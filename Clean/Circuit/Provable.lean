@@ -233,6 +233,18 @@ instance (priority := high) : ProvableType fieldTriple where
   fromElements := fun ⟨⟨[x, y, z]⟩, _ ⟩ => (x, y, z)
 instance : NonEmptyProvableType fieldTriple where
 
+@[circuit_norm] lemma toElements_field {F : Type} (x : F) : toElements (M := field) x = #v[x] := rfl
+@[circuit_norm] lemma toElements_fieldPair {F : Type} (x y : F) :
+    toElements (M := fieldPair) (x, y) = #v[x, y] := rfl
+@[circuit_norm] lemma toElements_fieldTriple {F : Type} (x y z : F) :
+    toElements (M := fieldTriple) (x, y, z) = #v[x, y, z] := rfl
+@[circuit_norm] lemma fromElements_field {F : Type} (x : F) :
+    fromElements (M := field) #v[x] = x := rfl
+@[circuit_norm] lemma fromElements_fieldPair {F : Type} (x y : F) :
+    fromElements (M := fieldPair) #v[x, y] = (x, y) := rfl
+@[circuit_norm] lemma fromElements_fieldTriple {F : Type} (x y z : F) :
+    fromElements (M := fieldTriple) #v[x, y, z] = (x, y, z) := rfl
+
 variable {n : ℕ}
 abbrev ProvableVector (α : TypeMap) (n : ℕ) := fun F => Vector (α F) n
 
@@ -433,6 +445,33 @@ instance ProvableType.fromStruct {α : TypeMap} [ProvableStruct α] : ProvableTy
     simp only [Vector.cast_cast, Vector.cast_rfl]
 
 namespace ProvableStruct
+
+/-- The elements of a list of components, as a list. -/
+def componentsToList {F : Type} : (cs : List WithProvableType) → ProvableTypeList F cs → List F
+  | [], .nil => []
+  | _ :: cs, .cons a as => (toElements a).toList ++ componentsToList cs as
+
+@[circuit_norm] lemma componentsToList_nil {F : Type} :
+    componentsToList [] (.nil : ProvableTypeList F []) = [] := rfl
+
+@[circuit_norm] lemma componentsToList_cons {F : Type} {c : WithProvableType}
+    {cs : List WithProvableType} (a : c.type F) (as : ProvableTypeList F cs) :
+    componentsToList (c :: cs) (.cons a as) = (toElements a).toList ++ componentsToList cs as := rfl
+
+lemma toList_componentsToElements {F : Type} :
+    (cs : List WithProvableType) → (as : ProvableTypeList F cs) →
+      (componentsToElements cs as).toList = componentsToList cs as
+  | [], .nil => rfl
+  | _ :: cs, .cons a as => by
+    simp [componentsToElements, componentsToList, toList_componentsToElements cs as]
+
+/-- The elements of a structure, as a list, are those of its components. Applied before simp
+descends into `toElements`, so that the elements of a structure literal compute. -/
+@[circuit_norm ↓] lemma toList_toElements {α : TypeMap} [ProvableStruct α] {F : Type} (x : α F) :
+    (toElements x).toList = componentsToList (components α) (toComponents x) := by
+  change (structToElements x).toList = _
+  rw [structToElements_eq, Vector.toList_cast, toList_componentsToElements]
+
 variable {α : TypeMap} [ProvableStruct α] {F : Type} [FiniteField F]
 
 /--

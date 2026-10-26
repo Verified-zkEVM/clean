@@ -16,6 +16,10 @@ instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
 
 instance {p : ℕ} : DecidableEq (F p) := ZMod.decidableEq p
 
+instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <| by
+  simp [F, ZMod.ringChar_zmod_n]
+  linarith [pGt.out]
+
 @[circuit_norm]
 lemma zero_ne_neg_one {F : Type} [Field F] : (0 : F) ≠ -1 := by
   intro h

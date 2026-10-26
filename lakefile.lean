@@ -15,5 +15,20 @@ lean_lib Clean where
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
+lean_exe export_fibonacci_ensemble_rust where
+  root := `Clean.Examples.FibonacciVm.Rust
+
+lean_exe export_femtocairo_flat_air_rust where
+  root := `Clean.Examples.FemtoCairo.FlatAirRust
+
+lean_exe export_opcode_vm_rust where
+  root := `Clean.Examples.OpcodeVm.Rust
+
+lean_exe export_witness_ir_reference_rust where
+  root := `Clean.Backends.Plonky3.Test.Reference
+
+lean_exe export_differential_rust where
+  root := `Clean.Backends.Plonky3.Test.Differential
+
 require "leanprover-community" / "mathlib" @ git "v4.33.1"
 require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git"@"v4.33.1"
