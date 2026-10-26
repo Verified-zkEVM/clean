@@ -16,12 +16,18 @@ the tables read off the traces (`toTable`) satisfy their constraints, and every 
 because its bus does. This needs, beyond `bridgeable` components, that the verifier has no
 interactions, that channels are told apart by their names, and that the number of interactions
 stays below the characteristic, as Clean's balance requires (`EnsembleBridgeable`).
+
+Composed with CompStark's batch knowledge soundness, whatever the ensemble's statement proves of
+its witnesses' tables (`WitnessSound`) holds for the rows of traces close to the ones an accepted
+prover committed to: with the error `2 ^ (-bits)` the security calculator certifies for the batch
+(`batchKnowledgeSoundness_of_secure`, `batchKnowledgeSoundness_ro_of_secureRo`), or in terms of
+the knowledge and round errors at any radii.
 -/
 
 @[expose] public section
 
 namespace CleanCompStark
-open Air.Flat Backends CompStark CompStark.Stark CompStark.Iop
+open Air.Flat Backends CompStark CompStark.Stark CompStark.Iop CompStark.Sound
 
 variable {F : Type} [FiniteField F] {K : Type} [BaseField K] {EF : Type} [Challenge K EF]
   (e : F ≃+* K) {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -413,6 +419,21 @@ def WitnessSound (ens : Ensemble F PublicIO) (P : List (List (Array F)) → Prop
   ∀ witness : EnsembleWitness ens, witness.Constraints → witness.BalancedChannels →
     P (witness.tables.map (·.table))
 
+/-- Traces whose rows fail a property that a bridgeable ensemble's statement proves of its
+witnesses' tables do not satisfy a batch that proves the ensemble. -/
+theorem not_satisfied_of_witnessSound (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
+    (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
+    (hcount : interactionCount ens h.length S.logN < ringChar F) {P : List (List (Array F)) → Prop}
+    (hP : WitnessSound ens P) (publicInput : PublicIO F) {publicValues : Fin S.k → List K}
+    {traces : Fin S.k → Array K}
+    (hfar : ¬ P (List.ofFn fun i => toRows e (componentAt ens h.length i) (S.logN i) (traces i))) :
+    ¬ S.Satisfied traces publicValues := fun hsat ↦ by
+  have := hP (toWitness e h fits traces publicInput)
+    (constraints_toWitness e h hb fits hsat.air publicInput)
+    (balancedChannels_toWitness e h hb fits hcount hsat publicInput)
+  rw [toWitness_tables] at this
+  exact hfar this
+
 /-- **Knowledge soundness of an ensemble's batch STARK.** If a batch proves a bridgeable ensemble
 and the ensemble proves `P` of its witnesses' tables, the verifier accepts a prover with
 probability at most the knowledge error unless the rows read off some tuple of traces, each within
@@ -426,12 +447,8 @@ theorem batchKnowledgeSoundness_of_witnessSound (h : ProvesEnsemble e S ens)
     (∀ traces ∈ Batch.closeTraces S δ' prover.trace,
       ¬ P (List.ofFn fun i => toRows e (componentAt ens h.length i) (S.logN i) (traces i))) →
       Batch.acceptance publicValues prover ≤ Batch.knowledgeError S δ δ' := fun hfar ↦
-  batchKnowledgeSoundness S publicValues prover δ δ' hδ' fun traces ht hsat ↦ by
-    have := hP (toWitness e h fits traces publicInput)
-      (constraints_toWitness e h hb fits hsat.air publicInput)
-      (balancedChannels_toWitness e h hb fits hcount hsat publicInput)
-    rw [toWitness_tables] at this
-    exact hfar traces ht this
+  batchKnowledgeSoundness S publicValues prover δ δ' hδ' fun traces ht ↦
+    not_satisfied_of_witnessSound e h hb fits hcount hP publicInput (hfar traces ht)
 
 /-- **Knowledge soundness of an ensemble's batch STARK, from the ensemble's soundness.** If a batch
 proves a bridgeable ensemble that is sound for `Assumptions` and `Spec`, and a public input
@@ -468,12 +485,55 @@ theorem batchKnowledgeSoundness_ro_of_witnessSound (h : ProvesEnsemble e S ens)
           ¬ P (List.ofFn fun i => toRows e (componentAt ens h.length i) (S.logN i) (traces i))] ≤
       (Q + S.verifierQueries) * Batch.roundError S δ δ' +
         hashError K S.params.capHeight (Q + S.verifierQueries) :=
-  (prEvent_mono _ _ _ fun ⟨_, _, _⟩ hev ↦ ⟨hev.1, hev.2.1, fun traces ht hsat ↦ by
-    have := hP (toWitness e h fits traces publicInput)
-      (constraints_toWitness e h hb fits hsat.air publicInput)
-      (balancedChannels_toWitness e h hb fits hcount hsat publicInput)
-    rw [toWitness_tables] at this
-    exact hev.2.2 traces ht this⟩).trans
+  (prEvent_mono _ _ _ fun ⟨_, _, _⟩ hev ↦ ⟨hev.1, hev.2.1, fun traces ht ↦
+    not_satisfied_of_witnessSound e h hb fits hcount hP publicInput (hev.2.2 traces ht)⟩).trans
     (Batch.batchKnowledgeSoundness_ro S publicValues δ δ' hδ' Q prover hQ)
+
+/-- **Knowledge soundness of an ensemble's batch STARK from the calculator.** If a batch proves a
+bridgeable ensemble, the ensemble proves `P` of its witnesses' tables, and the calculator certifies
+`bits` bits for the batch at the analysis `A` with an MCA bound `B` that holds, for a base field of
+`p` elements, the verifier accepts a prover with probability at most `2 ^ (-bits)` unless the rows
+read off some tuple of traces, each within `δ' = A.δ'` of its instance's committed trace, satisfy
+`P`. -/
+theorem batchKnowledgeSoundness_of_secure (h : ProvesEnsemble e S ens)
+    (hb : EnsembleBridgeable ens)
+    (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
+    (hcount : interactionCount ens h.length S.logN < ringChar F) {P : List (List (Array F)) → Prop}
+    (hP : WitnessSound ens P) {p : ℕ} (hp : Nat.card K = p) {B : McaBound} (hB : B.Holds)
+    (A : Analysis) {bits : ℕ} (hsecure : S.Secure p B A bits) (δ' : NNReal)
+    (hδ' : (δ' : ℝ) = A.δ') (publicInput : PublicIO F) (publicValues : Fin S.k → List K)
+    (prover : Batch.Prover S) :
+    (∀ traces ∈ Batch.closeTraces S δ' prover.trace,
+      ¬ P (List.ofFn fun i => toRows e (componentAt ens h.length i) (S.logN i) (traces i))) →
+      Batch.acceptance publicValues prover ≤ (2 ^ bits)⁻¹ := fun hfar ↦
+  Iop.batchKnowledgeSoundness_of_secure S hp hB A hsecure δ' hδ' publicValues prover
+    fun traces ht ↦
+      not_satisfied_of_witnessSound e h hb fits hcount hP publicInput (hfar traces ht)
+
+/-- **Knowledge soundness of an ensemble's batch STARK in the random-oracle model from the
+calculator.** If a batch proves a bridgeable ensemble, the ensemble proves `P` of its witnesses'
+tables, and the calculator certifies `bits` bits per oracle answer for the batch at the analysis
+`A` with an MCA bound `B` that holds, for a base field of `p` elements, a prover making at most `Q`
+oracle calls gets a proof accepted while the rows read off no tuple of traces within `δ' = A.δ'`
+of the ones it committed to satisfy `P` with probability at most `q · 2 ^ (-bits) + hashError h q`,
+`q = Q + verifierQueries`. -/
+theorem batchKnowledgeSoundness_ro_of_secureRo (h : ProvesEnsemble e S ens)
+    (hb : EnsembleBridgeable ens)
+    (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
+    (hcount : interactionCount ens h.length S.logN < ringChar F) {P : List (List (Array F)) → Prop}
+    (hP : WitnessSound ens P) {p : ℕ} (hp : Nat.card K = p) {B : McaBound} (hB : B.Holds)
+    (A : Analysis) {bits : ℕ} (hsecure : S.SecureRo p B A bits) (δ' : NNReal)
+    (hδ' : (δ' : ℝ) = A.δ') (publicInput : PublicIO F) (publicValues : Fin S.k → List K) (Q : ℕ)
+    (prover : Batch.NIProver S) (hQ : prover.IsTotalQueryBound Q) :
+    Pr{let (proof, log, verdict) ← Batch.run S publicValues prover}[
+      verdict = .ok () ∧ proof.degreeBits.toList = List.ofFn S.logN ∧
+        ∀ traces ∈ Batch.closeTraces S δ' (Batch.committedTraces S log proof),
+          ¬ P (List.ofFn fun i => toRows e (componentAt ens h.length i) (S.logN i) (traces i))] ≤
+      (Q + S.verifierQueries) * (2 ^ bits)⁻¹ +
+        hashError K S.params.capHeight (Q + S.verifierQueries) :=
+  (prEvent_mono _ _ _ fun ⟨_, _, _⟩ hev ↦ ⟨hev.1, hev.2.1, fun traces ht ↦
+    not_satisfied_of_witnessSound e h hb fits hcount hP publicInput (hev.2.2 traces ht)⟩).trans
+    (Batch.batchKnowledgeSoundness_ro_of_secureRo S hp hB A hsecure δ' hδ' publicValues Q prover
+      hQ)
 
 end CleanCompStark

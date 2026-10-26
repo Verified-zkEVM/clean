@@ -147,6 +147,25 @@ theorem knowledgeSoundness_ro (δ δ' : NNReal) (hδ' : (δ' : ℝ) < 1 - setup.
   knowledgeSoundness_ro_of_tableSound babyBear setup rfl bridgeable_component fits (tableSound 8)
     [] δ δ' hδ' Q prover hQ
 
+/-- An analysis of the squares table's STARK: `δ = 3/32`, `δ' = 1/4 - 2 ^ (-10)`, a proximity loss
+of `2 ^ (-16)` per fold. -/
+def analysis : Iop.Analysis := ⟨3 / 32, 1 / 4 - 1 / 2 ^ 10, 1 / 2 ^ 16⟩
+
+/-- The calculator certifies `1` bit of knowledge soundness for the squares table's STARK, whose
+`8` queries on `8` rows are a test configuration. -/
+theorem secure : setup.Secure p .uniqueDecoding analysis 1 := by decide +kernel
+
+/-- **Knowledge soundness of the squares table's STARK from the calculator.** Unless the rows of
+some trace within `δ' = 255 / 1024` of the prover's committed trace each hold the square of their
+counter, the verifier accepts with probability at most `2 ^ (-1)`. -/
+theorem knowledgeSoundness_of_secure (prover : Iop.Prover setup) :
+    (∀ trace ∈ Iop.closeTraces setup (255 / 1024) prover.trace,
+      ¬ SquaresHeld (toRows babyBear component 3 trace)) →
+      Iop.acceptance [] prover ≤ (2 ^ 1)⁻¹ :=
+  CleanCompStark.knowledgeSoundness_of_secure babyBear setup rfl bridgeable_component fits
+    (tableSound 8) BabyBear.card_eq Sound.McaBound.uniqueDecoding_holds analysis secure (255 / 1024)
+    (by norm_num [analysis]) [] prover
+
 /--
 info: 'CleanCompStarkTests.SquaresTable.knowledgeSoundness' depends on axioms:
 [propext, Classical.choice, Quot.sound]
@@ -160,5 +179,12 @@ info: 'CleanCompStarkTests.SquaresTable.knowledgeSoundness_ro' depends on axioms
 -/
 #guard_msgs (whitespace := lax) in
 #print axioms knowledgeSoundness_ro
+
+/--
+info: 'CleanCompStarkTests.SquaresTable.knowledgeSoundness_of_secure' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms knowledgeSoundness_of_secure
 
 end CleanCompStarkTests.SquaresTable
