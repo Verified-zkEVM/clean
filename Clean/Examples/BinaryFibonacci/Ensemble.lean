@@ -116,14 +116,16 @@ def verifier : Verifier.Program BF64 State where
   Spec final data := stateChannel.Guarantees final data
   soundness := by simp [circuit_norm]
 
-/-- The state channel is closed by its counter: every step multiplies it by the primitive element
-`g`, so the states that fail their guarantee can't form a cycle. -/
+/-- The state channel is closed by its counter: every step multiplies the nonzero counter by the
+primitive element `g`, which has no short cycles, so the states that fail their guarantee can't
+form a cycle. -/
 def stateCounterChannel : CounterChannel BF64 State where
   channel := stateChannel
   owners := [stepComponent]
   counter state := state.counter
-  generator := g
-  orderOf_generator := BF64.orderOf_X
+  step := (· * g)
+  Valid := (· ≠ 0)
+  iterate_ne_self _ h_ne _ hk hk_lt := CounterChannel.iterate_mul_ne_self BF64.orderOf_X h_ne hk hk_lt
   exists_step_of_constraintsHold := by
     simp only [List.mem_singleton, forall_eq]
     intro env h_constraints

@@ -9,13 +9,15 @@ public import Clean.Air.Memory
 
 A counter channel is a channel of states that carry a counter, like the state channel of a VM with
 a clock: every row of its owners pulls a state and pushes a successor, whose counter is the pulled
-counter times a primitive element `g`. Each row is sound on its own, in that the guarantee of the
+counter advanced by a step function. Each row is sound on its own, in that the guarantee of the
 pulled state implies the requirement of the pushed one.
 
 Such a channel is closed: all its guarantees hold, not just those on the cycle through the
 verifier's states. A pull whose guarantee fails can only be matched by a row whose own pull fails,
-with the counter divided by `g`, so failures form a cycle of `orderOf g` rows, more than there can
-be interactions.
+with the previous counter, so failures form a cycle of the step. If the step has no cycles of at
+most half the field size through the counters that rows pull, such a cycle has more interactions
+than there can be. Multiplying by a primitive element has none on nonzero counters, and neither does
+adding `1` in a prime field.
 -/
 
 variable {F : Type} [FiniteField F]
@@ -24,52 +26,58 @@ namespace Air.Flat.CounterChannel
 
 /--
 The counting argument of counter channels. Messages that are pulled, pushed, and each pushed by a
-step from another such message, with the counter times `g`, would form a chain of `orderOf g`
-distinct messages, each pulled and pushed: more interactions than there are.
+step from another such message would form a chain of more than half the field size distinct
+messages, each pulled and pushed: more interactions than there are.
 -/
-theorem not_bad {α : Type} {g : F} (h_order : orderOf g = FiniteField.size F - 1)
+theorem not_bad {α : Type} (step : F → F) (Valid : F → Prop)
+    (iterate_ne_self : ∀ c, Valid c → ∀ k, 0 < k → 2 * k < FiniteField.size F → step^[k] c ≠ c)
     (counter : α → F) (key : Interaction F → α) (interactions : List (Interaction F))
     (length_lt : interactions.length < FiniteField.size F) (Bad : α → Prop)
     (h_bad : ∀ message, Bad message →
       (∃ i ∈ interactions, i.direction = .pull ∧ key i = message) ∧
       (∃ i ∈ interactions, i.direction = .push ∧ key i = message) ∧
-      ∃ previous, Bad previous ∧ counter previous ≠ 0 ∧ counter message = counter previous * g) :
+      ∃ previous, Bad previous ∧ Valid (counter previous) ∧ counter message = step (counter previous)) :
     ∀ message, ¬Bad message := by
   classical
   intro first h_first
-  have size_pos := FiniteField.fieldSize_pos (F := F)
-  have g_ne_zero : g ≠ 0 := by
-    rintro rfl
-    have : orderOf (0 : F) = 0 := orderOf_eq_zero_iff'.mpr fun n hn => by simp [hn.ne']
-    omega
   -- the chain of bad messages, following each one's previous message
   let previous (message : {message // Bad message}) : {message // Bad message} :=
     ⟨(h_bad _ message.2).2.2.choose, (h_bad _ message.2).2.2.choose_spec.1⟩
   let chain (k : ℕ) : {message // Bad message} := previous^[k] ⟨first, h_first⟩
-  have counter_ne_zero (message : {message // Bad message}) : counter message.1 ≠ 0 := by
-    obtain ⟨-, h_ne, h_eq⟩ := (h_bad _ message.2).2.2.choose_spec
-    rw [h_eq]
-    exact mul_ne_zero h_ne g_ne_zero
-  have counter_chain (k : ℕ) : counter first = counter (chain k).1 * g ^ k := by
-    induction k with
-    | zero => simp [chain]
-    | succ k ih =>
-      have h_eq := ((h_bad _ (chain k).2).2.2.choose_spec).2.2
-      rw [ih, h_eq, pow_succ', mul_assoc]
-      simp only [chain, Function.iterate_succ_apply', previous]
-  have injOn : Set.InjOn (fun k => (chain k).1) (Finset.range (orderOf g)) := by
+  have chain_succ (k : ℕ) : chain (k + 1) = previous (chain k) :=
+    Function.iterate_succ_apply' ..
+  have valid (k : ℕ) : Valid (counter (chain (k + 1)).1) := by
+    rw [chain_succ]
+    exact (h_bad _ (chain k).2).2.2.choose_spec.2.1
+  have counter_chain (k n : ℕ) : counter (chain k).1 = step^[n] (counter (chain (k + n)).1) := by
+    induction n with
+    | zero => rfl
+    | succ n ih =>
+      rw [ih, Function.iterate_succ_apply, ← Nat.add_assoc, chain_succ]
+      congr 1
+      exact (h_bad _ (chain (k + n)).2).2.2.choose_spec.2.2
+  -- more than half the field size of them are distinct
+  let n := (FiniteField.size F + 1) / 2
+  have ne_of_lt (k j : ℕ) (hj : j < n) (h_lt : k < j) : (chain (k + 1)).1 ≠ (chain (j + 1)).1 := by
+    intro h_eq
+    apply iterate_ne_self _ (valid j) (j - k) (by omega) (by omega)
+    have h := counter_chain (k + 1) (j - k)
+    rw [show k + 1 + (j - k) = j + 1 by omega, h_eq] at h
+    exact h.symm
+  have injOn : Set.InjOn (fun k => (chain (k + 1)).1) (Finset.range n) := by
     intro k hk j hj h_eq
-    have h := (counter_chain k).symm.trans (counter_chain j)
-    simp only at h_eq
-    rw [h_eq, mul_right_inj' (counter_ne_zero _)] at h
-    exact pow_injOn_Iio_orderOf (by simpa using hk) (by simpa using hj) h
-  let messages := (Finset.range (orderOf g)).image fun k => (chain k).1
-  have card_messages : messages.card = orderOf g := by
+    simp only [Finset.coe_range, Set.mem_Iio] at hk hj h_eq
+    rcases lt_trichotomy k j with h | h | h
+    · exact absurd h_eq (ne_of_lt k j hj h)
+    · exact h
+    · exact absurd h_eq.symm (ne_of_lt j k hk h)
+  let messages := (Finset.range n).image fun k => (chain (k + 1)).1
+  have card_messages : messages.card = n := by
     rw [Finset.card_image_of_injOn injOn, Finset.card_range]
   -- each message is pulled and pushed
   have card_le (direction : Direction)
       (h : ∀ message ∈ messages, ∃ i ∈ interactions, i.direction = direction ∧ key i = message) :
-      orderOf g ≤ (interactions.filter (·.direction = direction)).length := by
+      n ≤ (interactions.filter (·.direction = direction)).length := by
     rw [← card_messages]
     calc messages.card ≤ ((interactions.filter (·.direction = direction)).map key).toFinset.card := by
           apply Finset.card_le_card
@@ -80,13 +88,27 @@ theorem not_bad {α : Type} {g : F} (h_order : orderOf g = FiniteField.size F - 
       _ ≤ _ := (List.toFinset_card_le _).trans (by simp)
   have pulls := card_le .pull fun message h_message => by
     obtain ⟨k, -, rfl⟩ := Finset.mem_image.mp h_message
-    exact (h_bad _ (chain k).2).1
+    exact (h_bad _ (chain (k + 1)).2).1
   have pushes := card_le .push fun message h_message => by
     obtain ⟨k, -, rfl⟩ := Finset.mem_image.mp h_message
-    exact (h_bad _ (chain k).2).2.1
+    exact (h_bad _ (chain (k + 1)).2).2.1
   have bound := Memory.length_filter_add_length_filter_le interactions
     (fun i => decide (i.direction = .push)) (fun i => decide (i.direction = .pull))
     (fun i _ h_push h_pull => by simp_all)
+  omega
+
+/-- Multiplying by a primitive element has no cycles of at most half the field size on nonzero
+counters. -/
+theorem iterate_mul_ne_self {g : F} (h_order : orderOf g = FiniteField.size F - 1) {c : F}
+    (h_ne : c ≠ 0) {k : ℕ} (hk : 0 < k) (hk_lt : 2 * k < FiniteField.size F) :
+    (· * g)^[k] c ≠ c := by
+  have size_pos := FiniteField.fieldSize_pos (F := F)
+  rw [mul_right_iterate_apply g c]
+  intro h_eq
+  have h_pow : g ^ k = 1 := by
+    rw [← mul_right_inj' h_ne, mul_one]
+    exact h_eq
+  have := Nat.le_of_dvd hk (orderOf_dvd_of_pow_eq_one h_pow)
   omega
 
 end Air.Flat.CounterChannel
@@ -100,16 +122,21 @@ structure CounterChannel (F : Type) [FiniteField F] (Message : TypeMap) [Provabl
   channel : Channel F Message
   owners : List (Component F)
   counter : Message F → F
-  generator : F
-  orderOf_generator : orderOf generator = FiniteField.size F - 1
-  /-- Every row pulls a state and pushes its successor, if enabled: the counter is nonzero and
-  advances by `generator`, and the guarantee of the pulled state implies that of the pushed one. -/
+  /-- How every row advances the counter. -/
+  step : F → F
+  /-- The counters that rows pull. -/
+  Valid : F → Prop
+  /-- The step has no cycles of at most half the field size through valid counters. -/
+  iterate_ne_self : ∀ c, Valid c → ∀ k, 0 < k → 2 * k < FiniteField.size F → step^[k] c ≠ c
+  /-- Every row pulls a state and pushes its successor, if enabled: the pulled counter is valid and
+  the pushed one is its step, and the guarantee of the pulled state implies that of the pushed one.
+  -/
   exists_step_of_constraintsHold : ∀ owner ∈ owners, ∀ env, owner.operations.ConstraintsHold env →
     ∃ (enabled : F) (pull push : Message F),
       owner.operations.interactionValuesWith channel.toRaw env =
         [channel.pulledIfValue enabled pull, channel.pushedIfValue enabled push] ∧
       IsBool enabled ∧
-      (enabled = 1 → counter pull ≠ 0 ∧ counter push = counter pull * generator ∧
+      (enabled = 1 → Valid (counter pull) ∧ counter push = step (counter pull) ∧
         (channel.Guarantees pull env.data → channel.Guarantees push env.data))
 
 namespace CounterChannel
@@ -161,7 +188,8 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
       exact .inl (reqs b h_row)
   let Bad (message : Array F) : Prop :=
     ∃ a ∈ interactions, a.Pull ∧ a.msg = message ∧ ¬a.Guarantees witness.data
-  have not_bad := CounterChannel.not_bad counterChannel.orderOf_generator
+  have not_bad := CounterChannel.not_bad counterChannel.step counterChannel.Valid
+    counterChannel.iterate_ne_self
     (fun message => counterChannel.counter (decode message)) (·.msg) interactions
     (Balance.LengthLtSize.length_lt_size _ balanced) Bad (by
       rintro message ⟨a, a_mem, a_pull, rfl, a_bad⟩
