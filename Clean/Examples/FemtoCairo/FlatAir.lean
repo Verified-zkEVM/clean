@@ -509,7 +509,7 @@ def vm (program : Array (F p)) (h_program : ValidProgram program)
 
 def soundEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) (initialState : State (F p)) :=
-  SoundEnsemble.empty (F p) fieldPair
+  SoundEnsemble.empty (F p) fieldPair .logUp
   |>.addLookup (programLookup program h_program)
   |>.addChannel memoryChannel.toRaw (by simp [circuit_norm, memoryChannel, programLookup])
   |>.addTable (memoryComponent memorySize h_memorySize)
@@ -545,7 +545,7 @@ def ProverAssumptions (program : Array (F p))
 
 def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) (initialState : State (F p)) :=
-  (soundEnsemble program h_program h_memorySize initialState).toFormal .logUp (fun _ => True)
+  (soundEnsemble program h_program h_memorySize initialState).toFormal (fun _ => True)
     (Spec program memorySize initialState)
     (by simp [circuit_norm, soundEnsemble, vm, memoryComponent])
     (by

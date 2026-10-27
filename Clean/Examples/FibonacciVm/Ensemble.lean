@@ -232,7 +232,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
     simp only [circuit_norm, fibonacciVerifier, fibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
 
-def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
+def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple .logUp
   |>.addLookup bytes
   |>.addChannel add8Channel.toRaw (by simp [circuit_norm, add8Channel, bytes])
   |>.addTable add8Component
@@ -246,7 +246,7 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
       add8Channel, fibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, add8, bytes])
-  |>.toFormal .logUp (fun _ => True)
+  |>.toFormal (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
     (by simp [circuit_norm, fibonacciVm, bytes])
     (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
@@ -315,7 +315,7 @@ abbrev falseComponent : Component (F p) where
     padding := ()
   }
 
-def falseEnsemble := SoundEnsemble.empty (F p) unit
+def falseEnsemble := SoundEnsemble.empty (F p) unit .logUp
   |>.addFinishedChannel falseChannel.toRaw
   |>.addTable falseComponent
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])

@@ -123,13 +123,13 @@ def Spec (final : State BF64) : Prop :=
 
 /-- The ensemble, sound under multiset balance. -/
 def formalEnsemble : FormalEnsemble BF64 State .multiset :=
-  SoundEnsemble.empty BF64 State
+  SoundEnsemble.empty BF64 State .multiset
   |>.addVm vm
     (by simp +instances [circuit_norm, vm, stateChannel])
     (by simp +instances [circuit_norm, vm, step, verifier])
     (by simp +instances [circuit_norm, vm, step, verifier, stateChannel])
     (by simp [circuit_norm, vm, step])
-  |>.toFormal .multiset (fun _ => True) Spec
+  |>.toFormal (fun _ => True) Spec
     (by simp [circuit_norm, vm])
     (fun _ _ h => h)
 

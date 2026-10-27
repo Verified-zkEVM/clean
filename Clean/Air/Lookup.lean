@@ -90,13 +90,13 @@ def component : Component F where
 end Lookup
 
 namespace SoundEnsemble
-variable {PublicIO : TypeMap} [ProvableType PublicIO]
+variable {PublicIO : TypeMap} [ProvableType PublicIO] {balance : Balance F}
 
 /-- Add a static lookup: its table component and its channel, which is finished right away. -/
-def addLookup (soundEns : SoundEnsemble F PublicIO) (lookup : Lookup F Row)
+def addLookup (soundEns : SoundEnsemble F PublicIO balance) (lookup : Lookup F Row)
     (fresh : lookup.name ∉ soundEns.tables.map (·.circuit.name) := by simp [circuit_norm])
     (fresh_channel : lookup.name ∉ soundEns.channels.map (·.name) := by simp [circuit_norm]) :
-    SoundEnsemble F PublicIO :=
+    SoundEnsemble F PublicIO balance :=
   soundEns.addChannel lookup.channel.toRaw fresh_channel
     |>.addTable lookup.component (List.nil_subset _)
       (fun channel h_channel => by
@@ -105,8 +105,10 @@ def addLookup (soundEns : SoundEnsemble F PublicIO) (lookup : Lookup F Row)
         exact List.mem_map.mpr ⟨_, soundEns.finished_subset h_finished, rfl⟩)
       fresh
     |>.markFinished lookup.channel.toRaw (List.mem_cons_self ..)
+      fun h => fresh_channel (List.mem_map.mpr ⟨_, soundEns.closed_subset h, rfl⟩)
 
-variable {soundEns : SoundEnsemble F PublicIO} {lookup : Lookup F Row} {fresh fresh_channel}
+variable {soundEns : SoundEnsemble F PublicIO balance} {lookup : Lookup F Row}
+  {fresh fresh_channel}
 
 @[circuit_norm] lemma addLookup_tables :
     (soundEns.addLookup lookup fresh fresh_channel).tables =
@@ -114,9 +116,11 @@ variable {soundEns : SoundEnsemble F PublicIO} {lookup : Lookup F Row} {fresh fr
 @[circuit_norm] lemma addLookup_channels :
     (soundEns.addLookup lookup fresh fresh_channel).channels =
       lookup.channel.toRaw :: soundEns.channels := rfl
-@[circuit_norm] lemma addLookup_finished :
-    (soundEns.addLookup lookup fresh fresh_channel).finished =
-      lookup.channel.toRaw :: soundEns.finished := rfl
+@[circuit_norm] lemma addLookup_ordered :
+    (soundEns.addLookup lookup fresh fresh_channel).ordered =
+      lookup.channel.toRaw :: soundEns.ordered := rfl
+@[circuit_norm] lemma addLookup_closed :
+    (soundEns.addLookup lookup fresh fresh_channel).closed = soundEns.closed := rfl
 @[circuit_norm] lemma addLookup_verifier :
     (soundEns.addLookup lookup fresh fresh_channel).verifier = soundEns.verifier := rfl
 

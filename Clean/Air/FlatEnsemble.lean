@@ -402,11 +402,11 @@ assuming constraints and channel balance.
 This is just Soundness, except for per-table soundness implying global soundness.
 -/
 @[circuit_norm]
-def TableSoundness (ens : Ensemble F PublicIO) : Prop :=
+def TableSoundness (ens : Ensemble F PublicIO) (balance : Balance F) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →
-    witness.BalancedChannels →
+    witness.Balanced balance →
     witness.Spec
 
 /-- The verifier spec and table specs imply the ensemble's public specification. -/
@@ -434,7 +434,7 @@ lemma assumptions_of_assumptionsConsistency {ens : Ensemble F PublicIO}
 
 theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F PublicIO)
   (balance : Balance F) (Assumptions Spec : PublicIO F → Prop) :
-  ens.TableSoundness →
+  ens.TableSoundness balance →
   ens.AssumptionsConsistency Assumptions →
   ens.SpecConsistency Spec →
     ens.Soundness balance Assumptions Spec := by
@@ -444,8 +444,7 @@ theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F Public
     publicInput assumptions witness publicInput_eq constraints balanced
   simp only [← publicInput_eq] at *
   apply spec_consistency witness
-  apply table_soundness witness ?assumptions constraints
-    (EnsembleWitness.balancedChannels_of_balanced balanced)
+  apply table_soundness witness ?assumptions constraints balanced
   exact assumptions_of_assumptionsConsistency assumptions_consistency witness assumptions
 end Ensemble
 

@@ -243,7 +243,7 @@ def vm (program : Program) (h_program : program.length < p) (initial : F p) :
   verifier_requirements data := by simp [circuit_norm, verifier, stateChannel, run]
 
 def soundEnsemble (program : Program) (h_program : program.length < p) (initial : F p) :=
-  SoundEnsemble.empty (F p) field
+  SoundEnsemble.empty (F p) field .logUp
   |>.addLookup (programLookup program)
   |>.addVm (vm program h_program initial)
     (by simp +instances [circuit_norm, vm, programLookup, stateChannel])
@@ -256,7 +256,7 @@ def Spec (program : Program) (initial final : F p) : Prop :=
   final = run program initial
 
 def formalEnsemble (program : Program) (h_program : program.length < p) (initial : F p) :=
-  (soundEnsemble program h_program initial).toFormal .logUp (fun _ => True) (Spec program initial)
+  (soundEnsemble program h_program initial).toFormal (fun _ => True) (Spec program initial)
     (by simp [circuit_norm, soundEnsemble, vm])
     (by simp [circuit_norm, soundEnsemble, vm, verifier, stateChannel, Spec,
       ZMod.val_cast_of_lt h_program])
