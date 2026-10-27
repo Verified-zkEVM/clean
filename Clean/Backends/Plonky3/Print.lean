@@ -340,9 +340,9 @@ clean_backend::ensemble! \{
 }
 "
 
-/-- Lower a proven ensemble to an extraction program and print it as Rust. The ensemble is over a
-prime field, whose constants are printed as their canonical values, the values that Rust's prime
-fields compute with. -/
+/-- Lower a proven ensemble to an extraction program and print it as Rust. The ensemble is sound
+under LogUp, the balance check of the Plonky3 backend, over a prime field, whose constants are
+printed as their canonical values, the values that Rust's prime fields compute with. -/
 def ensembleToRust {p : ℕ} [Fact p.Prime] (ensemble : FormalEnsemble (ZMod p) PublicIO .logUp)
     (fuel : ℕ) : Except String String := do
   let program ← lower ensemble.ensemble fuel |>.mapError toString

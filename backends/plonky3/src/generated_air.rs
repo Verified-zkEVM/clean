@@ -389,7 +389,7 @@ where
     P: GeneratedAirSpec,
 {
     fn eval(&self, builder: &mut AB) {
-        // Clean's channel balance is over field multiplicities: every interaction is provided,
+        // Clean's LogUp balance check is over field multiplicities: every interaction is provided,
         // with the signed multiplicity of its push or pull, and the interaction-count bound of
         // `GeneratedEnsemble::new` replaces LogUp's height check.
         let interactions = match self.kind {

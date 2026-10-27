@@ -15,11 +15,6 @@ open Spec
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 512)]
 
-instance (p : ℕ) [p_large_enough : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) :=
-  .mk <| by
-    simp [F, ZMod.ringChar_zmod_n]
-    linarith [p_large_enough.out]
-
 structure ProviderInput F where
   address : F
   value : F
