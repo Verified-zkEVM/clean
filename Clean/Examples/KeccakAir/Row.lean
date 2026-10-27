@@ -1,6 +1,5 @@
 /-
-Plonky3's Keccak-f AIR (`p3-keccak-air`): its columns, in Plonky3's order, and its constraints, in
-the order and form in which Plonky3 emits them.
+The columns of Plonky3's Keccak-f AIR (`p3-keccak-air`), in Plonky3's order.
 
 Every row computes one round of Keccak-f, and 24 consecutive rows one permutation. The one-hot
 `stepFlags` say which round a row computes. A row holds the round's input state `a` in 16-bit limbs,
@@ -10,13 +9,11 @@ input is this row's output, unless this row computes the last round.
 
 Lanes are indexed by `(x, y)`, and a state is stored `y`-major: lane `(x, y)` is at `5 y + x`, as in
 the Keccak specification's `s[w (5 y + x) + z] = a[x][y][z]`.
-
-The constraints are written once for any type with addition, subtraction and multiplication, so that
-they are both the circuit's expressions and their values.
 -/
 module
 
 public import Clean.Air.Window
+public import Clean.Gadgets.Boolean
 public import Clean.Specs.Keccak256BitVec
 
 @[expose] public section
@@ -104,11 +101,45 @@ def map {β : Type} (f : α → β) (row : Row α) : Row β where
 def aPrimePrimePrimeLimb (row : Row α) (y x : Fin 5) (limb : Fin 4) : α :=
   if y = 0 ∧ x = 0 then row.aPrimePrimePrime00Limbs[limb] else row.aPrimePrimeLimb y x limb
 
+/-- The limbs of lane `(x, y)` of the round's input `A`. -/
+def aLane (row : Row α) (y x : Fin 5) : Vector α 4 := .ofFn (row.aLimb y x)
+/-- The bits of θ's column parity `C[x]`. -/
+def cLane (row : Row α) (x : Fin 5) : Vector α 64 := .ofFn (row.cBit x)
+/-- The bits of `C'[x]`. -/
+def cPrimeLane (row : Row α) (x : Fin 5) : Vector α 64 := .ofFn (row.cPrimeBit x)
+/-- The bits of lane `(x, y)` of θ's output `A'`. -/
+def aPrimeLane (row : Row α) (y x : Fin 5) : Vector α 64 := .ofFn (row.aPrimeBit y x)
+/-- The bits of lane `(x, y)` of `B`, the output of ρ and π. -/
+def bLane (row : Row α) (x y : Fin 5) : Vector α 64 := .ofFn (row.b x y)
+/-- The limbs of lane `(x, y)` of χ's output `A''`. -/
+def aPrimePrimeLane (row : Row α) (y x : Fin 5) : Vector α 4 := .ofFn (row.aPrimePrimeLimb y x)
+/-- The limbs of lane `(x, y)` of the round's output `A'''`. -/
+def aPrimePrimePrimeLane (row : Row α) (y x : Fin 5) : Vector α 4 :=
+  .ofFn (row.aPrimePrimePrimeLimb y x)
+
+lemma getElem_cLane (row : Row α) (x : Fin 5) (z : ℕ) (hz : z < 64) :
+    (row.cLane x)[z] = row.cBit x ⟨z, hz⟩ := by
+  simp [cLane]
+
+lemma getElem_cPrimeLane (row : Row α) (x : Fin 5) (z : ℕ) (hz : z < 64) :
+    (row.cPrimeLane x)[z] = row.cPrimeBit x ⟨z, hz⟩ := by
+  simp [cPrimeLane]
+
+lemma getElem_aPrimeLane (row : Row α) (y x : Fin 5) (z : ℕ) (hz : z < 64) :
+    (row.aPrimeLane y x)[z] = row.aPrimeBit y x ⟨z, hz⟩ := by
+  simp [aPrimeLane]
+
 section Map
 variable {β : Type} (f : α → β) (row : Row α)
 
 @[simp] lemma map_stepFlags : (row.map f).stepFlags = row.stepFlags.map f := rfl
 @[simp] lemma map_exportFlag : (row.map f).exportFlag = f row.exportFlag := rfl
+@[simp] lemma map_preimage : (row.map f).preimage = row.preimage.map f := rfl
+@[simp] lemma map_a : (row.map f).a = row.a.map f := rfl
+@[simp] lemma map_c : (row.map f).c = row.c.map f := rfl
+@[simp] lemma map_cPrime : (row.map f).cPrime = row.cPrime.map f := rfl
+@[simp] lemma map_aPrime : (row.map f).aPrime = row.aPrime.map f := rfl
+@[simp] lemma map_aPrimePrime : (row.map f).aPrimePrime = row.aPrimePrime.map f := rfl
 @[simp] lemma map_aPrimePrime00Bits :
     (row.map f).aPrimePrime00Bits = row.aPrimePrime00Bits.map f := rfl
 @[simp] lemma map_aPrimePrimePrime00Limbs :
@@ -133,10 +164,36 @@ variable {β : Type} (f : α → β) (row : Row α)
     (row.map f).aPrimePrimePrimeLimb y x limb = f (row.aPrimePrimePrimeLimb y x limb) := by
   simp only [aPrimePrimePrimeLimb]
   split <;> simp [map, aPrimePrimeLimb]
+@[simp] lemma map_aLane (y x) : (row.map f).aLane y x = (row.aLane y x).map f := by
+  ext; simp [aLane]
+@[simp] lemma map_cLane (x) : (row.map f).cLane x = (row.cLane x).map f := by
+  ext; simp [cLane]
+@[simp] lemma map_cPrimeLane (x) : (row.map f).cPrimeLane x = (row.cPrimeLane x).map f := by
+  ext; simp [cPrimeLane]
+@[simp] lemma map_aPrimeLane (y x) : (row.map f).aPrimeLane y x = (row.aPrimeLane y x).map f := by
+  ext; simp [aPrimeLane]
+@[simp] lemma map_aPrimePrimeLane (y x) :
+    (row.map f).aPrimePrimeLane y x = (row.aPrimePrimeLane y x).map f := by
+  ext; simp [aPrimePrimeLane]
+@[simp] lemma map_aPrimePrimePrimeLane (y x) :
+    (row.map f).aPrimePrimePrimeLane y x = (row.aPrimePrimePrimeLane y x).map f := by
+  ext; simp [aPrimePrimePrimeLane]
 
 end Map
 
 end Row
+
+/-- Plonky3's check that `c` is the parity of the bits `a0, ..., a4`: their difference is 0, 2 or 4.
+-/
+def parityCheck {α : Type} [Add α] [Sub α] [Mul α] [OfNat α 2] [OfNat α 4] (a0 a1 a2 a3 a4 c : α) :
+    α :=
+  let diff := a0 + a1 + a2 + a3 + a4 - c
+  diff * (diff - (2 : α)) * (diff - (4 : α))
+
+/-- A window transitions to a row of the same permutation: it is not the last row, and does not
+compute the last round. -/
+def transitionInPermutation {α : Type} [Sub α] [Mul α] [OfNat α 1] (window : Window Row α) : α :=
+  window.isTransition * ((1 : α) - window.current.stepFlags[23])
 
 /-- Apply `f` to every cell of a window. -/
 def mapWindow {α β : Type} (f : α → β) (window : Window Row α) : Window Row β where
@@ -146,123 +203,67 @@ def mapWindow {α β : Type} (f : α → β) (window : Window Row α) : Window R
   isLastRow := f window.isLastRow
   isTransition := f window.isTransition
 
-section Constraints
-variable {α : Type} [Add α] [Sub α] [Mul α] [OfNat α 1] [OfNat α 2] [OfNat α 4]
+section MapWindow
+variable {α β : Type} (f : α → β) (window : Window Row α)
 
-/-- Plonky3's `bool_check`: zero exactly on 0 and 1. -/
-def boolCheck (x : α) : α := x * (x - (1 : α))
+@[simp] lemma mapWindow_current : (mapWindow f window).current = window.current.map f := rfl
+@[simp] lemma mapWindow_next : (mapWindow f window).next = window.next.map f := rfl
+@[simp] lemma mapWindow_isFirstRow : (mapWindow f window).isFirstRow = f window.isFirstRow := rfl
+@[simp] lemma mapWindow_isLastRow : (mapWindow f window).isLastRow = f window.isLastRow := rfl
+@[simp] lemma mapWindow_isTransition :
+    (mapWindow f window).isTransition = f window.isTransition := rfl
 
-/-- Plonky3's `xor` of two bits. -/
-def xor (x y : α) : α := x + y - x * ((2 : α) * y)
+end MapWindow
 
-/-- Plonky3's `andn` of two bits: `!x & y`. -/
-def andn (x y : α) : α := ((1 : α) - x) * y
+section Eval
+variable {p : ℕ} [Fact p.Prime] (env : Environment (F p))
 
-/-- The bits `15 - n, ..., 15` of a 16-bit limb, by Horner's rule from the top bit, as Plonky3 folds
-them. -/
-def horner (bit : Fin 16 → α) : ℕ → α
-  | 0 => bit 15
-  | n + 1 => (2 : α) * horner bit n + bit (Fin.ofNat 16 (14 - n))
+/-- A row's values are its expressions' values. -/
+lemma eval_row (row : Var Row (F p)) : eval env row = row.map (Expression.eval env) := by
+  obtain ⟨⟩ := row
+  simp only [circuit_norm, Row.map]
 
-/-- Limb `limb` of a lane, from the lane's bits. -/
-def limbOf (bit : Fin 64 → α) (limb : Fin 4) : α :=
-  horner (fun k => bit (limbBit limb k)) 15
+lemma provableStructEval_row (row : Var Row (F p)) :
+    ProvableStruct.eval env row = row.map (Expression.eval env) := by
+  obtain ⟨⟩ := row
+  simp only [circuit_norm, Row.map]
+
+/-- A window's values are its expressions' values. -/
+lemma eval_window (window : Var (Window Row) (F p)) :
+    eval env window = mapWindow (Expression.eval env) window := by
+  obtain ⟨⟨⟩, ⟨⟩, _, _, _⟩ := window
+  simp only [circuit_norm, mapWindow, Row.map]
+
+@[circuit_norm]
+lemma eval_parityCheck (a0 a1 a2 a3 a4 c : Expression (F p)) :
+    Expression.eval env (parityCheck a0 a1 a2 a3 a4 c) =
+      parityCheck (Expression.eval env a0) (Expression.eval env a1) (Expression.eval env a2)
+        (Expression.eval env a3) (Expression.eval env a4) (Expression.eval env c) := by
+  simp only [parityCheck, circuit_norm]
+
+lemma provableStructEval_window (window : Var (Window Row) (F p)) :
+    ProvableStruct.eval env window = mapWindow (Expression.eval env) window := by
+  obtain ⟨⟨⟩, ⟨⟩, _, _, _⟩ := window
+  simp only [circuit_norm, mapWindow, Row.map]
+
+lemma transitionInPermutation_eval (window : Var (Window Row) (F p)) :
+    transitionInPermutation (mapWindow (Expression.eval env) window) =
+      Expression.eval env (transitionInPermutation window) := by
+  simp only [transitionInPermutation, mapWindow, Row.map, circuit_norm]
+
+end Eval
+
+/-- The four 16-bit limbs of 64 bits, lowest first. -/
+def limbBits {α : Type} (bits : Vector α 64) : Vector (Vector α 16) 4 :=
+  .ofFn fun limb => .ofFn fun k => bits[limbBit limb k]
 
 /-- Bit `z` of ι's output `A'''[0, 0]`, from bit `z` of `A''[0, 0]`: Plonky3 xors it with the sum
 of the step flags of the rounds whose round constant has bit `z` set, and skips the xor if there
 are none. -/
-def iotaBit (stepFlags : Vector α 24) (bit : α) (z : Fin 64) : α :=
+def iotaBit {α : Type} [Add α] [Sub α] [Mul α] [OfNat α 2] (stepFlags : Vector α 24) (bit : α)
+    (z : Fin 64) : α :=
   match (List.finRange 24).filter (roundConstantBit · z) with
   | [] => bit
-  | r :: rs => xor (rs.foldl (fun sum r => sum + stepFlags[r]) stepFlags[r]) bit
+  | r :: rs => bitXor (rs.foldl (fun sum r => sum + stepFlags[r]) stepFlags[r]) bit
 
-/-- The round flags start at round 0 and advance by one round per row. -/
-def roundFlagConstraints (window : Window Row α) : List α :=
-  let current := window.current
-  window.isFirstRow * (current.stepFlags[0] - (1 : α)) ::
-    (List.finRange 23).map (fun (i : Fin 23) => window.isFirstRow * current.stepFlags[i.succ]) ++
-    (List.finRange 24).map fun (i : Fin 24) =>
-      window.isTransition * (current.stepFlags[i] - window.next.stepFlags[i + 1])
-
-/-- Transitions to a row of the same permutation. -/
-def transitionInPermutation (window : Window Row α) : α :=
-  window.isTransition * ((1 : α) - window.current.stepFlags[23])
-
-/-- The first round's input is the preimage, and the preimage is the same along a permutation. -/
-def preimageConstraints (window : Window Row α) : List α :=
-  let current := window.current
-  let firstStep := current.stepFlags[0]
-  let sameBlock := transitionInPermutation window
-  ((List.finRange 5).flatMap fun y => (List.finRange 5).flatMap fun x =>
-    (List.finRange 4).map fun limb => firstStep * (current.preimageLimb y x limb -
-      current.aLimb y x limb)) ++
-  (List.finRange 5).flatMap fun y => (List.finRange 5).flatMap fun x =>
-    (List.finRange 4).map fun limb => sameBlock * (current.preimageLimb y x limb -
-      window.next.preimageLimb y x limb)
-
-/-- The export flag is boolean and only set on the last round. -/
-def exportConstraints (window : Window Row α) : List α :=
-  let current := window.current
-  [boolCheck current.exportFlag, ((1 : α) - current.stepFlags[23]) * current.exportFlag]
-
-/-- θ: `C` is boolean and `C'[x] = C[x] ^ C[x - 1] ^ rot(C[x + 1], 1)`. -/
-def thetaColumnConstraints (window : Window Row α) : List α :=
-  let current := window.current
-  (List.finRange 5).flatMap fun x =>
-    (List.finRange 64).map (fun z => boolCheck (current.cBit x z)) ++
-    (List.finRange 64).map fun z => current.cPrimeBit x z -
-      xor (xor (current.cBit x z) (current.cBit (x + 4) z)) (current.cBit (x + 1) (z - 1))
-
-/-- θ: `A'` is boolean, and `A = A' ^ C ^ C'`, which also range checks the limbs of `A`. -/
-def thetaConstraints (window : Window Row α) : List α :=
-  let current := window.current
-  (List.finRange 5).flatMap fun x =>
-    let cXorCPrime : Vector α 64 := .ofFn fun z => xor (current.cBit x z) (current.cPrimeBit x z)
-    (List.finRange 5).flatMap fun y =>
-      (List.finRange 64).map (fun z => boolCheck (current.aPrimeBit y x z)) ++
-      (List.finRange 4).map fun limb =>
-        limbOf (fun z => xor (current.aPrimeBit y x z) cXorCPrime[z]) limb -
-          current.aLimb y x limb
-
-/-- θ: the parity of `A'[x, 0], ..., A'[x, 4]` is `C'[x]`, so `C` are the column parities of `A`. -/
-def parityConstraints (window : Window Row α) : List α :=
-  let current := window.current
-  (List.finRange 5).flatMap fun x => (List.finRange 64).map fun z =>
-    let sum := current.aPrimeBit 0 x z + current.aPrimeBit 1 x z + current.aPrimeBit 2 x z +
-      current.aPrimeBit 3 x z + current.aPrimeBit 4 x z
-    let diff := sum - current.cPrimeBit x z
-    diff * (diff - (2 : α)) * (diff - (4 : α))
-
-/-- χ: `A''[x, y] = B[x, y] ^ (~B[x + 1, y] & B[x + 2, y])`, which also range checks `A''`. -/
-def chiConstraints (window : Window Row α) : List α :=
-  let current := window.current
-  (List.finRange 5).flatMap fun y => (List.finRange 5).flatMap fun x =>
-    (List.finRange 4).map fun limb =>
-      limbOf (fun z => xor (andn (current.b (x + 1) y z) (current.b (x + 2) y z))
-        (current.b x y z)) limb - current.aPrimePrimeLimb y x limb
-
-/-- ι: the bits of `A''[0, 0]`, and `A'''[0, 0] = A''[0, 0] ^ RC`. -/
-def iotaConstraints (window : Window Row α) : List α :=
-  let current := window.current
-  (List.finRange 64).map (fun z => boolCheck current.aPrimePrime00Bits[z]) ++
-  (List.finRange 4).map (fun limb =>
-    limbOf (fun z => current.aPrimePrime00Bits[z]) limb - current.aPrimePrimeLimb 0 0 limb) ++
-  (List.finRange 4).map fun limb =>
-    limbOf (fun z => iotaBit current.stepFlags current.aPrimePrime00Bits[z] z) limb -
-      current.aPrimePrimePrime00Limbs[limb]
-
-/-- The round's output is the next round's input, within a permutation. -/
-def outputConstraints (window : Window Row α) : List α :=
-  let sameBlock := transitionInPermutation window
-  (List.finRange 5).flatMap fun x => (List.finRange 5).flatMap fun y =>
-    (List.finRange 4).map fun limb => sameBlock * (window.current.aPrimePrimePrimeLimb y x limb -
-      window.next.aLimb y x limb)
-
-/-- All constraints of a window, in Plonky3's order. -/
-def constraints (window : Window Row α) : List α :=
-  roundFlagConstraints window ++ preimageConstraints window ++ exportConstraints window ++
-    thetaColumnConstraints window ++ thetaConstraints window ++ parityConstraints window ++
-    chiConstraints window ++ iotaConstraints window ++ outputConstraints window
-
-end Constraints
 end KeccakAir

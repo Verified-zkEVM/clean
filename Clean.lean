@@ -34,6 +34,7 @@ public import Clean.Tables.KeccakInductive
 public import Clean.Tables.BLAKE3.ProcessBlocksInductive
 public import Clean.Gadgets.Bits
 public import Clean.Gadgets.Conditional
+public import Clean.Gadgets.ConditionalEquality
 public import Clean.Gadgets.IsEqual
 public import Clean.Gadgets.IsZeroField
 public import Clean.Gadgets.IsZero

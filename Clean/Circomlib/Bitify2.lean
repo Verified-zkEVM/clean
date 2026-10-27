@@ -19,6 +19,22 @@ due to cyclic import dependencies with AliasCheck.
 
 namespace Circomlib
 open Utils.Bits
+
+/-- Circom's linear combination `lc1` of the bits evaluates like `fieldFromBitsExpr`. -/
+private lemma eval_lc1 {p : ℕ} [Fact p.Prime] {n : ℕ} (env : Environment (F p))
+    (bits : Vector (Expression (F p)) n) :
+    Expression.eval env
+        (Fin.foldl n (fun acc i ↦ acc + bits[i.val] * Expression.const (2 ^ i.val)) 0) =
+      Expression.eval env (fieldFromBitsExpr bits) := by
+  rw [fieldFromBits_eval]
+  simp only [fieldFromBits, fromBits]
+  induction n with
+  | zero => simp only [Fin.foldl_zero, Expression.eval, Vector.map_map, Nat.cast_zero]
+  | succ n ih =>
+    obtain ih := ih bits.pop
+    simp [Vector.getElem_pop'] at ih
+    simp [Fin.foldl_succ_last, ih, Expression.eval]
+
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
 namespace Num2Bits_strict
@@ -214,9 +230,11 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         apply h_bits ⟨i, hi⟩
 
       set bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
-      have h_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
-          = fieldFromBitsExpr bits_vars := by
-        simp [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
+      have h_fold : Expression.eval env (Fin.foldl n
+          (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
+          = Expression.eval env (fieldFromBitsExpr bits_vars) := by
+        rw [← eval_lc1]
+        simp [bits_vars, Vector.getElem_mapRange]
 
       by_cases h_input_zero : input = 0
       · subst h_input_zero
@@ -273,9 +291,11 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         simp_all only [Nat.reducePow, gt_iff_lt, dite_eq_ite, ite_mul, one_mul, zero_mul]
         let bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
 
-        have h_expr_fold : (Fin.foldl n (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
-            = fieldFromBitsExpr bits_vars := by
-          simp only [fieldFromBitsExpr, bits_vars, Vector.getElem_mapRange]
+        have h_expr_fold : Expression.eval env.toEnvironment (Fin.foldl n
+            (fun acc i ↦ acc + var { index := i0 + ↑i } * Expression.const (2 ^ (Fin.val i))) 0)
+            = Expression.eval env.toEnvironment (fieldFromBitsExpr bits_vars) := by
+          rw [← eval_lc1]
+          simp only [bits_vars, Vector.getElem_mapRange]
         rw [h_expr_fold]
 
         have : ∀ (i: Fin n), Expression.eval env bits_vars[i]! = env.get (i0 + i) := by
