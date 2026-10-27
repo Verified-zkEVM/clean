@@ -25,8 +25,8 @@ def Direction.name : Direction → String
 @[simp, circuit_norm] lemma Direction.pull_eq_push_iff : Direction.pull = .push ↔ False := by
   simp
 
-/-- What an interaction of `mult` copies owes, given the guarantee of its message: an active push
-owes the guarantee, and a pull takes `0` or `1` copies. -/
+/-- What an interaction of multiplicity `mult` owes, given the guarantee of its message: an active
+push owes the guarantee, and a pull has multiplicity `0` or `1`. -/
 def Direction.Requirements {F : Type} [Zero F] [One F] (direction : Direction) (mult : F)
     (guarantee : Prop) : Prop :=
   match direction with
@@ -132,7 +132,7 @@ instance [Repr F] : Repr (AbstractInteraction F) where
 
 variable {channel : Channel F Message}
 
-/-- Pull one copy of a message. -/
+/-- Pull a message once. -/
 def pulled {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { direction := .pull, mult := 1, msg }
 
@@ -141,7 +141,7 @@ def pulledIf {channel : Channel F Message} (enabled : Expression F) (msg : Messa
     ChannelInteraction channel :=
   { direction := .pull, mult := enabled, msg }
 
-/-- Push one copy of a message. -/
+/-- Push a message once. -/
 def pushed {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { direction := .push, mult := 1, msg }
 
@@ -150,7 +150,7 @@ def pushedIf {channel : Channel F Message} (enabled : Expression F) (msg : Messa
     ChannelInteraction channel :=
   { direction := .push, mult := enabled, msg }
 
-/-- Push `mult` copies of a message. -/
+/-- Push a message `mult` times. -/
 def emitted {channel : Channel F Message} (mult : Expression F) (msg : Message (Expression F)) :
     ChannelInteraction channel :=
   { direction := .push, mult, msg }

@@ -21,7 +21,7 @@ with a channel, together with the proof that the check implies these facts.
 -/
 
 namespace Interaction
-/-- A pull of one copy of a message: the interactions that typed channels give their guarantee. -/
+/-- A pull of multiplicity `1`: the interactions that typed channels give their guarantee. -/
 def Pull (i : Interaction F) : Prop := i.direction = .pull ∧ i.mult = 1
 
 /--
@@ -56,7 +56,7 @@ lemma count_activeMessages (interactions : List (Interaction F)) (direction : Di
 
 /--
 The facts about balanced interactions that soundness proofs use:
-- a pull of one copy of a message is matched by a push of it, and
+- a pull of multiplicity `1` is matched by a push of its message, and
 - if all interactions carrying a message have multiplicity `0` or `1`, it is pushed and pulled
   equally often.
 -/
@@ -150,13 +150,13 @@ theorem LogUpBalanced.activeCount_push_eq_activeCount_pull_of_isBool
     Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ (activeCount_lt _) (activeCount_lt _)] at sum
   exact sum
 
-/-- Every pull of one copy of a message is matched by a push of it. -/
+/-- Every pull of multiplicity `1` is matched by a push of its message. -/
 theorem LogUpBalanced.exists_push_of_pull {interactions : List (Interaction F)}
     (balanced : LogUpBalanced interactions) :
     ∀ a ∈ interactions, a.Pull → ∃ b ∈ interactions, b.msg = a.msg ∧ b.Push := by
   intro a a_mem a_pull
-  -- assuming no such push exists, all interactions with the message are pulls of one copy or
-  -- inactive, so balance says that there are none
+  -- assuming no such push exists, all interactions with the message are pulls of multiplicity `1`
+  -- or inactive, so balance says that there are none
   by_contra! no_push
   have isBool : ∀ i ∈ interactions, i.msg = a.msg → IsBool i.mult := by
     intro i i_mem i_msg
@@ -271,7 +271,7 @@ instance (channel : Channel F Message) : Normal channel.toRaw where
     simp only [Interaction.Guarantees, Channel.toRaw]
     exact fun h_direction h_mult => absurd h_mult (not_pull h_direction)
 
-/-- Normal channels are consistent: every pull of one copy is matched by a push, whose requirements
+/-- Normal channels are consistent: every pull of multiplicity `1` is matched by a push, whose requirements
 give the guarantee. -/
 theorem consistent_of_normal (channel : RawChannel F) [channel.Normal] :
     channel.Consistent := by
@@ -336,7 +336,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees
   (n : ℕ) (len_pulls : pulls.length = n) (len_pushes : pushes.length = n)
   -- all interactions are on the input channel
   (pulls_channel : ∀ a ∈ pulls, a.channel = channel) (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
-  -- every pull takes one copy of its message, and every push adds one copy
+  -- all pulls and pushes have multiplicity 1
   (pulls_unit : ∀ a ∈ pulls, a.Pull)
   (pushes_unit : ∀ b ∈ pushes, b.direction = .push ∧ b.mult = 1) :
     (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →

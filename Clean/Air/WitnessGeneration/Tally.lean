@@ -203,8 +203,8 @@ def add (tally : Tally F) (channel : String) (message : Array F) (multiplicity :
       if hmultiplicity : multiplicity = 0 then tally
       else tally.append { channel, message, multiplicity } hposition hmultiplicity
 
-/-- The number of copies an interaction adds to the net multiplicity of its message: its
-multiplicity read as a natural number, positive for a push and negative for a pull. -/
+/-- What an interaction adds to the net multiplicity of its message: its multiplicity read as a
+natural number, positive for a push and negative for a pull. -/
 def signedCount (interaction : Interaction F) : ℤ :=
   match interaction.direction with
   | .push => FiniteField.val interaction.mult
