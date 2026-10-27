@@ -336,7 +336,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees
   (n : ℕ) (len_pulls : pulls.length = n) (len_pushes : pushes.length = n)
   -- all interactions are on the input channel
   (pulls_channel : ∀ a ∈ pulls, a.channel = channel) (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
-  -- pulls and pushes of one copy of a message
+  -- every pull takes one copy of its message, and every push adds one copy
   (pulls_unit : ∀ a ∈ pulls, a.Pull)
   (pushes_unit : ∀ b ∈ pushes, b.direction = .push ∧ b.mult = 1) :
     (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →
