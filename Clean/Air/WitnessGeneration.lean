@@ -270,4 +270,11 @@ def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness 
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
   (Tally.empty.addInteractions witness.interactions).isEmpty
 
+/-- Whether the interactions with every channel pass a balance check, in a field of characteristic
+`char`. -/
+def balanceHolds {ensemble : Ensemble F PublicIO} (balance : Balance F) (char : ℕ)
+    (witness : EnsembleWitness ensemble) : Bool :=
+  ensemble.channels.all fun channel =>
+    balance.isBalanced char (witness.interactions.filter (·.channel.name == channel.name))
+
 end Air.Flat.WitnessGeneration
