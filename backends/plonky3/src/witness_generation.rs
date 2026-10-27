@@ -179,10 +179,10 @@ pub struct MultiplicityColumn {
 
 impl MultiplicityColumn {
     /// The multiplicity cell that cancels a net multiplicity `demand` on top of the value `cell`.
-    fn cancel<F: Field>(&self, cell: F, demand: F) -> F {
+    fn cancel<F: Field>(&self, cell: F, demand: i128) -> F {
         match self.direction {
-            Direction::Push => cell - demand,
-            Direction::Pull => cell + demand,
+            Direction::Push => cell - F::from_i128(demand),
+            Direction::Pull => cell + F::from_i128(demand),
         }
     }
 }
@@ -357,26 +357,31 @@ pub trait Program<F: WitnessField> {
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>>;
 }
 
-/// A nonzero net multiplicity of one channel message.
+/// The number of copies an interaction adds to the net multiplicity of its message: its
+/// multiplicity read as a natural number, positive for a push and negative for a pull.
+fn signed_count<F: WitnessField>(interaction: &Interaction<F>) -> i128 {
+    let count = i128::from(interaction.multiplicity.canonical_u64());
+    match interaction.direction {
+        Direction::Push => count,
+        Direction::Pull => -count,
+    }
+}
+
+/// A nonzero net multiplicity of one channel message, pushes minus pulls.
 #[derive(Clone, Debug)]
 struct Demand<F> {
     channel: &'static str,
     message: Vec<F>,
-    multiplicity: F,
+    multiplicity: i128,
 }
 
 impl<F: WitnessField> Demand<F> {
-    /// The direction and size of a net multiplicity: pushes count positively and pulls negatively,
-    /// so values above half the field order are read as negative.
+    /// Whether the message was pushed or pulled more often, and by how much.
     fn surplus(&self) -> (Direction, usize) {
-        let value = self.multiplicity.canonical_u64();
-        if 2 * u128::from(value) <= u128::from(F::ORDER_U64) {
-            (Direction::Push, value as usize)
+        if self.multiplicity > 0 {
+            (Direction::Push, self.multiplicity as usize)
         } else {
-            (
-                Direction::Pull,
-                (-self.multiplicity).canonical_u64() as usize,
-            )
+            (Direction::Pull, (-self.multiplicity) as usize)
         }
     }
 
@@ -394,7 +399,7 @@ type MessageKey<F> = (&'static str, Vec<F>);
 /// The nonzero net multiplicities of channel messages, in the order they became nonzero.
 struct Demands<F> {
     /// The net multiplicity of each message, with its position in `order`.
-    net: BTreeMap<MessageKey<F>, (F, u64)>,
+    net: BTreeMap<MessageKey<F>, (i128, u64)>,
     order: BTreeMap<u64, MessageKey<F>>,
     next_position: u64,
 }
@@ -413,14 +418,14 @@ impl<F: WitnessField> Demands<F> {
     }
 
     /// Add a multiplicity for a channel message, dropping the entry when it cancels to zero.
-    fn add(&mut self, channel: &'static str, message: Vec<F>, multiplicity: F) {
-        if multiplicity == F::ZERO {
+    fn add(&mut self, channel: &'static str, message: Vec<F>, multiplicity: i128) {
+        if multiplicity == 0 {
             return;
         }
         let key = (channel, message);
         if let Some((total, position)) = self.net.get_mut(&key) {
             *total += multiplicity;
-            if *total == F::ZERO {
+            if *total == 0 {
                 let position = *position;
                 self.net.remove(&key);
                 self.order.remove(&position);
@@ -434,15 +439,15 @@ impl<F: WitnessField> Demands<F> {
 
     fn add_interactions(&mut self, interactions: impl IntoIterator<Item = Interaction<F>>) {
         for interaction in interactions {
-            let multiplicity = interaction.signed_multiplicity();
-            self.add(interaction.channel, interaction.message, multiplicity);
+            let count = signed_count(&interaction);
+            self.add(interaction.channel, interaction.message, count);
         }
     }
 
     fn remove_interactions(&mut self, interactions: impl IntoIterator<Item = Interaction<F>>) {
         for interaction in interactions {
-            let multiplicity = interaction.signed_multiplicity();
-            self.add(interaction.channel, interaction.message, -multiplicity);
+            let count = signed_count(&interaction);
+            self.add(interaction.channel, interaction.message, -count);
         }
     }
 

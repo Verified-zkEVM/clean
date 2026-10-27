@@ -26,8 +26,8 @@ structure MultiplicityColumn where
   direction : Direction
 
 /-- The multiplicity cell that cancels a net multiplicity `demand` on top of the value `cell`. -/
-def MultiplicityColumn.cancel {F : Type} [Field F] (multiplicity : MultiplicityColumn) (cell demand : F) :
-    F :=
+def MultiplicityColumn.cancel {F : Type} [Field F] (multiplicity : MultiplicityColumn) (cell : F)
+    (demand : ℤ) : F :=
   match multiplicity.direction with
   | .push => cell - demand
   | .pull => cell + demand
