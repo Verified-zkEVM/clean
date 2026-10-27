@@ -64,7 +64,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- assert correctness
     input.x + input.y === input.z + carry * 256
     -- emit to the add8 channel with multiplicity `m`
-    add8Channel.emit .push input.m (input.x, input.y, input.z)
+    add8Channel.emit input.m (input.x, input.y, input.z)
 
   ProverAssumptions
   | { x, y, z, m }, _, _ =>

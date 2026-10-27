@@ -370,7 +370,7 @@ def femtoCairoStep (program : Array (F p)) (h_program : ValidProgram program) :
 def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   name := "memory"
   main | { address, value, multiplicity } => do
-    memoryChannel.emit .push multiplicity { address, value }
+    memoryChannel.emit multiplicity { address, value }
   Assumptions
   | { address, value, .. }, data => memoryChannel.Guarantees { address, value } data
   ProverAssumptions

@@ -36,7 +36,7 @@ Preallocated components must have exactly one multiplicity cell. For demand comp
 depends on whether you use a multiplicity cell in the input: if yes, the component gets one row per
 distinct message, like an addition chip; if not, it gets one row per occurrence, like a VM, where
 every step is its own row even if two steps happen to agree. For example, a memory row
-emits `memoryChannel.emit .push multiplicity { address, value }`, so its input is
+emits `memoryChannel.emit multiplicity { address, value }`, so its input is
 `{ address := .fixed i.toField, value := .witness ..., multiplicity := .multiplicity }`.
 
 The component's witness programs compute the rest of the row from its input.

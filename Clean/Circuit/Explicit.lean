@@ -555,16 +555,12 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} {entry : Var α F
   ExplicitCircuits.toSingle (lookup table) entry
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
-    {direction : Direction} {mult : Expression F} :
-    ExplicitCircuits (F:=F) (channel.emit direction mult) where
+    {mult : Expression F} :
+    ExplicitCircuits (F:=F) (channel.emit mult) where
   output _ _ := ()
   localLength _ _ := 0
-  operations msg _ := [.interact (channel.emitted direction mult msg).toRaw]
-  channelsWithGuarantees _ _ := match direction with
-    | .push => []
-    | .pull => [channel.toRaw]
-  channelsLawful _ _ := by
-    cases direction <;> simp [Operations.ChannelsLawful, circuit_norm]
+  operations msg _ := [.interact (channel.emitted mult msg).toRaw]
+  channelsWithGuarantees _ _ := []
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
     ExplicitCircuits (F:=F) (channel.pull) where

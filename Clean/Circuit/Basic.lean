@@ -129,12 +129,11 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 
 end Circuit
 
-/-- Push or pull a message `mult` times. -/
+/-- Push a message `mult` times. -/
 @[circuit_norm]
 def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (direction : Direction) (mult : Expression F) (msg : Message (Expression F)) :
-    Circuit F Unit := fun _ =>
-  ((), [.interact (channel.emitted direction mult msg).toRaw])
+    (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+  ((), [.interact (channel.emitted mult msg).toRaw])
 
 @[circuit_norm]
 def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)

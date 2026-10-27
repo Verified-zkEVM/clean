@@ -118,25 +118,6 @@ instance [Repr F] : Repr (AbstractInteraction F) where
 
 variable {channel : Channel F Message}
 
-/-- Normal form for a channel interaction. -/
-def emitted (direction : Direction) (mult : Expression F) (msg : Message (Expression F)) :
-    ChannelInteraction channel :=
-  { direction, mult, msg }
-
-omit [FiniteField F] in @[circuit_norm]
-lemma emitted_def (direction : Direction) (mult : Expression F) (msg : Message (Expression F)) :
-  ({ direction, mult, msg } : ChannelInteraction channel) = emitted direction mult msg := rfl
-omit [FiniteField F] in @[circuit_norm]
-lemma emitted_direction (direction : Direction) (mult : Expression F)
-    (msg : Message (Expression F)) :
-  (emitted direction mult msg : ChannelInteraction channel).direction = direction := rfl
-omit [FiniteField F] in @[circuit_norm]
-lemma emitted_mult (direction : Direction) (mult : Expression F) (msg : Message (Expression F)) :
-  (emitted direction mult msg : ChannelInteraction channel).mult = mult := rfl
-omit [FiniteField F] in @[circuit_norm]
-lemma emitted_msg (direction : Direction) (mult : Expression F) (msg : Message (Expression F)) :
-  (emitted direction mult msg : ChannelInteraction channel).msg = msg := rfl
-
 /-- Pull one copy of a message. -/
 def pulled {channel : Channel F Message} (msg : Message (Expression F)) : ChannelInteraction channel :=
   { direction := .pull, mult := 1, msg }
@@ -155,12 +136,27 @@ def pushedIf {channel : Channel F Message} (enabled : Expression F) (msg : Messa
     ChannelInteraction channel :=
   { direction := .push, mult := enabled, msg }
 
+/-- Push `mult` copies of a message. -/
+def emitted {channel : Channel F Message} (mult : Expression F) (msg : Message (Expression F)) :
+    ChannelInteraction channel :=
+  { direction := .push, mult, msg }
+
 omit [FiniteField F] in @[circuit_norm]
-lemma emitted_pull_eq_pulledIf (enabled : Expression F) (msg : Message (Expression F)) :
-  (emitted .pull enabled msg : ChannelInteraction channel) = pulledIf enabled msg := rfl
+lemma emitted_def (mult : Expression F) (msg : Message (Expression F)) :
+  ({ direction := .push, mult, msg } : ChannelInteraction channel) = emitted mult msg := rfl
 omit [FiniteField F] in @[circuit_norm]
-lemma emitted_push_eq_pushedIf (enabled : Expression F) (msg : Message (Expression F)) :
-  (emitted .push enabled msg : ChannelInteraction channel) = pushedIf enabled msg := rfl
+lemma pulledIf_def (enabled : Expression F) (msg : Message (Expression F)) :
+  ({ direction := .pull, mult := enabled, msg } : ChannelInteraction channel) =
+    pulledIf enabled msg := rfl
+omit [FiniteField F] in @[circuit_norm]
+lemma emitted_direction (mult : Expression F) (msg : Message (Expression F)) :
+  (emitted mult msg : ChannelInteraction channel).direction = .push := rfl
+omit [FiniteField F] in @[circuit_norm]
+lemma emitted_mult (mult : Expression F) (msg : Message (Expression F)) :
+  (emitted mult msg : ChannelInteraction channel).mult = mult := rfl
+omit [FiniteField F] in @[circuit_norm]
+lemma emitted_msg (mult : Expression F) (msg : Message (Expression F)) :
+  (emitted mult msg : ChannelInteraction channel).msg = msg := rfl
 @[circuit_norm]
 lemma pulledIf_one_eq_pulled (msg : Message (Expression F)) :
   (pulledIf 1 msg : ChannelInteraction channel) = pulled msg := rfl
@@ -199,8 +195,8 @@ omit [FiniteField F] in @[circuit_norm]
 lemma pushedIf_msg (enabled : Expression F) (msg : Message (Expression F)) :
   (pushedIf enabled msg : ChannelInteraction channel).msg = msg := rfl
 
-@[circuit_norm] def Channel.emitted (channel : Channel F Message) direction mult msg :=
-  _root_.emitted (channel := channel) direction mult msg
+@[circuit_norm] def Channel.emitted (channel : Channel F Message) mult msg :=
+  _root_.emitted (channel := channel) mult msg
 @[circuit_norm] def Channel.pulled (channel : Channel F Message) msg :=
   _root_.pulled (channel := channel) msg
 @[circuit_norm] def Channel.pushed (channel : Channel F Message) msg :=
