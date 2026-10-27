@@ -410,6 +410,18 @@ lemma pulledIfValue_requirements_of_isBool_enabled {channel : Channel F Message}
     Direction.pull_requirements]
   exact id
 
+lemma pulledIfValue_one_guarantees_iff {channel : Channel F Message} {msg : Message F}
+    {data : ProverData F} :
+    (channel.pulledIfValue 1 msg).Guarantees data ↔ channel.Guarantees msg data := by
+  simp [Interaction.Guarantees, Interaction.msgVector, Channel.pulledIfValue, Channel.toRaw,
+    ProvableType.fromElements_toElements]
+
+lemma pushedIfValue_requirements_iff {channel : Channel F Message} {enabled : F}
+    {msg : Message F} {data : ProverData F} (h_enabled : enabled ≠ 0) :
+    (channel.pushedIfValue enabled msg).Requirements data ↔ channel.Guarantees msg data := by
+  simp [Interaction.Requirements, Interaction.msgVector, Channel.pushedIfValue, Channel.toRaw,
+    ProvableType.fromElements_toElements, h_enabled]
+
 lemma pushedIfValue_guarantees {channel : Channel F Message}
   {enabled : F} {msg : Message F} {data : ProverData F} :
     (channel.pushedIfValue enabled msg).Guarantees data := by
