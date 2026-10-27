@@ -33,11 +33,13 @@ It also proves the basic row-level transport lemmas: instantiated component oper
 
 **Ensemble-level soundness** is more than a simple lifting of per-circuit soundness: it requires that channel guarantees, which were _assumed_ as part of local circuit proofs, are shown to hold unconditionally from global channel balance and constraints.
 
-The library currently provides two distinct arguments to establish soundness, covering two prominent ways of using channels:
+The library currently provides three distinct arguments to establish soundness, covering prominent ways of using channels:
 
 `OrderedChannel.lean` contains a staged channel construction for ordinary lookup-like channels. The defining property is a strict hierarchy on the list of component tables: any table that pushes to a channel must come before every table that pulls from it. From little more than this property, we prove ensemble-level soundness, as encapsulated in the `SoundEnsemble` structure. On the way, we introduce a relaxed notion of channel balance called `PartialBalancedChannel` that allows the balanced interaction list to contain additional interactions from tables added later. This makes it suitable for an inductive argument or gradual addition of tables to an existing sound ensemble.
 
 `Vm.lean` contains a construction aimed at "VM-like" components that perform one transition per row. Since VM components both pull from and push to one distinguished state channel, they cannot follow the theory of ordered lookup-channel soundness. Instead, we prove a dedicated soundness theorem that applies to a set of VM components added to an existing hierarchical ensemble; a typical modern zkVMs layout. `Clean/Examples/BinaryFibonacci` is a VM over the binary field GF(2^64), sound under multiset balance.
+
+Some channels are sound by an argument of their own. A *closed channel* is a finished channel whose owners, the components that push to it, come with a proof that the balance check implies the guarantees of all its interactions; other tables may still pull from it like from any finished channel. `Memory.lean` closes a channel for read-only memory checked offline: each read pulls an entry with a counter and pushes it back with the counter times a primitive element, so that the reads of an entry outside the memory could only balance in a cycle of more reads than there are interactions. Unlike a lookup, a memory doesn't count reads in a multiplicity column, so it is sound under every balance check that bounds the number of interactions, including multiset balance in binary fields. `Clean/Examples/BinaryProgram` runs a VM over GF(2^64) on a program in memory.
 
 `WitnessGeneration.lean` constructs ensemble witnesses from the public input and the prover's private input, see the next section.
 
