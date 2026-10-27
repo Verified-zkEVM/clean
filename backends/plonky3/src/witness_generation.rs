@@ -376,21 +376,13 @@ struct Demand<F> {
 }
 
 impl<F: WitnessField> Demand<F> {
-    /// Whether the message was pushed or pulled more often, and by how much.
-    fn surplus(&self) -> (Direction, usize) {
-        if self.multiplicity > 0 {
-            (Direction::Push, self.multiplicity as usize)
-        } else {
-            (Direction::Pull, (-self.multiplicity) as usize)
-        }
-    }
-
+    /// Whether the message was pushed or pulled more often.
     fn direction(&self) -> Direction {
-        self.surplus().0
-    }
-
-    fn count(&self) -> usize {
-        self.surplus().1
+        if self.multiplicity > 0 {
+            Direction::Push
+        } else {
+            Direction::Pull
+        }
     }
 }
 
@@ -606,28 +598,22 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
-    let new_rows = match &mode.multiplicity {
-        None => demand.count(),
-        Some(multiplicity) => match table.counted_row(demand) {
-            Some(row_index) => {
-                return increment_multiplicity::<F, P>(
-                    component,
-                    multiplicity,
-                    row_index,
-                    demand,
-                    table,
-                    demands,
-                    data,
-                    hint,
-                );
-            }
-            None => 1,
-        },
-    };
-    for _ in 0..new_rows {
-        let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
-        demands.add_interactions(table.push::<P>(component, row));
+    if let Some(multiplicity) = &mode.multiplicity {
+        if let Some(row_index) = table.counted_row(demand) {
+            return increment_multiplicity::<F, P>(
+                component,
+                multiplicity,
+                row_index,
+                demand,
+                table,
+                demands,
+                data,
+                hint,
+            );
+        }
     }
+    let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
+    demands.add_interactions(table.push::<P>(component, row));
     Ok(())
 }
 

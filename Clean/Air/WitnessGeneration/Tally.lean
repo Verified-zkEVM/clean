@@ -39,14 +39,9 @@ namespace Demand
 /-- The channel and the message: what the tally records a net multiplicity for. -/
 def key (demand : Demand F) : String × Array F := (demand.channel, demand.message)
 
-/-- Whether the message was pushed or pulled more often, and by how much. -/
-def surplus (demand : Demand F) : Direction × ℕ :=
-  if 0 < demand.multiplicity then (.push, demand.multiplicity.toNat)
-  else (.pull, (-demand.multiplicity).toNat)
-
-def direction (demand : Demand F) : Direction := demand.surplus.1
-
-def count (demand : Demand F) : ℕ := demand.surplus.2
+/-- Whether the message was pushed or pulled more often. -/
+def direction (demand : Demand F) : Direction :=
+  if 0 < demand.multiplicity then .push else .pull
 
 end Demand
 
