@@ -22,18 +22,16 @@ with a channel, together with the proof that the check implies these facts.
 
 namespace Interaction
 /-- A pull of one copy of a message: the interactions that typed channels give their guarantee. -/
-def IsUnitPull (i : Interaction F) : Prop := i.direction = .pull ∧ i.mult = 1
+def Pull (i : Interaction F) : Prop := i.direction = .pull ∧ i.mult = 1
 
 /--
-An interaction that provides its message to pulls: an active push, or a pull of multiplicity other
-than `0` or `1`, which can cancel other pulls under field-sum balance. Typed channels require the
-guarantee from active pushes, and a multiplicity of `0` or `1` from pulls.
+An interaction that pushes its message: an active push, or a pull of multiplicity other than `0` or
+`1`, which acts as a push under field-sum balance.
 -/
-def Provides (i : Interaction F) : Prop := i.mult ≠ 0 ∧ (i.direction = .pull → i.mult ≠ 1)
+def Push (i : Interaction F) : Prop := i.mult ≠ 0 ∧ (i.direction = .pull → i.mult ≠ 1)
 
-lemma not_provides_iff {i : Interaction F} :
-    ¬i.Provides ↔ i.mult = 0 ∨ i.IsUnitPull := by
-  simp only [Provides, IsUnitPull, not_and, Classical.not_imp]
+lemma not_push_iff {i : Interaction F} : ¬i.Push ↔ i.mult = 0 ∨ i.Pull := by
+  simp only [Push, Pull, not_and, Classical.not_imp]
   tauto
 end Interaction
 
@@ -58,13 +56,13 @@ lemma count_activeMessages (interactions : List (Interaction F)) (direction : Di
 
 /--
 The facts about balanced interactions that soundness proofs use:
-- every pull of one copy of a message is matched by an interaction that provides it, and
+- a pull of one copy of a message is matched by a push of it, and
 - if all interactions carrying a message have multiplicity `0` or `1`, it is pushed and pulled
   equally often.
 -/
 structure BalancedInteractions (interactions : List (Interaction F)) : Prop where
-  exists_provides_of_isUnitPull : ∀ a ∈ interactions, a.IsUnitPull →
-    ∃ b ∈ interactions, b.msg = a.msg ∧ b.Provides
+  exists_push_of_pull : ∀ a ∈ interactions, a.Pull →
+    ∃ b ∈ interactions, b.msg = a.msg ∧ b.Push
   activeCount_push_eq_activeCount_pull_of_isBool : ∀ msg : Array F,
     (∀ i ∈ interactions, i.msg = msg → IsBool i.mult) →
     activeCount interactions .push msg = activeCount interactions .pull msg
@@ -72,11 +70,11 @@ structure BalancedInteractions (interactions : List (Interaction F)) : Prop wher
 /-- Balance is invariant under permutation of the interaction list. -/
 lemma BalancedInteractions.of_perm {as bs : List (Interaction F)} :
     BalancedInteractions as → List.Perm as bs → BalancedInteractions bs := by
-  rintro ⟨ provides, counts ⟩ perm
+  rintro ⟨ push_of_pull, counts ⟩ perm
   constructor
   · intro a a_mem a_pull
-    obtain ⟨ b, b_mem, b_msg, b_provides ⟩ := provides a (perm.mem_iff.mpr a_mem) a_pull
-    exact ⟨ b, perm.mem_iff.mp b_mem, b_msg, b_provides ⟩
+    obtain ⟨ b, b_mem, b_msg, b_push ⟩ := push_of_pull a (perm.mem_iff.mpr a_mem) a_pull
+    exact ⟨ b, perm.mem_iff.mp b_mem, b_msg, b_push ⟩
   · intro msg isBool
     simp only [activeCount, ← perm.countP_eq]
     exact counts msg fun i hi => isBool i (perm.mem_iff.mp hi)
@@ -159,16 +157,16 @@ def Balance.logUp : Balance F where
         rw [zero, zero]
     refine ⟨ ?_, counts ⟩
     intro a a_mem a_pull
-    by_contra! no_provides
+    by_contra! no_push
     have isBool : ∀ i ∈ interactions, i.msg = a.msg → IsBool i.mult := by
       intro i i_mem i_msg
-      rcases Interaction.not_provides_iff.mp (no_provides i i_mem i_msg) with h | h
-      · exact Or.inl h
-      · exact Or.inr h.2
+      rcases Interaction.not_push_iff.mp (no_push i i_mem i_msg) with h | h
+      · exact .inl h
+      · exact .inr h.2
     have no_push : activeCount interactions .push a.msg = 0 := by
       simp only [activeCount, List.countP_eq_zero, decide_eq_true_eq, not_and]
       intro i i_mem i_push i_msg i_mult
-      rcases Interaction.not_provides_iff.mp (no_provides i i_mem i_msg) with h | h
+      rcases Interaction.not_push_iff.mp (no_push i i_mem i_msg) with h | h
       · exact i_mult h
       · simp [h.1] at i_push
     have pull_pos : 0 < activeCount interactions .pull a.msg := by
@@ -247,9 +245,9 @@ A "normal" channel is one where
 class Normal (channel : RawChannel F) : Prop where
   guarantees_of_requirements : ∀ (a b : Interaction F) (data : ProverData F),
     a.channel = channel → b.channel = channel → a.msg = b.msg →
-    a.IsUnitPull → b.Provides → b.Requirements data → a.Guarantees data
-  guarantees_of_not_isUnitPull : ∀ (a : Interaction F) (data : ProverData F),
-    a.channel = channel → ¬a.IsUnitPull → a.Guarantees data
+    a.Pull → b.Push → b.Requirements data → a.Guarantees data
+  guarantees_of_not_pull : ∀ (a : Interaction F) (data : ProverData F),
+    a.channel = channel → ¬a.Pull → a.Guarantees data
 
 /-- Typed `Channel`s are normal by definition! -/
 instance (channel : Channel F Message) : Normal channel.toRaw where
@@ -261,23 +259,23 @@ instance (channel : Channel F Message) : Normal channel.toRaw where
     cases b_direction
     · exact fun _ _ => b_reqs b_ne_zero
     · exact absurd (b_reqs.resolve_left b_ne_zero) (b_ne_one rfl)
-  guarantees_of_not_isUnitPull := by
+  guarantees_of_not_pull := by
     rintro ⟨ _, direction, mult, msg, size ⟩ data rfl not_pull
-    simp only [Interaction.IsUnitPull, not_and] at not_pull
+    simp only [Interaction.Pull, not_and] at not_pull
     simp only [Interaction.Guarantees, Channel.toRaw]
     exact fun h_direction h_mult => absurd h_mult (not_pull h_direction)
 
-/-- Normal channels are consistent: every unit pull is matched by an interaction providing it. -/
+/-- Normal channels are consistent: every pull of one copy is matched by a push, whose requirements
+give the guarantee. -/
 theorem consistent_of_normal (channel : RawChannel F) [channel.Normal] :
     channel.Consistent := by
   constructor
   intro interactions data balance reqs a a_mem
-  by_cases a_pull : a.IsUnitPull
-  case neg => exact Normal.guarantees_of_not_isUnitPull a data (reqs a a_mem).1 a_pull
-  obtain ⟨ b, b_mem, b_msg, b_provides ⟩ :=
-    balance.exists_provides_of_isUnitPull a a_mem a_pull
+  by_cases a_pull : a.Pull
+  case neg => exact Normal.guarantees_of_not_pull a data (reqs a a_mem).1 a_pull
+  obtain ⟨ b, b_mem, b_msg, b_push ⟩ := balance.exists_push_of_pull a a_mem a_pull
   exact Normal.guarantees_of_requirements a b data (reqs a a_mem).1 (reqs b b_mem).1 b_msg.symm
-    a_pull b_provides (reqs b b_mem).2
+    a_pull b_push (reqs b b_mem).2
 
 instance (channel : RawChannel F) [channel.Normal] : channel.Consistent :=
   consistent_of_normal channel
@@ -333,7 +331,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees
   -- all interactions are on the input channel
   (pulls_channel : ∀ a ∈ pulls, a.channel = channel) (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
   -- pulls and pushes of one copy of a message
-  (pulls_unit : ∀ a ∈ pulls, a.IsUnitPull)
+  (pulls_unit : ∀ a ∈ pulls, a.Pull)
   (pushes_unit : ∀ b ∈ pushes, b.direction = .push ∧ b.mult = 1) :
     (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →
     ∀ (i : ℕ) (hi: i < n), pushes[i].Requirements data → pulls[i].Guarantees data := by
@@ -361,7 +359,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees
       apply RawChannel.Normal.guarantees_of_requirements pulls[i] pushes[j] data
         (pulls_channel _ (List.getElem_mem ..)) (pushes_channel _ (List.getElem_mem ..))
         push_j_msg.symm (pulls_unit _ (List.getElem_mem ..))
-      simp [Interaction.Provides, push_j_unit.1, push_j_unit.2]
+      simp [Interaction.Push, push_j_unit.1, push_j_unit.2]
     -- if i = j, we're done
     by_cases h_ij : j = i
     · subst h_ij; exact push_j_imp_pull_i push_i_req
@@ -388,7 +386,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees
       exact push_i_req |> push_i_imp_pull_j |> constraints j hj |> push_j_imp_pull_i
     -- we need to re-check all assumptions about pulls', pushes' for the induction hypothesis
     -- most of these are straightforward
-    have pulls'_unit : ∀ a ∈ pulls', a.IsUnitPull := by
+    have pulls'_unit : ∀ a ∈ pulls', a.Pull := by
       simp only [pulls', List.forall_mem_iff_getElem, List.getElem_eraseIdx]
       intros; split_ifs <;> simp [*]
     have pushes'_unit : ∀ b ∈ pushes', b.direction = .push ∧ b.mult = 1 := by
@@ -563,7 +561,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_if
     intro b hb
     simp only [active_pushes, activeInteractions, List.mem_filter] at hb
     exact pushes_channel b hb.1
-  have active_pulls_unit : ∀ a ∈ active_pulls, a.IsUnitPull := by
+  have active_pulls_unit : ∀ a ∈ active_pulls, a.Pull := by
     intro a ha
     simp only [active_pulls, activeInteractions, List.mem_filter, decide_eq_true_eq] at ha
     obtain ⟨ h_direction, h_mult ⟩ := pulls_direction a ha.1

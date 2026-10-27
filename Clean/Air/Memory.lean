@@ -53,13 +53,13 @@ namespace Air.Flat.Memory
 and a push of the same message with counter `c * g`. -/
 def IsRead (g : F) (block : List (Interaction F)) : Prop :=
   ∃ pull push : Interaction F, ∃ c : F, block = [pull, push] ∧ c ≠ 0 ∧
-    pull.IsUnitPull ∧ push.direction = .push ∧ push.mult = 1 ∧
+    pull.Pull ∧ push.direction = .push ∧ push.mult = 1 ∧
     pull.msg = pull.msg.pop.push c ∧ push.msg = pull.msg.pop.push (c * g)
 
 /-- Interactions whose entry, the message without its counter, is good, or which are inactive or
 unit pulls. -/
 def IsOther (Good : Array F → Prop) (block : List (Interaction F)) : Prop :=
-  ∀ i ∈ block, Good i.msg.pop ∨ i.mult = 0 ∨ i.IsUnitPull
+  ∀ i ∈ block, Good i.msg.pop ∨ i.mult = 0 ∨ i.Pull
 
 lemma length_filter_add_length_filter_le {α : Type} (l : List α) (p q : α → Bool)
     (disjoint : ∀ a ∈ l, p a → q a → False) :
@@ -86,13 +86,13 @@ come in blocks, which are reads or other interactions. If they are balanced and 
 size, every unit pull is of a good entry: the reads of a bad entry can only balance among
 themselves, which takes `orderOf g` of them.
 -/
-theorem good_of_isUnitPull {g : F} (h_order : orderOf g = FiniteField.size F - 1)
+theorem good_of_pull {g : F} (h_order : orderOf g = FiniteField.size F - 1)
     (Good : Array F → Prop) (blocks : List (List (Interaction F)))
     (nonempty : ∀ i ∈ blocks.flatten, i.msg.size ≠ 0)
     (balance : BalancedInteractions blocks.flatten)
     (length_lt : blocks.flatten.length < FiniteField.size F)
     (h_blocks : ∀ block ∈ blocks, IsRead g block ∨ IsOther Good block) :
-    ∀ i ∈ blocks.flatten, i.IsUnitPull → Good i.msg.pop := by
+    ∀ i ∈ blocks.flatten, i.Pull → Good i.msg.pop := by
   classical
   intro a a_mem a_pull
   by_contra bad
@@ -369,7 +369,7 @@ lemma guarantees_of_good {i : Interaction F} (h_channel : i.channel = memory.cou
 variable {memory} in
 lemma good_of_requirements {i : Interaction F} (h_channel : i.channel = memory.counterChannel.toRaw)
     {data : ProverData F} (requirements : i.Requirements data) :
-    memory.Good i.msg.pop ∨ i.mult = 0 ∨ i.IsUnitPull := by
+    memory.Good i.msg.pop ∨ i.mult = 0 ∨ i.Pull := by
   obtain ⟨channel, direction, mult, msg, h_size⟩ := i
   subst h_channel
   by_cases h_mult : mult = 0
@@ -520,7 +520,7 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
     simp [Function.comp_def]
   have h_channel (i) (h_i : i ∈ witness.interactionsWith channel) : i.channel = channel :=
     witness.channel_eq_of_mem_interactionsWith h_i
-  have good := good_of_isUnitPull memory.orderOf_generator memory.Good blocks
+  have good := good_of_pull memory.orderOf_generator memory.Good blocks
     (by
       rw [h_flatten]
       intro i h_i
@@ -558,9 +558,9 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
         (h_channel i (witness.mem_interactionsWith.mpr (.inr ⟨table, h_table, h_mem i h_i⟩)))
         (witness.same_data table h_table ▸ reqs i (h_mem i h_i)))
   intro i h_i
-  by_cases h_pull : i.IsUnitPull
+  by_cases h_pull : i.Pull
   · exact guarantees_of_good (h_channel i h_i) _ (good i (h_flatten ▸ h_i) h_pull)
-  · exact RawChannel.Normal.guarantees_of_not_isUnitPull i _ (h_channel i h_i) h_pull
+  · exact RawChannel.Normal.guarantees_of_not_pull i _ (h_channel i h_i) h_pull
 
 /-- The memory's counter channel, closed by offline memory checking. -/
 def closedChannel (balance : Balance F) [balance.LengthLtSize] : ClosedChannel F balance where

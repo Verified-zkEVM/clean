@@ -160,15 +160,15 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
       rw [Table.channelRequirements_iff_forall, witness.same_data table h_table] at reqs
       exact .inl (reqs b h_row)
   let Bad (message : Array F) : Prop :=
-    ∃ a ∈ interactions, a.IsUnitPull ∧ a.msg = message ∧ ¬a.Guarantees witness.data
+    ∃ a ∈ interactions, a.Pull ∧ a.msg = message ∧ ¬a.Guarantees witness.data
   have not_bad := CounterChannel.not_bad counterChannel.orderOf_generator
     (fun message => counterChannel.counter (decode message)) (·.msg) interactions
     (Balance.LengthLtSize.length_lt_size _ balanced) Bad (by
       rintro message ⟨a, a_mem, a_pull, rfl, a_bad⟩
-      obtain ⟨b, b_mem, b_msg, b_provides⟩ := kernel.exists_provides_of_isUnitPull a a_mem a_pull
+      obtain ⟨b, b_mem, b_msg, b_push⟩ := kernel.exists_push_of_pull a a_mem a_pull
       have a_of_b (b_reqs : b.Requirements witness.data) : a.Guarantees witness.data :=
         RawChannel.Normal.guarantees_of_requirements a b witness.data (h_channel a a_mem)
-          (h_channel b b_mem) b_msg.symm a_pull b_provides b_reqs
+          (h_channel b b_mem) b_msg.symm a_pull b_push b_reqs
       rcases h_source b b_mem with b_reqs | ⟨table, h_table, h_owner, row, h_row, h_b⟩
       · exact absurd (a_of_b b_reqs) a_bad
       obtain ⟨enabled, pull, push, h_interactions, h_bool, h_step⟩ :=
@@ -180,12 +180,12 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
       rw [h_interactions] at h_b
       rcases List.mem_pair.mp h_b with rfl | rfl
       · rcases h_bool with h | h <;>
-          simp [Interaction.Provides, Channel.pulledIfValue, h] at b_provides
-      have h_one : enabled = 1 := h_bool.resolve_left b_provides.1
+          simp [Interaction.Push, Channel.pulledIfValue, h] at b_push
+      have h_one : enabled = 1 := h_bool.resolve_left b_push.1
       obtain ⟨h_ne, h_counter, h_grt⟩ := h_step h_one
       rw [h_data] at h_grt
       have pull_bad : ¬channel.Guarantees pull witness.data := fun h =>
-        a_bad (a_of_b ((Channel.pushedIfValue_requirements_iff b_provides.1).mpr (h_grt h)))
+        a_bad (a_of_b ((Channel.pushedIfValue_requirements_iff b_push.1).mpr (h_grt h)))
       refine ⟨⟨a, a_mem, a_pull.1, rfl⟩, ⟨_, b_mem, rfl, b_msg⟩, (toElements pull).toArray,
         ⟨channel.pulledIfValue 1 pull, ?_, ⟨rfl, rfl⟩, rfl,
           fun h => pull_bad (Channel.pulledIfValue_one_guarantees_iff.mp h)⟩, ?_, ?_⟩
@@ -196,10 +196,10 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
       · rw [← b_msg]
         simp only [Channel.pushedIfValue, decode_toArray, h_counter])
   intro i h_i
-  by_cases h_pull : i.IsUnitPull
+  by_cases h_pull : i.Pull
   · by_contra h_bad
     exact not_bad i.msg ⟨i, h_i, h_pull, rfl, h_bad⟩
-  · exact RawChannel.Normal.guarantees_of_not_isUnitPull i _ (h_channel i h_i) h_pull
+  · exact RawChannel.Normal.guarantees_of_not_pull i _ (h_channel i h_i) h_pull
 
 /-- The counter channel, closed by `guarantees_of_balanced`. -/
 def closedChannel (balance : Balance F) [balance.LengthLtSize] : ClosedChannel F balance where
