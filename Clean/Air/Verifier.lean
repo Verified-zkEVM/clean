@@ -163,9 +163,7 @@ def pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message
     (message : Message (Expression F)) : Verifier F Unit :=
   addOperation (.interact (channel.pulled message).toRaw (fun _ env => by
     rw [ChannelInteraction.toRaw_requirements]
-    change Expression.eval env (1 : Expression F) ≠ 0 →
-      (Direction.pull = .pull → Expression.eval env (1 : Expression F) ≠ 1) → _
-    simp [Expression.eval]))
+    simp [ChannelInteraction.Requirements, Channel.pulled, pulled, Expression.eval]))
 
 @[circuit_norm]
 def push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)

@@ -191,7 +191,7 @@ def step (program : Program) (h_program : program.length < p) (initial : F p) (o
   requirementsChannelsLawful input_var i₀ := by
     obtain ⟨enabled, pc, acc⟩ := input_var
     simp only [circuit_norm, stateChannel, programLookup]
-    intro env h_bool h_one h_zero
+    intro env h_bool
     rcases mul_eq_zero.mp h_bool with h | h <;> simp_all [sub_eq_zero]
 
   soundness := by

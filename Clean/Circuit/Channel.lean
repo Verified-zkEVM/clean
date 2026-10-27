@@ -25,6 +25,21 @@ def Direction.name : Direction → String
 @[simp, circuit_norm] lemma Direction.pull_eq_push_iff : Direction.pull = .push ↔ False := by
   simp
 
+/-- What an interaction of `mult` copies owes, given the guarantee of its message: an active push
+owes the guarantee, and a pull takes `0` or `1` copies. -/
+def Direction.Requirements {F : Type} [Zero F] [One F] (direction : Direction) (mult : F)
+    (guarantee : Prop) : Prop :=
+  match direction with
+  | .push => mult ≠ 0 → guarantee
+  | .pull => mult = 0 ∨ mult = 1
+
+@[simp, circuit_norm] lemma Direction.push_requirements {F : Type} [Zero F] [One F] (mult : F)
+    (guarantee : Prop) : Direction.push.Requirements mult guarantee = (mult ≠ 0 → guarantee) :=
+  rfl
+@[simp, circuit_norm] lemma Direction.pull_requirements {F : Type} [Zero F] [One F] (mult : F)
+    (guarantee : Prop) : Direction.pull.Requirements mult guarantee = (mult = 0 ∨ mult = 1) :=
+  rfl
+
 structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
   name : String
   /-- the guarantees you get from adding an interaction to the channel, to be used locally in your soundness proof -/
@@ -49,8 +64,8 @@ namespace Channel
 Convert a `Channel` to a `RawChannel` by removing the type argument,
 and adapting to the more general guarantees/requirements split.
 
-A pull of multiplicity `1` gets the guarantee. Every other active interaction requires it: a push,
-and also a pull of multiplicity other than `0` or `1`, which under field-sum balance can cancel
+A pull of multiplicity `1` gets the guarantee, and an active push requires it. A pull requires its
+multiplicity to be `0` or `1`: under field-sum balance, a pull of other multiplicities could cancel
 other pulls like a push.
 -/
 -- The erased channel's arity indexes raw interaction message vectors.
@@ -61,8 +76,7 @@ def toRaw (channel : Channel F Message) : RawChannel F where
   Guarantees mult message data :=
     mult = 1 → channel.Guarantees (fromElements message) data
   Requirements direction mult message data :=
-    mult ≠ 0 → (direction = .pull → mult ≠ 1) →
-    channel.Guarantees (fromElements message) data
+    direction.Requirements mult (channel.Guarantees (fromElements message) data)
 
 instance : CoeOut (Channel F Message) (RawChannel F) where
   coe := toRaw
@@ -89,10 +103,10 @@ lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
         channel1.Guarantees (fromElements message) data) ≍
       fun (mult : F) message data ↦ mult = 1 →
         channel2.Guarantees (fromElements message) data) ∧
-    (fun direction (mult : F) message data ↦ mult ≠ 0 → (direction = Direction.pull → mult ≠ 1) →
-        channel1.Guarantees (fromElements message) data) ≍
-      fun direction (mult : F) message data ↦ mult ≠ 0 → (direction = Direction.pull → mult ≠ 1) →
-        channel2.Guarantees (fromElements message) data := by
+    (fun (direction : Direction) (mult : F) message data ↦
+        direction.Requirements mult (channel1.Guarantees (fromElements message) data)) ≍
+      fun (direction : Direction) (mult : F) message data ↦
+        direction.Requirements mult (channel2.Guarantees (fromElements message) data) := by
   simp only [toRaw, RawChannel.mk.injEq]
 end Channel
 
@@ -228,8 +242,7 @@ def Guarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
 
 @[circuit_norm]
 def Requirements (i : ChannelInteraction channel) (env : Environment F) : Prop :=
-  Expression.eval env i.mult ≠ 0 → (i.direction = .pull → Expression.eval env i.mult ≠ 1) →
-    channel.Guarantees (eval env i.msg) env.data
+  i.direction.Requirements (Expression.eval env i.mult) (channel.Guarantees (eval env i.msg) env.data)
 end ChannelInteraction
 
 namespace AbstractInteraction
@@ -393,8 +406,9 @@ lemma pulledIfValue_requirements_of_isBool_enabled {channel : Channel F Message}
   {enabled : F} {msg : Message F} {data : ProverData F} :
     enabled = 0 ∨ enabled = 1 →
     (channel.pulledIfValue enabled msg).Requirements data := by
-  simp only [Interaction.Requirements, Channel.pulledIfValue, Channel.toRaw]
-  grind
+  simp only [Interaction.Requirements, Channel.pulledIfValue, Channel.toRaw,
+    Direction.pull_requirements]
+  exact id
 
 lemma pulledIfValue_one_guarantees_iff {channel : Channel F Message} {msg : Message F}
     {data : ProverData F} :

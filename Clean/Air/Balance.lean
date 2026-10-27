@@ -26,8 +26,8 @@ def IsUnitPull (i : Interaction F) : Prop := i.direction = .pull ∧ i.mult = 1
 
 /--
 An interaction that provides its message to pulls: an active push, or a pull of multiplicity other
-than `0` or `1`, which can cancel other pulls under field-sum balance. Typed channels require their
-guarantee from exactly these interactions.
+than `0` or `1`, which can cancel other pulls under field-sum balance. Typed channels require the
+guarantee from active pushes, and a multiplicity of `0` or `1` from pulls.
 -/
 def Provides (i : Interaction F) : Prop := i.mult ≠ 0 ∧ (i.direction = .pull → i.mult ≠ 1)
 
@@ -264,7 +264,9 @@ instance (channel : Channel F Message) : Normal channel.toRaw where
       data rfl rfl (rfl : a_msg = b_msg) a_pull ⟨ b_ne_zero, b_ne_one ⟩ b_reqs
     simp only [Interaction.Guarantees, Interaction.Requirements, Interaction.msgVector,
       Channel.toRaw] at b_reqs ⊢
-    exact fun _ _ => b_reqs b_ne_zero b_ne_one
+    cases b_direction
+    · exact fun _ _ => b_reqs b_ne_zero
+    · exact absurd (b_reqs.resolve_left b_ne_zero) (b_ne_one rfl)
   guarantees_of_not_isUnitPull := by
     rintro ⟨ _, direction, mult, msg, size ⟩ data rfl not_pull
     simp only [Interaction.IsUnitPull, not_and] at not_pull

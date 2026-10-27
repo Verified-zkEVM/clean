@@ -89,7 +89,7 @@ def step : GeneralFormalCircuit BF64 StepInput unit where
     rw [sub_eq_zero] at h_one
     subst h_one
     obtain ⟨ k, h_counter, h_fib ⟩ := h_state rfl
-    refine ⟨ fun _ h => absurd rfl h, fun _ => ⟨ k + 1, by rw [h_counter, pow_succ], ?_ ⟩ ⟩
+    refine ⟨ .inr rfl, fun _ => ⟨ k + 1, by rw [h_counter, pow_succ], ?_ ⟩ ⟩
     simp only [fibonacci, ← h_fib]
   completeness := by
     circuit_proof_start [stateChannel]

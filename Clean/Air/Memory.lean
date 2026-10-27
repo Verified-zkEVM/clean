@@ -374,11 +374,9 @@ lemma good_of_requirements {i : Interaction F} (h_channel : i.channel = memory.c
   subst h_channel
   by_cases h_mult : mult = 0
   · exact .inr (.inl h_mult)
-  by_cases h_pull : direction = .pull ∧ mult = 1
-  · exact .inr (.inr h_pull)
-  left
-  refine ⟨_, requirements h_mult fun h => fun h_one => h_pull ⟨h, h_one⟩,
-    toArray_toElements_fst (Entry := Entry) ⟨msg, h_size⟩⟩
+  cases direction
+  · exact .inl ⟨_, requirements h_mult, toArray_toElements_fst (Entry := Entry) ⟨msg, h_size⟩⟩
+  · exact .inr (.inr ⟨rfl, (requirements : mult = 0 ∨ mult = 1).resolve_left h_mult⟩)
 
 /-- The memory as a component: its fixed entries, followed by the last counter of each. -/
 def table : Component F where
