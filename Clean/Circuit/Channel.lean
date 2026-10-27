@@ -448,15 +448,4 @@ lemma eval_pushedIf {channel : Channel F Message} {enabled : Expression F}
   apply congrArg Vector.toArray
   rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
   rfl
-lemma eval_toRaw_pulledIf (channel : Channel F Message) (enabled : Expression F)
-    (msg : Message (Expression F)) (env : Environment F) :
-    (_root_.pulledIf (channel := channel) enabled msg).toRaw.eval env =
-      channel.pulledIfValue (Expression.eval env enabled) (eval env msg) :=
-  (eval_pulledIf (channel := channel)).trans (by rw [ProvableType.eval_field])
-
-lemma eval_toRaw_pushedIf (channel : Channel F Message) (enabled : Expression F)
-    (msg : Message (Expression F)) (env : Environment F) :
-    (_root_.pushedIf (channel := channel) enabled msg).toRaw.eval env =
-      channel.pushedIfValue (Expression.eval env enabled) (eval env msg) :=
-  (eval_pushedIf (channel := channel)).trans (by rw [ProvableType.eval_field])
 end Channel

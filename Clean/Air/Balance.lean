@@ -208,22 +208,6 @@ def Balance.multiset : Balance F where
     simp only [decide_eq_true_eq] at h_b
     exact ⟨ b, b_mem, h_b.2.1, h_b.2.2, by simp [h_b.1] ⟩
 
-/--
-A balance check that bounds the number of interactions by the size of the field. Offline memory
-checking relies on it to bound the number of reads of one address.
--/
-class Balance.LengthLtSize (balance : Balance F) : Prop where
-  length_lt_size : ∀ interactions,
-    balance.Balanced interactions → interactions.length < FiniteField.size F
-
-instance : (Balance.multiset (F := F)).LengthLtSize where
-  length_lt_size _ balanced := balanced.1
-
-instance {p : ℕ} [Fact p.Prime] : (Balance.logUp (F := _root_.F p)).LengthLtSize where
-  length_lt_size _ balanced := by
-    have : FiniteField.size (_root_.F p) = p := rfl
-    simpa [Balance.logUp, ZMod.ringChar_zmod_n, this] using balanced.1
-
 /- ## Conditions on channels that strengthen the implications of interaction balance. -/
 
 namespace RawChannel

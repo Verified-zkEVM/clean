@@ -27,7 +27,6 @@ public import Clean.Examples.FemtoCairo.FemtoCairo
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Air.WitnessGeneration
 public import Clean.Air.Lookup
-public import Clean.Air.Memory
 public import Clean.Backends.Plonky3.Print
 public import Clean.Tables.Fibonacci8
 public import Clean.Tables.Fibonacci32
@@ -49,7 +48,6 @@ public import Clean.Gadgets.BLAKE3.FinalizeChunk
 public import Clean.Examples.FibonacciVm.Ensemble
 public import Clean.Examples.OpcodeVm.Ensemble
 public import Clean.Examples.BinaryFibonacci.Ensemble
-public import Clean.Examples.BinaryProgram.Ensemble
 public import Clean.Gadgets.SHA256.SHA256Compress
 public import Clean.Backends.Circom.Ast
 public import Clean.Backends.Circom.Compile
