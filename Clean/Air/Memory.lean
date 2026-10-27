@@ -596,6 +596,10 @@ def closedChannel (balance : Balance F) [balance.LengthLtSize] : ClosedChannel F
 @[circuit_norm] lemma readerComponent_channelsWithRequirements :
     memory.readerComponent.circuit.channelsWithRequirements =
       [memory.counterChannel.toRaw, memory.channel.toRaw] := rfl
+@[circuit_norm] lemma table_assumptions (input : memory.table.Input F) (data : ProverData F) :
+    memory.table.Assumptions input data = True := rfl
+@[circuit_norm] lemma readerComponent_assumptions (input : memory.readerComponent.Input F)
+    (data : ProverData F) : memory.readerComponent.Assumptions input data = True := rfl
 @[circuit_norm] lemma closedChannel_channel (balance : Balance F) [balance.LengthLtSize] :
     (memory.closedChannel balance).channel = memory.counterChannel.toRaw := rfl
 @[circuit_norm] lemma closedChannel_owners (balance : Balance F) [balance.LengthLtSize] :
