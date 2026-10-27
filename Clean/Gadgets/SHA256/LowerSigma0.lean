@@ -258,21 +258,14 @@ private lemma spec_of_constraint
     (input z : fields 32 (F p))
     (hx : Normalized input)
     (h_z : ∀ i : Fin 32, z[i] =
-      (input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val])
-      + (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0)
-      - 2 * (input[(i + 7).val] + input[(i + 18).val] -
-              2 * input[(i + 7).val] * input[(i + 18).val])
-            * (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0)) :
+      bitXor (bitXor input[(i + 7).val] input[(i + 18).val]) (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0)) :
     valueBits z = Specs.SHA256.lowerSigma0 (valueBits input) ∧ Normalized z := by
   have ha_val : ∀ i : Fin 32, (input[i] : F p).val = 0 ∨ (input[i] : F p).val = 1 :=
     fun i => by rcases hx i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   -- intermediate r7[i] XOR r18[i] is boolean
   have h_r17_isbool : ∀ i : Fin 32,
-      input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val] = 0 ∨
-      input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val] = 1 :=
+      bitXor input[(i + 7).val] input[(i + 18).val] = 0 ∨
+      bitXor input[(i + 7).val] input[(i + 18).val] = 1 :=
     fun i => IsBool.xor_is_bool (hx _) (hx _)
   -- shr3 element is boolean
   have h_s3_isbool : ∀ i : Fin 32,
@@ -285,10 +278,8 @@ private lemma spec_of_constraint
   have h_z_val : ∀ i : Fin 32, (z[i] : F p).val = 0 ∨ (z[i] : F p).val = 1 :=
     fun i => by rcases h_z_isbool i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   have h_r17_val : ∀ i : Fin 32,
-      ((input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val] : F p)).val = 0 ∨
-      ((input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val] : F p)).val = 1 :=
+      ((bitXor input[(i + 7).val] input[(i + 18).val] : F p)).val = 0 ∨
+      ((bitXor input[(i + 7).val] input[(i + 18).val] : F p)).val = 1 :=
     fun i => by rcases h_r17_isbool i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   have h_s3_val : ∀ i : Fin 32,
       ((if h : i.val + 3 < 32 then (input[i.val + 3]'h : F p) else 0) : F p).val = 0 ∨
@@ -296,13 +287,11 @@ private lemma spec_of_constraint
     fun i => by rcases h_s3_isbool i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   -- z[i].val = (r7[i] XOR r18[i]) XOR s3[i] (at val level)
   have h_z_xor_val : ∀ i : Fin 32, (z[i] : F p).val =
-      (input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val] : F p).val ^^^
+      (bitXor input[(i + 7).val] input[(i + 18).val] : F p).val ^^^
       ((if h : i.val + 3 < 32 then (input[i.val + 3]'h : F p) else 0) : F p).val :=
     fun i => by rw [h_z i]; exact IsBool.xor_eq_val_xor (h_r17_isbool i) (h_s3_isbool i)
   have h_r17_xor_val : ∀ i : Fin 32,
-      (input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val] : F p).val =
+      (bitXor input[(i + 7).val] input[(i + 18).val] : F p).val =
       (input[(i + 7).val] : F p).val ^^^ (input[(i + 18).val] : F p).val :=
     fun i => IsBool.xor_eq_val_xor (hx _) (hx _)
   -- Build the sum identity
@@ -310,15 +299,13 @@ private lemma spec_of_constraint
       ((rotRight32 (valueBits input) 7) ^^^ (rotRight32 (valueBits input) 18))
       ^^^ (valueBits input / 2^3) := by
     have step1 : ∑ i : Fin 32, (z[i] : F p).val * 2^i.val =
-        ∑ i : Fin 32, ((input[(i + 7).val] + input[(i + 18).val] -
-            2 * input[(i + 7).val] * input[(i + 18).val] : F p).val ^^^
+        ∑ i : Fin 32, ((bitXor input[(i + 7).val] input[(i + 18).val] : F p).val ^^^
           ((if h : i.val + 3 < 32 then (input[i.val + 3]'h : F p) else 0) : F p).val) * 2^i.val := by
       apply Finset.sum_congr rfl
       intro i _; rw [h_z_xor_val i]
     rw [step1, bool_finsum_xor_eq 32 _ _ h_r17_val h_s3_val]
     have step2 : ∑ i : Fin 32,
-        (input[(i + 7).val] + input[(i + 18).val] -
-          2 * input[(i + 7).val] * input[(i + 18).val] : F p).val * 2^i.val =
+        (bitXor input[(i + 7).val] input[(i + 18).val] : F p).val * 2^i.val =
         ∑ i : Fin 32,
           ((input[(i + 7).val] : F p).val ^^^ (input[(i + 18).val] : F p).val) * 2^i.val := by
       apply Finset.sum_congr rfl
@@ -358,26 +345,22 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_s3  : ∀ i : Fin 32, Expression.eval env (shr32 3 input_var)[i.val] =
       if h : i.val + 3 < 32 then input[i.val + 3]'h else 0 :=
     fun i => eval_shr32 env input_var input h_input 3 i
-  -- First xor32 output at i₀+i: r1[i] = r7[i] + r18[i] - 2*r7[i]*r18[i]
+  -- First xor32 output at i₀+i: r1[i] = bitXor r7[i] r18[i]
   have h_r1 : ∀ i : Fin 32, env.get (i₀ + i.val) =
-      input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val] := by
+      bitXor input[(i + 7).val] input[(i + 18).val] := by
     intro i
     have h := h_holds1 i; rw [h_r7 i, h_r18 i] at h
     have key : env.get (i₀ + i.val) -
-        (input[(i + 7).val] + input[(i + 18).val] -
-          2 * input[(i + 7).val] * input[(i + 18).val]) = 0 := by
+        (bitXor input[(i + 7).val] input[(i + 18).val]) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
-  -- Second xor32 output at i₀+32+i: z[i] = r1[i] + s3[i] - 2*r1[i]*s3[i]
+  -- Second xor32 output at i₀+32+i: z[i] = bitXor r1[i] s3[i]
   have h_z_raw : ∀ i : Fin 32, env.get (i₀ + (32 + 32 * 0) + i.val) =
-      env.get (i₀ + i.val) + Expression.eval env (shr32 3 input_var)[i.val] -
-      2 * env.get (i₀ + i.val) * Expression.eval env (shr32 3 input_var)[i.val] := by
+      bitXor (env.get (i₀ + i.val)) (Expression.eval env (shr32 3 input_var)[i.val]) := by
     intro i
     have h := h_holds2 i
     have key : env.get (i₀ + (32 + 32 * 0) + i.val) -
-        (env.get (i₀ + i.val) + Expression.eval env (shr32 3 input_var)[i.val] -
-         2 * env.get (i₀ + i.val) * Expression.eval env (shr32 3 input_var)[i.val]) = 0 := by
+        (bitXor (env.get (i₀ + i.val)) (Expression.eval env (shr32 3 input_var)[i.val])) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
   -- Set z to the output vector
@@ -387,12 +370,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
     intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
   have h_z : ∀ i : Fin 32, z[i] =
-      (input[(i + 7).val] + input[(i + 18).val] -
-        2 * input[(i + 7).val] * input[(i + 18).val])
-      + (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0)
-      - 2 * (input[(i + 7).val] + input[(i + 18).val] -
-              2 * input[(i + 7).val] * input[(i + 18).val])
-            * (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0) := by
+      bitXor (bitXor input[(i + 7).val] input[(i + 18).val]) (if h : i.val + 3 < 32 then input[i.val + 3]'h else 0) := by
     intro i
     rw [h_z_get i, h_z_raw i, h_r1 i, h_s3 i]
   exact spec_of_constraint input z ha h_z
@@ -412,8 +390,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have b18v : ZMod.val input[(i + 18).val] < 2 := IsBool.val_lt_two b18
     simp only [circuit_norm]
     have hc : ((input[(i + 7).val].val ^^^ input[(i + 18).val].val : ℕ) : F p) =
-        input[(i + 7).val] + input[(i + 18).val] -
-          2 * input[(i + 7).val] * input[(i + 18).val] := by
+        bitXor input[(i + 7).val] input[(i + 18).val] := by
       rw [← IsBool.xor_eq_val_xor b7 b18, ZMod.natCast_val]
       exact ZMod.cast_id p _
     rw [hc]; ring
@@ -435,7 +412,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     set r18 : F p := input[(i + 18).val]
     set s3 : F p := if h : i.val + (3 : Fin 32).val < 32
       then input[i.val + (3 : Fin 32).val]'h else 0
-    have hxor1 : ((r7.val ^^^ r18.val : ℕ) : F p) = r7 + r18 - 2 * r7 * r18 := by
+    have hxor1 : ((r7.val ^^^ r18.val : ℕ) : F p) = bitXor r7 r18 := by
       rw [← IsBool.xor_eq_val_xor b7 b18, ZMod.natCast_val]
       exact ZMod.cast_id p _
     have hxor1_bool : IsBool (((r7.val ^^^ r18.val : ℕ) : F p)) := by
@@ -443,8 +420,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hxor2 : (((r7.val ^^^ r18.val : ℕ) : F p).val ^^^ s3.val : ℕ) =
         ((r7.val ^^^ r18.val : ℕ) : F p).val ^^^ s3.val := rfl
     have hxor3 : (((((r7.val ^^^ r18.val : ℕ) : F p).val ^^^ s3.val) : ℕ) : F p) =
-        ((r7.val ^^^ r18.val : ℕ) : F p) + s3 -
-          2 * ((r7.val ^^^ r18.val : ℕ) : F p) * s3 := by
+        bitXor ((r7.val ^^^ r18.val : ℕ) : F p) s3 := by
       rw [← IsBool.xor_eq_val_xor hxor1_bool bs3, ZMod.natCast_val]
       exact ZMod.cast_id p _
     -- the witness IR computes the xors on `u64`s; all operands are bits, so nothing wraps
