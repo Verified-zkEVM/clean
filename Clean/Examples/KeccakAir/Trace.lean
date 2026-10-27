@@ -4,7 +4,7 @@ permutation, padded to a power of two with the rows of the permutation of the ze
 -/
 module
 
-public import Clean.Examples.KeccakAir.Air
+public import Clean.Examples.KeccakAir.Row
 
 @[expose] public section
 

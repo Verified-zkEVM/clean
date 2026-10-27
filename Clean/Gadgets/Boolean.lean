@@ -179,6 +179,52 @@ theorem not_eq_val_not {a : F p} (ha : IsBool a) :
 end BinaryOps
 end IsBool
 
+section BitOperations
+
+/-- The exclusive or of bits `x` and `y`, as the polynomial `x + y - x (2 y)`. -/
+def bitXor {α : Type*} [Add α] [Sub α] [Mul α] [OfNat α 2] (x y : α) : α := x + y - x * (2 * y)
+
+/-- `¬x ∧ y` of bits `x` and `y`, as the polynomial `(1 - x) y`. -/
+def bitAndNot {α : Type*} [Sub α] [Mul α] [OfNat α 1] (x y : α) : α := (1 - x) * y
+
+variable {p : ℕ} [Fact p.Prime]
+
+@[circuit_norm]
+lemma Expression.eval_bitXor (env : Environment (F p)) (x y : Expression (F p)) :
+    Expression.eval env (bitXor x y) = bitXor (Expression.eval env x) (Expression.eval env y) := by
+  simp only [bitXor, eval_sub]
+  rfl
+
+@[circuit_norm]
+lemma Expression.eval_bitAndNot (env : Environment (F p)) (x y : Expression (F p)) :
+    Expression.eval env (bitAndNot x y) =
+      bitAndNot (Expression.eval env x) (Expression.eval env y) := by
+  simp only [bitAndNot]
+  show Expression.eval env (1 - x) * _ = _
+  rw [eval_sub]
+  rfl
+
+namespace IsBool
+
+theorem bitXor {x y : F p} (hx : IsBool x) (hy : IsBool y) : IsBool (bitXor x y) := by
+  rcases hx with rfl | rfl <;> rcases hy with rfl | rfl <;> norm_num [IsBool, _root_.bitXor]
+
+theorem bitAndNot {x y : F p} (hx : IsBool x) (hy : IsBool y) : IsBool (bitAndNot x y) := by
+  rcases hx with rfl | rfl <;> rcases hy with rfl | rfl <;> simp [IsBool, _root_.bitAndNot]
+
+/-- On bits, `bitXor` is the exclusive or of their values. -/
+theorem val_bitXor {x y : F p} (hx : IsBool x) (hy : IsBool y) :
+    (_root_.bitXor x y).val = x.val ^^^ y.val := by
+  rcases hx with rfl | rfl <;> rcases hy with rfl | rfl <;> norm_num [_root_.bitXor, ZMod.val_one]
+
+/-- On bits, `bitAndNot x y` is the conjunction of the negation of `x` with `y`. -/
+theorem val_bitAndNot {x y : F p} (hx : IsBool x) (hy : IsBool y) :
+    (_root_.bitAndNot x y).val = (1 - x.val) &&& y.val := by
+  rcases hx with rfl | rfl <;> rcases hy with rfl | rfl <;> simp [_root_.bitAndNot, ZMod.val_one]
+
+end IsBool
+end BitOperations
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

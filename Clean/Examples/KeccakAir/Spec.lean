@@ -4,7 +4,7 @@ applied to the permutation's preimage.
 -/
 module
 
-public import Clean.Examples.KeccakAir.Air
+public import Clean.Examples.KeccakAir.Row
 public import Clean.Utils.Field
 
 @[expose] public section
