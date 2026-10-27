@@ -654,32 +654,33 @@ theorem empty_soundChannels : (empty F PublicIO).SoundChannels [] [] := by
 theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO)
   (table : Component F) (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name))
   (table_channels : table.circuit.channels ⊆ ens.channels) {finished : List (RawChannel F)} :
-    -- given an ensemble with ordered channels and empty verifier,
+    -- given an ensemble with ordered channels, whose verifier adds no requirements to them,
     ens.OrderedChannels finished →
-    ens.verifier = .empty F PublicIO →
+    (∀ channel ∈ finished, channel ∉ ens.verifier.channelsWithRequirements) →
     -- assuming that the table's channelsWithRequirements contain none of the ordered ones
     -- (so that we don't get new requirements to prove)
     (∀ channel ∈ finished, channel ∉ table.circuit.channelsWithRequirements) →
     -- the ensemble with the new table has the same ordered channels!
     (ens.addTable table fresh table_channels).OrderedChannels finished := by
-  intro h_sound verifier_empty reqs_disjoint_finished channel h_channel
-  -- we need to make use of soundness of the original ensemble; that'll give us most of what we need
-  simp only [circuit_norm, verifier_empty] at h_sound ⊢
-  -- proof is a trivial combination of the hypotheses
-  simp_all
+  intro h_sound verifier_reqs reqs_disjoint_finished channel h_channel
+  obtain ⟨refl, ordered, lt⟩ := h_sound channel h_channel
+  refine ⟨refl, ?_, orderedChannelLt_of_no_requirements ?_⟩
+  · simp only [Ensemble.addTable_tables, orderedChannel_cons]
+    exact ⟨.inr (reqs_disjoint_finished channel h_channel), ordered,
+      orderedChannelLt_of_no_requirements (by simp [circuit_norm, reqs_disjoint_finished channel h_channel])⟩
+  · simpa [circuit_norm] using verifier_reqs channel h_channel
 
 theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
   (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup)
   (unique_channel_names : ((ens2.channels ++ ens1.channels).map (·.name)).Nodup)
   {finished : List (RawChannel F)} :
-    -- given an ensemble with ordered channels and empty verifier,
+    -- given an ensemble with ordered channels,
     ens1.OrderedChannels finished →
-    ens1.verifier = .empty F PublicIO →
     -- assuming that the new tables' channelsWithRequirements contain none of the finished channels
     (∀ channel ∈ finished, channel ∉ ens2.channelsWithRequirements) →
     -- the merged ensemble with the new table satisfies OrderedChannels!
     (ens1.merge ens2 unique_names unique_channel_names).OrderedChannels finished := by
-  intro h_sound verifier_empty reqs_disjoint_finished channel h_channel
+  intro h_sound reqs_disjoint_finished channel h_channel
   simp only [circuit_norm] at h_sound ⊢
   simp only [channelsWithRequirements_eq_verifier_append, circuit_norm] at reqs_disjoint_finished
   simp_all only [not_false_eq_true, or_true, true_and, and_true]
@@ -742,13 +743,15 @@ structure SoundEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [Provabl
   closed_subset : closed.map (·.channel) ⊆ channels
   closed_requirements : ∀ closedChannel ∈ closed, ∀ table ∈ tables, table ∉ closedChannel.owners →
     closedChannel.channel ∉ table.circuit.channelsWithRequirements
+  ordered_not_closed : ∀ channel ∈ ordered, channel ∉ closed.map (·.channel)
   subset_finished : ensemble.channelsWithGuarantees ⊆ ordered ++ closed.map (·.channel)
-  -- TODO get rid of this assumption, by being more flexible about table order
-  -- => use "∃ permutation, s.t. ordered" instead of "ordered" in Ensemble.OrderedChannels
-  verifier_empty : ensemble.verifier = .empty F PublicIO
+  /-- The verifier only pushes to closed channels, and its requirements hold unconditionally. -/
+  verifier_requirements_closed : verifier.channelsWithRequirements ⊆ closed.map (·.channel)
+  verifier_requirements : ∀ publicInput data channel,
+    ensemble.VerifierChannelRequirements publicInput data channel
 
 attribute [circuit_norm] SoundEnsemble.ordered_consistent SoundEnsemble.ordered_subset
-  SoundEnsemble.subset_finished SoundEnsemble.ordered_channels SoundEnsemble.verifier_empty
+  SoundEnsemble.subset_finished SoundEnsemble.ordered_channels
 
 namespace SoundEnsemble
 variable {balance : Balance F}
@@ -761,6 +764,11 @@ def finished (soundEns : SoundEnsemble F PublicIO balance) : List (RawChannel F)
 lemma finished_subset (soundEns : SoundEnsemble F PublicIO balance) :
     soundEns.finished ⊆ soundEns.channels :=
   List.append_subset.mpr ⟨soundEns.ordered_subset, soundEns.closed_subset⟩
+
+lemma verifier_requirements_not_ordered (soundEns : SoundEnsemble F PublicIO balance) :
+    ∀ channel ∈ soundEns.ordered, channel ∉ soundEns.verifier.channelsWithRequirements :=
+  fun channel h_ordered h_req =>
+    soundEns.ordered_not_closed channel h_ordered (soundEns.verifier_requirements_closed h_req)
 
 lemma soundChannels (soundEns : SoundEnsemble F PublicIO balance) :
     soundEns.SoundChannels soundEns.ordered (soundEns.closed.map (·.channel)) :=
@@ -777,8 +785,7 @@ theorem tableSoundness (soundEns : SoundEnsemble F PublicIO balance) :
     exact table.requirements_of_not_mem_of_constraints (constraints table h_table)
       (soundEns.closed_requirements closedChannel h_closed _
         (witness.component_mem_tables_of_mem h_table) h_owner)
-  · apply soundEns.verifierChannelRequirements_of_not_mem
-    simp [soundEns.verifier_empty, circuit_norm]
+  · exact soundEns.verifier_requirements _ _ _
 
 def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]
     (balance : Balance F) : SoundEnsemble F PublicIO balance where
@@ -790,8 +797,12 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
   closed := []
   closed_subset := by simp
   closed_requirements := by simp
+  ordered_not_closed := by simp
   subset_finished := by simp [circuit_norm, Ensemble.channelsWithGuarantees]
-  verifier_empty := by simp [circuit_norm]
+  verifier_requirements_closed := by simp [circuit_norm, Ensemble.empty]
+  verifier_requirements _ _ _ := by
+    apply Ensemble.verifierChannelRequirements_of_not_mem
+    simp [circuit_norm, Ensemble.empty]
 
 @[circuit_norm] lemma empty_tables : (empty F PublicIO balance).tables = [] := rfl
 @[circuit_norm] lemma empty_channels : (empty F PublicIO balance).channels = [] := rfl
@@ -828,7 +839,7 @@ def addTable (soundEns : SoundEnsemble F PublicIO balance) (table : Component F)
   ordered_consistent := soundEns.ordered_consistent
   ordered_subset := soundEns.ordered_subset
   ordered_channels := soundEns.orderedChannels_of_soundChannels_addTable table fresh _
-    soundEns.ordered_channels soundEns.verifier_empty
+    soundEns.ordered_channels soundEns.verifier_requirements_not_ordered
     fun channel h_ordered h_channel =>
       (reqs_unfinished channel h_channel).2 (List.mem_append_left _ h_ordered)
   closed := soundEns.closed
@@ -844,7 +855,9 @@ def addTable (soundEns : SoundEnsemble F PublicIO balance) (table : Component F)
     rw [Ensemble.channelsWithGuarantees_subset_iff] at h ⊢
     simp only [Ensemble.addTable_verifier, Ensemble.addTable_tables, List.forall_mem_cons]
     exact ⟨h.1, grts_subset_finished, h.2⟩
-  verifier_empty := soundEns.verifier_empty
+  ordered_not_closed := soundEns.ordered_not_closed
+  verifier_requirements_closed := soundEns.verifier_requirements_closed
+  verifier_requirements := soundEns.verifier_requirements
 
 variable {soundEns : SoundEnsemble F PublicIO balance} {table : Component F}
     {gsf : table.circuit.channelsWithGuarantees ⊆ soundEns.finished}
@@ -880,8 +893,10 @@ def addChannel (soundEns : SoundEnsemble F PublicIO balance) (channel : RawChann
   closed := soundEns.closed
   closed_subset := List.Subset.trans soundEns.closed_subset (List.subset_cons_self _ _)
   closed_requirements := soundEns.closed_requirements
+  ordered_not_closed := soundEns.ordered_not_closed
   subset_finished := soundEns.subset_finished
-  verifier_empty := soundEns.verifier_empty
+  verifier_requirements_closed := soundEns.verifier_requirements_closed
+  verifier_requirements := soundEns.verifier_requirements
 
 section
 variable {channel : RawChannel F} {fresh : channel.name ∉ soundEns.channels.map (·.name)}
@@ -918,9 +933,15 @@ def markFinished (soundEns : SoundEnsemble F PublicIO balance) (channel : RawCha
   closed := soundEns.closed
   closed_subset := soundEns.closed_subset
   closed_requirements := soundEns.closed_requirements
+  ordered_not_closed := by
+    intro channel' h_channel'
+    rcases List.mem_cons.mp h_channel' with rfl | h_channel'
+    · exact not_closed
+    · exact soundEns.ordered_not_closed channel' h_channel'
   subset_finished :=
     (soundEns.soundChannels_markFinished soundEns.soundChannels channel not_closed).left
-  verifier_empty := soundEns.verifier_empty
+  verifier_requirements_closed := soundEns.verifier_requirements_closed
+  verifier_requirements := soundEns.verifier_requirements
 
 section
 variable {channel : RawChannel F} [channel.Consistent] {h_mem : channel ∈ soundEns.channels}
@@ -1008,7 +1029,8 @@ def addClosedChannel (soundEns : SoundEnsemble F PublicIO balance)
       intro channel h_ordered
       have h_finished : channel ∈ soundEns.finished := List.mem_append_left _ h_ordered
       have ordered := soundEns.ordered_channels channel h_ordered
-      simp only [Ensemble.OrderedChannel, soundEns.verifier_empty] at ordered ⊢
+      have no_verifier_reqs := soundEns.verifier_requirements_not_ordered channel h_ordered
+      simp only [Ensemble.OrderedChannel] at ordered ⊢
       refine ⟨ordered.1, ?_, ?_⟩
       · rw [orderedChannel_append]
         refine ⟨orderedChannel_of_no_requirements fun owner h_owner =>
@@ -1018,7 +1040,7 @@ def addClosedChannel (soundEns : SoundEnsemble F PublicIO balance)
       · rw [orderedChannelLt_append_left]
         refine ⟨?_, ordered.2.2⟩
         apply orderedChannelLt_of_no_requirements
-        simp [circuit_norm]
+        simpa [circuit_norm] using no_verifier_reqs
     closed := closed :: soundEns.closed
     closed_subset := by
       intro channel h_channel
@@ -1051,7 +1073,13 @@ def addClosedChannel (soundEns : SoundEnsemble F PublicIO balance)
       · rcases List.mem_append.mp (h.2 table h_table h_channel) with h | h
         · exact List.mem_append_left _ h
         · exact List.mem_append_right _ (List.mem_cons_of_mem _ h)
-    verifier_empty := soundEns.verifier_empty }
+    ordered_not_closed := fun channel h_ordered h_closed => by
+      rcases List.mem_cons.mp h_closed with h | h
+      · exact not_mem (by simp only at h; rw [← h]; exact soundEns.ordered_subset h_ordered)
+      · exact soundEns.ordered_not_closed channel h_ordered h
+    verifier_requirements_closed := List.Subset.trans soundEns.verifier_requirements_closed
+      (List.subset_cons_self _ _)
+    verifier_requirements := soundEns.verifier_requirements }
 
 section
 variable {closed : ClosedChannel F balance}
@@ -1075,6 +1103,63 @@ variable {closed : ClosedChannel F balance}
   rfl
 @[circuit_norm] lemma addClosedChannel_verifier :
   (soundEns.addClosedChannel closed fresh grts reqs names).verifier = soundEns.verifier := rfl
+end
+
+/-- Set the verifier: its guarantees come from finished channels, and it only pushes to closed
+channels, with requirements that hold unconditionally. -/
+def setVerifier (soundEns : SoundEnsemble F PublicIO balance)
+    (verifier : Verifier.Program F PublicIO)
+    (grts_subset_finished : verifier.channelsWithGuarantees ⊆ soundEns.finished
+      := by simp [circuit_norm])
+    (reqs_closed : verifier.channelsWithRequirements ⊆ soundEns.closed.map (·.channel)
+      := by simp [circuit_norm])
+    (requirements : ∀ env channel,
+      Operations.ChannelRequirements channel env verifier.circuitOperations) :
+    SoundEnsemble F PublicIO balance where
+  ensemble := { soundEns.ensemble with
+    verifier
+    verifier_channels := List.append_subset.mpr
+      ⟨List.Subset.trans grts_subset_finished soundEns.finished_subset,
+        List.Subset.trans reqs_closed soundEns.closed_subset⟩ }
+  ordered := soundEns.ordered
+  ordered_consistent := soundEns.ordered_consistent
+  ordered_subset := soundEns.ordered_subset
+  ordered_channels := by
+    intro channel h_ordered
+    have ordered := soundEns.ordered_channels channel h_ordered
+    have no_verifier_reqs : channel ∉ verifier.channelsWithRequirements := fun h =>
+      soundEns.ordered_not_closed channel h_ordered (reqs_closed h)
+    simp only [Ensemble.OrderedChannel] at ordered ⊢
+    refine ⟨.inr (by simpa [circuit_norm] using no_verifier_reqs), ordered.2.1,
+      orderedChannelLt_of_no_requirements (by simpa [circuit_norm] using no_verifier_reqs)⟩
+  closed := soundEns.closed
+  closed_subset := soundEns.closed_subset
+  closed_requirements := soundEns.closed_requirements
+  ordered_not_closed := soundEns.ordered_not_closed
+  subset_finished := by
+    have h := soundEns.subset_finished
+    rw [Ensemble.channelsWithGuarantees_subset_iff] at h ⊢
+    exact ⟨grts_subset_finished, h.2⟩
+  verifier_requirements_closed := reqs_closed
+  verifier_requirements _ _ channel := requirements _ channel
+
+section
+variable {verifier : Verifier.Program F PublicIO}
+  {grts : verifier.channelsWithGuarantees ⊆ soundEns.finished}
+  {reqs : verifier.channelsWithRequirements ⊆ soundEns.closed.map (·.channel)}
+  {requirements : ∀ env channel,
+    Operations.ChannelRequirements channel env verifier.circuitOperations}
+
+@[circuit_norm] lemma setVerifier_tables :
+  (soundEns.setVerifier verifier grts reqs requirements).tables = soundEns.tables := rfl
+@[circuit_norm] lemma setVerifier_channels :
+  (soundEns.setVerifier verifier grts reqs requirements).channels = soundEns.channels := rfl
+@[circuit_norm] lemma setVerifier_verifier :
+  (soundEns.setVerifier verifier grts reqs requirements).verifier = verifier := rfl
+@[circuit_norm] lemma setVerifier_ordered :
+  (soundEns.setVerifier verifier grts reqs requirements).ordered = soundEns.ordered := rfl
+@[circuit_norm] lemma setVerifier_closed :
+  (soundEns.setVerifier verifier grts reqs requirements).closed = soundEns.closed := rfl
 end
 
 /-- The formal ensemble, from the ensemble-level assumptions and spec, and the prover assumptions
