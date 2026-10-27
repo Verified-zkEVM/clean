@@ -129,51 +129,57 @@ lemma balanceOf_eq_sub_of_isBool {interactions : List (Interaction F)} {msg : Ar
     · simp [h_msg]
 
 /--
-LogUp: for every message, the signed multiplicities sum to zero, and there are fewer interactions
-than the characteristic, so that counts can't wrap around.
+LogUp balance: for every message, the signed multiplicities sum to zero, and there are fewer
+interactions than the characteristic, so that counts can't wrap around.
 -/
+def LogUpBalanced (interactions : List (Interaction F)) : Prop :=
+  interactions.length < ringChar F ∧ ∀ msg, balanceOf interactions msg = 0
+
+/-- If all interactions carrying a message have multiplicity `0` or `1`, it is pushed and pulled
+equally often. -/
+theorem LogUpBalanced.activeCount_push_eq_activeCount_pull_of_isBool
+    {interactions : List (Interaction F)} (balanced : LogUpBalanced interactions) (msg : Array F)
+    (isBool : ∀ i ∈ interactions, i.msg = msg → IsBool i.mult) :
+    activeCount interactions .push msg = activeCount interactions .pull msg := by
+  obtain ⟨ length_lt, sums ⟩ := balanced
+  have activeCount_lt (direction : Direction) :
+      activeCount interactions direction msg < ringChar F :=
+    lt_of_le_of_lt (List.countP_le_length) length_lt
+  have sum := sums msg
+  rw [balanceOf_eq_sub_of_isBool isBool, sub_eq_zero,
+    Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ (activeCount_lt _) (activeCount_lt _)] at sum
+  exact sum
+
+/-- Every pull of one copy of a message is matched by a push of it. -/
+theorem LogUpBalanced.exists_push_of_pull {interactions : List (Interaction F)}
+    (balanced : LogUpBalanced interactions) :
+    ∀ a ∈ interactions, a.Pull → ∃ b ∈ interactions, b.msg = a.msg ∧ b.Push := by
+  intro a a_mem a_pull
+  -- assuming no such push exists, all interactions with the message are pulls of one copy or
+  -- inactive, so balance says that there are none
+  by_contra! no_push
+  have isBool : ∀ i ∈ interactions, i.msg = a.msg → IsBool i.mult := by
+    intro i i_mem i_msg
+    rcases Interaction.not_push_iff.mp (no_push i i_mem i_msg) with h | h
+    · exact .inl h
+    · exact .inr h.2
+  have no_active_push : activeCount interactions .push a.msg = 0 := by
+    simp only [activeCount, List.countP_eq_zero, decide_eq_true_eq, not_and]
+    intro i i_mem i_push i_msg i_mult
+    rcases Interaction.not_push_iff.mp (no_push i i_mem i_msg) with h | h
+    · exact i_mult h
+    · simp [h.1] at i_push
+  have pull_pos : 0 < activeCount interactions .pull a.msg := by
+    apply List.countP_pos_iff.mpr
+    exact ⟨ a, a_mem, by simp [a_pull.1, a_pull.2] ⟩
+  have := balanced.activeCount_push_eq_activeCount_pull_of_isBool a.msg isBool
+  omega
+
+/-- LogUp: field sums with the interaction-count bound. -/
 def Balance.logUp : Balance F where
-  Balanced interactions :=
-    interactions.length < ringChar F ∧ ∀ msg, balanceOf interactions msg = 0
-  balancedInteractions_of_balanced interactions balanced := by
-    obtain ⟨ length_lt, sums ⟩ := balanced
-    have activeCount_lt (direction : Direction) (msg : Array F) :
-        activeCount interactions direction msg < ringChar F :=
-      lt_of_le_of_lt (List.countP_le_length) length_lt
-    have counts : ∀ msg : Array F, (∀ i ∈ interactions, i.msg = msg → IsBool i.mult) →
-        activeCount interactions .push msg = activeCount interactions .pull msg := by
-      intro msg isBool
-      by_cases h_mem : ∃ i ∈ interactions, i.msg = msg
-      · obtain ⟨ i, i_mem, rfl ⟩ := h_mem
-        have sum := sums i.msg
-        rw [balanceOf_eq_sub_of_isBool isBool, sub_eq_zero,
-          Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ (activeCount_lt _ _) (activeCount_lt _ _)]
-          at sum
-        exact sum
-      · push Not at h_mem
-        have zero (direction : Direction) : activeCount interactions direction msg = 0 := by
-          simp only [activeCount, List.countP_eq_zero, decide_eq_true_eq, not_and]
-          exact fun i i_mem _ i_msg => absurd i_msg (h_mem i i_mem)
-        rw [zero, zero]
-    refine ⟨ ?_, counts ⟩
-    intro a a_mem a_pull
-    by_contra! no_push
-    have isBool : ∀ i ∈ interactions, i.msg = a.msg → IsBool i.mult := by
-      intro i i_mem i_msg
-      rcases Interaction.not_push_iff.mp (no_push i i_mem i_msg) with h | h
-      · exact .inl h
-      · exact .inr h.2
-    have no_push : activeCount interactions .push a.msg = 0 := by
-      simp only [activeCount, List.countP_eq_zero, decide_eq_true_eq, not_and]
-      intro i i_mem i_push i_msg i_mult
-      rcases Interaction.not_push_iff.mp (no_push i i_mem i_msg) with h | h
-      · exact i_mult h
-      · simp [h.1] at i_push
-    have pull_pos : 0 < activeCount interactions .pull a.msg := by
-      apply List.countP_pos_iff.mpr
-      exact ⟨ a, a_mem, by simp [a_pull.1, a_pull.2] ⟩
-    have := counts a.msg isBool
-    omega
+  Balanced := LogUpBalanced
+  balancedInteractions_of_balanced _ balanced :=
+    ⟨ balanced.exists_push_of_pull, balanced.activeCount_push_eq_activeCount_pull_of_isBool ⟩
 
 /-
 ## Multiset balance with `0`/`1` activations
