@@ -375,7 +375,7 @@ def femtoCairoStep (program : Array (F p)) (h_program : ValidProgram program) :
 def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   name := "memory"
   main | { address, value, multiplicity } => do
-    memoryChannel.emit multiplicity { address, value }
+    memoryChannel.emit .push multiplicity { address, value }
   Assumptions
   | { address, value, .. }, data => memoryChannel.Guarantees { address, value } data
   ProverAssumptions
@@ -384,7 +384,7 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   channelsWithRequirements := [memoryChannel.toRaw]
   soundness := by
     circuit_proof_start [memoryChannel]
-    intro _ _
+    intro _
     exact h_assumptions
   completeness := by circuit_proof_start
 
@@ -461,7 +461,7 @@ def executeStep (program : Array (F p)) (h_program : ValidProgram program)
     rcases h_bool with rfl | rfl
     · simp
     obtain ⟨steps, hsteps⟩ := h_pull rfl
-    refine ⟨by simp, fun _ _ => ⟨steps + 1, ?_⟩⟩
+    refine ⟨by simp, fun _ => ⟨steps + 1, ?_⟩⟩
     simp only [Spec.femtoCairoMachineBoundedExecution, hsteps]
     exact h_step
 
@@ -550,7 +550,7 @@ def ProverAssumptions (program : Array (F p))
 
 def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) (initialState : State (F p)) :=
-  (soundEnsemble program h_program h_memorySize initialState).toFormal (fun _ => True)
+  (soundEnsemble program h_program h_memorySize initialState).toFormal .logUp (fun _ => True)
     (Spec program memorySize initialState)
     (by simp [circuit_norm, soundEnsemble, vm, memoryComponent])
     (by
@@ -571,7 +571,7 @@ theorem femtoCairo_soundness {memorySize : UInt64}
     (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) (ap fp : F p) :
-    (soundEnsemble program h_program h_memorySize initialState).ensemble.Statement (ap, fp) →
+    (soundEnsemble program h_program h_memorySize initialState).ensemble.Statement .logUp (ap, fp) →
       ∃ mem : Array (F p), mem.size = memorySize.toNat ∧ ∃ steps,
         Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
           some (haltedState program.size ap fp) :=

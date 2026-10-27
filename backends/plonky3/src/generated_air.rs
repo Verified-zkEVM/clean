@@ -421,10 +421,11 @@ where
             }
         };
         for interaction in interactions {
+            let multiplicity = interaction.signed_multiplicity();
             builder.push_interaction(
                 interaction.channel,
                 interaction.message,
-                Count::provided(interaction.multiplicity),
+                Count::provided(multiplicity),
             );
         }
     }

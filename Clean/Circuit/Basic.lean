@@ -129,36 +129,32 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 
 end Circuit
 
-/-- Emit an interaction to the channel -/
+/-- Push or pull a message `mult` times. -/
 @[circuit_norm]
 def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ mult, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+    (direction : Direction) (mult : Expression F) (msg : Message (Expression F)) :
+    Circuit F Unit := fun _ =>
+  ((), [.interact (channel.emitted direction mult msg).toRaw])
 
 @[circuit_norm]
 def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ -1, msg, true ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pulled msg).toRaw])
 
 @[circuit_norm]
 def Channel.pullIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ -enabled, msg, true ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pulledIf enabled msg).toRaw])
 
 @[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pushed msg).toRaw])
 
 @[circuit_norm]
 def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ enabled, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pushedIf enabled msg).toRaw])
 
 /-- Low-level method to create a new variable of an arbitrary "provable type" from raw `WitgenIR`. -/
 @[circuit_norm]

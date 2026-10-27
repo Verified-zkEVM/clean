@@ -64,7 +64,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- assert correctness
     input.x + input.y === input.z + carry * 256
     -- emit to the add8 channel with multiplicity `m`
-    add8Channel.emit input.m (input.x, input.y, input.z)
+    add8Channel.emit .push input.m (input.x, input.y, input.z)
 
   ProverAssumptions
   | { x, y, z, m }, _, _ =>
@@ -76,7 +76,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     circuit_proof_start [bytes, add8Channel]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
-    intro hm h0 hx hy
+    intro h0 hx hy
     have add_soundness :=
       Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
@@ -246,7 +246,7 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
       add8Channel, fibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, add8, bytes])
-  |>.toFormal (fun _ => True)
+  |>.toFormal .logUp (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
     (by simp [circuit_norm, fibonacciVm, bytes])
     (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
@@ -281,7 +281,7 @@ Then let the guarantees/requirements access that state (the guarantees _before_ 
 _after_ the interaction).
 -/
 theorem fibonacci_soundness : ∀ (n x y : F p),
-  fibonacciEnsemble.ensemble.Statement (n, x, y) →
+  fibonacciEnsemble.ensemble.Statement .logUp (n, x, y) →
     ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
   intro n x y statement
   exact fibonacciEnsemble.soundness (n, x, y) trivial statement

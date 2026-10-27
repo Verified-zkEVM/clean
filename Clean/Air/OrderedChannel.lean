@@ -232,7 +232,7 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt
   simp only [circuit_norm] at *
   simp [or_imp] at ⊢ not_in_reqs_or extra_reqs_or_no_grts
   constructor
-  · apply balancedInteractions_of_perm balanced
+  · apply BalancedInteractions.of_perm balanced
     grw [List.perm_append_comm_assoc]
   constructor
   · intro a
@@ -336,10 +336,7 @@ lemma partialBalancedChannel_of_sublist {subtables tables : Tables F} {channel :
   by_cases subtables_empty : subtables.tables = []
   · simp [subtables_empty, circuit_norm, PartialBalancedChannel, Tables.interactionsWith]
     use []
-    simp [BalancedInteractions, balanceOf]
-    by_cases h : ringChar F = 0
-    · exact Or.inr h
-    · exact Or.inl (Nat.pos_of_ne_zero h)
+    simp [BalancedInteractions.nil]
   have subtables_subset : subtables.tables ⊆ tables.tables := by
     have p := perm.symm.subset
     simp_all
@@ -377,7 +374,7 @@ lemma partialBalancedChannel_of_sublist {subtables tables : Tables F} {channel :
     exact otherConstraints _ ht
     exact otherReqs _ ht
   -- balance
-  apply balancedInteractions_of_perm balanced
+  apply BalancedInteractions.of_perm balanced
   simp only [Tables.interactionsWith]
   grw [← List.append_assoc, List.perm_append_right_iff, ← List.flatMap_append, perm.flatMap]
   exact fun _ _ => List.Perm.refl _
@@ -577,7 +574,7 @@ lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
   intro ordered balanced
   use witness.verifierInteractionsWith channel
   constructor
-  · apply balancedInteractions_of_perm balanced
+  · apply BalancedInteractions.of_perm balanced
     apply List.perm_append_comm
   constructor
   · intro interaction h_interaction
@@ -887,21 +884,21 @@ variable {channel : RawChannel F} [channel.Consistent]
   (soundEns.addFinishedChannel channel fresh).finished = channel :: soundEns.finished := rfl
 end
 
-/-- The formal ensemble, from the ensemble-level assumptions and spec, and the prover assumptions
-that witness generation needs. -/
-def toFormal (soundEns : SoundEnsemble F PublicIO)
+/-- The formal ensemble under a balance check, from the ensemble-level assumptions and spec, and
+the prover assumptions that witness generation needs. -/
+def toFormal (soundEns : SoundEnsemble F PublicIO) (balance : Balance F)
     (Assumptions Spec : PublicIO F → Prop)
     (assumptionsConsistency : soundEns.AssumptionsConsistency Assumptions)
     (specConsistency : soundEns.SpecConsistency Spec)
     (ProverAssumptions : PublicIO F → soundEns.ProverInput F → Prop := fun _ _ => True) :
-    FormalEnsemble F PublicIO where
+    FormalEnsemble F PublicIO balance where
   ensemble := soundEns.ensemble
   Assumptions := Assumptions
   Spec := Spec
   ProverAssumptions
   soundness := by
     apply soundEns.soundness_of_tableSoundness_and_specConsistency
-      Assumptions Spec ?_ assumptionsConsistency specConsistency
+      balance Assumptions Spec ?_ assumptionsConsistency specConsistency
     apply soundEns.tableSoundness_of_soundChannels
     use soundEns.finished, soundEns.finished_subset
     exact soundEns.soundChannels

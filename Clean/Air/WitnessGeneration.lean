@@ -103,7 +103,7 @@ def findCountedRow (state : ComponentState F) (demand : Demand F) :
 def incrementMultiplicity (state : ComponentState F) (demand : Demand F) (data : ProverData F)
     (hint : ProverHint F) : MultiplicityColumn × ℕ × GeneratedRow F → Change F
   | (multiplicity, index, row) =>
-      let count := (row.input[multiplicity.column]?.getD 0) - demand.multiplicity
+      let count := multiplicity.cancel (row.input[multiplicity.column]?.getD 0) demand.multiplicity
       .update index row (completeRow state (row.input.set! multiplicity.column count) data hint)
 
 /-- A new row answering the demanded message, whose multiplicity cell, if any, cancels the
@@ -111,7 +111,8 @@ demand. -/
 def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
   let env := ProverEnvironment.fromArray demand.message data hint
-  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 (-demand.multiplicity)
+  let count := (state.multiplicity.map (·.cancel 0 demand.multiplicity)).getD 0
+  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 count
   completeRow state input data hint
 
 /-- Answer demand with one new row per occurrence, or, with a multiplicity cell, by counting it in

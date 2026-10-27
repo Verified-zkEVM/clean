@@ -202,7 +202,7 @@ def step (program : Program) (h_program : program.length < p) (initial : F p) (o
     rw [sub_eq_zero] at h_one
     subst h_one
     simp_all
-    exact fun _ => stateChannel_guarantees_step h_program h_state h_instruction
+    exact stateChannel_guarantees_step h_program h_state h_instruction
   completeness := by
     circuit_proof_start [programCell, programCellIn]
     rcases h_assumptions with h | ⟨h, h_state, h_contains⟩ <;> simp_all
@@ -256,7 +256,7 @@ def Spec (program : Program) (initial final : F p) : Prop :=
   final = run program initial
 
 def formalEnsemble (program : Program) (h_program : program.length < p) (initial : F p) :=
-  (soundEnsemble program h_program initial).toFormal (fun _ => True) (Spec program initial)
+  (soundEnsemble program h_program initial).toFormal .logUp (fun _ => True) (Spec program initial)
     (by simp [circuit_norm, soundEnsemble, vm])
     (by simp [circuit_norm, soundEnsemble, vm, verifier, stateChannel, Spec,
       ZMod.val_cast_of_lt h_program])
@@ -265,7 +265,7 @@ def formalEnsemble (program : Program) (h_program : program.length < p) (initial
 on the initial accumulator ends with `final`. -/
 theorem opcodeVm_soundness (program : Program) (h_program : program.length < p)
     (initial final : F p) :
-    (soundEnsemble program h_program initial).ensemble.Statement final →
+    (soundEnsemble program h_program initial).ensemble.Statement .logUp final →
       final = run program initial :=
   (formalEnsemble program h_program initial).soundness final trivial
 

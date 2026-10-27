@@ -43,7 +43,7 @@ def channel : Channel F Row where
 /-- One table row: pushes its fixed row with the given multiplicity. -/
 def provider : GeneralFormalCircuit F (ProvablePair Row field) unit where
   name := lookup.name
-  main | (value, multiplicity) => lookup.channel.emit multiplicity value
+  main | (value, multiplicity) => lookup.channel.emit .push multiplicity value
   channelsWithRequirements := [lookup.channel.toRaw]
   Assumptions | (value, _), _ => lookup.Contains value
   ProverAssumptions | (value, _), _, _ => lookup.Contains value

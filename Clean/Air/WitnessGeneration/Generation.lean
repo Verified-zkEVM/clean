@@ -36,7 +36,7 @@ Preallocated components must have exactly one multiplicity cell. For demand comp
 depends on whether you use a multiplicity cell in the input: if yes, the component gets one row per
 distinct message, like an addition chip; if not, it gets one row per occurrence, like a VM, where
 every step is its own row even if two steps happen to agree. For example, a memory row
-emits `memoryChannel.emit multiplicity { address, value }`, so its input is
+emits `memoryChannel.emit .push multiplicity { address, value }`, so its input is
 `{ address := .fixed i.toField, value := .witness ..., multiplicity := .multiplicity }`.
 
 The component's witness programs compute the rest of the row from its input.
@@ -50,16 +50,6 @@ channel, and each table's guard checks the opcode at the state's `pc`.
 namespace Air.Flat.WitnessGeneration
 
 variable {F : Type}
-
-/-- Whether a channel message was pushed or pulled. -/
-inductive Direction where
-  | pull
-  | push
-deriving Repr, DecidableEq, BEq
-
-def Direction.name : Direction → String
-  | .pull => "pull"
-  | .push => "push"
 
 /-- How generation fills one input cell of a component row. -/
 inductive Cell (F : Type) where

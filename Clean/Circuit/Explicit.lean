@@ -555,12 +555,16 @@ instance {α : TypeMap} [ProvableType α] {table : Table F α} {entry : Var α F
   ExplicitCircuits.toSingle (lookup table) entry
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
-    {mult : Expression F} :
-    ExplicitCircuits (F:=F) (channel.emit mult) where
+    {direction : Direction} {mult : Expression F} :
+    ExplicitCircuits (F:=F) (channel.emit direction mult) where
   output _ _ := ()
   localLength _ _ := 0
-  operations msg _ := [.interact (channel.emitted mult msg).toRaw]
-  channelsWithGuarantees _ _ := []
+  operations msg _ := [.interact (channel.emitted direction mult msg).toRaw]
+  channelsWithGuarantees _ _ := match direction with
+    | .push => []
+    | .pull => [channel.toRaw]
+  channelsLawful _ _ := by
+    cases direction <;> simp [Operations.ChannelsLawful, circuit_norm]
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
     ExplicitCircuits (F:=F) (channel.pull) where
@@ -574,7 +578,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
     ExplicitCircuits (F:=F) (channel.pullIf enabled) where
   output _ _ := ()
   localLength _ _ := 0
-  operations msg _ := [.interact (pulledIf (channel:=channel) enabled msg).toRaw]
+  operations msg _ := [.interact (channel.pulledIf enabled msg).toRaw]
   channelsWithGuarantees _ _ := [channel.toRaw]
 
 instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message} :
@@ -589,7 +593,7 @@ instance {Message : TypeMap} [ProvableType Message] {channel : Channel F Message
     ExplicitCircuits (F:=F) (channel.pushIf enabled) where
   output _ _ := ()
   localLength _ _ := 0
-  operations msg _ := [.interact (pushedIf (channel:=channel) enabled msg).toRaw]
+  operations msg _ := [.interact (channel.pushedIf enabled msg).toRaw]
   channelsWithGuarantees _ _ := []
 
 attribute [explicit_circuit_unfold_type] Circuit

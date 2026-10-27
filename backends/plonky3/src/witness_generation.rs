@@ -5,6 +5,7 @@ use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::ops::Neg;
 
 use p3_field::{Field, PrimeField64};
 use p3_matrix::dense::RowMajorMatrix;
@@ -172,6 +173,18 @@ pub struct MultiplicityColumn {
     pub interaction: usize,
     /// The input column of the cell.
     pub column: usize,
+    /// The direction of the counted interaction.
+    pub direction: Direction,
+}
+
+impl MultiplicityColumn {
+    /// The multiplicity cell that cancels a net multiplicity `demand` on top of the value `cell`.
+    fn cancel<F: Field>(&self, cell: F, demand: F) -> F {
+        match self.direction {
+            Direction::Push => cell - demand,
+            Direction::Pull => cell + demand,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -255,9 +268,19 @@ impl<F: Field + Copy> WitnessData<F> {
 #[derive(Clone, Debug)]
 pub struct Interaction<F> {
     pub channel: &'static str,
+    pub direction: Direction,
     pub multiplicity: F,
     pub message: Vec<F>,
-    pub assume_guarantees: bool,
+}
+
+impl<F: Clone + Neg<Output = F>> Interaction<F> {
+    /// The multiplicity with sign: pushes count positively, pulls negatively.
+    pub fn signed_multiplicity(&self) -> F {
+        match self.direction {
+            Direction::Push => self.multiplicity.clone(),
+            Direction::Pull => -self.multiplicity.clone(),
+        }
+    }
 }
 
 /// A generated ensemble witness: the rows of each component.
@@ -411,21 +434,15 @@ impl<F: WitnessField> Demands<F> {
 
     fn add_interactions(&mut self, interactions: impl IntoIterator<Item = Interaction<F>>) {
         for interaction in interactions {
-            self.add(
-                interaction.channel,
-                interaction.message,
-                interaction.multiplicity,
-            );
+            let multiplicity = interaction.signed_multiplicity();
+            self.add(interaction.channel, interaction.message, multiplicity);
         }
     }
 
     fn remove_interactions(&mut self, interactions: impl IntoIterator<Item = Interaction<F>>) {
         for interaction in interactions {
-            self.add(
-                interaction.channel,
-                interaction.message,
-                -interaction.multiplicity,
-            );
+            let multiplicity = interaction.signed_multiplicity();
+            self.add(interaction.channel, interaction.message, -multiplicity);
         }
     }
 
@@ -540,7 +557,10 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<Row<F>, String> {
-    let input = (mode.input)(&demand.message, data, hint, -demand.multiplicity);
+    let count = mode.multiplicity.map_or(F::ZERO, |multiplicity| {
+        multiplicity.cancel(F::ZERO, demand.multiplicity)
+    });
+    let input = (mode.input)(&demand.message, data, hint, count);
     let values = P::complete_row(component, &input, data, hint)?;
     Ok(Row { input, values })
 }
@@ -565,7 +585,7 @@ fn increment_multiplicity<F: WitnessField, P: Program<F>>(
         )
     })?;
     let old_interactions = P::interactions(component, &row.values);
-    row.input[multiplicity.column] = current - demand.multiplicity;
+    row.input[multiplicity.column] = multiplicity.cancel(current, demand.multiplicity);
     row.values = P::complete_row(component, &row.input, data, hint)?;
     demands.remove_interactions(old_interactions);
     demands.add_interactions(P::interactions(component, &row.values));

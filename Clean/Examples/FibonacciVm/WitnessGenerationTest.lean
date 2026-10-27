@@ -48,11 +48,11 @@ def valueChannel : Channel (F pBabybear) field where
 /-- One row of a table that consumes the values `0, ..., 7`, counted by its multiplicity. -/
 def consumeValue : GeneralFormalCircuit (F pBabybear) fieldPair unit where
   name := "sink"
-  main | (value, multiplicity) => valueChannel.emit multiplicity value
+  main | (value, multiplicity) => valueChannel.emit .pull multiplicity value
   channelsWithRequirements := [valueChannel.toRaw]
   Spec _ _ _ := True
   soundness := by circuit_proof_start [valueChannel]
-  completeness := by circuit_proof_start
+  completeness := by circuit_proof_start [valueChannel]
 
 /-- The consuming table answers values pushed more often than pulled. -/
 def sink : Component (F pBabybear) where
@@ -91,7 +91,7 @@ def pushedResult : Except String (F pBabybear × Bool × Bool) :=
             channelsBalanced witness)
       | _ => .error "ensemble has no sink table"
 
-/-- The sink answers the surplus pushes with a negative multiplicity in the row for 5. -/
-example : pushedResult = .ok (-2, true, true) := by native_decide
+/-- The sink answers the surplus pushes by pulling 5 twice, in the row for 5. -/
+example : pushedResult = .ok (2, true, true) := by native_decide
 
 end Air.Flat.WitnessGenerationTest

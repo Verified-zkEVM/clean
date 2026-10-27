@@ -683,75 +683,75 @@ pub mod component_0 {
         vec![
             Interaction {
                 channel: "state",
-                multiplicity: (-E::from_u64(1u64) * row[0].clone()),
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
                 message: vec![row[1].clone(), row[2].clone(), row[3].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "program",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[1].clone(), row[4].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "program",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![(row[1].clone() + E::from_u64(1u64)), row[5].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "program",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![(row[1].clone() + E::from_u64(2u64)), row[6].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "program",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![(row[1].clone() + E::from_u64(3u64)), row[7].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "memory",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[16].clone(), row[17].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "memory",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[18].clone(), row[19].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "memory",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[21].clone(), row[22].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "memory",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[23].clone(), row[24].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "memory",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[26].clone(), row[27].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "memory",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[28].clone(), row[29].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "state",
+                direction: Direction::Push,
                 multiplicity: row[0].clone(),
                 message: vec![row[31].clone(), row[32].clone(), row[33].clone()],
-                assume_guarantees: false,
             },
         ]
     }
@@ -830,9 +830,9 @@ pub mod component_1 {
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "memory",
+            direction: Direction::Push,
             multiplicity: row[2].clone(),
             message: vec![row[0].clone(), row[1].clone()],
-            assume_guarantees: false,
         }]
     }
 
@@ -844,6 +844,7 @@ pub mod component_1 {
             multiplicity: MultiplicityColumn {
                 interaction: 0,
                 column: 2,
+                direction: Direction::Push,
             },
         }
     }
@@ -935,9 +936,9 @@ pub mod component_2 {
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "program",
+            direction: Direction::Push,
             multiplicity: row[2].clone(),
             message: vec![row[0].clone(), row[1].clone()],
-            assume_guarantees: false,
         }]
     }
 
@@ -949,6 +950,7 @@ pub mod component_2 {
             multiplicity: MultiplicityColumn {
                 interaction: 0,
                 column: 2,
+                direction: Direction::Push,
             },
         }
     }
@@ -1009,15 +1011,15 @@ pub mod verifier {
         vec![
             Interaction {
                 channel: "state",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![E::from_u64(32u64), row[0].clone(), row[1].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "state",
+                direction: Direction::Push,
                 multiplicity: E::from_u64(1u64),
                 message: vec![E::from_u64(0u64), E::from_u64(0u64), E::from_u64(0u64)],
-                assume_guarantees: false,
             },
         ]
     }

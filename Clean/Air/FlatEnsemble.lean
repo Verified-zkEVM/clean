@@ -346,6 +346,16 @@ abbrev BalancedChannel {ens : Ensemble F PublicIO} (witness : EnsembleWitness en
 @[circuit_norm]
 def BalancedChannels {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
   ∀ channel ∈ ens.channels, BalancedChannel witness channel
+
+/-- The interactions with every ensemble channel pass the balance check. -/
+def Balanced {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) (balance : Balance F) :
+    Prop :=
+  ∀ channel ∈ ens.channels, balance.isBalanced (ringChar F) (witness.interactionsWith channel)
+
+lemma balancedChannels_of_balanced {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
+    {balance : Balance F} (balanced : witness.Balanced balance) : witness.BalancedChannels :=
+  fun channel h_channel =>
+    balance.balancedInteractions_of_isBalanced _ (balanced channel h_channel)
 end EnsembleWitness
 
 /- ## Soundness, Completeness and related definitions -/
@@ -353,38 +363,34 @@ end EnsembleWitness
 namespace Ensemble
 
 /--
-The raw "statement" that a proof about an ensemble makes. Could also be called "relation".
-
-TODO: we currently assume a proof system that already provides us with the fact that the
-total interaction length doesn't overflow (as part of `BalancedChannels`).
-
-In practice, however, it's not the total interaction length that is part of a proof,
-but rather the length of each individual table. It should be our verifier's job to
-verify a bound on the interaction length from the given table lengths.
+The raw "statement" that a proof about an ensemble makes, for a balance check that the proof system
+performs on every channel. Could also be called "relation".
 -/
-def Statement (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
+def Statement (ens : Ensemble F PublicIO) (balance : Balance F) (publicInput : PublicIO F) : Prop :=
   ∃ witness : EnsembleWitness ens,
     witness.publicInput = publicInput ∧
-    witness.Constraints ∧ witness.BalancedChannels
+    witness.Constraints ∧ witness.Balanced balance
 
 /-- Soundness: assumptions plus the raw statement imply the spec. -/
-def Soundness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → Prop) : Prop :=
-  ∀ publicInput, Assumptions publicInput → ens.Statement publicInput → Spec publicInput
+def Soundness (ens : Ensemble F PublicIO) (balance : Balance F)
+    (Assumptions Spec : PublicIO F → Prop) : Prop :=
+  ∀ publicInput, Assumptions publicInput → ens.Statement balance publicInput → Spec publicInput
 
 /--
 Completeness: assumptions plus the spec implies the raw statement.
 -/
-def Completeness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → Prop) : Prop :=
-  ∀ publicInput, Assumptions publicInput → Spec publicInput → ens.Statement publicInput
+def Completeness (ens : Ensemble F PublicIO) (balance : Balance F)
+    (Assumptions Spec : PublicIO F → Prop) : Prop :=
+  ∀ publicInput, Assumptions publicInput → Spec publicInput → ens.Statement balance publicInput
 end Ensemble
 
-/-- An ensemble with its specification and soundness proof. -/
+/-- An ensemble with its specification and its soundness proof under a balance check. -/
 structure FormalEnsemble (F : Type) [FiniteField F]
-    (PublicIO : TypeMap) [ProvableType PublicIO] where
+    (PublicIO : TypeMap) [ProvableType PublicIO] (balance : Balance F) where
   ensemble : Ensemble F PublicIO
   Assumptions : PublicIO F → Prop := fun _ => True
   Spec : PublicIO F → Prop
-  soundness : ensemble.Soundness Assumptions Spec
+  soundness : ensemble.Soundness balance Assumptions Spec
   /-- What the public and private inputs must satisfy for witness generation to succeed. -/
   ProverAssumptions : PublicIO F → ensemble.ProverInput F → Prop := fun _ _ => True
 
@@ -427,18 +433,19 @@ lemma assumptions_of_assumptionsConsistency {ens : Ensemble F PublicIO}
   exact consistency _ assumptions _ (EnsembleWitness.component_mem_tables_of_mem htable) _ _
 
 theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F PublicIO)
-  (Assumptions Spec : PublicIO F → Prop) :
+  (balance : Balance F) (Assumptions Spec : PublicIO F → Prop) :
   ens.TableSoundness →
   ens.AssumptionsConsistency Assumptions →
   ens.SpecConsistency Spec →
-    ens.Soundness Assumptions Spec := by
+    ens.Soundness balance Assumptions Spec := by
   simp only [Soundness, TableSoundness, AssumptionsConsistency, SpecConsistency, Statement,
     forall_exists_index, and_imp]
   intro table_soundness assumptions_consistency spec_consistency
-    publicInput assumptions witness publicInput_eq constraints balance
+    publicInput assumptions witness publicInput_eq constraints balanced
   simp only [← publicInput_eq] at *
   apply spec_consistency witness
-  apply table_soundness witness ?assumptions constraints balance
+  apply table_soundness witness ?assumptions constraints
+    (EnsembleWitness.balancedChannels_of_balanced balanced)
   exact assumptions_of_assumptionsConsistency assumptions_consistency witness assumptions
 end Ensemble
 

@@ -1,6 +1,7 @@
 module
 
 public import Clean.Air.WitnessGeneration.Generation
+public import Clean.Air.Balance
 public import Std.Data.HashMap
 public import Std.Data.TreeMap
 
@@ -207,11 +208,11 @@ def add (tally : Tally F) (channel : String) (message : Array F) (multiplicity :
 
 def addInteractions (tally : Tally F) (interactions : List (Interaction F)) : Tally F :=
   interactions.foldl (fun tally interaction =>
-    tally.add interaction.channel.name interaction.msg interaction.mult) tally
+    tally.add interaction.channel.name interaction.msg interaction.signedMult) tally
 
 def removeInteractions (tally : Tally F) (interactions : List (Interaction F)) : Tally F :=
   interactions.foldl (fun tally interaction =>
-    tally.add interaction.channel.name interaction.msg (-interaction.mult)) tally
+    tally.add interaction.channel.name interaction.msg (-interaction.signedMult)) tally
 
 /-! ### Net multiplicities and demands -/
 
