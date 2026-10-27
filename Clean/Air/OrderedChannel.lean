@@ -746,6 +746,8 @@ structure SoundEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [Provabl
   ordered_not_closed : ∀ channel ∈ ordered, channel ∉ closed.map (·.channel)
   subset_finished : ensemble.channelsWithGuarantees ⊆ ordered ++ closed.map (·.channel)
   /-- The verifier only pushes to closed channels, and its requirements hold unconditionally. -/
+  -- TODO let the verifier push to ordered channels too, by being more flexible about table order
+  -- => use "∃ permutation, s.t. ordered" instead of "ordered" in Ensemble.OrderedChannels
   verifier_requirements_closed : verifier.channelsWithRequirements ⊆ closed.map (·.channel)
   verifier_requirements : ∀ publicInput data channel,
     ensemble.VerifierChannelRequirements publicInput data channel
