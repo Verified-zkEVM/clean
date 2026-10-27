@@ -154,20 +154,53 @@ Convert a vector of bits to a field element.
 def fieldFromBits {n : ℕ} (bits : Vector (F p) n) : F p :=
   fromBits <| bits.map ZMod.val
 
-def fieldFromBitsExpr {n : ℕ} (bits : Vector (Expression (F p)) n) : Expression (F p) :=
-  Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * (2^i : F p)) 0
+/-- Horner's rule from the top bit: each step doubles the bits so far and adds the next lower bit,
+`2 * (... (2 * acc + bits[n - 1]) ...) + bits[0]`. -/
+def hornerExpr {n : ℕ} (bits : Vector (Expression (F p)) n) (acc : Expression (F p)) :
+    Expression (F p) :=
+  Fin.foldr n (fun i acc => 2 * acc + bits[i]) acc
+
+/-- The field element with the given bits, as an expression: Horner's rule from the top bit. -/
+def fieldFromBitsExpr : {n : ℕ} → Vector (Expression (F p)) n → Expression (F p)
+  | 0, _ => 0
+  | n + 1, bits => hornerExpr bits.pop bits[n]
+
+lemma fromBits_natCast {n : ℕ} (bits : Vector ℕ n) :
+    (fromBits bits : F p) = ∑ i : Fin n, (bits[i] : F p) * 2 ^ i.val := by
+  simp only [fromBits]
+  rw [Fin.foldl_to_sum n (fun i : Fin n => bits[i.val] * 2 ^ i.val)]
+  push_cast
+  rfl
+
+lemma foldr_horner_eval {n : ℕ} (eval : Environment (F p)) (bit : Fin n → Expression (F p))
+    (acc : Expression (F p)) :
+    Expression.eval eval (Fin.foldr n (fun i acc => 2 * acc + bit i) acc) =
+      ∑ i : Fin n, Expression.eval eval (bit i) * 2 ^ i.val + 2 ^ n * Expression.eval eval acc := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [Fin.foldr_succ, Fin.sum_univ_succ]
+    simp only [Expression.eval, Fin.val_zero, pow_zero, mul_one, Fin.val_succ]
+    rw [ih, mul_add, Finset.mul_sum]
+    ring_nf
+
+lemma hornerExpr_eval {n : ℕ} (eval : Environment (F p)) (bits : Vector (Expression (F p)) n)
+    (acc : Expression (F p)) :
+    Expression.eval eval (hornerExpr bits acc) =
+      ∑ i : Fin n, Expression.eval eval bits[i] * 2 ^ i.val + 2 ^ n * Expression.eval eval acc :=
+  foldr_horner_eval eval (fun i => bits[i]) acc
 
 /-- Evaluation commutes with bits accumulation -/
-theorem fieldFromBits_eval {n : ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n) :
-    eval (fieldFromBitsExpr bits) = fieldFromBits (bits.map eval) := by
-  simp only [fieldFromBitsExpr, fieldFromBits, fromBits]
-  induction n with
-  | zero => simp only [Fin.foldl_zero, Expression.eval, Vector.map_map, Vector.getElem_map,
-    Function.comp_apply, Nat.cast_zero]
-  | succ n ih =>
-    obtain ih := ih bits.pop
-    simp [Vector.getElem_pop'] at ih
-    simp [Fin.foldl_succ_last, ih, Expression.eval]
+theorem fieldFromBits_eval {n : ℕ} {eval : Environment (F p)}
+    (bits : Vector (Expression (F p)) n) :
+    Expression.eval eval (fieldFromBitsExpr bits) =
+      fieldFromBits (bits.map (Expression.eval eval)) := by
+  simp only [fieldFromBits, fromBits_natCast]
+  cases n with
+  | zero => simp [fieldFromBitsExpr]; rfl
+  | succ n =>
+    simp only [fieldFromBitsExpr, hornerExpr_eval, Fin.sum_univ_castSucc]
+    simp [Vector.getElem_pop', mul_comm]
 
 theorem fieldToBits_bits {n : ℕ} {x : F p} :
     ∀ i (_ : i < n), (fieldToBits n x)[i] = 0 ∨ (fieldToBits n x)[i] = 1 := by

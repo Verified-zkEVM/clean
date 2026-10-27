@@ -79,7 +79,7 @@ The window's selectors are 0 or 1 in Clean's semantics. Plonky3's selectors are 
 
 VM tables are single-row, since the VM soundness argument derives each row's requirements from its own guarantees.
 
-`Clean/Examples/KeccakAir` is Plonky3's Keccak-f AIR (`p3-keccak-air`) as a two-row component, with Plonky3's columns and constraints in Plonky3's order. A row assumes, unless it is the first row, that its one-hot step flags are those of a round `r` and its input is the state after `r` rounds of its preimage; its spec is that it computes round `r`. `KeccakAir.table_block_soundness` concludes that every block of 24 rows starting at round 0 outputs Keccak-f of its preimage, and `KeccakAir.table_soundness` that every row computing the last round outputs Keccak-f of its preimage.
+`Clean/Examples/KeccakAir` is Plonky3's Keccak-f AIR (`p3-keccak-air`) as a two-row component, with Plonky3's columns and constraints in Plonky3's order. Its row circuit is Plonky3's `eval` in four subcircuits, each with its own spec: round control (step flags, preimage, export), θ, ρ ∘ π ∘ χ, and ι with the link to the next row, built from the general gadgets `assertBool`, `PackBits`/`PackLimbs` and `ConditionalEquality`. The row's soundness composes their specs into a round of Keccak-f. A row assumes, unless it is the first row, that its one-hot step flags are those of a round `r` and its input is the state after `r` rounds of its preimage; its spec is that it computes round `r`. `KeccakAir.table_block_soundness` concludes that every block of 24 rows starting at round 0 outputs Keccak-f of its preimage, and `KeccakAir.table_soundness` that every row computing the last round outputs Keccak-f of its preimage.
 
 ## Relation To Clean/Table
 
