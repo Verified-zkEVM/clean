@@ -1,26 +1,18 @@
 module
 
-public import CleanCompStark.Transfer
+public import CleanCompStark.Gating
 public import Clean.Examples.KeccakAir.Component
 
 /-!
-# The Keccak-f component is bridgeable
+# The constraints of the Keccak-f component are admissible
 
-`bridgeable (component height) = true`, proved by the shape of the constraints rather than by
-evaluating them: every constraint is written over the cells of the current and the next row with
-`+`, `-`, `*` and numerals, and multiplied by at most one selector, at the top or as the left
-factor of a product that is the left factor of the constraint (`when_transition` of
-`1 - step_flags[23]`).
-
-A `Shape` abstracts an expression: `plain` (it reads only cells of the two rows), a `selector`, a
-`gated` constraint (`splitSelector` takes its selector off and leaves a plain body), or `bad`.
-Shapes have the operations of the constraints, and so do expressions paired with a shape that
-describes them (`Tagged`). The constraints of the component's variables are the first components of
-the constraints of the variables tagged with their shapes (`IsHom.map_constraints`), and the shapes
-of those are the constraints of the cells' shapes, all of them `plain` or `gated`
-(`gateable_constraints`), which `simp` shows family by family. The window's variables enter only
-through where their cells are (`VarWindow`), so no proof evaluates the 3182 constraints or the
-5269 variables.
+Every constraint of the component's row circuit splits into a gate and a body that reads no
+selector, reads cells of the window, and weighs at most `max (3 a) (b + 2 a)` when the rows' cells
+and the first-row selector weigh `a` and the transition selector `b` (`admissible_main`). This is
+shown step by step: each of the four steps, round control, θ, ρ ∘ π ∘ χ and ι, has its constraints
+described by the gadgets it calls (`Gating`), and its inputs are cells of the window
+(`WindowShaped`). So the component is bridgeable (`bridgeable_component`), and its lowered
+constraints have Plonky3's degree (`KeccakAir.Setup`).
 -/
 
 @[expose] public section
@@ -28,349 +20,302 @@ through where their cells are (`VarWindow`), so no proof evaluates the 3182 cons
 namespace CleanCompStark.KeccakAir
 open Air.Flat Air.Flat.WitnessGeneration Backends _root_.KeccakAir
 
-/-- The shape of an expression of a window. -/
-inductive Shape where
-  /-- Reads only cells of the current and the next row. -/
-  | plain
-  /-- A selector cell. -/
-  | selector (gate : Gate)
-  /-- A selector times a plain body, as `splitSelector` splits it. -/
-  | gated (gate : Gate)
-  /-- Any other expression. -/
-  | bad
+/-! ### Cells of a row -/
 
-namespace Shape
+/-- A property of every cell of a row. -/
+structure RowCells {α : Type} (P : α → Prop) (row : Row α) : Prop where
+  stepFlags : ∀ i : Fin 24, P row.stepFlags[i]
+  exportFlag : P row.exportFlag
+  preimage : ∀ i : Fin 100, P row.preimage[i]
+  a : ∀ i : Fin 100, P row.a[i]
+  c : ∀ i : Fin 320, P row.c[i]
+  cPrime : ∀ i : Fin 320, P row.cPrime[i]
+  aPrime : ∀ i : Fin 1600, P row.aPrime[i]
+  aPrimePrime : ∀ i : Fin 100, P row.aPrimePrime[i]
+  aPrimePrime00Bits : ∀ i : Fin 64, P row.aPrimePrime00Bits[i]
+  aPrimePrimePrime00Limbs : ∀ i : Fin 4, P row.aPrimePrimePrime00Limbs[i]
 
-/-- The shape of a sum or a difference. -/
-def add : Shape → Shape → Shape
-  | plain, plain => plain
-  | _, _ => bad
+/-- A property of the elements of a row is one of its cells. -/
+theorem rowCells_of_toElements {α : Type} {P : α → Prop} {row : Row α}
+    (h : ∀ x ∈ (toElements row).toList, P x) : RowCells P row := by
+  rw [ProvableStruct.toList_toElements] at h
+  simp only [ProvableStruct.components, ProvableStruct.toComponents,
+    ProvableStruct.componentsToList, List.mem_append, List.append_nil] at h
+  have hv {n : ℕ} (v : Vector α n) (hv : ∀ x ∈ v.toList, P x) (i : Fin n) : P v[i] :=
+    hv _ (by simp)
+  constructor
+  all_goals first
+    | exact hv _ fun x hx => h x (by simp only [toElements] at *; simp only [hx, true_or, or_true])
+    | exact h _ (Or.inr (Or.inl (List.mem_singleton_self _)))
 
-/-- The shape of a product. -/
-def mul : Shape → Shape → Shape
-  | plain, plain => plain
-  | selector gate, plain | plain, selector gate => gated gate
-  | gated gate, plain | plain, gated gate => gated gate
-  | _, _ => bad
+section Cells
+variable {α : Type} {P : α → Prop} {row : Row α} (h : RowCells P row)
+include h
 
-instance : Add Shape := ⟨add⟩
-instance : Sub Shape := ⟨add⟩
-instance : Mul Shape := ⟨mul⟩
-instance {n : ℕ} : OfNat Shape n := ⟨plain⟩
+lemma RowCells.aLimb (y x : Fin 5) (l : Fin 4) : P (row.aLimb y x l) :=
+  h.a _
+lemma RowCells.cBit (x : Fin 5) (z : Fin 64) : P (row.cBit x z) := h.c _
+lemma RowCells.cPrimeBit (x : Fin 5) (z : Fin 64) : P (row.cPrimeBit x z) :=
+  h.cPrime _
+lemma RowCells.aPrimeBit (y x : Fin 5) (z : Fin 64) : P (row.aPrimeBit y x z) :=
+  h.aPrime _
+lemma RowCells.b (x y : Fin 5) (z : Fin 64) : P (row.b x y z) := h.aPrime _
+lemma RowCells.aPrimePrimeLimb (y x : Fin 5) (l : Fin 4) :
+    P (row.aPrimePrimeLimb y x l) :=
+  h.aPrimePrime _
+lemma RowCells.aPrimePrimePrimeLimb (y x : Fin 5) (l : Fin 4) :
+    P (row.aPrimePrimePrimeLimb y x l) := by
+  unfold Row.aPrimePrimePrimeLimb
+  split
+  · exact h.aPrimePrimePrime00Limbs _
+  · exact h.aPrimePrime _
 
-/-- A constraint of this shape can be split into a gate and a body. -/
-def Gateable : Shape → Prop
-  | plain | gated _ => True
-  | selector _ | bad => False
+end Cells
 
-@[simp] lemma plain_add_plain : plain + plain = plain := rfl
-@[simp] lemma plain_sub_plain : plain - plain = plain := rfl
-@[simp] lemma plain_mul_plain : plain * plain = plain := rfl
-@[simp] lemma selector_mul_plain (gate : Gate) : selector gate * plain = gated gate := rfl
-@[simp] lemma gated_mul_plain (gate : Gate) : gated gate * plain = gated gate := rfl
-@[simp] lemma one_eq_plain : (1 : Shape) = plain := rfl
-@[simp] lemma two_eq_plain : (2 : Shape) = plain := rfl
-@[simp] lemma four_eq_plain : (4 : Shape) = plain := rfl
-@[simp] lemma gateable_plain : Gateable plain := trivial
-@[simp] lemma gateable_gated (gate : Gate) : Gateable (gated gate) := trivial
+/-- The shapes of a window's cells: the rows' cells are plain and weigh at most `a`, the first-row
+and transition selectors are selectors and weigh at most `a` and `b`. -/
+structure WindowShaped {F : Type} (w : ℕ) (wv : ℕ → ℕ) (a b : ℕ)
+    (window : Window Row (Expression F)) : Prop where
+  current : RowCells (Shaped w wv .plain a) window.current
+  next : RowCells (Shaped w wv .plain a) window.next
+  isFirstRow : Shaped w wv (.selector .firstRow) a window.isFirstRow
+  isTransition : Shaped w wv (.selector .transition) b window.isTransition
 
-@[simp] lemma boolCheck_plain : boolCheck plain = plain := rfl
-@[simp] lemma xor_plain : xor plain plain = plain := rfl
-@[simp] lemma andn_plain : andn plain plain = plain := rfl
+/-! ### The constraints of the steps -/
 
-lemma horner_plain (n : ℕ) : horner (fun _ => plain) n = plain := by
-  induction n with
-  | zero => rfl
-  | succ n ih => simp only [horner, ih]; rfl
+section Steps
+variable {p : ℕ} [Fact p.Prime] {w : ℕ} {wv : ℕ → ℕ} {a b : ℕ}
 
-@[simp] lemma limbOf_plain (limb : Fin 4) : limbOf (fun _ => plain) limb = plain :=
-  horner_plain 15
+lemma getElem_packLane_bits {α : Type} (bits : Vector α 64) (limbs : Vector α 4) (l : ℕ)
+    (hl : l < 4) (k : ℕ) (hk : k < 16) :
+    (packLane bits limbs)[l].bits[k] = bits[16 * l + k] := by
+  simp [packLane, limbBits, limbBit]
 
-@[simp] lemma iotaBit_plain {α : Type} (flags : Vector α 24) (z : Fin 64) :
-    iotaBit (flags.map fun _ => plain) plain z = plain := by
-  have hfold (rounds : List (Fin 24)) (sum : Shape) (hsum : sum = plain) :
-      rounds.foldl (fun sum (r : Fin 24) => sum + (flags.map fun _ => plain)[r]) sum =
-        plain := by
+lemma getElem_packLane_value {α : Type} (bits : Vector α 64) (limbs : Vector α 4) (l : ℕ)
+    (hl : l < 4) : (packLane bits limbs)[l].value = limbs[l] := by
+  simp [packLane]
+
+/-- Packing bits of shape `plain` and weight `d` into limbs of weight `a ≤ d`. -/
+lemma shaped_pack {d : ℕ} {bits : Vector (Expression (F p)) 64}
+    {limbs : Vector (Expression (F p)) 4}
+    (hbits : ∀ z : Fin 64, Shaped w wv .plain d bits[z])
+    (hlimbs : ∀ l : Fin 4, Shaped w wv .plain d limbs[l]) (l : Fin 4) :
+    Shaped w wv .plain d (Utils.Bits.fieldFromBitsExpr (packLane bits limbs)[l].bits -
+      (packLane bits limbs)[l].value) := by
+  have hb : Shaped w wv .plain d
+      (Utils.Bits.fieldFromBitsExpr (packLane bits limbs)[l].bits) :=
+    shaped_fieldFromBitsExpr fun k => by
+      rw [Fin.getElem_fin, Fin.getElem_fin, getElem_packLane_bits _ _ _ l.isLt _ k.isLt]
+      exact hbits ⟨16 * l.val + k.val, by omega⟩
+  have hv : Shaped w wv .plain d (packLane bits limbs)[l].value := by
+    rw [Fin.getElem_fin, getElem_packLane_value _ _ _ l.isLt]
+    exact hlimbs l
+  exact (shaped_sub hb hv).mono (by simp)
+
+lemma shaped_parityCheck {a0 a1 a2 a3 a4 c : Expression (F p)} (h0 : Shaped w wv .plain a a0)
+    (h1 : Shaped w wv .plain a a1) (h2 : Shaped w wv .plain a a2) (h3 : Shaped w wv .plain a a3)
+    (h4 : Shaped w wv .plain a a4) (h5 : Shaped w wv .plain a c) :
+    Shaped w wv .plain (3 * a) (parityCheck a0 a1 a2 a3 a4 c) := by
+  have hd := shaped_sub (shaped_add (shaped_add (shaped_add (shaped_add h0 h1) h2) h3) h4) h5
+  simp only [max_self] at hd
+  have h := shaped_mul (shaped_mul hd (shaped_sub hd (shaped_ofNat (F := F p) 2)))
+    (shaped_sub hd (shaped_ofNat (F := F p) 4))
+  exact h.mono (by simp only [Nat.max_zero]; omega)
+
+lemma shaped_iotaBit {flags : Vector (Expression (F p)) 24} {bit : Expression (F p)}
+    (hflags : ∀ r : Fin 24, Shaped w wv .plain a flags[r]) (hbit : Shaped w wv .plain a bit)
+    (z : Fin 64) : Shaped w wv .plain (2 * a) (iotaBit flags bit z) := by
+  have hfold (rounds : List (Fin 24)) (sum : Expression (F p)) (hsum : Shaped w wv .plain a sum) :
+      Shaped w wv .plain a (rounds.foldl (fun sum (r : Fin 24) => sum + flags[r]) sum) := by
     induction rounds generalizing sum with
     | nil => exact hsum
     | cons r rounds ih =>
       rw [List.foldl_cons]
-      exact ih _ (by rw [hsum, getElem_map_fin]; rfl)
+      exact ih _ ((shaped_add hsum (hflags r)).mono (by simp))
   unfold iotaBit
   split
-  · rfl
-  · rw [hfold _ _ (getElem_map_fin _ _ _)]
-    rfl
+  · exact hbit.mono (by omega)
+  · rename_i r rs _
+    exact (shaped_bitXor (hfold rs _ (hflags r)) hbit).mono (by omega)
 
-end Shape
+theorem admissible_rhoPiChi {row : Var Row (F p)} (h : RowCells (Shaped w wv .plain a) row)
+    (n : ℕ) : ∀ x ∈ ((RhoPiChi.circuit.main row).operations n).constraints,
+      Admissible w wv (max (3 * a) (b + 2 * a)) x := by
+  intro x hx
+  simp only [RhoPiChi.circuit, RhoPiChi.main, circuit_norm, mem_constraints_forEach,
+    constraints_toSubcircuit, mem_constraints_packLimbs, Fin.eta] at hx
+  obtain ⟨y, x, l, rfl⟩ := hx
+  refine ((shaped_pack (fun z => ?_) (fun l => ?_) l).mono le_rfl |>.mono
+    (le_max_left _ _)).admissible trivial
+  · simp only [RhoPiChi.chiBits, Fin.getElem_fin, Vector.getElem_ofFn]
+    exact (shaped_bitXor (shaped_bitAndNot (h.b _ y _) (h.b _ y _)) (h.b x y _)).mono
+      (by omega)
+  · simp only [Row.aPrimePrimeLane, Fin.getElem_fin, Vector.getElem_ofFn]
+    exact (h.aPrimePrimeLimb y x _).mono (by omega)
 
-/-- The shapes of a window whose rows are plain. -/
-def plainWindow {α : Type} (current next : Row α) : Window Row Shape where
-  current := current.map fun _ => .plain
-  next := next.map fun _ => .plain
-  isFirstRow := .selector .firstRow
-  isLastRow := .selector .lastRow
-  isTransition := .selector .transition
+lemma shaped_transitionInPermutation {window : Var (Window Row) (F p)}
+    (h : WindowShaped w wv a b window) :
+    Shaped w wv (.gated .transition) (b + a) (transitionInPermutation window) :=
+  (shaped_mul h.isTransition (shaped_sub (shaped_ofNat (F := F p) 1) (h.current.stepFlags 23))).mono
+    (by simp)
 
-/-- The shapes of the constraints of a window whose rows are plain are `plain` or `gated`. -/
-theorem gateable_constraints {α : Type} (current next : Row α) :
-    ∀ s ∈ constraints (plainWindow current next), s.Gateable := by
-  simp only [plainWindow, constraints, roundFlagConstraints, preimageConstraints,
-    exportConstraints, thetaColumnConstraints, thetaConstraints, parityConstraints,
-    chiConstraints, iotaConstraints, outputConstraints, transitionInPermutation,
-    List.mem_append, List.mem_cons, List.mem_map, List.mem_flatMap, Row.map_stepFlags,
-    Row.map_exportFlag, Row.map_aPrimePrime00Bits, Row.map_aPrimePrimePrime00Limbs,
-    Row.map_preimageLimb, Row.map_aLimb, Row.map_cBit, Row.map_cPrimeBit, Row.map_aPrimeBit,
-    Row.map_aPrimePrimeLimb, Row.map_b, Row.map_aPrimePrimePrimeLimb, Vector.getElem_ofFn,
-    Fin.getElem_fin, Vector.getElem_map, Shape.plain_add_plain,
-    Shape.plain_sub_plain, Shape.plain_mul_plain, Shape.selector_mul_plain, Shape.gated_mul_plain,
-    Shape.one_eq_plain, Shape.two_eq_plain, Shape.four_eq_plain, Shape.boolCheck_plain,
-    Shape.xor_plain, Shape.andn_plain, Shape.limbOf_plain, Shape.iotaBit_plain, or_imp,
-    forall_and, forall_exists_index, and_imp,
-    forall_eq, implies_true, Shape.gateable_plain, Shape.gateable_gated,
-    List.not_mem_nil, false_imp_iff, and_self]
-  and_intros <;> first | trivial | (intros; subst_vars; trivial)
+theorem admissible_roundControl {window : Var (Window Row) (F p)}
+    (h : WindowShaped w wv a b window) (n : ℕ) :
+    ∀ x ∈ ((RoundControl.circuit.main window).operations n).constraints,
+      Admissible w wv (max (3 * a) (b + 2 * a)) x := by
+  intro x hx
+  simp only [RoundControl.circuit, RoundControl.main, circuit_norm, mem_constraints_forEach,
+    constraints_toSubcircuit, mem_constraints_conditionalEquality, List.mem_append,
+    List.mem_singleton, Fin.eta] at hx
+  have hplain (d : ℕ) (hd : d ≤ 3 * a) {y : Expression (F p)} (hy : Shaped w wv .plain d y) :
+      Admissible w wv (max (3 * a) (b + 2 * a)) y :=
+    (hy.mono (le_max_of_le_left hd)).admissible trivial
+  have hgated (gate : Gate) (d : ℕ) (hd : d ≤ b + 2 * a) {y : Expression (F p)}
+      (hy : Shaped w wv (.gated gate) d y) : Admissible w wv (max (3 * a) (b + 2 * a)) y :=
+    (hy.mono (le_max_of_le_right hd)).admissible trivial
+  have hnext (i : Fin 24) : Shaped w wv .plain a (RoundControl.nextFlags window)[i] := by
+    simp only [RoundControl.nextFlags, Fin.getElem_fin, Vector.getElem_ofFn]
+    exact h.next.stepFlags _
+  have hc := h.current
+  rcases hx with rfl | ⟨i, rfl⟩ | ⟨i, rfl⟩ | ⟨i, rfl⟩ | ⟨i, rfl⟩ | rfl | rfl
+  · exact hgated _ _ (by simp; omega)
+      (shaped_mul h.isFirstRow (shaped_sub (hc.stepFlags 0) (shaped_ofNat (F := F p) 1)))
+  · exact hgated _ _ (by omega) (shaped_mul h.isFirstRow (hc.stepFlags i.succ))
+  · exact hgated _ _ (by simp; omega)
+      (shaped_mul h.isTransition (shaped_sub (hc.stepFlags i) (hnext i)))
+  · exact hplain _ (by simp; omega)
+      (shaped_mul (hc.stepFlags 0) (shaped_sub (hc.preimage i) (hc.a i)))
+  · exact hgated _ _ (by simp; omega) (shaped_mul (shaped_transitionInPermutation h)
+      (shaped_sub (hc.preimage i) (h.next.preimage i)))
+  · exact hplain _ (by omega) (shaped_boolCheck hc.exportFlag)
+  · exact hplain _ (by simp; omega)
+      (shaped_mul (shaped_sub (shaped_ofNat (F := F p) 1) (hc.stepFlags 23)) hc.exportFlag)
 
-/-! ### Expressions with a shape -/
+theorem admissible_iota {window : Var (Window Row) (F p)}
+    (h : WindowShaped w wv a b window) (n : ℕ) :
+    ∀ x ∈ ((Iota.circuit.main window).operations n).constraints,
+      Admissible w wv (max (3 * a) (b + 2 * a)) x := by
+  intro x hx
+  simp only [Iota.circuit, Iota.main, circuit_norm, mem_constraints_forEach,
+    constraints_toSubcircuit, mem_constraints_packLimbs, mem_constraints_conditionalEquality,
+    List.mem_append, List.mem_singleton, Fin.eta] at hx
+  have hplain (d : ℕ) (hd : d ≤ 3 * a) {y : Expression (F p)} (hy : Shaped w wv .plain d y) :
+      Admissible w wv (max (3 * a) (b + 2 * a)) y :=
+    (hy.mono (le_max_of_le_left hd)).admissible trivial
+  have hc := h.current
+  rcases hx with ⟨i, rfl⟩ | ⟨l, rfl⟩ | ⟨l, rfl⟩ | ⟨x, y, i, rfl⟩
+  · exact hplain _ (by omega) (shaped_boolCheck (hc.aPrimePrime00Bits i))
+  · refine hplain a (by omega) (shaped_pack (fun z => hc.aPrimePrime00Bits z) (fun l => ?_) l)
+    simp only [Row.aPrimePrimeLane, Fin.getElem_fin, Vector.getElem_ofFn]
+    exact hc.aPrimePrimeLimb 0 0 _
+  · refine hplain (2 * a) (by omega) (shaped_pack (fun z => ?_) (fun l => ?_) l)
+    · simp only [Iota.iotaBits, Fin.getElem_fin, Vector.getElem_ofFn]
+      exact shaped_iotaBit hc.stepFlags (hc.aPrimePrime00Bits _) _
+    · exact (hc.aPrimePrimePrime00Limbs l).mono (by omega)
+  · have hl : Shaped w wv .plain a (window.current.aPrimePrimePrimeLane y x)[i.val] := by
+      simp only [Row.aPrimePrimePrimeLane, Vector.getElem_ofFn]
+      exact hc.aPrimePrimePrimeLimb y x _
+    have hr : Shaped w wv .plain a (window.next.aLane y x)[i.val] := by
+      simp only [Row.aLane, Vector.getElem_ofFn]
+      exact h.next.aLimb y x _
+    exact ((shaped_mul (shaped_transitionInPermutation h) (shaped_sub hl hr)).mono
+      (le_max_of_le_right (by simp; omega))).admissible trivial
 
-section Tagged
-variable {F : Type} (w : ℕ)
+lemma lookups_roundControl (window : Var (Window Row) (F p)) (n : ℕ) :
+    ((RoundControl.circuit.main window).operations n).lookups = [] := by
+  simp [RoundControl.circuit, RoundControl.main, circuit_norm, lookups_forEach,
+    lookups_toSubcircuit, lookups_conditionalEquality]
 
-/-- An expression reads only cells of the current and the next row, of `w` cells each. -/
-def Plain (x : Expression F) : Prop := ∀ j ∈ expressionCells x, j < 2 * w
+lemma lookups_rhoPiChi (row : Var Row (F p)) (n : ℕ) :
+    ((RhoPiChi.circuit.main row).operations n).lookups = [] := by
+  simp [RhoPiChi.circuit, RhoPiChi.main, circuit_norm, lookups_forEach, lookups_toSubcircuit,
+    lookups_packLimbs]
 
-instance : DecidablePred (Plain (F := F) w) := fun _ => by unfold Plain; infer_instance
+lemma lookups_iota (window : Var (Window Row) (F p)) (n : ℕ) :
+    ((Iota.circuit.main window).operations n).lookups = [] := by
+  simp [Iota.circuit, Iota.main, circuit_norm, lookups_forEach, lookups_toSubcircuit,
+    lookups_packLimbs, lookups_conditionalEquality]
 
-/-- An expression has a shape, for rows of `w` cells. -/
-def Good : Expression F × Shape → Prop
-  | (x, .plain) => Plain w x
-  | (x, .selector gate) => selectorGate? w x = some gate
-  | (x, .gated gate) => (∃ body, splitSelector w x = some (gate, body) ∧ Plain w body) ∧
-      ∀ j ∈ expressionCells x, j < 2 * w + 3
-  | (_, .bad) => True
+lemma length_roundControl (window : Var (Window Row) (F p)) (n : ℕ) :
+    ((RoundControl.circuit.main window).operations n).constraints.length = 250 := by
+  simp [RoundControl.circuit, RoundControl.main, circuit_norm, constraints_forEach,
+    constraints_toSubcircuit, length_constraints_conditionalEquality]
 
-variable {w}
+lemma length_rhoPiChi (row : Var Row (F p)) (n : ℕ) :
+    ((RhoPiChi.circuit.main row).operations n).constraints.length = 100 := by
+  simp [RhoPiChi.circuit, RhoPiChi.main, circuit_norm, constraints_forEach,
+    constraints_toSubcircuit, length_constraints_packLimbs]
 
-lemma Plain.left {x y : Expression F}
-    (h : ∀ j ∈ expressionCells x ++ expressionCells y, j < 2 * w) :
-    Plain w x := fun j hj => h j (List.mem_append_left _ hj)
+lemma length_iota (window : Var (Window Row) (F p)) (n : ℕ) :
+    ((Iota.circuit.main window).operations n).constraints.length = 172 := by
+  simp [Iota.circuit, Iota.main, circuit_norm, constraints_forEach, constraints_toSubcircuit,
+    length_constraints_packLimbs, length_constraints_conditionalEquality]
 
-lemma Plain.right {x y : Expression F}
-    (h : ∀ j ∈ expressionCells x ++ expressionCells y, j < 2 * w) :
-    Plain w y := fun j hj => h j (List.mem_append_right _ hj)
+variable [Fact (2 ^ 16 < p)]
 
-lemma Plain.append {x y : Expression F} (hx : Plain w x) (hy : Plain w y) :
-    ∀ j ∈ expressionCells x ++ expressionCells y, j < 2 * w := by
-  intro j hj
-  rcases List.mem_append.mp hj with hj | hj
-  exacts [hx j hj, hy j hj]
+lemma lookups_theta (row : Var Row (F p)) (n : ℕ) :
+    ((Theta.circuit.main row).operations n).lookups = [] := by
+  simp [Theta.circuit, Theta.main, circuit_norm, lookups_forEach, lookups_toSubcircuit,
+    lookups_packLimbs]
 
-lemma Plain.lt {x : Expression F} (h : Plain w x) : ∀ j ∈ expressionCells x, j < 2 * w + 3 :=
-  fun j hj => by have := h j hj; omega
+theorem admissible_theta {row : Var Row (F p)} (h : RowCells (Shaped w wv .plain a) row)
+    (n : ℕ) : ∀ x ∈ ((Theta.circuit.main row).operations n).constraints,
+      Admissible w wv (max (3 * a) (b + 2 * a)) x := by
+  intro x hx
+  simp only [Theta.circuit, Theta.main, circuit_norm, mem_constraints_forEach,
+    constraints_toSubcircuit, mem_constraints_packLimbs, List.mem_append, List.mem_singleton,
+    Fin.eta] at hx
+  have hD (d : ℕ) (hd : d ≤ 3 * a) {y : Expression (F p)} (hy : Shaped w wv .plain d y) :
+      Admissible w wv (max (3 * a) (b + 2 * a)) y :=
+    (hy.mono (le_max_of_le_left hd)).admissible trivial
+  rcases hx with ⟨x, ⟨z, rfl⟩ | ⟨z, rfl⟩⟩ | ⟨x, y, ⟨z, rfl⟩ | ⟨l, rfl⟩⟩ | ⟨x, z, rfl⟩
+  · rw [Row.getElem_cLane _ _ _ z.isLt]
+    exact hD _ (by omega) (shaped_boolCheck (h.cBit x _))
+  · exact hD _ (by omega) (shaped_sub (h.cPrimeBit x z)
+      (shaped_bitXor (shaped_bitXor (h.cBit x z) (h.cBit _ z)) (h.cBit _ _)))
+  · rw [Row.getElem_aPrimeLane _ _ _ _ z.isLt]
+    exact hD _ (by omega) (shaped_boolCheck (h.aPrimeBit y x _))
+  · refine hD (3 * a) le_rfl (shaped_pack (fun z => ?_) (fun l => ?_) l)
+    · simp only [Theta.inputBits, Fin.getElem_fin, Vector.getElem_ofFn]
+      exact (shaped_bitXor (h.aPrimeBit y x _)
+        (shaped_bitXor (h.cBit x _) (h.cPrimeBit x _))).mono (by omega)
+    · simp only [Row.aLane, Fin.getElem_fin, Vector.getElem_ofFn]
+      exact (h.aLimb y x _).mono (by omega)
+  · exact hD _ le_rfl (shaped_parityCheck (h.aPrimeBit 0 x z) (h.aPrimeBit 1 x z)
+      (h.aPrimeBit 2 x z) (h.aPrimeBit 3 x z) (h.aPrimeBit 4 x z) (h.cPrimeBit x z))
 
-lemma selectorGate?_of_plain {x : Expression F} (h : Plain w x) : selectorGate? w x = none := by
-  cases x with
-  | var v =>
-    have := h v.index (by simp [expressionCells])
-    simp only [selectorGate?]
-    split_ifs <;> first | rfl | omega
-  | const _ | add _ _ | mul _ _ => rfl
+lemma lookups_main (window : Var (Window Row) (F p)) (n : ℕ) :
+    ((main window).operations n).lookups = [] := by
+  simp only [main, circuit_norm, List.append_eq_nil_iff, lookups_toSubcircuit]
+  exact ⟨lookups_roundControl _ _, lookups_theta _ _, lookups_rhoPiChi _ _, lookups_iota _ _⟩
 
-lemma splitSelector_of_plain : ∀ {x : Expression F}, Plain w x → splitSelector w x = none
-  | .var _, _ | .const _, _ | .add _ _, _ => rfl
-  | .mul a b, h => by
-    have ha : Plain w a := Plain.left h
-    have hb : Plain w b := Plain.right h
-    simp only [splitSelector, selectorGate?_of_plain ha, selectorGate?_of_plain hb,
-      splitSelector_of_plain ha, splitSelector_of_plain hb, Option.map_none]
+/-- The constraints of the row circuit are those of its four steps. -/
+theorem admissible_main {window : Var (Window Row) (F p)} (h : WindowShaped w wv a b window)
+    (n : ℕ) : ∀ x ∈ ((main window).operations n).constraints,
+      Admissible w wv (max (3 * a) (b + 2 * a)) x := by
+  intro x hx
+  simp only [main, circuit_norm, List.mem_append] at hx
+  rcases hx with hx | hx | hx | hx <;> rw [constraints_toSubcircuit] at hx
+  · exact admissible_roundControl h _ x hx
+  · exact admissible_theta h.current _ x hx
+  · exact admissible_rhoPiChi h.current _ x hx
+  · exact admissible_iota h _ x hx
 
-lemma selectorGate?_of_splitSelector {x : Expression F} {gate : Gate} {body : Expression F}
-    (h : splitSelector w x = some (gate, body)) : selectorGate? w x = none := by
-  cases x with
-  | mul _ _ => rfl
-  | var _ | const _ | add _ _ => simp [splitSelector] at h
+lemma length_theta (row : Var Row (F p)) (n : ℕ) :
+    ((Theta.circuit.main row).operations n).constraints.length = 2660 := by
+  simp only [Theta.circuit, Theta.main, circuit_norm, constraints_forEach,
+    constraints_toSubcircuit, length_constraints_packLimbs, List.length_append,
+    List.length_flatten, List.map_ofFn, List.sum_ofFn, Function.comp_def, List.length_ofFn,
+    Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
 
-lemma cells_of_selectorGate? {x : Expression F} {gate : Gate} (h : selectorGate? w x = some gate) :
-    ∀ j ∈ expressionCells x, j < 2 * w + 3 := by
-  cases x with
-  | var v =>
-    intro j hj
-    simp only [expressionCells, List.mem_singleton] at hj
-    subst hj
-    simp only [selectorGate?] at h
-    split_ifs at h <;> omega
-  | const _ | add _ _ | mul _ _ => simp [selectorGate?] at h
+/-- The row circuit has Plonky3's `3182` constraints. -/
+lemma length_main (window : Var (Window Row) (F p)) (n : ℕ) :
+    ((main window).operations n).constraints.length = 3182 := by
+  simp only [main, circuit_norm, List.length_append]
+  rw [constraints_toSubcircuit, constraints_toSubcircuit, constraints_toSubcircuit,
+    constraints_toSubcircuit, length_roundControl, length_theta, length_rhoPiChi, length_iota]
 
-lemma cells_append_lt {x y : Expression F} (hx : ∀ j ∈ expressionCells x, j < 2 * w + 3)
-    (hy : ∀ j ∈ expressionCells y, j < 2 * w + 3) :
-    ∀ j ∈ expressionCells x ++ expressionCells y, j < 2 * w + 3 := by
-  intro j hj
-  rcases List.mem_append.mp hj with hj | hj
-  exacts [hx j hj, hy j hj]
-
-theorem good_add {x y : Expression F} {s t : Shape} (hx : Good w (x, s)) (hy : Good w (y, t)) :
-    Good w (x + y, s + t) := by
-  cases s <;> cases t <;> first | trivial | exact Plain.append hx hy
-
-theorem good_sub [FiniteField F] {x y : Expression F} {s t : Shape} (hx : Good w (x, s))
-    (hy : Good w (y, t)) :
-    Good w (x - y, s - t) := by
-  have hneg (hy : Plain w y) : Plain w (.mul (.const (-1)) y) :=
-    Plain.append (x := .const (-1)) (fun _ h => by simp [expressionCells] at h) hy
-  cases s <;> cases t <;> first | trivial | exact Plain.append hx (hneg hy)
-
-theorem good_mul {x y : Expression F} {s t : Shape} (hx : Good w (x, s)) (hy : Good w (y, t)) :
-    Good w (x * y, s * t) := by
-  cases s <;> cases t <;> try trivial
-  case plain.plain => exact Plain.append hx hy
-  case plain.selector =>
-    refine ⟨⟨x, ?_, hx⟩, cells_append_lt hx.lt (cells_of_selectorGate? hy)⟩
-    have hy : selectorGate? w y = some _ := hy
-    show splitSelector w (.mul x y) = _
-    simp only [splitSelector, selectorGate?_of_plain hx, hy]
-  case plain.gated =>
-    obtain ⟨⟨body, hsplit, hbody⟩, hcells⟩ := hy
-    refine ⟨⟨.mul x body, ?_, Plain.append hx hbody⟩, cells_append_lt hx.lt hcells⟩
-    show splitSelector w (.mul x y) = _
-    simp only [splitSelector, selectorGate?_of_plain hx, selectorGate?_of_splitSelector hsplit,
-      splitSelector_of_plain hx, hsplit, Option.map_some]
-  case selector.plain =>
-    refine ⟨⟨y, ?_, hy⟩, cells_append_lt (cells_of_selectorGate? hx) hy.lt⟩
-    have hx : selectorGate? w x = some _ := hx
-    show splitSelector w (.mul x y) = _
-    simp only [splitSelector, hx]
-  case gated.plain =>
-    obtain ⟨⟨body, hsplit, hbody⟩, hcells⟩ := hx
-    refine ⟨⟨.mul body y, ?_, Plain.append hbody hy⟩, cells_append_lt hcells hy.lt⟩
-    show splitSelector w (.mul x y) = _
-    simp only [splitSelector, selectorGate?_of_splitSelector hsplit, selectorGate?_of_plain hy,
-      hsplit]
-
-/-- A constraint of a gateable shape splits into a gate and a body, and reads cells of the
-window. -/
-theorem gateConstraint_of_good {x : Expression F} {s : Shape} (hx : Good w (x, s))
-    (hs : s.Gateable) : (gateConstraint (some w) x).isSome ∧
-      ∀ j ∈ expressionCells x, j < 2 * w + 3 := by
-  have hreads (y : Expression F) (hy : Plain w y) :
-      (expressionCells y).any (fun cell => 2 * w ≤ cell && cell < 2 * w + 3) = false := by
-    simp only [List.any_eq_false, Bool.and_eq_true, decide_eq_true_eq, not_and, not_lt]
-    intro j hj h
-    have := hy j hj
-    omega
-  cases s with
-  | plain =>
-    refine ⟨?_, Plain.lt hx⟩
-    simp [gateConstraint, hreads x hx]
-  | gated gate =>
-    obtain ⟨⟨body, hsplit, hbody⟩, hcells⟩ := hx
-    refine ⟨?_, hcells⟩
-    simp only [gateConstraint]
-    split
-    · rfl
-    · simp only [hsplit, hreads body hbody, Option.bind_eq_bind, Option.bind_some,
-        Bool.false_eq_true, ↓reduceIte, Option.isSome_some]
-  | selector _ | bad => exact hs.elim
-
-variable (w)
-
-/-- Expressions with a shape that describes them. -/
-def Tagged [FiniteField F] : Type := {t : Expression F × Shape // Good w t}
-
-instance [FiniteField F] : Add (Tagged (F := F) w) :=
-  ⟨fun a b => ⟨(a.1.1 + b.1.1, a.1.2 + b.1.2), good_add a.2 b.2⟩⟩
-instance [FiniteField F] : Sub (Tagged (F := F) w) :=
-  ⟨fun a b => ⟨(a.1.1 - b.1.1, a.1.2 - b.1.2), good_sub a.2 b.2⟩⟩
-instance [FiniteField F] : Mul (Tagged (F := F) w) :=
-  ⟨fun a b => ⟨(a.1.1 * b.1.1, a.1.2 * b.1.2), good_mul a.2 b.2⟩⟩
-instance [FiniteField F] {n : ℕ} [OfNat F n] : OfNat (Tagged (F := F) w) n :=
-  ⟨⟨(.const (OfNat.ofNat n), .plain), fun _ hj => nomatch hj⟩⟩
-
-lemma isHom_expression [FiniteField F] : IsHom fun t : Tagged (F := F) w => t.1.1 :=
-  ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl, rfl, rfl, rfl⟩
-
-lemma isHom_shape [FiniteField F] : IsHom fun t : Tagged (F := F) w => t.1.2 :=
-  ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl, rfl, rfl, rfl⟩
-
-/-- The shape of an expression of a window: `plain`, a `selector`, or `bad`. -/
-def shapeOf (x : Expression F) : Shape :=
-  if Plain w x then .plain else
-    match selectorGate? w x with
-    | some gate => .selector gate
-    | none => .bad
-
-theorem good_shapeOf (x : Expression F) : Good w (x, shapeOf w x) := by
-  unfold shapeOf
-  split
-  · assumption
-  · split
-    · assumption
-    · trivial
-
-/-- An expression with its shape. -/
-def tag [FiniteField F] (x : Expression F) : Tagged (F := F) w :=
-  ⟨(x, shapeOf w x), good_shapeOf w x⟩
-
-lemma shapeOf_of_plain {x : Expression F} (h : Plain w x) : shapeOf w x = .plain := by
-  simp [shapeOf, h]
-
-lemma shapeOf_var (j : ℕ) (gate : Gate) (hj : ¬ j < 2 * w)
-    (hgate : selectorGate? w (.var ⟨j⟩ : Expression F) = some gate) :
-    shapeOf w (.var ⟨j⟩ : Expression F) = .selector gate := by
-  have hplain : ¬ Plain w (.var ⟨j⟩ : Expression F) := fun h => hj (h j (by simp [expressionCells]))
-  simp [shapeOf, hplain, hgate]
-
-end Tagged
-
-/-! ### The component's constraints -/
-
-lemma Row.map_congr {α β : Type} {f g : α → β} (row : Row α)
-    (h : ∀ x ∈ (toElements row).toList, f x = g x) : row.map f = row.map g := by
-  rw [ProvableStruct.toList_toElements] at h
-  simp only [ProvableStruct.components, ProvableStruct.toComponents,
-    ProvableStruct.componentsToList, List.mem_append, List.append_nil] at h
-  have hv {n : ℕ} (v : Vector α n) (hv : ∀ x ∈ v.toList, f x = g x) : v.map f = v.map g := by
-    ext i hi
-    simp only [Vector.getElem_map]
-    exact hv _ (by simp)
-  have hfield (x : α) : x ∈ (toElements (M := field) x).toList := List.mem_singleton_self x
-  unfold Row.map
-  congr 1
-  all_goals first
-    | exact hv _ fun x hx => h x (by simp only [toElements] at *; simp only [hx, true_or, or_true])
-    | exact h _ (Or.inr (Or.inl (hfield _)))
-
-lemma Row.map_map {α β γ : Type} (f : α → β) (g : β → γ) (row : Row α) :
-    (row.map f).map g = row.map (g ∘ f) := by
-  simp only [Row.map, Vector.map_map, Function.comp_apply]
-
-lemma Row.map_id' {α : Type} (row : Row α) : row.map (fun x => x) = row := by
-  simp only [Row.map, Vector.map_id']
-
-lemma mapWindow_mapWindow {α β γ : Type} (f : α → β) (g : β → γ) (window : Window Row α) :
-    mapWindow g (mapWindow f window) = mapWindow (g ∘ f) window := by
-  simp only [mapWindow, Row.map_map, Function.comp_apply]
-
-lemma constraints_map_assert {F : Type} [FiniteField F] (l : List (Expression F)) :
-    Operations.constraints (l.map Operation.assert) = l := by
-  induction l with
-  | nil => rfl
-  | cons x l ih => simp only [List.map_cons, Operations.constraints, ih]
-
-lemma lookups_map_assert {F : Type} [FiniteField F] (l : List (Expression F)) :
-    Operations.lookups (l.map Operation.assert) = [] := by
-  induction l with
-  | nil => rfl
-  | cons x l ih => simp only [List.map_cons, Operations.lookups, ih]
-
-lemma expressionBadVariable_eq_none {F : Type} (width : ℕ) :
-    ∀ x : Expression F, (∀ j ∈ expressionCells x, j < width) → expressionBadVariable width x = none
-  | .var v, h => by simp [expressionBadVariable, h v.index (by simp [expressionCells])]
-  | .const _, _ => rfl
-  | .add a b, h | .mul a b, h => by
-    simp only [expressionCells, List.mem_append] at h
-    simp only [expressionBadVariable,
-      expressionBadVariable_eq_none width a fun j hj => h j (Or.inl hj),
-      expressionBadVariable_eq_none width b fun j hj => h j (Or.inr hj), Option.orElse_none]
+end Steps
 
 section Variables
 variable {F : Type} {R : TypeMap} [ProvableType R]
@@ -428,75 +373,46 @@ lemma varFromOffset_isTransition :
 
 end Variables
 
+/-! ### The component -/
+
 section Component
 variable {p : ℕ}
 
 /-- The variables of a window, the input of the component's row operations. -/
 abbrev vars : Window Row (Expression (F p)) := varFromOffset (Window Row) 0
 
-/-- A window of variables: the rows' cells, then the selectors. -/
-structure VarWindow (window : Window Row (Expression (F p))) : Prop where
-  current : ∀ x ∈ (toElements window.current).toList, ∃ j < size Row, x = .var ⟨j⟩
-  next : ∀ x ∈ (toElements window.next).toList, ∃ j < size Row, x = .var ⟨size Row + j⟩
-  isFirstRow : window.isFirstRow = .var ⟨2 * size Row⟩
-  isLastRow : window.isLastRow = .var ⟨2 * size Row + 1⟩
-  isTransition : window.isTransition = .var ⟨2 * size Row + 2⟩
+/-- The weights of cells: `a` for the cells of the rows and the first- and last-row selectors,
+`b` for the transition selector. -/
+def cellWeight (a b : ℕ) (j : ℕ) : ℕ := if j = 2 * size Row + 2 then b else a
 
-theorem varWindow_vars : VarWindow (vars (p := p)) :=
-  ⟨varFromOffset_current, varFromOffset_next, varFromOffset_isFirstRow, varFromOffset_isLastRow,
-    varFromOffset_isTransition⟩
-
-/-- The shapes of a window of variables: the rows are plain, the selectors are selectors. -/
-theorem shapes_varWindow {window : Window Row (Expression (F p))} (h : VarWindow window) :
-    mapWindow (shapeOf (size Row)) window = plainWindow window.current window.next := by
-  have hplain (j : ℕ) (hj : j < 2 * size Row) :
-      shapeOf (size Row) (.var ⟨j⟩ : Expression (F p)) = .plain :=
-    shapeOf_of_plain _ fun i hi => by simp only [expressionCells, List.mem_singleton] at hi; omega
-  have hselector (j : ℕ) (gate : Gate) (hj : 2 * size Row ≤ j)
-      (hgate : selectorGate? (size Row) (.var ⟨j⟩ : Expression (F p)) = some gate) :
-      shapeOf (size Row) (.var ⟨j⟩ : Expression (F p)) = .selector gate :=
-    shapeOf_var _ j gate (by omega) hgate
-  have hfirst := hselector (2 * size Row) .firstRow le_rfl (by simp [selectorGate?])
-  have hlast := hselector (2 * size Row + 1) .lastRow (by omega) (by simp [selectorGate?])
-  have htransition := hselector (2 * size Row + 2) .transition (by omega) (by simp [selectorGate?])
-  simp only [mapWindow, plainWindow, h.isFirstRow, h.isLastRow, h.isTransition, hfirst, hlast,
-    htransition]
-  congr 1
-  · exact Row.map_congr _ fun x hx => by
-      obtain ⟨j, hj, rfl⟩ := h.current x hx
-      exact hplain j (by omega)
-  · exact Row.map_congr _ fun x hx => by
-      obtain ⟨j, hj, rfl⟩ := h.next x hx
-      exact hplain _ (by omega)
-
-/-- Every constraint of a window of variables splits into a gate and a body, and reads cells of
-the window. -/
-theorem constraints_varWindow [Fact p.Prime] {window : Window Row (Expression (F p))}
-    (h : VarWindow window) : ∀ x ∈ constraints window,
-      (gateConstraint (some (size Row)) x).isSome ∧
-        ∀ j ∈ expressionCells x, j < 2 * size Row + 3 := by
-  intro x hx
-  have hfst : mapWindow (fun t : Tagged (F := F p) (size Row) => t.1.1)
-      (mapWindow (tag _) window) = window := by
-    rw [mapWindow_mapWindow]
-    simp only [mapWindow, Function.comp_def, tag, Row.map_id']
-  have hsnd : mapWindow (fun t : Tagged (F := F p) (size Row) => t.1.2)
-      (mapWindow (tag _) window) = plainWindow window.current window.next := by
-    rw [mapWindow_mapWindow, ← shapes_varWindow h]
-    rfl
-  rw [← hfst, ← (isHom_expression (size Row)).map_constraints] at hx
-  obtain ⟨t, ht, rfl⟩ := List.mem_map.mp hx
-  have hs : t.1.2 ∈ constraints (plainWindow window.current window.next) := by
-    rw [← hsnd, ← (isHom_shape (size Row)).map_constraints]
-    exact List.mem_map_of_mem ht
-  exact gateConstraint_of_good t.2 (gateable_constraints _ _ _ hs)
+/-- The cells of the window of variables have their shapes. -/
+theorem windowShaped_vars (a b : ℕ) :
+    WindowShaped (size Row) (cellWeight a b) a b (vars (p := p)) := by
+  have hcell (j : ℕ) (hj : j < 2 * size Row) :
+      Shaped (size Row) (cellWeight a b) .plain a (.var ⟨j⟩ : Expression (F p)) :=
+    (shaped_var hj).mono (by simp only [cellWeight]; split_ifs <;> omega)
+  refine ⟨rowCells_of_toElements fun x hx => ?_, rowCells_of_toElements fun x hx => ?_, ?_, ?_⟩
+  · obtain ⟨j, hj, rfl⟩ := varFromOffset_current x hx
+    exact hcell j (by omega)
+  · obtain ⟨j, hj, rfl⟩ := varFromOffset_next x hx
+    exact hcell _ (by omega)
+  · rw [varFromOffset_isFirstRow]
+    exact (shaped_selector (by simp [selectorGate?])).mono (by simp [cellWeight])
+  · rw [varFromOffset_isTransition]
+    exact (shaped_selector (by simp [selectorGate?])).mono (by simp [cellWeight])
 
 variable [Fact p.Prime] [Fact (2 ^ 16 < p)]
 
 lemma rowOperations_component (height : UInt64) :
-    (component (p := p) height).rowOperations = (constraints vars).map Operation.assert := by
-  unfold Component.rowOperations
+    (component (p := p) height).rowOperations = (main vars).operations (size (Window Row)) :=
   rfl
+
+/-- Every constraint of the component is admissible. -/
+theorem admissible_component (height : UInt64) (a b : ℕ) :
+    ∀ x ∈ (component (p := p) height).rowOperations.constraints,
+      Admissible (size Row) (cellWeight a b) (max (3 * a) (b + 2 * a)) x := by
+  rw [rowOperations_component]
+  exact admissible_main (windowShaped_vars a b) _
 
 /-- **The Keccak-f component is bridgeable**: no legacy lookups, every constraint is a gate times
 a body that reads no selector, and every expression reads cells of the row. -/
@@ -504,14 +420,49 @@ theorem bridgeable_component (height : UInt64) : bridgeable (component (p := p) 
   have hwidth : 2 * size Row + 3 ≤ (component (p := p) height).width :=
     rowWidth_le_size (component := component (p := p) height) (layout := Window.layout Row) rfl
   have hwindow : (component (p := p) height).window.map (·.rowWidth) = some (size Row) := rfl
+  have hinteractions : (component (p := p) height).rowOperations.interactions = [] :=
+    interactions_main _ _
+  have hadmissible := admissible_component (p := p) height 0 0
   simp only [bridgeable, Bool.and_eq_true, List.isEmpty_iff, List.all_eq_true,
-    Option.isNone_iff_eq_none, rowOperations_component, constraints_map_assert,
-    lookups_map_assert, hwindow]
-  refine ⟨⟨trivial, fun x hx => (constraints_varWindow varWindow_vars x hx).1⟩, ?_⟩
-  simp only [rowExpressions, rowOperations_component, constraints_map_assert,
-    assertZeros_interactions, List.flatMap_nil, List.append_nil, expressionsBadVariable]
+    Option.isNone_iff_eq_none, hwindow]
+  refine ⟨⟨by rw [rowOperations_component]; exact lookups_main _ _,
+    fun x hx => (hadmissible x hx).1⟩, ?_⟩
+  simp only [rowExpressions, hinteractions, List.flatMap_nil, List.append_nil,
+    expressionsBadVariable]
   exact List.findSome?_eq_none_iff.mpr fun x hx => expressionBadVariable_eq_none _ x
-    fun j hj => by have := (constraints_varWindow varWindow_vars x hx).2 j hj; omega
+    fun j hj => by have := (hadmissible x hx).2.1 j hj; omega
+
+/-- A parity constraint of θ weighs `3` when the cells of the rows weigh `1`. -/
+theorem exists_weight_eq (height : UInt64) :
+    ∃ x ∈ (component (p := p) height).rowOperations.constraints,
+      weight (cellWeight 1 0) x = 3 := by
+  have hcells : RowCells (fun x => ∃ j < size Row, x = .var ⟨j⟩) (vars (p := p)).current :=
+    rowCells_of_toElements varFromOffset_current
+  refine ⟨parityCheck ((vars (p := p)).current.aPrimeBit 0 0 0)
+    ((vars (p := p)).current.aPrimeBit 1 0 0) ((vars (p := p)).current.aPrimeBit 2 0 0)
+    ((vars (p := p)).current.aPrimeBit 3 0 0) ((vars (p := p)).current.aPrimeBit 4 0 0)
+    ((vars (p := p)).current.cPrimeBit 0 0), ?_, ?_⟩
+  · rw [rowOperations_component]
+    simp only [main, circuit_norm, List.mem_append]
+    right; left
+    rw [constraints_toSubcircuit]
+    simp only [Theta.circuit, Theta.main, circuit_norm, mem_constraints_forEach,
+      constraints_toSubcircuit, mem_constraints_packLimbs, List.mem_append, List.mem_singleton,
+      Fin.eta]
+    right; right
+    exact ⟨0, 0, rfl⟩
+  · obtain ⟨j0, hj0, h0⟩ := hcells.aPrimeBit 0 0 0
+    obtain ⟨j1, hj1, h1⟩ := hcells.aPrimeBit 1 0 0
+    obtain ⟨j2, hj2, h2⟩ := hcells.aPrimeBit 2 0 0
+    obtain ⟨j3, hj3, h3⟩ := hcells.aPrimeBit 3 0 0
+    obtain ⟨j4, hj4, h4⟩ := hcells.aPrimeBit 4 0 0
+    obtain ⟨j5, hj5, h5⟩ := hcells.cPrimeBit 0 0
+    have htwo : weight (cellWeight 1 0) (2 : Expression (F p)) = 0 := rfl
+    have hfour : weight (cellWeight 1 0) (4 : Expression (F p)) = 0 := rfl
+    rw [h0, h1, h2, h3, h4, h5]
+    simp only [parityCheck, weight_mul, weight_sub, weight_add, weight_var, htwo, hfour,
+      cellWeight]
+    split_ifs <;> omega
 
 end Component
 

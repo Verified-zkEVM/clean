@@ -56,79 +56,41 @@ section Air
 variable {p : ℕ} [Fact p.Prime] {K : Type} [BaseField K] (e : _root_.F p ≃+* K)
   (height : UInt64) (logN : ℕ)
 
-/-- The weights of the component's constraints are the constraints of the cells' weights: `a`
-for the cells of the rows and the first- and last-row selectors, `b` for the transition
-selector. -/
-theorem weights_vars (a b : ℕ) :
-    (constraints (vars (p := p))).map
-        (fun x => (⟨weight (fun j => if j = 2 * size Row + 2 then b else a) x⟩ : Deg)) =
-      constraints (degWindow (vars (p := p)).current (vars (p := p)).next a b) := by
-  rw [(isHom_weight _).map_constraints]
-  have h := varWindow_vars (p := p)
-  have hcell (j : ℕ) (hj : j < 2 * size Row) :
-      (⟨weight (fun j => if j = 2 * size Row + 2 then b else a)
-        (.var ⟨j⟩ : Expression (_root_.F p))⟩ : Deg) = ⟨a⟩ := by
-    simp only [weight, Deg.mk.injEq]
-    split_ifs <;> omega
-  have h1 : 2 * size Row ≠ 2 * size Row + 2 := by omega
-  have h2 : 2 * size Row + 1 ≠ 2 * size Row + 2 := by omega
-  simp only [mapWindow, degWindow, h.isFirstRow, h.isLastRow, h.isTransition, weight, h1, h2,
-    ↓reduceIte]
-  have hrow (row : Row (Expression (_root_.F p)))
-      (hrow : ∀ x ∈ (toElements row).toList, ∃ j < 2 * size Row, x = .var ⟨j⟩) :
-      row.map (fun x => (⟨weight (fun j => if j = 2 * size Row + 2 then b else a) x⟩ : Deg)) =
-        row.map fun _ => ⟨a⟩ := by
-    refine Row.map_congr _ fun x hx => ?_
-    obtain ⟨j, hj, rfl⟩ := hrow x hx
-    exact hcell j hj
-  rw [hrow _ fun x hx => (h.current x hx).imp fun j ⟨hj, hx⟩ => ⟨by omega, hx⟩,
-    hrow _ fun x hx => (h.next x hx).imp' (size Row + ·) fun j ⟨hj, hx⟩ => ⟨by omega, hx⟩]
-
 variable [Fact (2 ^ 16 < p)]
 
 lemma window_component :
     (_root_.KeccakAir.component (p := p) height).window = some (Window.layout Row) := rfl
 
+lemma degreeWeight_eq : degreeWeight (Window.layout Row).rowWidth = cellWeight 1 0 := rfl
+
 /-- A constraint of the AIR is a gated constraint of the component, read off the trace. -/
 theorem lower_of_mem {y : Expr K}
     (hy : y ∈ (toAir e (_root_.KeccakAir.component (p := p) height) logN).constraints) :
-    ∃ x ∈ constraints (vars (p := p)), ∃ g,
+    ∃ x ∈ (_root_.KeccakAir.component (p := p) height).rowOperations.constraints, ∃ g,
       gateConstraint (some (size Row)) x = some g ∧
         (∀ j ∈ expressionCells x, j < 2 * size Row + 3) ∧
         y = gateExpr g.gate (toExpr e (_root_.KeccakAir.component (p := p) height) g.body) := by
   obtain ⟨x, hx, g, hg, rfl⟩ := (mem_toAir_constraints e).mp hy
-  rw [rowOperations_component, constraints_map_assert] at hx
-  exact ⟨x, hx, g, hg, (constraints_varWindow varWindow_vars x hx).2, rfl⟩
+  exact ⟨x, hx, g, hg, (admissible_component height 0 0 x hx).2.1, rfl⟩
 
 theorem degree_le {y : Expr K}
     (hy : y ∈ (toAir e (_root_.KeccakAir.component (p := p) height) logN).constraints) :
     y.degree ≤ 3 := by
   obtain ⟨x, hx, g, hg, hcells, rfl⟩ := lower_of_mem e height logN hy
-  rw [degree_lower e (window_component height) hcells hg]
-  have hmem := List.mem_map_of_mem
-    (f := fun x => (⟨weight (fun j => if j = 2 * size Row + 2 then 0 else 1) x⟩ : Deg)) hx
-  rw [weights_vars] at hmem
-  have := weights_le _ _ 1 0 _ hmem
-  simp only at this
-  have hw : degreeWeight (Window.layout Row).rowWidth =
-      fun j => if j = 2 * size Row + 2 then 0 else 1 := rfl
-  rw [hw]
+  rw [degree_lower e (window_component height) hcells hg, degreeWeight_eq]
+  have := (admissible_component height 1 0 x hx).2.2
   omega
 
 theorem exists_degree_eq :
     ∃ y ∈ (toAir e (_root_.KeccakAir.component (p := p) height) logN).constraints,
       y.degree = 3 := by
-  obtain ⟨d, hd, hval⟩ := exists_weight_eq (vars (p := p)).current (vars (p := p)).next 1 0
-  rw [← weights_vars] at hd
-  obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hd
-  have hgate := constraints_varWindow varWindow_vars x hx
-  obtain ⟨g, hg⟩ := Option.isSome_iff_exists.mp hgate.1
+  obtain ⟨x, hx, hweight⟩ := exists_weight_eq (p := p) height
+  obtain ⟨hgate, hcells, -⟩ := admissible_component height 0 0 x hx
+  obtain ⟨g, hg⟩ := Option.isSome_iff_exists.mp hgate
   refine ⟨gateExpr g.gate (toExpr e (_root_.KeccakAir.component (p := p) height) g.body),
-    (mem_toAir_constraints e).mpr ⟨x, ?_, g, hg, rfl⟩, ?_⟩
-  · rw [rowOperations_component, constraints_map_assert]
-    exact hx
-  · rw [degree_lower e (window_component height) hgate.2 hg]
-    exact hval
+    (mem_toAir_constraints e).mpr ⟨x, hx, g, hg, rfl⟩, ?_⟩
+  rw [degree_lower e (window_component height) hcells hg, degreeWeight_eq]
+  exact hweight
 
 /-- Every constraint's degree profile `(a, b)` has `a + b ≤ 3` and `b ≤ 1`: it fits two quotient
 chunks. -/
@@ -136,12 +98,8 @@ theorem profileFits_toAir :
     (toAir e (_root_.KeccakAir.component (p := p) height) logN).ProfileFits 1 := fun y hy => by
   obtain ⟨x, hx, g, hg, hcells, rfl⟩ := lower_of_mem e height logN hy
   obtain ⟨hsum, htransition⟩ := degProfile_lower e (window_component height) hcells hg
-  have hmem := List.mem_map_of_mem
-    (f := fun x => (⟨weight (fun j => if j = 2 * size Row + 2 then 1 else 1) x⟩ : Deg)) hx
-  rw [weights_vars] at hmem
-  have := weights_le _ _ 1 1 _ hmem
-  have hw : (fun j : ℕ => if j = 2 * size Row + 2 then 1 else 1) = fun _ => 1 :=
-    funext fun _ => ite_self 1
+  have := (admissible_component height 1 1 x hx).2.2
+  have hw : cellWeight 1 1 = fun _ => 1 := funext fun _ => ite_self 1
   simp only [hw] at this
   simp only [pow_one]
   omega
@@ -166,10 +124,10 @@ theorem width_toAir : (A).width = size Row := by
 theorem length_toAir : (A).constraints.length = 3182 := by
   have hwindow : (_root_.KeccakAir.component (p := p) height).window.map (·.rowWidth) =
       some (size Row) := rfl
-  simp only [toAir, gatedConstraints, List.length_map, hwindow, rowOperations_component,
-    constraints_map_assert]
-  rw [length_filterMap_of_isSome _ _ fun x hx => (constraints_varWindow varWindow_vars x hx).1]
-  exact length_constraints _
+  simp only [toAir, gatedConstraints, List.length_map, hwindow]
+  rw [length_filterMap_of_isSome _ _ fun x hx => (admissible_component height 0 0 x hx).1,
+    rowOperations_component]
+  exact length_main _ _
 
 theorem maxDegree_toAir : (A).maxDegree = 3 :=
   foldl_max_eq _ _ 3 (fun _ hy => degree_le e height logN hy) (exists_degree_eq e height logN)

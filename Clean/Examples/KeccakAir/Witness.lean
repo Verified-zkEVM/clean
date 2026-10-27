@@ -7,7 +7,7 @@ round on 64-bit lanes and stores them as limbs and bits.
 module
 
 public import Clean.Air.RowProgram
-public import Clean.Examples.KeccakAir.Air
+public import Clean.Examples.KeccakAir.Row
 
 @[expose] public section
 

@@ -1,6 +1,6 @@
 module
 
-public import CleanCompStark.KeccakAir.Degree
+public import CleanCompStark.KeccakAir.Bridgeable
 public import CompStark.SoundnessError
 
 /-!
@@ -14,7 +14,7 @@ fit two chunks at every trace length.
 A lowered constraint is a Clean constraint's body under CompStark's selector
 (`mem_toAir_constraints`); its degree is a weight of the Clean constraint (`degree_lower`), and so
 is the sum of its degree profile's entries (`degProfile_lower`); the weights of the component's
-constraints are bounded by `weights_le`.
+constraints are bounded by `admissible_component`.
 -/
 
 @[expose] public section

@@ -91,9 +91,9 @@ theorem windowSpec_of_table {height : UInt64} {table : Table (F p)}
   · intro row _
     rw [Component.guarantees_iff]
     intro interaction hinteraction
-    change interaction ∈ Operations.interactions
-      ((KeccakAir.constraints _).map Operation.assert) at hinteraction
-    simp [assertZeros_interactions] at hinteraction
+    change interaction ∈ Operations.interactions ((main _).operations _) at hinteraction
+    erw [interactions_main] at hinteraction
+    simp at hinteraction
 
 /-- In a satisfied table of the Keccak-f component, the rows computing the last round of a
 permutation output Keccak-f of their preimage, whose limbs are 16-bit. -/
