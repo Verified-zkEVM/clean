@@ -400,6 +400,18 @@ lemma pulledIfValue_requirements_of_isBool_enabled {channel : Channel F Message}
   simp only [Interaction.Requirements, Channel.pulledIfValue, Channel.toRaw]
   grind
 
+lemma pulledIfValue_one_guarantees_iff {channel : Channel F Message} {msg : Message F}
+    {data : ProverData F} :
+    (channel.pulledIfValue 1 msg).Guarantees data ↔ channel.Guarantees msg data := by
+  simp [Interaction.Guarantees, Interaction.msgVector, Channel.pulledIfValue, Channel.toRaw,
+    ProvableType.fromElements_toElements]
+
+lemma pushedIfValue_requirements_iff {channel : Channel F Message} {enabled : F}
+    {msg : Message F} {data : ProverData F} (h_enabled : enabled ≠ 0) :
+    (channel.pushedIfValue enabled msg).Requirements data ↔ channel.Guarantees msg data := by
+  simp [Interaction.Requirements, Interaction.msgVector, Channel.pushedIfValue, Channel.toRaw,
+    ProvableType.fromElements_toElements, h_enabled]
+
 lemma pushedIfValue_guarantees {channel : Channel F Message}
   {enabled : F} {msg : Message F} {data : ProverData F} :
     (channel.pushedIfValue enabled msg).Guarantees data := by
@@ -438,4 +450,15 @@ lemma eval_pushedIf {channel : Channel F Message} {enabled : Expression F}
   apply congrArg Vector.toArray
   rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
   rfl
+lemma eval_toRaw_pulledIf (channel : Channel F Message) (enabled : Expression F)
+    (msg : Message (Expression F)) (env : Environment F) :
+    (_root_.pulledIf (channel := channel) enabled msg).toRaw.eval env =
+      channel.pulledIfValue (Expression.eval env enabled) (eval env msg) :=
+  (eval_pulledIf (channel := channel)).trans (by rw [ProvableType.eval_field])
+
+lemma eval_toRaw_pushedIf (channel : Channel F Message) (enabled : Expression F)
+    (msg : Message (Expression F)) (env : Environment F) :
+    (_root_.pushedIf (channel := channel) enabled msg).toRaw.eval env =
+      channel.pushedIfValue (Expression.eval env enabled) (eval env msg) :=
+  (eval_pushedIf (channel := channel)).trans (by rw [ProvableType.eval_field])
 end Channel

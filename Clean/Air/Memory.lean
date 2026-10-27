@@ -443,20 +443,6 @@ lemma table_interactionValuesWith (env : Environment F) :
   have := eval_fst env (varFromOffset (ProvablePair Entry field) 0)
   congr 4
 
-omit [ProvableType Entry] in
-lemma eval_pulledIf_toRaw {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (enabled : Expression F) (message : Message (Expression F)) (env : Environment F) :
-    (pulledIf (channel := channel) enabled message).toRaw.eval env =
-      channel.pulledIfValue (Expression.eval env enabled) (eval env message) :=
-  (Channel.eval_pulledIf (channel := channel)).trans (by rw [ProvableType.eval_field])
-
-omit [ProvableType Entry] in
-lemma eval_pushedIf_toRaw {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (enabled : Expression F) (message : Message (Expression F)) (env : Environment F) :
-    (pushedIf (channel := channel) enabled message).toRaw.eval env =
-      channel.pushedIfValue (Expression.eval env enabled) (eval env message) :=
-  (Channel.eval_pushedIf (channel := channel)).trans (by rw [ProvableType.eval_field])
-
 /-- The interactions of a row of the reads on the counter channel: a read, or disabled. -/
 lemma reader_block {env : Environment F}
     (h : memory.readerComponent.operations.ConstraintsHold env) :
@@ -468,7 +454,7 @@ lemma reader_block {env : Environment F}
     Component.interactionsWith_of_exposedChannels (table := memory.readerComponent)
       (List.mem_singleton_self _)]
   simp only [circuit_norm, readerComponent, reader] at h ⊢
-  simp only [eval_pulledIf_toRaw, eval_pushedIf_toRaw, eval_pair]
+  simp only [Channel.eval_toRaw_pulledIf, Channel.eval_toRaw_pushedIf, eval_pair]
   obtain ⟨h_bool, h_inverse⟩ := h
   rcases mul_eq_zero.mp h_bool with h_zero | h_one
   · right
