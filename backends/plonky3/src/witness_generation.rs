@@ -360,21 +360,18 @@ struct Demand<F> {
 }
 
 impl<F: WitnessField> Demand<F> {
-    /// Whether the message was pushed or pulled more often, and by how much.
-    fn surplus(&self) -> (Direction, usize) {
+    /// Whether the message was pushed or pulled more often.
+    fn direction(&self) -> Direction {
         if self.multiplicity > 0 {
-            (Direction::Push, self.multiplicity as usize)
+            Direction::Push
         } else {
-            (Direction::Pull, (-self.multiplicity) as usize)
+            Direction::Pull
         }
     }
 
-    fn direction(&self) -> Direction {
-        self.surplus().0
-    }
-
-    fn count(&self) -> usize {
-        self.surplus().1
+    /// How many more times the message was pushed than pulled, or the opposite, as a field element.
+    fn count(&self) -> F {
+        F::from_u128(self.multiplicity.unsigned_abs())
     }
 }
 
@@ -558,7 +555,7 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<Row<F>, String> {
-    let input = (mode.input)(&demand.message, data, hint, F::from_usize(demand.count()));
+    let input = (mode.input)(&demand.message, data, hint, demand.count());
     let values = P::complete_row(component, &input, data, hint)?;
     Ok(Row { input, values })
 }
@@ -583,7 +580,7 @@ fn increment_multiplicity<F: WitnessField, P: Program<F>>(
         .copied()
         .ok_or_else(|| format!("multiplicity column {column} is out of bounds"))?;
     let old_interactions = P::interactions(component, &row.values);
-    row.input[column] = current + F::from_usize(demand.count());
+    row.input[column] = current + demand.count();
     row.values = P::complete_row(component, &row.input, data, hint)?;
     demands.remove_interactions(old_interactions);
     demands.add_interactions(P::interactions(component, &row.values));
@@ -599,24 +596,19 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
-    match mode.multiplicity {
-        None => {
-            for _ in 0..demand.count() {
-                let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
-                demands.add_interactions(table.push::<P>(component, row));
-            }
-        }
-        Some(column) => match table.message_rows.get(&demand.message).copied() {
-            Some(row_index) => increment_multiplicity::<F, P>(
+    if let Some(column) = mode.multiplicity {
+        if let Some(row_index) = table.message_rows.get(&demand.message).copied() {
+            return increment_multiplicity::<F, P>(
                 component, column, row_index, demand, table, demands, data, hint,
-            )?,
-            None => {
-                let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
-                let message = demand.message.clone();
-                demands.add_interactions(table.push_for_message::<P>(component, message, row));
-            }
-        },
+            );
+        }
     }
+    let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
+    let interactions = match mode.multiplicity {
+        None => table.push::<P>(component, row),
+        Some(_) => table.push_for_message::<P>(component, demand.message.clone(), row),
+    };
+    demands.add_interactions(interactions);
     Ok(())
 }
 

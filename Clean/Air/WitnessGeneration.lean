@@ -57,9 +57,9 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-! ### Answering demand -/
 
-/-- The rows a component adds or replaces to answer a demand. -/
+/-- The row a component adds or replaces to answer a demand. -/
 inductive Change (F : Type) where
-  | add (rows : List (GeneratedRow F))
+  | add (row : GeneratedRow F)
   /-- A new row created for the demanded `message`, which counts it. -/
   | addForMessage (message : Array F) (row : GeneratedRow F)
   /-- The row at `index` is updated from `old` to `new`. -/
@@ -72,12 +72,10 @@ def Change.removedRows : Change F → List (GeneratedRow F)
 
 /-- The rows that enter the tally with their interactions. -/
 def Change.addedRows : Change F → List (GeneratedRow F)
-  | .add rows => rows
-  | .addForMessage _ row => [row]
-  | .update _ _ new => [new]
+  | .add row | .addForMessage _ row | .update _ _ row => [row]
 
 def ComponentState.applyChange (state : ComponentState F) : Change F → ComponentState F
-  | .add rows => rows.foldl (·.pushRow) state
+  | .add row => state.pushRow row
   | .addForMessage message row => state.pushMessageRow message row
   | .update index _ new => state.setRow index new
 
@@ -129,12 +127,12 @@ def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.comp
   let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 demand.count
   completeRow state input data hint
 
-/-- Answer demand with one new row per occurrence, or, with a multiplicity cell, by counting it in
-the row created for the message, which the first demand for the message creates. -/
+/-- Answer demand with a new row for one occurrence, or, with a multiplicity cell, by counting it
+in the row created for the message, which the first demand for the message creates. -/
 def DemandMode.answer (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Change F :=
   match state.multiplicity with
-  | none => .add (List.replicate demand.count (mode.newRow state demand data hint))
+  | none => .add (mode.newRow state demand data hint)
   | some column =>
       match state.messageRows[demand.message]?.bind fun index =>
           state.rows[index]?.map (index, ·) with
