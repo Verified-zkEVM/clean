@@ -12,17 +12,17 @@ namespace Gadgets.SHA256
 /-!
 # 32-bit Bitwise XOR for SHA-256
 
-Per bit: z = a + b − 2·a·b  (correct when a, b ∈ {0, 1}).
+Per bit: z = `bitXor a b`  (correct when a, b ∈ {0, 1}).
 Witnesses 32 output bits.
 -/
 
 /-- Bitwise XOR of two 32-bit words.
-    Per bit: z = a + b − 2·a·b  (correct when a, b ∈ {0, 1}).
+    Per bit: z = `bitXor a b`  (correct when a, b ∈ {0, 1}).
     Witnesses 32 output bits. -/
 def xor32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   let z ← witnessVector 32 (.lit <| .ofFn fun i => (a[i].val ^^^ b[i].val).toField)
   Circuit.forEach (Vector.finRange 32) fun i =>
-    assertZero (z[i] - a[i] - b[i] + 2 * a[i] * b[i])
+    assertZero (z[i] - bitXor a[i] b[i])
   return z
 
 namespace Xor32
@@ -114,12 +114,12 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     intro i
     have := Vector.ext_iff.mp h_input_b i i.isLt
     simp [Vector.getElem_map] at this; exact this
-  -- h_holds: env.get(i₀+i) = a[i] + b[i] - 2*a[i]*b[i]
-  have h_eq : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by
+  -- h_holds: env.get(i₀+i) = bitXor a[i] b[i]
+  have h_eq : ∀ i : Fin 32, env.get (i₀ + i.val) = bitXor input_a[i] input_b[i] := by
     intro i
     have h := h_holds i; rw [h_ai i, h_bi i] at h
     -- h: env.get(i₀+i) + -a[i] + -b[i] + 2*a[i]*b[i] = 0
-    have key : env.get (i₀ + i.val) - (input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i]) = 0 := by
+    have key : env.get (i₀ + i.val) - (bitXor input_a[i] input_b[i]) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
   have h_z : Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
@@ -159,9 +159,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm] at henv
   rw [h_ai i, h_bi i] at henv
   have hcast : ((input_a[i].val ^^^ input_b[i].val : ℕ) : F p) =
-      input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by
+      bitXor input_a[i] input_b[i] := by
     rw [← IsBool.xor_eq_val_xor (ha i) (hb i)]
-    have := ZMod.natCast_val (R := ZMod p) (input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i])
+    have := ZMod.natCast_val (R := ZMod p) (bitXor input_a[i] input_b[i])
     rw [this]; exact ZMod.cast_id p _
   rw [henv, hcast, h_ai i, h_bi i]; ring
 
