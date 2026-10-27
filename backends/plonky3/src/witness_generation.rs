@@ -357,8 +357,8 @@ pub trait Program<F: WitnessField> {
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>>;
 }
 
-/// The number of copies an interaction adds to the net multiplicity of its message: its
-/// multiplicity read as a natural number, positive for a push and negative for a pull.
+/// What an interaction adds to the net multiplicity of its message: its multiplicity read as a
+/// natural number, positive for a push and negative for a pull.
 fn signed_count<F: WitnessField>(interaction: &Interaction<F>) -> i128 {
     let count = i128::from(interaction.multiplicity.canonical_u64());
     match interaction.direction {
