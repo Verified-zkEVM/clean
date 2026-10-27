@@ -495,11 +495,11 @@ variable {memory} in
 Soundness of offline memory checking: in a witness where all components other than the memory's
 satisfy their requirements on its counter channel, every read is of an entry of the memory.
 -/
-theorem guarantees_of_isBalanced {balance : Balance F} [balance.LengthLtSize]
+theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
     {PublicIO : TypeMap} [ProvableType PublicIO] {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) (assumptions : witness.Assumptions)
     (constraints : witness.Constraints)
-    (balanced : balance.isBalanced (ringChar F)
+    (balanced : balance.Balanced
       (witness.interactionsWith memory.counterChannel.toRaw))
     (requirements : ∀ table ∈ witness.tables,
       table.component ∉ [memory.table, memory.readerComponent] →
@@ -526,7 +526,7 @@ theorem guarantees_of_isBalanced {balance : Balance F} [balance.LengthLtSize]
       intro i h_i
       rw [i.same_size, h_channel i h_i]
       simp [channel, circuit_norm])
-    (h_flatten ▸ balance.balancedInteractions_of_isBalanced _ balanced)
+    (h_flatten ▸ balance.balancedInteractions_of_balanced _ balanced)
     (h_flatten ▸ Balance.LengthLtSize.length_lt_size _ balanced)
     (by
       intro block h_block
@@ -566,7 +566,7 @@ theorem guarantees_of_isBalanced {balance : Balance F} [balance.LengthLtSize]
 def closedChannel (balance : Balance F) [balance.LengthLtSize] : ClosedChannel F balance where
   channel := memory.counterChannel.toRaw
   owners := [memory.table, memory.readerComponent]
-  guarantees_of_isBalanced := guarantees_of_isBalanced
+  guarantees_of_balanced := guarantees_of_balanced
 
 @[circuit_norm] lemma table_name : memory.table.circuit.name = memory.name := rfl
 @[circuit_norm] lemma readerComponent_name :

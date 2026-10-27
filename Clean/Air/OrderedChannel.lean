@@ -720,10 +720,10 @@ channel, every interaction gets its guarantee.
 structure ClosedChannel (F : Type) [FiniteField F] (balance : Balance F) where
   channel : RawChannel F
   owners : List (Component F)
-  guarantees_of_isBalanced : ∀ {PublicIO : TypeMap} [ProvableType PublicIO]
+  guarantees_of_balanced : ∀ {PublicIO : TypeMap} [ProvableType PublicIO]
     {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens),
     witness.Assumptions → witness.Constraints →
-    balance.isBalanced (ringChar F) (witness.interactionsWith channel) →
+    balance.Balanced (witness.interactionsWith channel) →
     (∀ table ∈ witness.tables, table.component ∉ owners → table.ChannelRequirements channel) →
     ens.VerifierChannelRequirements witness.publicInput witness.data channel →
     ∀ i ∈ witness.interactionsWith channel, i.Guarantees witness.data
@@ -779,7 +779,7 @@ theorem tableSoundness (soundEns : SoundEnsemble F PublicIO balance) :
   apply soundEns.tableSoundness_of_soundChannels soundEns.ordered_subset soundEns.soundChannels
   intro witness assumptions constraints balanced channel h_channel
   obtain ⟨closedChannel, h_closed, rfl⟩ := List.mem_map.mp h_channel
-  apply closedChannel.guarantees_of_isBalanced witness assumptions constraints
+  apply closedChannel.guarantees_of_balanced witness assumptions constraints
     (balanced _ (soundEns.closed_subset h_channel))
   · intro table h_table h_owner
     exact table.requirements_of_not_mem_of_constraints (constraints table h_table)

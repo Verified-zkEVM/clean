@@ -350,12 +350,12 @@ def BalancedChannels {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
 /-- The interactions with every ensemble channel pass the balance check. -/
 def Balanced {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) (balance : Balance F) :
     Prop :=
-  ∀ channel ∈ ens.channels, balance.isBalanced (ringChar F) (witness.interactionsWith channel)
+  ∀ channel ∈ ens.channels, balance.Balanced (witness.interactionsWith channel)
 
 lemma balancedChannels_of_balanced {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
     {balance : Balance F} (balanced : witness.Balanced balance) : witness.BalancedChannels :=
   fun channel h_channel =>
-    balance.balancedInteractions_of_isBalanced _ (balanced channel h_channel)
+    balance.balancedInteractions_of_balanced _ (balanced channel h_channel)
 end EnsembleWitness
 
 /- ## Soundness, Completeness and related definitions -/

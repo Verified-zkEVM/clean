@@ -129,11 +129,11 @@ lemma decode_toArray (value : Message F) :
 variable {counterChannel} in
 /-- Soundness of counter channels: in a witness where all components other than the owners satisfy
 their requirements on the channel, all its guarantees hold. -/
-theorem guarantees_of_isBalanced {balance : Balance F} [balance.LengthLtSize]
+theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
     {PublicIO : TypeMap} [ProvableType PublicIO] {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) (_ : witness.Assumptions)
     (constraints : witness.Constraints)
-    (balanced : balance.isBalanced (ringChar F)
+    (balanced : balance.Balanced
       (witness.interactionsWith counterChannel.channel.toRaw))
     (requirements : ∀ table ∈ witness.tables, table.component ∉ counterChannel.owners →
       table.ChannelRequirements counterChannel.channel.toRaw)
@@ -142,7 +142,7 @@ theorem guarantees_of_isBalanced {balance : Balance F} [balance.LengthLtSize]
     ∀ i ∈ witness.interactionsWith counterChannel.channel.toRaw, i.Guarantees witness.data := by
   set channel := counterChannel.channel
   set interactions := witness.interactionsWith channel.toRaw
-  have kernel := balance.balancedInteractions_of_isBalanced _ balanced
+  have kernel := balance.balancedInteractions_of_balanced _ balanced
   have h_channel (i) (h_i : i ∈ interactions) : i.channel = channel.toRaw :=
     witness.channel_eq_of_mem_interactionsWith h_i
   -- an interaction is from a row of an owner, or satisfies its requirements
@@ -201,11 +201,11 @@ theorem guarantees_of_isBalanced {balance : Balance F} [balance.LengthLtSize]
     exact not_bad i.msg ⟨i, h_i, h_pull, rfl, h_bad⟩
   · exact RawChannel.Normal.guarantees_of_not_isUnitPull i _ (h_channel i h_i) h_pull
 
-/-- The counter channel, closed by `guarantees_of_isBalanced`. -/
+/-- The counter channel, closed by `guarantees_of_balanced`. -/
 def closedChannel (balance : Balance F) [balance.LengthLtSize] : ClosedChannel F balance where
   channel := counterChannel.channel.toRaw
   owners := counterChannel.owners
-  guarantees_of_isBalanced := guarantees_of_isBalanced
+  guarantees_of_balanced := guarantees_of_balanced
 
 @[circuit_norm] lemma closedChannel_channel (balance : Balance F) [balance.LengthLtSize] :
     (counterChannel.closedChannel balance).channel = counterChannel.channel.toRaw := rfl

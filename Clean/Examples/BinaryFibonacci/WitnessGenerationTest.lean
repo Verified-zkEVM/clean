@@ -22,10 +22,9 @@ def result : Except String (List ℕ × Bool × Bool) :=
   | .error error => .error (toString error)
   | .ok witness =>
       .ok (witness.tables.map (·.length), constraintsHold witness,
-        balanceHolds .multiset 2 witness)
+        channelsBalanced witness)
 
-/-- The verifier's push creates 100 steps, padded to 128 rows, whose interactions pass the multiset
-balance check. -/
+/-- The verifier's push creates 100 steps, padded to 128 rows, whose interactions balance. -/
 example : result = .ok ([128], true, true) := by native_decide
 
 end BinaryFibonacci.WitnessGenerationTest

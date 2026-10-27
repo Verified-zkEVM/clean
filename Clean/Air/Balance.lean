@@ -85,14 +85,13 @@ lemma BalancedInteractions.nil : BalancedInteractions ([] : List (Interaction F)
   ⟨ by simp, by simp [activeCount] ⟩
 
 /--
-A balance check: a computable condition that a verifier checks on the interactions with each
-channel, given the characteristic of the field, and its proof that the check implies
-`BalancedInteractions`.
+A balance check: the condition that a verifier checks on the interactions with each channel, and its
+proof that the condition implies `BalancedInteractions`.
 -/
 structure Balance (F : Type) [FiniteField F] where
-  isBalanced : ℕ → List (Interaction F) → Bool
-  balancedInteractions_of_isBalanced : ∀ interactions,
-    isBalanced (ringChar F) interactions → BalancedInteractions interactions
+  Balanced : List (Interaction F) → Prop
+  balancedInteractions_of_balanced : ∀ interactions,
+    Balanced interactions → BalancedInteractions interactions
 
 /-
 ## LogUp: field-sum balance
@@ -136,11 +135,10 @@ LogUp: for every message, the signed multiplicities sum to zero, and there are f
 than the characteristic, so that counts can't wrap around.
 -/
 def Balance.logUp : Balance F where
-  isBalanced c interactions :=
-    decide (interactions.length < c) && interactions.all fun i => balanceOf interactions i.msg = 0
-  balancedInteractions_of_isBalanced interactions h_check := by
-    simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h_check
-    obtain ⟨ length_lt, sums ⟩ := h_check
+  Balanced interactions :=
+    interactions.length < ringChar F ∧ ∀ msg, balanceOf interactions msg = 0
+  balancedInteractions_of_balanced interactions balanced := by
+    obtain ⟨ length_lt, sums ⟩ := balanced
     have activeCount_lt (direction : Direction) (msg : Array F) :
         activeCount interactions direction msg < ringChar F :=
       lt_of_le_of_lt (List.countP_le_length) length_lt
@@ -149,7 +147,7 @@ def Balance.logUp : Balance F where
       intro msg isBool
       by_cases h_mem : ∃ i ∈ interactions, i.msg = msg
       · obtain ⟨ i, i_mem, rfl ⟩ := h_mem
-        have sum := sums i i_mem
+        have sum := sums i.msg
         rw [balanceOf_eq_sub_of_isBool isBool, sub_eq_zero,
           Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ (activeCount_lt _ _) (activeCount_lt _ _)]
           at sum
@@ -188,16 +186,14 @@ Multiset balance: every multiplicity is `0` or `1`, and the messages of the acti
 permutation of the messages of the active pulls. There are fewer interactions than field elements.
 -/
 def Balance.multiset : Balance F where
-  isBalanced _ interactions :=
-    decide (interactions.length < FiniteField.size F) &&
-      interactions.all (fun i => decide (IsBool i.mult)) &&
-      (activeMessages interactions .push).isPerm (activeMessages interactions .pull)
-  balancedInteractions_of_isBalanced interactions h_check := by
-    simp only [Bool.and_eq_true, List.isPerm_iff] at h_check
+  Balanced interactions :=
+    interactions.length < FiniteField.size F ∧ (∀ i ∈ interactions, IsBool i.mult) ∧
+      (activeMessages interactions .push).Perm (activeMessages interactions .pull)
+  balancedInteractions_of_balanced interactions h_check := by
     have counts (msg : Array F) :
         activeCount interactions .push msg = activeCount interactions .pull msg := by
       rw [← count_activeMessages, ← count_activeMessages]
-      exact h_check.2.count_eq msg
+      exact h_check.2.2.count_eq msg
     refine ⟨ ?_, fun msg _ => counts msg ⟩
     intro a a_mem a_pull
     have pull_pos : 0 < activeCount interactions .pull a.msg := by
@@ -214,17 +210,15 @@ checking relies on it to bound the number of reads of one address.
 -/
 class Balance.LengthLtSize (balance : Balance F) : Prop where
   length_lt_size : ∀ interactions,
-    balance.isBalanced (ringChar F) interactions → interactions.length < FiniteField.size F
+    balance.Balanced interactions → interactions.length < FiniteField.size F
 
 instance : (Balance.multiset (F := F)).LengthLtSize where
-  length_lt_size interactions h_check := by
-    simp only [Balance.multiset, Bool.and_eq_true, decide_eq_true_eq] at h_check
-    exact h_check.1.1
+  length_lt_size _ balanced := balanced.1
 
 instance {p : ℕ} [Fact p.Prime] : (Balance.logUp (F := _root_.F p)).LengthLtSize where
-  length_lt_size interactions h_check := by
-    simp only [Balance.logUp, Bool.and_eq_true, decide_eq_true_eq, ZMod.ringChar_zmod_n] at h_check
-    exact h_check.1
+  length_lt_size _ balanced := by
+    have : FiniteField.size (_root_.F p) = p := rfl
+    simpa [Balance.logUp, ZMod.ringChar_zmod_n, this] using balanced.1
 
 /- ## Conditions on channels that strengthen the implications of interaction balance. -/
 

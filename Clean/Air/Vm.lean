@@ -1035,7 +1035,7 @@ theorem addVm_closedGuarantees (ens : SoundEnsemble F PublicIO balance) (vm : Vm
   intro assumptions constraints balanced channel h_channel
   obtain ⟨closedChannel, h_closed, rfl⟩ := List.mem_map.mp h_channel
   have h_finished : closedChannel.channel ∈ ens.finished := List.mem_append_right _ h_channel
-  apply closedChannel.guarantees_of_isBalanced witness assumptions constraints
+  apply closedChannel.guarantees_of_balanced witness assumptions constraints
     (balanced _ (List.mem_cons_of_mem _ (ens.closed_subset h_channel)))
   · intro table h_table h_owner
     apply table.requirements_of_not_mem_of_constraints (constraints table h_table)
