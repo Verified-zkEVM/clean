@@ -232,7 +232,7 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt
   simp only [circuit_norm] at *
   simp [or_imp] at ⊢ not_in_reqs_or extra_reqs_or_no_grts
   constructor
-  · apply balancedInteractions_of_perm balanced
+  · apply BalancedInteractions.of_perm balanced
     grw [List.perm_append_comm_assoc]
   constructor
   · intro a
@@ -336,10 +336,7 @@ lemma partialBalancedChannel_of_sublist {subtables tables : Tables F} {channel :
   by_cases subtables_empty : subtables.tables = []
   · simp [subtables_empty, circuit_norm, PartialBalancedChannel, Tables.interactionsWith]
     use []
-    simp [BalancedInteractions, balanceOf]
-    by_cases h : ringChar F = 0
-    · exact Or.inr h
-    · exact Or.inl (Nat.pos_of_ne_zero h)
+    simp [BalancedInteractions.nil]
   have subtables_subset : subtables.tables ⊆ tables.tables := by
     have p := perm.symm.subset
     simp_all
@@ -377,7 +374,7 @@ lemma partialBalancedChannel_of_sublist {subtables tables : Tables F} {channel :
     exact otherConstraints _ ht
     exact otherReqs _ ht
   -- balance
-  apply balancedInteractions_of_perm balanced
+  apply BalancedInteractions.of_perm balanced
   simp only [Tables.interactionsWith]
   grw [← List.append_assoc, List.perm_append_right_iff, ← List.flatMap_append, perm.flatMap]
   exact fun _ _ => List.Perm.refl _
@@ -577,7 +574,7 @@ lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
   intro ordered balanced
   use witness.verifierInteractionsWith channel
   constructor
-  · apply balancedInteractions_of_perm balanced
+  · apply BalancedInteractions.of_perm balanced
     apply List.perm_append_comm
   constructor
   · intro interaction h_interaction
@@ -626,11 +623,12 @@ Main result of this section:
 `SoundChannels` (an easily checkable property) implies
 `TableSoundness`, a complex ensemble-level soundness statement.
 -/
-theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
+theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} {balance : Balance F} :
   (∃ finished, finished ⊆ ens.channels ∧ ens.SoundChannels finished) →
-    ens.TableSoundness := by
+    ens.TableSoundness balance := by
   intro ⟨ finished, finished_subset, subset_finished, ordered, consistent ⟩
-    witness assumptions constraints balance
+    witness assumptions constraints balanced
+  have balance := witness.balancedChannels_of_balanced balanced
   rw [channelsWithGuarantees_subset_iff] at subset_finished
   -- the tables are sound by themselves, given partial balance
   have table_results := spec_and_guarantees_of_soundChannels (witness := witness.toTables)
@@ -655,7 +653,7 @@ theorem empty_soundChannels : (empty F PublicIO).SoundChannels [] := by
   simp only [circuit_norm]
 
 /-- Empty ensemble satisfies TableSoundness -/
-theorem empty_tableSoundness : (empty F PublicIO).TableSoundness :=
+theorem empty_tableSoundness {balance : Balance F} : (empty F PublicIO).TableSoundness balance :=
   tableSoundness_of_soundChannels ⟨ [], List.Subset.refl [], empty_soundChannels ⟩
 
 -- adding one table to a SoundChannels ensemble preserves SoundChannels under some
@@ -718,8 +716,9 @@ theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
   simp_all [circuit_norm, orderedChannel_of_no_guarantees]
 end Ensemble
 
+/-- An ensemble that is sound under a balance check, built up one component at a time. -/
 structure SoundEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]
-    extends ensemble : Ensemble F PublicIO where
+    (balance : Balance F) extends ensemble : Ensemble F PublicIO where
   finished : List (RawChannel F)
   finished_consistent : ∀ channel ∈ finished, channel.Consistent
   finished_subset : finished ⊆ channels
@@ -733,11 +732,13 @@ attribute [circuit_norm] SoundEnsemble.finished_consistent SoundEnsemble.finishe
   SoundEnsemble.ordered_channels SoundEnsemble.verifier_empty
 
 namespace SoundEnsemble
-lemma soundChannels (ens : SoundEnsemble F PublicIO) : ens.SoundChannels ens.finished := by
+variable {balance : Balance F}
+
+lemma soundChannels (ens : SoundEnsemble F PublicIO balance) : ens.SoundChannels ens.finished := by
   exact ⟨ens.subset_finished, ens.ordered_channels, ens.finished_consistent⟩
 
-def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] :
-  SoundEnsemble F PublicIO where
+def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]
+    (balance : Balance F) : SoundEnsemble F PublicIO balance where
     ensemble := .empty F PublicIO
     finished := []
     finished_consistent := by simp
@@ -746,14 +747,14 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
     ordered_channels := by simp [circuit_norm]
     verifier_empty := by simp [circuit_norm]
 
-@[circuit_norm] lemma empty_tables  : (empty F PublicIO).tables = [] := rfl
-@[circuit_norm] lemma empty_channels : (empty F PublicIO).channels = [] := rfl
-@[circuit_norm] lemma empty_finished : (empty F PublicIO).finished = [] := rfl
-@[circuit_norm] lemma empty_verifier : (empty F PublicIO).verifier = .empty F PublicIO := rfl
+@[circuit_norm] lemma empty_tables  : (empty F PublicIO balance).tables = [] := rfl
+@[circuit_norm] lemma empty_channels : (empty F PublicIO balance).channels = [] := rfl
+@[circuit_norm] lemma empty_finished : (empty F PublicIO balance).finished = [] := rfl
+@[circuit_norm] lemma empty_verifier : (empty F PublicIO balance).verifier = .empty F PublicIO := rfl
 
 /-- A table whose guarantees come from finished channels, and whose requirements go to channels of
 the ensemble, only uses channels of the ensemble. -/
-theorem table_channels_subset (soundEns : SoundEnsemble F PublicIO) (table : Component F)
+theorem table_channels_subset (soundEns : SoundEnsemble F PublicIO balance) (table : Component F)
     (grts_subset_finished : table.circuit.channelsWithGuarantees ⊆ soundEns.finished)
     (reqs_unfinished : ∀ channel ∈ table.circuit.channelsWithRequirements,
       channel ∈ soundEns.channels ∧ channel ∉ soundEns.finished) :
@@ -766,13 +767,13 @@ theorem table_channels_subset (soundEns : SoundEnsemble F PublicIO) (table : Com
 /-- Add a table whose guarantees come from finished channels, and whose requirements go to channels
 of the ensemble that aren't finished yet. -/
 @[circuit_norm]
-def addTable (soundEns : SoundEnsemble F PublicIO) (table : Component F)
+def addTable (soundEns : SoundEnsemble F PublicIO balance) (table : Component F)
     (grts_subset_finished : table.circuit.channelsWithGuarantees ⊆ soundEns.finished
       := by simp [circuit_norm])
     (reqs_unfinished : ∀ channel ∈ table.circuit.channelsWithRequirements,
       channel ∈ soundEns.channels ∧ channel ∉ soundEns.finished := by simp [circuit_norm])
     (fresh : table.circuit.name ∉ soundEns.tables.map (·.circuit.name) := by simp [circuit_norm])
-    : SoundEnsemble F PublicIO where
+    : SoundEnsemble F PublicIO balance where
   ensemble := soundEns.ensemble.addTable table fresh
     (soundEns.table_channels_subset table grts_subset_finished reqs_unfinished)
   finished := soundEns.finished
@@ -788,7 +789,7 @@ def addTable (soundEns : SoundEnsemble F PublicIO) (table : Component F)
     fun channel h_finished h_channel => (reqs_unfinished channel h_channel).2 h_finished
   verifier_empty := soundEns.verifier_empty
 
-variable {soundEns : SoundEnsemble F PublicIO} {table : Component F}
+variable {soundEns : SoundEnsemble F PublicIO balance} {table : Component F}
     {gsf : table.circuit.channelsWithGuarantees ⊆ soundEns.finished}
     {reqs : ∀ channel ∈ table.circuit.channelsWithRequirements,
       channel ∈ soundEns.channels ∧ channel ∉ soundEns.finished}
@@ -804,9 +805,9 @@ variable {soundEns : SoundEnsemble F PublicIO} {table : Component F}
   (soundEns.addTable table gsf reqs fresh).verifier = soundEns.verifier := rfl
 
 /-- Add a channel, whose name must be new. -/
-def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F)
+def addChannel (soundEns : SoundEnsemble F PublicIO balance) (channel : RawChannel F)
     (fresh : channel.name ∉ soundEns.channels.map (·.name) := by simp [circuit_norm]) :
-    SoundEnsemble F PublicIO where
+    SoundEnsemble F PublicIO balance where
   ensemble := { soundEns.ensemble with
     channels := channel :: soundEns.channels
     unique_channel_names := List.nodup_cons.mpr ⟨fresh, soundEns.unique_channel_names⟩
@@ -833,9 +834,9 @@ variable {channel : RawChannel F} {fresh : channel.name ∉ soundEns.channels.ma
   (soundEns.addChannel channel fresh).verifier = soundEns.verifier := rfl
 end
 
-def markFinished (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) [channel.Consistent]
+def markFinished (soundEns : SoundEnsemble F PublicIO balance) (channel : RawChannel F) [channel.Consistent]
   (h_mem : channel ∈ soundEns.channels := by simp [circuit_norm]) :
-    SoundEnsemble F PublicIO where
+    SoundEnsemble F PublicIO balance where
   ensemble := soundEns.ensemble
   finished := channel :: soundEns.finished
   finished_consistent := by
@@ -867,10 +868,10 @@ variable {channel : RawChannel F} [channel.Consistent] {h_mem : channel ∈ soun
   (soundEns.markFinished channel h_mem).finished = channel :: soundEns.finished := rfl
 
 /-- Add a channel that no table pushes to, as finished. Its name must be new. -/
-def addFinishedChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F)
+def addFinishedChannel (soundEns : SoundEnsemble F PublicIO balance) (channel : RawChannel F)
     [channel.Consistent]
     (fresh : channel.name ∉ soundEns.channels.map (·.name) := by simp [circuit_norm]) :
-    SoundEnsemble F PublicIO :=
+    SoundEnsemble F PublicIO balance :=
   soundEns
     |>.addChannel channel fresh
     |>.markFinished channel (List.mem_cons_self ..)
@@ -889,19 +890,19 @@ end
 
 /-- The formal ensemble, from the ensemble-level assumptions and spec, and the prover assumptions
 that witness generation needs. -/
-def toFormal (soundEns : SoundEnsemble F PublicIO)
+def toFormal (soundEns : SoundEnsemble F PublicIO balance)
     (Assumptions Spec : PublicIO F → Prop)
     (assumptionsConsistency : soundEns.AssumptionsConsistency Assumptions)
     (specConsistency : soundEns.SpecConsistency Spec)
     (ProverAssumptions : PublicIO F → soundEns.ProverInput F → Prop := fun _ _ => True) :
-    FormalEnsemble F PublicIO where
+    FormalEnsemble F PublicIO balance where
   ensemble := soundEns.ensemble
   Assumptions := Assumptions
   Spec := Spec
   ProverAssumptions
   soundness := by
     apply soundEns.soundness_of_tableSoundness_and_specConsistency
-      Assumptions Spec ?_ assumptionsConsistency specConsistency
+      balance Assumptions Spec ?_ assumptionsConsistency specConsistency
     apply soundEns.tableSoundness_of_soundChannels
     use soundEns.finished, soundEns.finished_subset
     exact soundEns.soundChannels

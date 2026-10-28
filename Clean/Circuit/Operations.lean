@@ -1140,10 +1140,10 @@ lemma subcircuitChannelsLawful_iff_forAllNoOffset {ops : Operations F} :
   simp [SubcircuitChannelsLawful, forAllNoOffset_iff_forall_mem]
 
 def shallowChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) :=
-  (ops.shallowInteractions.filter (·.assumeGuarantees)).map (·.channel)
+  (ops.shallowInteractions.filter (·.direction = .pull)).map (·.channel)
 
 def shallowChannelsWithRequirements (ops : Operations F) : List (RawChannel F) :=
-  (ops.shallowInteractions.filter fun i => !i.assumeGuarantees).map (·.channel)
+  (ops.shallowInteractions.filter (·.direction = .push)).map (·.channel)
 
 /-- Channel metadata used by circuit elaboration: guarantee channels and lawful subcircuit metadata. -/
 @[circuit_norm]
