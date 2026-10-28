@@ -118,3 +118,28 @@ theorem FiniteField.val_inj_F {p : ℕ} [Fact p.Prime] (x y : F p) :
     ZMod.val x = ZMod.val y ↔ x = y := by
   rw [← FiniteField.val_F, ← FiniteField.val_F]
   exact FiniteField.val_inj
+
+/-! ## Word conversions -/
+
+/-- Conversions between field elements and `u64` words: the conversions of witness IR, `.val` and
+`.ofU64`, and the conversion of a word known to be below the field size, which needs no
+reduction. -/
+class WordField (F : Type) [FiniteField F] where
+  /-- The value of an element, truncated to 64 bits. -/
+  toWord : F → UInt64
+  /-- The element of a word's value. -/
+  ofWord : UInt64 → F
+  /-- The element of a word's value, for words below the field size. -/
+  ofSmallWord : UInt64 → F
+  toWord_eq (x : F) : toWord x = UInt64.ofNat (FiniteField.val x)
+  ofWord_eq (n : UInt64) : ofWord n = FiniteField.fromNat n.toNat
+  ofSmallWord_eq (n : UInt64) : n.toNat < FiniteField.size F →
+    ofSmallWord n = FiniteField.fromNat n.toNat
+
+instance {p : ℕ} [Fact p.Prime] : WordField (F p) where
+  toWord x := UInt64.ofNat x.val
+  ofWord n := (n.toNat : F p)
+  ofSmallWord n := (n.toNat : F p)
+  toWord_eq _ := rfl
+  ofWord_eq _ := rfl
+  ofSmallWord_eq _ _ := rfl
