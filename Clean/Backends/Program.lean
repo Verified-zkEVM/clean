@@ -170,6 +170,8 @@ inductive ModeProgram (F : Type) [FiniteField F] where
   /-- `rows` rows, whose inputs are `input` at the row index, with multiplicity 0. -/
   | preallocated (channel : String) (trigger : Direction) (rows : UInt64) (input : InputProgram F)
       (multiplicity : MultiplicityColumn)
+  /-- `rows` rows, whose inputs are `input` at the row index, which answer no demand. -/
+  | standalone (rows : UInt64) (input : InputProgram F)
 
 /-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
@@ -394,6 +396,7 @@ def lowerGeneration (index : ℕ) (component : Component F)
       return .preallocated mode.channel.name mode.trigger mode.height input multiplicity
   | .preallocated _, none =>
       throw (.validation (.multiplicity component.circuit.name (.cells 0)))
+  | .standalone mode, _ => return .standalone mode.height input
 
 /-- Validate the generation of an ensemble, and lower it to an extraction program. `fuel` bounds the
 number of witness generation steps. -/

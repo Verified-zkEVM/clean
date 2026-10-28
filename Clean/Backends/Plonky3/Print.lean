@@ -214,7 +214,7 @@ pub const FIXED_HEIGHT: usize = 0;
 pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
     Vec::new()
 }"
-  | .preallocated _ _ rows input _ =>
+  | .preallocated _ _ rows input _ | .standalone rows input =>
     let fixed := input.cells.filter (·.isFixed)
     s!"pub const FIXED_COLUMNS: &[usize] = &[{commaSep (input.fixedColumns.map toString)}];
 pub const FIXED_HEIGHT: usize = {rows};
@@ -253,9 +253,9 @@ def guardToRust (guard : Witgen.BExpr F) : String :=
     {bexprToRust false guard}
 }"
 
-/-- `fn mode()`, and `fn initial_row(row_index, hint)`, the input of a preallocated row. A demand
-mode also gets `fn guard` and `fn input(row, data, hint, multiplicity)`, the input of a new row for
-the demanded message `row`. -/
+/-- `fn mode()`, and `fn initial_row(row_index, hint)`, the input of a preallocated or standalone
+row. A demand mode also gets `fn guard` and `fn input(row, data, hint, multiplicity)`, the input of
+a new row for the demanded message `row`. -/
 def modeToRust : ModeProgram F → String
   | .demand mode =>
     let multiplicity := match mode.multiplicity with
@@ -286,6 +286,16 @@ pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> 
     s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
     Mode::Preallocated \{ channel: {quoted channel}, trigger: {directionToRust trigger}, \
         rows: {rows}, multiplicity: {multiplicityToRust multiplicity} }
+}
+
+pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> \{
+    let row: &[F] = &[];
+    {inputToRust input input.cells "F::ZERO"}
+    output
+}"
+  | .standalone rows input =>
+    s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
+    Mode::Standalone \{ rows: {rows} }
 }
 
 pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> \{

@@ -25,7 +25,8 @@ structure MultiplicityColumn where
 
 /-- Why the multiplicity cell of a component is invalid. -/
 inductive MultiplicityError where
-  /-- A preallocated component has no multiplicity cell, or a component has several. -/
+  /-- A preallocated component has no multiplicity cell, a standalone component has one, or a
+  component has several. -/
   | cells (count : ℕ)
   /-- Not exactly one interaction has the cell as its multiplicity. -/
   | interactions (column count : ℕ)
@@ -66,7 +67,7 @@ def MultiplicityColumn.resolve (component : Component F) (column : ℕ) :
     | .var multiplicity => multiplicity.index == column
     | _ => false
   let [(interaction, index)] := counted | throw (.interactions column counted.length)
-  let channel := component.generation.channelName
+  let some channel := component.generation.channelName? | throw (.cells 1)
   unless interaction.channel.name == channel do
     throw (.channel column interaction.channel.name channel)
   let cells := interaction.msg.toList.flatMap expressionCells
@@ -75,13 +76,13 @@ def MultiplicityColumn.resolve (component : Component F) (column : ℕ) :
   return { column, interaction := index }
 
 /-- The multiplicity cell of a component, resolved: exactly one in a preallocated component, at most
-one in a demand component. -/
+one in a demand component, and none in a standalone component. -/
 def resolveMultiplicity (component : Component F) :
     Except MultiplicityError (Option MultiplicityColumn) := do
   let columns := (component.generation.cells.1.toList.zipIdx.filter (·.1.isMultiplicity)).map (·.2)
   match columns, component.generation with
   | [column], _ => some <$> MultiplicityColumn.resolve component column
-  | [], .demand _ => return none
+  | [], .demand _ | [], .standalone _ => return none
   | columns, _ => throw (.cells columns.length)
 
 end Air.Flat.WitnessGeneration

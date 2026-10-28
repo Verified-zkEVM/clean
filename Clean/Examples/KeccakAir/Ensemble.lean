@@ -66,22 +66,27 @@ def ensemble (height : UInt64) : Ensemble (F p) unit where
   tables := [component height]
   unique_names := by simp
   channels := []
+  unique_channel_names := by simp
+  tables_channels := by simp [circuit_norm, component, circuit, main, RoundControl.circuit,
+    Theta.circuit, RhoPiChi.circuit, Iota.circuit]
+  verifier_channels := by simp [circuit_norm, Verifier.Program.empty]
   ProverInput := fields (height.toNat * size Row)
   hintTables := [{ key := "keccak", width := size Row, offset := 0, rows := height.toNat }]
 
 /-- Every window of a satisfied table of the Keccak-f component computes a round of its
 preimage. -/
 theorem windowSpec_of_table {height : UInt64} {table : Table (F p)}
-    (hcomponent : table.component = component height) (consistent : table.DataConsistency)
+    (hcomponent : table.component = component height)
     (satisfied : table.Constraints) :
     table.component.WindowsMatch table.table ∧
       ∀ i (hi : i < table.table.length), WindowSpec (windowOf table.table[i]) := by
-  obtain ⟨component', rows, data, uniform_width, length_le, fixed_rows_match, windows_match⟩ :=
-    table
+  obtain ⟨component', rows, data, uniform_width, length_le, fixed_rows_match, windows_match,
+    data_consistent⟩ := table
   subst hcomponent
   refine ⟨windows_match, fun i hi => ?_⟩
-  have spec := (Table.weakSoundness consistent (fun _ _ => trivial) satisfied ?_).left
-    rows[i] (List.getElem_mem hi)
+  have spec := (Table.weakSoundness (table := ⟨component height, rows, data, uniform_width,
+    length_le, fixed_rows_match, windows_match, data_consistent⟩) (fun _ _ => trivial) satisfied
+    ?_).left rows[i] (List.getElem_mem hi)
   · have hinput : (component height).inputOf rows[i] = windowOf rows[i] := rfl
     simp only [Component.Spec, Table.environment, Component.rowInput_fromArray, hinput] at spec
     exact spec
@@ -95,7 +100,7 @@ theorem windowSpec_of_table {height : UInt64} {table : Table (F p)}
 /-- In a satisfied table of the Keccak-f component, the rows computing the last round of a
 permutation output Keccak-f of their preimage, whose limbs are 16-bit. -/
 theorem table_soundness {height : UInt64} {table : Table (F p)}
-    (hcomponent : table.component = component height) (consistent : table.DataConsistency)
+    (hcomponent : table.component = component height)
     (satisfied : table.Constraints) :
     ∀ cells ∈ table.table, (traceRow cells).stepFlags[23] = 1 →
       (traceRow cells).PreimageNormalized ∧
@@ -103,7 +108,7 @@ theorem table_soundness {height : UInt64} {table : Table (F p)}
   intro cells hcells hlast
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hcells
   obtain ⟨r, hr, hnormalized, -, houtput, -⟩ :=
-    (windowSpec_of_table hcomponent consistent satisfied).2 i hi
+    (windowSpec_of_table hcomponent satisfied).2 i hi
   rw [windowOf_current] at hr hnormalized houtput
   have : r = 23 := by
     by_contra hne
@@ -132,7 +137,7 @@ lemma next_of_windowsMatch {height : UInt64} {rows : List (Array (F p))}
 computes Keccak-f of the preimage of its first row: its last row computes the last round, of the
 same preimage, and outputs Keccak-f of it. -/
 theorem table_block_soundness {height : UInt64} {table : Table (F p)}
-    (hcomponent : table.component = component height) (consistent : table.DataConsistency)
+    (hcomponent : table.component = component height)
     (satisfied : table.Constraints) :
     ∀ i (hi : i + 23 < table.table.length), (traceRow table.table[i]).stepFlags[0] = 1 →
       let first := traceRow table.table[i]
@@ -140,7 +145,7 @@ theorem table_block_soundness {height : UInt64} {table : Table (F p)}
       last.stepFlags[23] = 1 ∧ last.preimage = first.preimage ∧ first.PreimageNormalized ∧
         last.outputState = keccakPermutation first.preimageState := by
   intro i hi hfirst
-  obtain ⟨hmatch, hspec⟩ := windowSpec_of_table hcomponent consistent satisfied
+  obtain ⟨hmatch, hspec⟩ := windowSpec_of_table hcomponent satisfied
   rw [hcomponent] at hmatch
   -- the rows of the block compute rounds 0, ..., 23 of the same preimage
   have hround (k : ℕ) (hk : k ≤ 23) :
@@ -189,7 +194,7 @@ theorem table_block_soundness {height : UInt64} {table : Table (F p)}
       oneHot_getElem 23 23
     rw [hlastFlags]
     simpa using h23
-  obtain ⟨hnormalized, houtput⟩ := table_soundness hcomponent consistent satisfied _
+  obtain ⟨hnormalized, houtput⟩ := table_soundness hcomponent satisfied _
     (List.getElem_mem (by omega)) hlastRound
   refine ⟨hlastRound, hlastPreimage, ?_, ?_⟩
   · intro y x l
@@ -212,7 +217,7 @@ theorem soundness {height : UInt64} (witness : EnsembleWitness (ensemble (p := p
       (traceRow cells).PreimageNormalized ∧
         (traceRow cells).outputState = keccakPermutation (traceRow cells).preimageState :=
   fun table htable => table_soundness (component_of_mem witness htable)
-    (witness.dataConsistency_of_mem table htable) (satisfied table htable)
+    (satisfied table htable)
 
 /-- In a witness of the ensemble that satisfies the constraints, a block of 24 rows that starts at
 round 0 computes Keccak-f of the preimage of its first row. -/
@@ -225,7 +230,7 @@ theorem block_soundness {height : UInt64} (witness : EnsembleWitness (ensemble (
       last.stepFlags[23] = 1 ∧ last.preimage = first.preimage ∧ first.PreimageNormalized ∧
         last.outputState = keccakPermutation first.preimageState :=
   fun table htable => table_block_soundness (component_of_mem witness htable)
-    (witness.dataConsistency_of_mem table htable) (satisfied table htable)
+    (satisfied table htable)
 
 end KeccakAir
 

@@ -208,10 +208,10 @@ def dataReaders (component : Component F) : List (DataReader × List DataRead) :
         let (cells, steps) := component.generation.cells
         [(.guard, bexprDataReads mode.guardCondition),
           (.input, steps.flatMap stepDataReads ++ cells.toList.flatMap cellDataReads)]
-    | .preallocated _ => []
+    | .preallocated _ | .standalone _ => []
   witnesses ++ demand
 
-/-- Whether the input program of a preallocated row is computed from the row index, except for its
+/-- Whether the input program of a preallocated or standalone row is computed from the row index, except for its
 witness cells, which may also read the hint. -/
 def rowProgramValid (steps : List (Witgen.Step F)) (cells : List (Cell F)) : Bool :=
   steps.all (·.validForRow .fixed) && cells.all fun
@@ -228,8 +228,8 @@ def validateComponent (component : Component F) :
   match component.generation with
   | .demand _ =>
       if cells.toList.any (·.isFixed) then throw (.demandFixedCell name)
-  | .preallocated mode =>
-      let height := mode.height.toNat
+  | .preallocated { height, .. } | .standalone { height, .. } =>
+      let height := height.toNat
       unless nextPowerOfTwo height = height do
         throw (.preallocatedHeight name height)
       unless rowProgramValid steps cells.toList do
@@ -252,7 +252,7 @@ def validateDataReads (components : List (Component F))
           throw (.dataReadWidth name reader read.key target.rowOffset read.width)
         match target.generation with
         | .demand _ => throw (.unstableDataRead name reader read.key read.column)
-        | .preallocated _ =>
+        | .preallocated _ | .standalone _ =>
             if targetMultiplicity.any (·.column = read.column) ||
                 target.isWindowCell read.column then
               throw (.unstableDataRead name reader read.key read.column)

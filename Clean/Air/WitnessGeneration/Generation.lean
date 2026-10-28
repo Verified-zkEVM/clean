@@ -11,14 +11,17 @@ public import Clean.Circuit.Channel
 How the prover builds the rows of a component: its `generation` field. The generator itself, and
 the "chain reaction" that drives it, is described in `Clean.Air.WitnessGeneration`.
 
-A component's generation is one of two modes:
+A component's generation is one of three modes:
 - `demand`: the component starts without rows and gets a new row whenever its channel has an
   unanswered message. Examples are a VM, which gets one row per state, and an addition chip.
 - `preallocated`: the component has a fixed number of rows from the start. Demand on its channel
   only changes the multiplicities of existing rows. Examples are a memory, which has one row per
   address, and a lookup table.
+- `standalone`: the component has a fixed number of rows from the start, and answers no demand. An
+  example is an AIR without channels, like Plonky3's Keccak-f AIR.
 
-In both modes, the component answers demand on one channel, in one direction, its `trigger`.
+In the first two modes, the component answers demand on one channel, in one direction, its
+`trigger`.
 
 Both modes describe the input of a row as a witness program producing the component's `Input`, with
 a `Cell` for every input variable:
@@ -164,6 +167,15 @@ structure PreallocatedMode (F : Type) (Input : TypeMap) [ProvableType Input] whe
   cells may also read the hint. Its multiplicity cell starts at 0. -/
   input (i : Witgen.U64Expr F) : Witgen.M F (Input (Cell F))
 
+/-- A fixed number of rows, which answer no demand. The fixed cells of all rows are the component's
+fixed columns. -/
+structure StandaloneMode (F : Type) (Input : TypeMap) [ProvableType Input] where
+  /-- The number of rows, a power of two. -/
+  height : UInt64
+  /-- The input of row `i`. Its `let`-steps and fixed cells are computed from `i` alone; its witness
+  cells may also read the hint. -/
+  input (i : Witgen.U64Expr F) : Witgen.M F (Input (Cell F))
+
 variable [FiniteField F]
 
 instance {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
@@ -183,20 +195,30 @@ def DemandMode.guardCondition {Input : TypeMap} [ProvableType Input] (mode : Dem
 inductive Generation (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType Input] where
   | demand (mode : DemandMode F Input)
   | preallocated (mode : PreallocatedMode F Input)
+  | standalone (mode : StandaloneMode F Input)
 
 namespace Generation
 variable {Input : TypeMap} [ProvableType Input]
 
-/-- The name of the channel on which the component answers demand. -/
-def channelName : Generation F Input → String
-  | .demand mode => mode.channel.name
-  | .preallocated mode => mode.channel.name
+/-- The name of the channel on which the component answers demand, if it answers any. -/
+def channelName? : Generation F Input → Option String
+  | .demand mode => some mode.channel.name
+  | .preallocated mode => some mode.channel.name
+  | .standalone _ => none
 
 /-- The input cells of a row, with the program's `let`-steps: those of a demand row, whose message
-is in the first cells of the environment, or those of a preallocated row, whose index is `.idx`. -/
+is in the first cells of the environment, or those of a preallocated or standalone row, whose index
+is `.idx`. -/
 def cells : Generation F Input → Vector (Cell F) (size Input) × List (Witgen.Step F)
   | .demand mode => inputCells (mode.input (varFromOffset mode.Message 0))
   | .preallocated mode => inputCells (mode.input .idx)
+  | .standalone mode => inputCells (mode.input .idx)
+
+/-- The number of rows of a preallocated or standalone component. -/
+def height? : Generation F Input → Option UInt64
+  | .demand _ => none
+  | .preallocated mode => some mode.height
+  | .standalone mode => some mode.height
 
 end Generation
 
@@ -218,13 +240,30 @@ instance (mode : PreallocatedMode F Input) (i : UInt64) (input : Input F) :
 
 end PreallocatedMode
 
-/-- The fixed-column fact about the input of row `i`: in a preallocated component, the row lies
-within the height, and the input agrees with the row's fixed cells. -/
+namespace StandaloneMode
+variable {Input : TypeMap} [ProvableType Input]
+
+/-- The input agrees with the fixed cells of row `i`. -/
+@[circuit_norm]
+def FixedAt (mode : StandaloneMode F Input) (i : UInt64) (input : Input F) : Prop :=
+  let (cells, steps) := mode.input .idx #[]
+  List.Forall₂ (Cell.FixedMatches (inputContext steps.toList (rowEnvironment (.empty F)) i.toNat))
+    (toElements cells).toList (toElements input).toList
+
+instance (mode : StandaloneMode F Input) (i : UInt64) (input : Input F) :
+    Decidable (mode.FixedAt i input) :=
+  inferInstanceAs (Decidable (List.Forall₂ _ _ _))
+
+end StandaloneMode
+
+/-- The fixed-column fact about the input of row `i`: in a preallocated or standalone component, the
+row lies within the height, and the input agrees with the row's fixed cells. -/
 @[circuit_norm]
 def Generation.FixedInputAt {Input : TypeMap} [ProvableType Input] :
     Generation F Input → UInt64 → Input F → Prop
   | .demand _, _, _ => True
   | .preallocated mode, i, input => i < mode.height ∧ mode.FixedAt i input
+  | .standalone mode, i, input => i < mode.height ∧ mode.FixedAt i input
 
 /-! ### Padding -/
 

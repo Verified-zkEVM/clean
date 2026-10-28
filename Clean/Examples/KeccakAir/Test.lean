@@ -224,8 +224,8 @@ def specState (row : Array F) (column : ℕ → ℕ → ℕ → ℕ) : Vector �
 
 /-! ## Witness generation copies the trace
 
-Generation reads every cell from the hint table, which is rebuilt on every read, so this checks a
-table of two rows: the first two rounds of the permutation.
+Generation copies every cell from the hint table, interpreted by `#guard`, so this checks a table of
+two rows: the first two rounds of the permutation.
 -/
 
 def proverInput : (ensemble (p := KoalaBear.fieldSize) 2).ProverInput F :=

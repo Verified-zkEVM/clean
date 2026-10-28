@@ -92,7 +92,7 @@ pub enum WitnessGenerationError {
         expected: usize,
         actual: usize,
     },
-    /// A preallocated component has fewer rows than the minimum trace height.
+    /// A preallocated or standalone component has fewer rows than the minimum trace height.
     PreallocatedHeight {
         component: &'static str,
         height: usize,
@@ -183,6 +183,10 @@ pub enum Mode<F> {
         trigger: Direction,
         rows: usize,
         multiplicity: MultiplicityColumn,
+    },
+    /// A fixed number of rows, which answer no demand.
+    Standalone {
+        rows: usize,
     },
 }
 
@@ -503,6 +507,7 @@ impl<F: WitnessField> Table<F> {
                 .multiplicity
                 .map(|multiplicity| multiplicity.interaction),
             Mode::Preallocated { multiplicity, .. } => Some(multiplicity.interaction),
+            Mode::Standalone { .. } => None,
         };
         Self {
             rows: Vec::new(),
@@ -570,6 +575,7 @@ fn accepts<'a, F: WitnessField>(
                 multiplicity,
                 row_index,
             }),
+        Mode::Standalone { .. } => None,
     }
 }
 
@@ -727,7 +733,7 @@ fn balance<F: WitnessField, P: Program<F>>(
 fn target_height<F>(row_count: usize, mode: &Mode<F>, minimum_height: usize) -> usize {
     match mode {
         Mode::Demand(_) => row_count.max(minimum_height).next_power_of_two(),
-        Mode::Preallocated { .. } => row_count,
+        Mode::Preallocated { .. } | Mode::Standalone { .. } => row_count,
     }
 }
 
@@ -835,14 +841,14 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         .enumerate()
         .map(|(component, mode)| match mode {
             Mode::Demand(_) => Vec::new(),
-            Mode::Preallocated { rows, .. } => (0..*rows as u64)
+            Mode::Preallocated { rows, .. } | Mode::Standalone { rows } => (0..*rows as u64)
                 .map(|row| P::initial_row(component, row, hint))
                 .collect(),
         })
         .collect();
 
     for (component, mode) in modes.iter().enumerate() {
-        if let Mode::Preallocated { rows, .. } = mode {
+        if let Mode::Preallocated { rows, .. } | Mode::Standalone { rows } = mode {
             if *rows < minimum_height {
                 return Err(WitnessGenerationError::PreallocatedHeight {
                     component: P::COMPONENT_NAMES[component],

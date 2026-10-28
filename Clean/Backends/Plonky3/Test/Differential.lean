@@ -42,7 +42,7 @@ def interactionsToRust (interactions : List (Interaction Fb)) : String :=
     s!"ExpectedInteraction \{ channel: {Print.quoted interaction.channel.name}, \
       multiplicity: {interaction.mult.val}, message: {u64List interaction.msg.toList} }")}]"
 
-/-- The values of the fixed cells of a preallocated row, in column order. -/
+/-- The values of the fixed cells of a preallocated or standalone row, in column order. -/
 def fixedRow (component : Component Fb) (row : ℕ) : List Fb :=
   let (cells, steps) := component.generation.cells
   let ctx := inputContext steps (rowEnvironment (.empty Fb)) row
@@ -54,7 +54,8 @@ def componentToRust (component : Component Fb) (index : ℕ) : String :=
   let rows := (List.range 3).map fun k => randomRow (31 * index + k) component.width
   let environments := rows.map (Environment.fromArray · noData)
   let fixedRows := match component.generation with
-    | .preallocated mode => (List.range mode.height.toNat).map (fixedRow component)
+    | .preallocated { height, .. } | .standalone { height, .. } =>
+        (List.range height.toNat).map (fixedRow component)
     | .demand _ => []
   s!"ExpectedComponent \{
         rows: &[{Print.commaSep (rows.map (u64List ·.toList))}],

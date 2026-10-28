@@ -66,11 +66,14 @@ def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
 
 namespace Component
 
-/-- The rows of a preallocated component: one per row index, agreeing with its fixed cells. -/
+/-- The rows of a preallocated or standalone component: one per row index, agreeing with its fixed
+cells. -/
 def FixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
   match component.generation with
   | .demand _ => True
   | .preallocated mode => rows.length = mode.height.toNat ∧ ∀ i (hi : i < rows.length),
+      mode.FixedAt (UInt64.ofNat i) (fromElements (rowPrefix (size component.Input) rows[i]))
+  | .standalone mode => rows.length = mode.height.toNat ∧ ∀ i (hi : i < rows.length),
       mode.FixedAt (UInt64.ofNat i) (fromElements (rowPrefix (size component.Input) rows[i]))
 
 instance (component : Component F) (rows : List (Array F)) :
@@ -245,7 +248,7 @@ structure Table (F : Type) [FiniteField F] where
   uniform_width : ∀ row ∈ table, row.size = component.width
   /-- Row indices are `u64` values. -/
   length_le : table.length ≤ UInt64.size
-  /-- The rows of a preallocated component agree with its fixed cells. -/
+  /-- The rows of a preallocated or standalone component agree with its fixed cells. -/
   fixed_rows_match : component.FixedRowsMatch table
   /-- The window cells of a two-row component's rows match the next rows and the selectors. -/
   windows_match : component.WindowsMatch table
@@ -391,6 +394,11 @@ lemma circuitAssumptions_at (table : Table F) (assumptions : table.Assumptions) 
     cases hgeneration : table.component.generation with
     | demand => trivial
     | preallocated mode =>
+      simp only [Component.FixedRowsMatch, hgeneration] at hmatch
+      obtain ⟨hlength, hfixed⟩ := hmatch
+      refine ⟨by simp [UInt64.lt_iff_toNat_lt, hindex]; omega, ?_⟩
+      simpa [hi'] using hfixed i hi
+    | standalone mode =>
       simp only [Component.FixedRowsMatch, hgeneration] at hmatch
       obtain ⟨hlength, hfixed⟩ := hmatch
       refine ⟨by simp [UInt64.lt_iff_toNat_lt, hindex]; omega, ?_⟩
