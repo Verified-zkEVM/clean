@@ -495,22 +495,14 @@ lemma pushes_direction {witness : VmWitness ens vm fits} :
   · simp only [circuit_norm, true_and]
     apply witness.rowEnabled_isBool_of_vmConstraints constraints _ ‹_› _ ‹_›
 
-lemma pulls_zero_iff_pushes_zero {witness : VmWitness ens vm fits} :
-    ∀ i (hi : i < witness.pulls.length) (hi' : i < witness.pushes.length),
-      witness.pulls[i].mult = 0 ↔ witness.pushes[i].mult = 0 := by
-  intro i hi_p hi_q
-  simp only [pulls, pushes, List.getElem_map]
-  have hi : i < witness.interactionPairs.length := by
-    simpa [pulls, interactionPairs] using hi_p
-  have pair_mem : witness.interactionPairs[i]'hi ∈ witness.interactionPairs := List.getElem_mem _
-  rw [mem_interactionPairs_iff] at pair_mem
-  rcases pair_mem with hpair | ⟨table, table_mem, row, row_mem, hpair⟩
-  · rw [hpair]
-    simp [verifierPair, Channel.pulledValue, Channel.pushedValue]
-  · rw [hpair]
-    simp only [circuit_norm]
+lemma pull_mult_eq_zero_iff_push_mult_eq_zero {witness : VmWitness ens vm fits} :
+    ∀ pair ∈ witness.pulls.zip witness.pushes, pair.1.mult = 0 ↔ pair.2.mult = 0 := by
+  intro pair pair_mem
+  rw [zip_pulls_pushes_eq_interactionPairs, mem_interactionPairs_iff] at pair_mem
+  rcases pair_mem with rfl | ⟨table, table_mem, row, row_mem, rfl⟩
+  · simp [verifierPair, Channel.pulledValue, Channel.pushedValue]
+  · simp only [circuit_norm]
 
-@[circuit_norm]
 lemma pulls_channel {witness : VmWitness ens vm fits} :
     ∀ pull ∈ witness.pulls, pull.channel = vm.channel.toRaw := by
   intro pull h_pull
@@ -626,34 +618,6 @@ lemma pushes_getElem_zero_eq (witness : VmWitness ens vm fits) :
   rw [witness.verifierEnabled_eq_one]
   rfl
 
-lemma activeInteractions_pulls_length_pos {witness : VmWitness ens vm fits} :
-    (activeInteractions witness.pulls).length > 0 := by
-  simp_rw [activeInteractions, ←List.countP_eq_length_filter, List.countP_pos_iff]
-  use witness.pulls[0]'pulls_length_pos, List.getElem_mem pulls_length_pos
-  rw [witness.pulls_getElem_zero_eq]
-  simp [circuit_norm, verifierEnabled_eq_one]
-
-lemma activeInteractions_pushes_length_pos {witness : VmWitness ens vm fits} :
-    (activeInteractions witness.pushes).length > 0 := by
-  simp_rw [activeInteractions, ←List.countP_eq_length_filter, List.countP_pos_iff]
-  use witness.pushes[0]'pushes_length_pos, List.getElem_mem pushes_length_pos
-  rw [witness.pushes_getElem_zero_eq]
-  simp [circuit_norm, verifierEnabled_eq_one]
-
-lemma activeInteractions_pulls_getElem_zero_eq {witness : VmWitness ens vm fits} :
-    (activeInteractions witness.pulls)[0]'activeInteractions_pulls_length_pos =
-      vm.channel.pulledIfValue witness.verifierEnabled witness.verifierPull := by
-  rw [witness.verifierEnabled_eq_one]
-  simp [activeInteractions, pulls, interactionPairs, verifierPair,
-    Channel.pulledValue, Channel.pulledIfValue]
-
-lemma activeInteractions_pushes_getElem_zero_eq {witness : VmWitness ens vm fits} :
-    (activeInteractions witness.pushes)[0]'activeInteractions_pushes_length_pos =
-      vm.channel.pushedIfValue witness.verifierEnabled witness.verifierPush := by
-  rw [witness.verifierEnabled_eq_one]
-  simp [activeInteractions, pushes, interactionPairs, verifierPair,
-    Channel.pushedValue, Channel.pushedIfValue]
-
 /-- Translation of the VM soundness theorem to VmTables -/
 theorem verifierChannelGuarantees_of_verifierChannelRequirements
   (witness : VmWitness ens vm fits) :
@@ -680,23 +644,16 @@ theorem verifierChannelGuarantees_of_verifierChannelRequirements
     apply BalancedInteractions.of_perm balance
     apply List.zip_flattenPairs_perm <| witness.pushes_length ▸ witness.pulls_length.symm
   -- we fill in the conditions on pulls and pushes in `guarantees_of_requirements_of_requirements_of_guarantees`
-  let n := (activeInteractions witness.pulls).length
   have same_length : witness.pulls.length = witness.pushes.length := by
     simp [pulls_length, pushes_length]
-  have : (activeInteractions witness.pushes).length = n := by
-    simp only [n, activeInteractions_length_eq same_length witness.pulls_zero_iff_pushes_zero]
   have grts_of_reqs := guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_iff
     vm.channel.toRaw witness.pulls witness.pushes balance witness.data same_length
     witness.pulls_channel witness.pushes_channel
     (witness.pulls_direction witness_constraints) (witness.pushes_direction witness_constraints)
-    witness.pulls_zero_iff_pushes_zero
+    witness.pull_mult_eq_zero_iff_push_mult_eq_zero
   -- it remains to prove the (grts → reqs) assumption. this is a reformulation of our `constraints`
-  have reqs_of_grts : (∀ i (hi : i < n),
-      (activeInteractions witness.pulls)[i].Guarantees witness.data →
-      (activeInteractions witness.pushes)[i].Requirements witness.data) := by
-    suffices ∀ pair ∈ (witness.pulls.zip witness.pushes), pair.1.Guarantees witness.data → pair.2.Requirements witness.data by
-      intro i hi
-      exact this _ (activePair_mem_zip same_length witness.pulls_zero_iff_pushes_zero _ hi)
+  have reqs_of_grts : ∀ pair ∈ witness.pulls.zip witness.pushes,
+      pair.1.Guarantees witness.data → pair.2.Requirements witness.data := by
     intro (pull, push) pair_mem
     simp only
     have ⟨ mem_pull, mem_push ⟩ := List.of_mem_zip pair_mem
@@ -724,10 +681,11 @@ theorem verifierChannelGuarantees_of_verifierChannelRequirements
       rw [show witness.data = table.data from
         (witness.same_data table (List.mem_of_mem_take table_mem)).symm]
       exact constraints table table_mem row row_mem
-  -- to get the conclusion about the verifier, we specialize to index 0
-  specialize grts_of_reqs reqs_of_grts 0 activeInteractions_pulls_length_pos
-  rw [witness.activeInteractions_pulls_getElem_zero_eq,
-    witness.activeInteractions_pushes_getElem_zero_eq] at grts_of_reqs
+  -- to get the conclusion about the verifier, we specialize to its pair, the first one
+  specialize grts_of_reqs reqs_of_grts (witness.pulls[0]'pulls_length_pos,
+    witness.pushes[0]'pushes_length_pos) (List.mem_iff_getElem.mpr
+      ⟨0, by simp [pulls_length_pos, pushes_length_pos], by simp⟩)
+  rw [witness.pulls_getElem_zero_eq, witness.pushes_getElem_zero_eq] at grts_of_reqs
   have verifier_requirements' := verifier_requirements
   rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements'
   have push_requirements :
