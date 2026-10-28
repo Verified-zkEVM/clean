@@ -102,20 +102,16 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     change carry = floorDiv (input_x + input_y) 256 at h_env
     grind
 
-example (input : Var Add8Inputs (F p)) :
-    ExplicitCircuit (add8.main input) := by
-  infer_explicit_circuit
-
 /-- The addition chip: one row per distinct message pulled from the addition channel, with the
 number of pulls as its multiplicity `m`. -/
 abbrev add8Component : Component (F p) where
   circuit := add8
+  /- witness generation: whenever someone ... -/
   generation := .demand {
-    channel := add8Channel
-    trigger := .pull
-    aggregation := .byMessage fun { m, .. } => m
-    input := [.message 0, .message 1, .message 2]
-    padding := #[0, 0, 0, 0]
+    trigger := .pull -- pulls ...
+    channel := add8Channel --- from the addition channel ...
+    --- this circuit is run with the channel message (x, y, z) and its current multiplicity as input.
+    input | (x, y, z) => pure { x, y, z, m := .multiplicity }
   }
 
 def fibonacci : ℕ → (ℕ × ℕ)
@@ -210,11 +206,9 @@ disabled. -/
 abbrev fib8Component : Component (F p) where
   circuit := fib8
   generation := .demand {
-    channel := fibonacciChannel
     trigger := .push
-    aggregation := .perOccurrence
-    input := [.const 1, .message 0, .message 1, .message 2]
-    padding := #[0, 0, 0, 0]
+    channel := fibonacciChannel
+    input | (n, x, y) => pure { enabled := 1, n, x, y }
   }
 
 -- completing Fibonacci channel with input and output
@@ -240,16 +234,16 @@ def fibonacciVm : VmTables (F p) fieldTriple where
 
 def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addLookup bytes
+  |>.addChannel add8Channel.toRaw (by simp [circuit_norm, add8Channel, bytes])
   |>.addTable add8Component
     (by simp [circuit_norm, add8])
-    (by simp [circuit_norm, add8])
+    (by simp [circuit_norm, add8, add8Channel, bytes])
     (by simp [circuit_norm, add8, bytes])
-  |>.addFinishedChannel add8Channel.toRaw
+  |>.markFinished add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp +instances [circuit_norm, fibonacciVm, add8, bytes,
-      add8Channel, fibonacciChannel])
+    (by simp +instances [circuit_norm, fibonacciVm, bytes, add8Channel, fibonacciChannel])
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
-    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
+    (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
       add8Channel, fibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, add8, bytes])
   |>.toFormal (fun _ => True)
@@ -317,9 +311,8 @@ abbrev falseComponent : Component (F p) where
   generation := .demand {
     channel := falseChannel
     trigger := .push
-    aggregation := .perOccurrence
-    input := []
-    padding := #[]
+    input _ := pure ()
+    padding := ()
   }
 
 def falseEnsemble := SoundEnsemble.empty (F p) unit

@@ -281,14 +281,14 @@ def Kernel.runner (kernel : Kernel) (hints : Array ByteArray) : RowRunner ByteAr
       ⟨setRegister registers kernel.index row.toUInt64, rows⟩
     (m.registers, m.rows)
 
-/-- The trace of a segment-generated component, each row's cells but the fixed and the window
-cells, as packed Montgomery words in `2 ^ logChunks` chunks of consecutive rows: CompStark's chunks
-of packed rows (`rowChunks`). `hints` are the hint tables that its programs read, by key and width,
-as packed words, row after row. -/
+/-- The trace of a segment-generated component, each row's cells but the window cells, as packed
+Montgomery words in `2 ^ logChunks` chunks of consecutive rows: CompStark's chunks of packed rows
+(`rowChunks`). `hints` are the hint tables that its programs read, by key and width, as packed
+words, row after row. -/
 def segmentTrace (component : Component (F p)) (hints : Array (String × ℕ × ByteArray))
     (logChunks : ℕ) : Except String (Array ByteArray) := do
   let kernel ← compileSegments component (hints.map fun (key, width, _) => (key, width))
-  let height := (component.fixedColumns.map (·.height.toNat)).getD 0
+  let height := (component.generation.height?.map (·.toNat)).getD 0
   unless 2 ^ logChunks ∣ height do
     throw s!"{2 ^ logChunks} chunks don't divide {height} rows"
   return chunks (kernel.runner (p := p) (hints.map (·.2.2))) kernel.width kernel.length height

@@ -34,8 +34,8 @@ def expectedRow (i : ℕ) : List ℕ :=
 -- Sixteen rows of squares, whose last row answers the verifier's pull.
 #guard result (15, 225) = .ok ((List.range 16).map expectedRow, true, true)
 
--- A wrong square leaves the verifier's pull and the last row's push unanswered.
-#guard result (15, 224) = .error "unhandled channel imbalance on: squares, squares"
+-- No row carries a wrong square, so the verifier's pull stays unanswered.
+#guard result (15, 224) = .error "unhandled channel imbalance on: squares"
 
 def program : Except LoweringError (ComponentProgram F) := do
   let program ← lower (ensemble (p := pBabybear) 16) 1000

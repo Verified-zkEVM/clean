@@ -78,19 +78,21 @@ def SquaresHeld (rows : List (Array (F p))) : Prop :=
 
 theorem tableSound (height : UInt64) :
     TableSound (_root_.SquaresTable.component (p := p) height) SquaresHeld := by
-  rintro ⟨component', rows, data, uniform_width, length_le, fixed_rows_match, windows_match⟩
-    hcomponent consistent constraints row hrow
+  rintro ⟨component', rows, data, uniform_width, length_le, fixed_rows_match, windows_match,
+    data_consistent⟩ hcomponent constraints row hrow
   subst hcomponent
   have hguarantees : Table.Guarantees
-      ⟨_, rows, data, uniform_width, length_le, fixed_rows_match, windows_match⟩ := by
+      ⟨_, rows, data, uniform_width, length_le, fixed_rows_match, windows_match,
+        data_consistent⟩ := by
     intro row _
     rw [Component.guarantees_iff]
     intro interaction hinteraction
     simp [circuit_norm, _root_.SquaresTable.component, _root_.SquaresTable.step] at hinteraction
     subst hinteraction
     simp [AbstractInteraction.Guarantees, circuit_norm]
-  have hspec := (Table.weakSoundness consistent (fun _ _ => trivial) constraints hguarantees).1
-    row hrow
+  have hspec := (Table.weakSoundness (table := ⟨_, rows, data, uniform_width, length_le,
+    fixed_rows_match, windows_match, data_consistent⟩) (fun _ _ => trivial) constraints
+    hguarantees).1 row hrow
   simp [circuit_norm, Component.Spec, _root_.SquaresTable.component, _root_.SquaresTable.step,
     Table.environment] at hspec
   simp only [valueFromOffset, explicit_provable_type, circuit_norm] at hspec

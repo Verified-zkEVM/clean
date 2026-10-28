@@ -42,16 +42,18 @@ def query : GeneralFormalCircuit (F p) field unit where
   soundness := by circuit_proof_start [bytes]; simp_all
   completeness := by circuit_proof_start [bytes]; simp_all
 
-/-- The queries, `height` rows. The fixed columns are empty and only fix the height. -/
+/-- The queries, `height` rows, which answer no demand. -/
 def queries (height : UInt64) : Component (F p) where
   circuit := query
-  fixedColumns := some { Row := unit, row _ := pure (), height }
-  generation := .preallocated { Row := field, row i := pure (.ofU64 i), counters := [] }
+  generation := .standalone { height, input i := pure (.witness (.ofU64 i)) }
 
 def ensemble (height : UInt64) : Ensemble (F p) unit where
   tables := [queries height, bytes.component]
   unique_names := by simp [circuit_norm, bytes, queries, query]
   channels := [bytes.channel.toRaw]
+  unique_channel_names := by simp
+  tables_channels := by simp [circuit_norm, bytes, queries, query]
+  verifier_channels := by simp [circuit_norm, Verifier.Program.empty]
 
 /-! ### Proving and verifying -/
 
@@ -104,7 +106,7 @@ theorem witnessSound (height : UInt64) : WitnessSound (ensemble height) QueriesI
   have assumptions : witness.Assumptions := by
     intro table htable row _
     have hmem := EnsembleWitness.component_mem_tables_of_mem htable
-    obtain ⟨component, rows, data, _, _, _, _⟩ := table
+    obtain ⟨component, rows, data, _, _, _, _, _⟩ := table
     simp only [ensemble, List.mem_cons, List.not_mem_nil, or_false] at hmem
     rcases hmem with rfl | rfl <;> trivial
   have hspec := (tableSoundness height witness assumptions constraints balanced).2
@@ -112,7 +114,7 @@ theorem witnessSound (height : UInt64) : WitnessSound (ensemble height) QueriesI
   have hcomponent := (witness.same_circuits 0 (by simp [ensemble])).symm
   have key : ∀ table : Table (F p), table.component = queries height → table.Spec →
       ∀ row ∈ table.table, (row[0]?.getD 0).val < 256 := by
-    rintro ⟨_, rows, data, _, _, _, _⟩ rfl hspec row hrow
+    rintro ⟨_, rows, data, _, _, _, _, _⟩ rfl hspec row hrow
     have := hspec row hrow
     simp only [Component.Spec, queries, query, circuit_norm, Table.environment,
       valueFromOffset] at this
