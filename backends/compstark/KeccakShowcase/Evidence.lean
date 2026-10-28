@@ -3,7 +3,7 @@ module
 public import KeccakShowcase.Air
 public import KeccakShowcase.Kernel
 public import KeccakShowcase.Json
-public import Clean.Examples.KeccakAir.FastKernel
+public import Clean.Examples.KeccakAir.KoalaBearKernel
 public import CompStark.Stark.Fingerprint
 public import CompStark.Stark.Fast
 public import CompStark.KoalaBear.Fast
@@ -26,8 +26,8 @@ of `rust/`, Plonky3 `a4982ec`):
 
 * fingerprint: the AIR's fingerprint report and digest are those of Plonky3's `KeccakAir`
   (CompStark's `tests/data/fingerprint/keccak_4.json`, from Plonky3's symbolic constraints);
-* trace: Clean's fast trace (`KeccakAir.koalaBearTrace`) is Plonky3's `generate_trace_rows` on the
-  example's inputs, row by row;
+* trace: Clean's packed trace (`KeccakAir.koalaBearKernel`) is Plonky3's `generate_trace_rows` on
+  the example's inputs, row by row;
 * the example's configuration (caps of height 3, the example's Poseidon2 constants, FRI with
   arity up to 8 and 87 queries): CompStark's fast prover, from the Clean AIR and the Clean trace,
   produces Plonky3's proof byte for byte, and CompStark's verifier accepts Plonky3's proof;
@@ -62,7 +62,9 @@ def params : String → IO Fri.Params
 
 /-- The Clean trace of the inputs, in row chunks of CompStark's fast prover. -/
 def trace (logN : ℕ) (inputs : Array KeccakAir.State) : Except String (Array ByteArray) :=
-  KeccakAir.koalaBearTrace inputs (min logN 6)
+  (KeccakAir.koalaBearKernel).trace
+    (KeccakAir.hints (p := KoalaBear.fieldSize) (FastField KoalaBear.fieldSize) inputs)
+    (KeccakAir.traceHeight inputs.size) (min logN 6)
 
 variable (I : CompStark.KoalaBear.Instances)
 
