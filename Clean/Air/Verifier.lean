@@ -11,10 +11,10 @@ namespace Verifier
 
 /-- Operations of a verifier program. -/
 inductive Operation (F : Type) [FiniteField F] where
-  /-- Append an interaction. If it assumes guarantees, the verifier doesn't list its channel as one
-  with requirements, so its requirements must hold unconditionally. -/
+  /-- Append an interaction. The verifier doesn't list the channel of a pull as one with
+  requirements, so the requirements of a pull must hold unconditionally. -/
   | interact (interaction : AbstractInteraction F)
-      (requirements : interaction.assumeGuarantees → ∀ env, interaction.Requirements env)
+      (requirements : interaction.direction = .pull → ∀ env, interaction.Requirements env)
 
 namespace Operation
 
@@ -25,12 +25,12 @@ def interaction : Operation F → AbstractInteraction F
 @[circuit_norm]
 def guaranteeChannel : Operation F → Option (RawChannel F)
   | .interact interaction _ =>
-      if interaction.assumeGuarantees then some interaction.channel else none
+      if interaction.direction = .pull then some interaction.channel else none
 
 @[circuit_norm]
 def requirementChannel : Operation F → Option (RawChannel F)
   | .interact interaction _ =>
-      if interaction.assumeGuarantees then none else some interaction.channel
+      if interaction.direction = .pull then none else some interaction.channel
 
 end Operation
 
@@ -64,7 +64,7 @@ lemma channel_mem_of_mem_interactions {operations : Operations F}
   simp only [interactions, List.mem_map, List.mem_append, channelsWithGuarantees,
     channelsWithRequirements, List.mem_filterMap]
   rintro ⟨⟨interaction, requirements⟩, h_mem, rfl⟩
-  by_cases h : interaction.assumeGuarantees
+  by_cases h : interaction.direction = .pull
   · exact .inl ⟨_, h_mem, by simp [Operation.guaranteeChannel, Operation.interaction, h]⟩
   · exact .inr ⟨_, h_mem, by simp [Operation.requirementChannel, Operation.interaction, h]⟩
 
@@ -88,7 +88,7 @@ lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F)
   simp only [interactions, List.mem_map] at h_interaction
   obtain ⟨operation, h_operation, rfl⟩ := h_interaction
   obtain ⟨interaction, requirements⟩ := operation
-  by_cases assumes : interaction.assumeGuarantees
+  by_cases assumes : interaction.direction = .pull
   · left
     rw [channelsWithGuarantees, List.mem_filterMap]
     refine ⟨.interact interaction requirements, h_operation, ?_⟩
@@ -105,16 +105,13 @@ lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F)
   simp only [interactions, List.mem_map] at h_interaction
   obtain ⟨operation, h_operation, rfl⟩ := h_interaction
   obtain ⟨interaction, requirements⟩ := operation
-  by_cases assumes : interaction.assumeGuarantees
+  by_cases assumes : interaction.direction = .pull
   · right
     exact requirements assumes env
   · left
     rw [channelsWithRequirements, List.mem_filterMap]
     refine ⟨.interact interaction requirements, h_operation, ?_⟩
-    have assumes_false : interaction.assumeGuarantees = false :=
-      Bool.eq_false_of_not_eq_true assumes
-    simp only [Operation.requirementChannel, Operation.interaction, assumes_false,
-      Bool.false_eq_true, if_false]
+    simp only [Operation.requirementChannel, Operation.interaction, assumes, if_false]
 
 end Operations
 
@@ -162,23 +159,16 @@ def addOperation (operation : Operation F) : Verifier F Unit :=
   ((), [operation])
 
 @[circuit_norm]
-def emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (mult : Expression F) (message : Message (Expression F)) : Verifier F Unit :=
-  addOperation (.interact (channel.emitted mult message).toRaw (Bool.noConfusion ·))
-
-@[circuit_norm]
 def pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (message : Message (Expression F)) : Verifier F Unit :=
   addOperation (.interact (channel.pulled message).toRaw (fun _ env => by
     rw [ChannelInteraction.toRaw_requirements]
-    change Expression.eval env (-1 : Expression F) ≠ -1 →
-      Expression.eval env (-1 : Expression F) ≠ 0 → _
-    simp [Expression.eval]))
+    simp [ChannelInteraction.Requirements, Channel.pulled, pulled, Expression.eval]))
 
 @[circuit_norm]
 def push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (message : Message (Expression F)) : Verifier F Unit :=
-  emit channel 1 message
+  addOperation (.interact (channel.pushed message).toRaw (Direction.noConfusion ·))
 
 /-- A verifier program parameterized by the proof's public input variables. -/
 structure Program (F : Type) [FiniteField F]

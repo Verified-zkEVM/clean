@@ -48,6 +48,10 @@ fn assert_interactions(
             "{context}: interaction {index}"
         );
         assert_eq!(
+            actual.direction, expected.direction,
+            "{context}: interaction {index}"
+        );
+        assert_eq!(
             actual.multiplicity.as_canonical_u64(),
             expected.multiplicity,
             "{context}: interaction {index}"

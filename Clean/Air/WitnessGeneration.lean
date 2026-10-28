@@ -58,9 +58,9 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-! ### Answering demand -/
 
-/-- The rows a component adds or replaces to answer a demand. -/
+/-- The row a component adds or replaces to answer a demand. -/
 inductive Change (F : Type) where
-  | add (rows : List (GeneratedRow F))
+  | add (row : GeneratedRow F)
   /-- The row at `index` is updated from `old` to `new`. -/
   | update (index : ℕ) (old new : GeneratedRow F)
 
@@ -71,12 +71,11 @@ def Change.removedRows : Change F → List (GeneratedRow F)
 
 /-- The rows that enter the tally with their interactions. -/
 def Change.addedRows : Change F → List (GeneratedRow F)
-  | .add rows => rows
-  | .update _ _ new => [new]
+  | .add row | .update _ _ row => [row]
 
 def ComponentState.applyChange (state : ComponentState F) (data : ProverData F) :
     Change F → ComponentState F
-  | .add rows => rows.foldl (·.pushRow data) state
+  | .add row => state.pushRow data row
   | .update index _ new => state.setRow index new
 
 /-- Whether a demand component answers the demand: it is on the mode's channel and triggers it, and
@@ -103,7 +102,7 @@ def findCountedRow (state : ComponentState F) (demand : Demand F) :
 def incrementMultiplicity (state : ComponentState F) (demand : Demand F) (data : ProverData F)
     (hint : ProverHint F) : MultiplicityColumn × ℕ × GeneratedRow F → Change F
   | (multiplicity, index, row) =>
-      let count := (row.input[multiplicity.column]?.getD 0) - demand.multiplicity
+      let count := multiplicity.cancel (row.input[multiplicity.column]?.getD 0) demand.multiplicity
       .update index row (completeRow state (row.input.set! multiplicity.column count) data hint)
 
 /-- A new row answering the demanded message, whose multiplicity cell, if any, cancels the
@@ -111,19 +110,20 @@ demand. -/
 def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
   let env := ProverEnvironment.fromArray demand.message data hint
-  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 (-demand.multiplicity)
+  let count := (state.multiplicity.map (·.cancel 0 demand.multiplicity)).getD 0
+  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 count
   completeRow state input data hint
 
-/-- Answer demand with one new row per occurrence, or, with a multiplicity cell, by counting it in
-the row for the message, which is created if there is none yet. -/
+/-- Answer demand with a new row for one occurrence, or, with a multiplicity cell, by counting it
+in the row for the message, which is created if there is none yet. -/
 def DemandMode.answer (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Change F :=
   match state.multiplicity with
-  | none => .add (List.replicate demand.count (mode.newRow state demand data hint))
+  | none => .add (mode.newRow state demand data hint)
   | some _ =>
       match findCountedRow state demand with
       | some found => incrementMultiplicity state demand data hint found
-      | none => .add [mode.newRow state demand data hint]
+      | none => .add (mode.newRow state demand data hint)
 
 /-- The component's answer to the demand, if it accepts it. A preallocated component accepts the
 messages it has a row for. -/

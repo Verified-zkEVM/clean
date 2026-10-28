@@ -21,7 +21,8 @@ jobs:
           sudo apt-get install -y wabt
       - uses: leanprover/lean-action@v1
         with:
-          build-args: "--wfail"
+          # CompPoly is pinned to a commit without a release, so Lake builds it from source
+          build-args: "--wfail --no-cache"
       - name: Build tests
         # CleanTests shells out to snarkjs / wasm-validate; without them the
         # affected checks print SKIP instead of failing.
