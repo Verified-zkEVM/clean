@@ -30,6 +30,8 @@ An interaction that pushes its message: an active push, or a pull of multiplicit
 -/
 def Push (i : Interaction F) : Prop := i.mult ≠ 0 ∧ (i.direction = .pull → i.mult ≠ 1)
 
+/-- Every interaction is in exactly one of three cases: inactive (`mult = 0`), a `Pull`, or a
+`Push`. -/
 lemma not_push_iff {i : Interaction F} : ¬i.Push ↔ i.mult = 0 ∨ i.Pull := by
   simp only [Push, Pull, not_and, Classical.not_imp]
   tauto
