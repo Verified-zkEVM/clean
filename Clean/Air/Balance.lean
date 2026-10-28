@@ -301,7 +301,7 @@ lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ}
 Assume you have a list of channel interactions that is made up of pairs (pull_i, push_i), where for each i, `Guarantees pull_i → Requirements push_i`.
 We want to think of (pull_i → push_i) as the state transition of a VM circuit.
 
-Furthermore, assume every message is pulled as often as it is pushed, and the channel is normal.
+Furthermore, assume pulls and pushes are balanced, and the channel is normal.
 
 Then, for any i, the **converse** is true: `Requirements push_i → Guarantees pull_i`.
 
