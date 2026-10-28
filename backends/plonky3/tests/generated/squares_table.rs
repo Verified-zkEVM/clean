@@ -8,11 +8,11 @@ pub mod component_0 {
     use super::*;
 
     pub const NAME: &str = "squares";
-    pub const INPUT_WIDTH: usize = 3;
+    pub const INPUT_WIDTH: usize = 9;
     pub const WINDOW: Option<usize> = Some(3);
     pub const WIDTH: usize = 9;
 
-    pub const FIXED_WIDTH: usize = 0;
+    pub const FIXED_COLUMNS: &[usize] = &[];
     pub const FIXED_HEIGHT: usize = 16;
 
     pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> {
@@ -61,8 +61,6 @@ pub mod component_0 {
         ]
     }
 
-    pub const INTERACTIONS: usize = 1;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "squares",
@@ -74,33 +72,35 @@ pub mod component_0 {
 
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
+            channel: "squares",
+            trigger: Direction::Pull,
             rows: 16,
-            counters: vec![],
+            multiplicity: MultiplicityColumn {
+                interaction: 0,
+                column: 2,
+            },
         }
     }
 
     pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> {
         let row: &[F] = &[];
-        let mut input = fixed_row::<F>(row_index);
-        let mut output: Vec<F> = Vec::with_capacity(3);
+        let mut output: Vec<F> = Vec::with_capacity(9);
         output.push(F::from_u64(row_index));
         output.push(F::from_u64((row_index).wrapping_mul(row_index)));
-        output.push(if (row_index == 15u64) {
-            F::from_u64(1u64)
-        } else {
-            F::from_u64(0u64)
-        });
-        input.extend(output);
-
-        input
+        output.push(F::ZERO);
+        output.push(F::from_u64(0u64));
+        output.push(F::from_u64(0u64));
+        output.push(F::from_u64(0u64));
+        output.push(F::from_u64(0u64));
+        output.push(F::from_u64(0u64));
+        output.push(F::from_u64(0u64));
+        output
     }
 }
 
 #[allow(unused_variables, unused_parens)]
 pub mod verifier {
     use super::*;
-
-    pub const INTERACTIONS: usize = 1;
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {

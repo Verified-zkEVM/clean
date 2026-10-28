@@ -35,8 +35,9 @@ fn proves(seed: u64, traces: Vec<RowMajorMatrix<BabyBear>>, public_values: &[Bab
     let config = setup::test_config(seed);
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
-    let (proof, _) =
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
+    let proof =
         prove_ensemble(&config, &statement, traces, public_values).expect("invalid proving shape");
     match verify_ensemble(&config, &statement, &proof, public_values) {
         Ok(()) => true,

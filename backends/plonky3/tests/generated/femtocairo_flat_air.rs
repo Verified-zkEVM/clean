@@ -12,7 +12,7 @@ pub mod component_0 {
     pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 34;
 
-    pub const FIXED_WIDTH: usize = 0;
+    pub const FIXED_COLUMNS: &[usize] = &[];
     pub const FIXED_HEIGHT: usize = 0;
 
     pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
@@ -62,52 +62,9 @@ pub mod component_0 {
                     F::from_u64(0u64),
                     F::from_u64(0u64),
                 ]
-                .get(((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize)
-                .copied()
-                .unwrap_or(F::ZERO),
-            );
-            row.extend(output);
-        }
-        {
-            let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(
-                [
-                    F::from_u64(212u64),
-                    F::from_u64(1u64),
-                    F::from_u64(2u64),
-                    F::from_u64(8u64),
-                    F::from_u64(213u64),
-                    F::from_u64(3u64),
-                    F::from_u64(4u64),
-                    F::from_u64(14u64),
-                    F::from_u64(244u64),
-                    F::from_u64(1u64),
-                    F::from_u64(10u64),
-                    F::from_u64(15u64),
-                    F::from_u64(233u64),
-                    F::from_u64(5u64),
-                    F::from_u64(2u64),
-                    F::from_u64(30u64),
-                    F::from_u64(220u64),
-                    F::from_u64(100u64),
-                    F::from_u64(3u64),
-                    F::from_u64(107u64),
-                    F::from_u64(212u64),
-                    F::from_u64(4u64),
-                    F::from_u64(5u64),
-                    F::from_u64(12u64),
-                    F::from_u64(252u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                ]
                 .get(
-                    (((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(1u64))
-                        as usize,
+                    usize::try_from((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
                 )
                 .copied()
                 .unwrap_or(F::ZERO),
@@ -152,8 +109,11 @@ pub mod component_0 {
                     F::from_u64(0u64),
                 ]
                 .get(
-                    (((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(2u64))
-                        as usize,
+                    usize::try_from(
+                        ((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                            .wrapping_add(1u64),
+                    )
+                    .unwrap_or(usize::MAX),
                 )
                 .copied()
                 .unwrap_or(F::ZERO),
@@ -198,8 +158,60 @@ pub mod component_0 {
                     F::from_u64(0u64),
                 ]
                 .get(
-                    (((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(3u64))
-                        as usize,
+                    usize::try_from(
+                        ((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                            .wrapping_add(2u64),
+                    )
+                    .unwrap_or(usize::MAX),
+                )
+                .copied()
+                .unwrap_or(F::ZERO),
+            );
+            row.extend(output);
+        }
+        {
+            let mut output: Vec<F> = Vec::with_capacity(1);
+            output.push(
+                [
+                    F::from_u64(212u64),
+                    F::from_u64(1u64),
+                    F::from_u64(2u64),
+                    F::from_u64(8u64),
+                    F::from_u64(213u64),
+                    F::from_u64(3u64),
+                    F::from_u64(4u64),
+                    F::from_u64(14u64),
+                    F::from_u64(244u64),
+                    F::from_u64(1u64),
+                    F::from_u64(10u64),
+                    F::from_u64(15u64),
+                    F::from_u64(233u64),
+                    F::from_u64(5u64),
+                    F::from_u64(2u64),
+                    F::from_u64(30u64),
+                    F::from_u64(220u64),
+                    F::from_u64(100u64),
+                    F::from_u64(3u64),
+                    F::from_u64(107u64),
+                    F::from_u64(212u64),
+                    F::from_u64(4u64),
+                    F::from_u64(5u64),
+                    F::from_u64(12u64),
+                    F::from_u64(252u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                ]
+                .get(
+                    usize::try_from(
+                        ((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                            .wrapping_add(3u64),
+                    )
+                    .unwrap_or(usize::MAX),
                 )
                 .copied()
                 .unwrap_or(F::ZERO),
@@ -243,12 +255,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(16).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(16).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -265,12 +280,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(18).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(18).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -325,12 +343,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(21).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(21).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -347,12 +368,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(23).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(23).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -407,12 +431,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(26).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(26).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -429,12 +456,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(28).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(28).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -750,8 +780,6 @@ pub mod component_0 {
         ]
     }
 
-    pub const INTERACTIONS: usize = 12;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![
             Interaction {
@@ -834,19 +862,28 @@ pub mod component_0 {
         true
     }
 
+    pub fn input<F: WitnessField>(
+        row: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        multiplicity: F,
+    ) -> Vec<F> {
+        let row_index = 0u64;
+        let mut output: Vec<F> = Vec::with_capacity(4);
+        output.push(F::from_u64(1u64));
+        output.push(row.get(0).copied().unwrap_or(F::ZERO));
+        output.push(row.get(1).copied().unwrap_or(F::ZERO));
+        output.push(row.get(2).copied().unwrap_or(F::ZERO));
+        output
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "state",
             trigger: Direction::Push,
             guard: guard::<F>,
-            aggregation: Aggregation::PerOccurrence,
-            input: vec![
-                InputCell::Constant(F::from_u64(1u64)),
-                InputCell::Message(0),
-                InputCell::Message(1),
-                InputCell::Message(2),
-            ],
-            counters: vec![],
+            input: input::<F>,
+            multiplicity: None,
             padding: vec![
                 F::from_u64(0u64),
                 F::from_u64(0u64),
@@ -870,7 +907,7 @@ pub mod component_1 {
     pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 3;
 
-    pub const FIXED_WIDTH: usize = 1;
+    pub const FIXED_COLUMNS: &[usize] = &[0];
     pub const FIXED_HEIGHT: usize = 8;
 
     pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> {
@@ -892,8 +929,6 @@ pub mod component_1 {
         vec![]
     }
 
-    pub const INTERACTIONS: usize = 1;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "memory",
@@ -905,23 +940,28 @@ pub mod component_1 {
 
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
+            channel: "memory",
+            trigger: Direction::Pull,
             rows: 8,
-            counters: vec![Counter {
-                channel: "memory",
+            multiplicity: MultiplicityColumn {
                 interaction: 0,
                 column: 2,
-            }],
+            },
         }
     }
 
     pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> {
         let row: &[F] = &[];
-        let mut input = fixed_row::<F>(row_index);
-        let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(hint.get("memoryValues", 1, (row_index) as usize, 0));
-        input.extend(output);
-        input.insert(2, F::ZERO);
-        input
+        let mut output: Vec<F> = Vec::with_capacity(3);
+        output.push(F::from_u64(row_index));
+        output.push(hint.get(
+            "memoryValues",
+            1,
+            usize::try_from(row_index).unwrap_or(usize::MAX),
+            0,
+        ));
+        output.push(F::ZERO);
+        output
     }
 }
 
@@ -934,7 +974,7 @@ pub mod component_2 {
     pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 3;
 
-    pub const FIXED_WIDTH: usize = 2;
+    pub const FIXED_COLUMNS: &[usize] = &[0, 1];
     pub const FIXED_HEIGHT: usize = 32;
 
     pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> {
@@ -976,7 +1016,7 @@ pub mod component_2 {
                 F::from_u64(0u64),
                 F::from_u64(0u64),
             ]
-            .get((row_index) as usize)
+            .get(usize::try_from(row_index).unwrap_or(usize::MAX))
             .copied()
             .unwrap_or(F::ZERO),
         );
@@ -995,8 +1035,6 @@ pub mod component_2 {
         vec![]
     }
 
-    pub const INTERACTIONS: usize = 1;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "program",
@@ -1008,30 +1046,67 @@ pub mod component_2 {
 
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
+            channel: "program",
+            trigger: Direction::Pull,
             rows: 32,
-            counters: vec![Counter {
-                channel: "program",
+            multiplicity: MultiplicityColumn {
                 interaction: 0,
                 column: 2,
-            }],
+            },
         }
     }
 
     pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> {
         let row: &[F] = &[];
-        let mut input = fixed_row::<F>(row_index);
-        let mut output: Vec<F> = Vec::with_capacity(0);
-        input.extend(output);
-        input.insert(2, F::ZERO);
-        input
+        let mut output: Vec<F> = Vec::with_capacity(3);
+        output.push(F::from_u64(row_index));
+        output.push(
+            [
+                F::from_u64(212u64),
+                F::from_u64(1u64),
+                F::from_u64(2u64),
+                F::from_u64(8u64),
+                F::from_u64(213u64),
+                F::from_u64(3u64),
+                F::from_u64(4u64),
+                F::from_u64(14u64),
+                F::from_u64(244u64),
+                F::from_u64(1u64),
+                F::from_u64(10u64),
+                F::from_u64(15u64),
+                F::from_u64(233u64),
+                F::from_u64(5u64),
+                F::from_u64(2u64),
+                F::from_u64(30u64),
+                F::from_u64(220u64),
+                F::from_u64(100u64),
+                F::from_u64(3u64),
+                F::from_u64(107u64),
+                F::from_u64(212u64),
+                F::from_u64(4u64),
+                F::from_u64(5u64),
+                F::from_u64(12u64),
+                F::from_u64(252u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+            ]
+            .get(usize::try_from(row_index).unwrap_or(usize::MAX))
+            .copied()
+            .unwrap_or(F::ZERO),
+        );
+        output.push(F::ZERO);
+        output
     }
 }
 
 #[allow(unused_variables, unused_parens)]
 pub mod verifier {
     use super::*;
-
-    pub const INTERACTIONS: usize = 2;
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![

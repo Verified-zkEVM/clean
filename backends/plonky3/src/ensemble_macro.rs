@@ -4,10 +4,9 @@
 /// Implements an extracted ensemble on top of its generated modules.
 ///
 /// Every module listed in `components`, and the module `verifier`, must be in scope. Component
-/// modules provide the constants `NAME`, `INPUT_WIDTH`, `WINDOW`, `WIDTH`, `FIXED_WIDTH`,
-/// `FIXED_HEIGHT` and `INTERACTIONS`, and the functions `fixed_row`, `complete`, `constraints`, `interactions`,
-/// `mode` and `initial_row`. The verifier module provides `INTERACTIONS` and
-/// `interactions`.
+/// modules provide the constants `NAME`, `INPUT_WIDTH`, `WINDOW`, `WIDTH`, `FIXED_COLUMNS` and
+/// `FIXED_HEIGHT`, and the functions `fixed_row`, `complete`, `constraints`, `interactions`, `mode`
+/// and `initial_row`. The verifier module provides `interactions`.
 ///
 /// The macro defines the type `Ensemble`, implementing both traits, the AIR statement
 /// `Statement<F>`, and `generate`, the witness generator.
@@ -35,7 +34,7 @@ macro_rules! ensemble {
             const PROVER_INPUTS: usize = $prover_inputs;
             const HINT_TABLES: &'static [$crate::witness_generation::HintTable] =
                 &[$($hint_table),*];
-            const FIXED_WIDTHS: &'static [usize] = &[$($component::FIXED_WIDTH),+];
+            const FIXED_COLUMNS: &'static [&'static [usize]] = &[$($component::FIXED_COLUMNS),+];
             const WINDOWS: &'static [Option<usize>] = &[$($component::WINDOW),+];
             const COMPONENT_NAMES: &'static [&'static str] = &[$($component::NAME),+];
 
@@ -81,13 +80,6 @@ macro_rules! ensemble {
                     ));
                 }
                 let mut row = input.to_vec();
-                row.resize(
-                    input.len()
-                        + $crate::witness_generation::window_width(
-                            <Self as $crate::witness_generation::Program<F>>::WINDOWS[component],
-                        ),
-                    F::ZERO,
-                );
                 complete(&mut row, data, hint);
                 if row.len() != widths[component] {
                     return Err($crate::__private::format!(
@@ -118,14 +110,12 @@ macro_rules! ensemble {
             const PUBLIC_VALUES: usize = $public_inputs;
             const WIDTHS: &'static [usize] = &[$(
                 $component::WIDTH
-                    - $component::FIXED_WIDTH
+                    - $component::FIXED_COLUMNS.len()
                     - $crate::witness_generation::window_width($component::WINDOW)
             ),+];
-            const FIXED_WIDTHS: &'static [usize] = &[$($component::FIXED_WIDTH),+];
+            const FIXED_COLUMNS: &'static [&'static [usize]] = &[$($component::FIXED_COLUMNS),+];
             const WINDOWS: &'static [Option<usize>] = &[$($component::WINDOW),+];
             const FIXED_HEIGHTS: &'static [usize] = &[$($component::FIXED_HEIGHT),+];
-            const INTERACTIONS_PER_ROW: &'static [usize] = &[$($component::INTERACTIONS),+];
-            const VERIFIER_INTERACTIONS: usize = verifier::INTERACTIONS;
 
             fn fixed_row<F: $crate::witness_generation::WitnessField>(
                 component: usize,
@@ -160,9 +150,9 @@ macro_rules! ensemble {
                     .map_or_else($crate::__private::Vec::new, |interactions| interactions(row))
             }
 
-            fn verifier_interactions<F: $crate::witness_generation::WitnessField>(
-                public_values: &[F],
-            ) -> $crate::__private::Vec<$crate::witness_generation::Interaction<F>> {
+            fn verifier_interactions<E: $crate::__private::PrimeCharacteristicRing + Clone>(
+                public_values: &[E],
+            ) -> $crate::__private::Vec<$crate::witness_generation::Interaction<E>> {
                 verifier::interactions(public_values)
             }
         }

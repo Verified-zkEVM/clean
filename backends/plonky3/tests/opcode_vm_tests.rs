@@ -52,8 +52,9 @@ fn extracted_opcode_vm_proves_and_verifies() {
     let traces = witness.into_traces().expect("invalid extracted traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
-    let (proof, _) =
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
+    let proof =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("extracted opcode VM proof failed verification");
@@ -69,7 +70,8 @@ impl<F: WitnessField> Program<F> for UnguardedProgram {
     const PUBLIC_INPUTS: usize = <generated::Ensemble as Program<F>>::PUBLIC_INPUTS;
     const PROVER_INPUTS: usize = <generated::Ensemble as Program<F>>::PROVER_INPUTS;
     const HINT_TABLES: &'static [HintTable] = <generated::Ensemble as Program<F>>::HINT_TABLES;
-    const FIXED_WIDTHS: &'static [usize] = <generated::Ensemble as Program<F>>::FIXED_WIDTHS;
+    const FIXED_COLUMNS: &'static [&'static [usize]] =
+        <generated::Ensemble as Program<F>>::FIXED_COLUMNS;
     const WINDOWS: &'static [Option<usize>] = <generated::Ensemble as Program<F>>::WINDOWS;
     const COMPONENT_NAMES: &'static [&'static str] =
         <generated::Ensemble as Program<F>>::COMPONENT_NAMES;

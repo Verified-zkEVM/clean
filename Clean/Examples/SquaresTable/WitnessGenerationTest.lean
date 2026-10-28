@@ -34,8 +34,8 @@ def expectedRow (i : ℕ) : List ℕ :=
 -- Sixteen rows of squares, whose last row answers the verifier's pull.
 #guard result (15, 225) = .ok ((List.range 16).map expectedRow, true, true)
 
--- A wrong square leaves the verifier's pull and the last row's push unanswered.
-#guard result (15, 224) = .error "unhandled channel imbalance on: squares, squares"
+-- No row carries a wrong square, so the verifier's pull stays unanswered.
+#guard result (15, 224) = .error "unhandled channel imbalance on: squares"
 
 def program : Except LoweringError (ComponentProgram F) := do
   let program ← lower (ensemble (p := pBabybear) 16) 1000
@@ -43,11 +43,18 @@ def program : Except LoweringError (ComponentProgram F) := do
   | [component] => return component
   | _ => throw (.validation (.preallocatedHeight "squares" 0))
 
+/-- Whether the lowered constraints hold on a row whose window cells are filled: each body, times
+the selector of its gate. -/
 def checkRow (row : List ℕ) : Bool :=
   match program with
   | .error _ => false
-  | .ok component => component.constraintsHold (row.map (FiniteField.fromNat ·)).toArray
-      (fun _ _ => #[])
+  | .ok component =>
+      let environment := Environment.fromArray (row.map (FiniteField.fromNat ·)).toArray
+        (fun _ _ => #[])
+      let width := component.window.getD 0
+      component.constraints.all fun constraint =>
+        let gate := (constraint.gate.selectorCell width).elim 1 environment.get
+        gate * constraint.body.eval environment == 0
 
 -- The constraints are lowered with their gates: the boundary constraints and the transitions to
 -- the next row.
