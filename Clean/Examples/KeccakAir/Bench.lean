@@ -1,21 +1,21 @@
 /-
 `keccak_air_trace bench GENERATOR LOG_ROWS REPS LOG_CHUNKS`: the median time of generating the trace
 of Plonky3's Keccak AIR over KoalaBear for `2 ^ LOG_ROWS` rows of pseudorandom permutations, in
-`2 ^ LOG_CHUNKS` chunks, by the compiled kernel (`compiled`, `koalaBearTrace`) or the interpreter
-(`interpreted`, `fastTrace`); the number of threads is Lean's (`LEAN_NUM_THREADS`).
+`2 ^ LOG_CHUNKS` chunks, by the compiled kernel (`compiled`, `koalaBearKernel`) or the interpreter
+(`interpreted`); the number of threads is Lean's (`LEAN_NUM_THREADS`).
 `keccak_air_trace kat GENERATOR PERMUTATIONS`: the height, width and per-row FNV-1a hashes of the
 canonical values of the trace of `PERMUTATIONS` pseudorandom permutations.
 Lane `i` of permutation `k` is SplitMix64 of `25 k + i`.
 -/
 module
 
-public import Clean.Examples.KeccakAir.FastKernel
+public import Clean.Examples.KeccakAir.KoalaBearKernel
 public import CompPoly.Fields.KoalaBear.Fast
 
 @[expose] public section
 
 namespace KeccakAir.Bench
-open Montgomery.Native32
+open Montgomery.Native32 Air.Flat WitnessGeneration
 
 abbrev p := KoalaBear.fieldSize
 
@@ -34,8 +34,13 @@ def canonical (w : UInt32) : UInt64 :=
 
 def generate (generator : String) (inputs : Array State) (logChunks : ℕ) :
     Except String (Array ByteArray) :=
-  if generator = "compiled" then koalaBearTrace inputs logChunks
-  else fastTrace (p := p) inputs logChunks
+  let height := traceHeight inputs.size
+  let hints := KeccakAir.hints (p := p) (FastField p) inputs
+  if generator = "compiled" then koalaBearKernel.trace hints height logChunks
+  else do
+    let kernel ← compileSegments (component (p := p) height.toUInt64) (FastField.ofZMod p)
+      (hintKeys (ensemble (p := p) height.toUInt64).hintTables)
+    kernel.trace hints height logChunks
 
 def kat (generator : String) (n : ℕ) : IO UInt32 := do
   let .ok chunks := generate generator (inputs n) 0 | return 1

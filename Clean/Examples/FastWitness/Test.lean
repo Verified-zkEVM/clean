@@ -1,26 +1,36 @@
 /-
-`fast_witness_test`: fast witness generation, interpreted and compiled, against generation and
-against Plonky3. Runs natively, since the packed-word accessors are C.
+`fast_witness_test`: packed witness generation over KoalaBear's Montgomery field, interpreted and
+compiled, against generation and against Plonky3. Runs natively, since the packed accessors are C.
 -/
 module
 
 public import Clean.Examples.FastWitness.Component
-public import Clean.Examples.KeccakAir.FastKernel
+public import Clean.Examples.KeccakAir.KoalaBearKernel
 public import Clean.Examples.KeccakAir.Test
 public import CompPoly.Fields.Montgomery.Native32Bytes
 meta import Clean.Examples.FastWitness.Component
+meta import Clean.Utils.FastField
 meta import CompPoly.Fields.KoalaBear.Fast
 
 @[expose] public section
 
 namespace FastWitnessTest
-open Air.Flat Air.Flat.FastWitness Montgomery.Native32 KeccakAir
+open Air.Flat Air.Flat.WitnessGeneration Montgomery.Native32 KeccakAir
 
 abbrev p := KoalaBear.fieldSize
 abbrev F := _root_.F p
 
-fast_witness_kernel exampleKernel for KoalaBear.fieldSize :=
-  compileSegments (FastWitnessExample.component (p := KoalaBear.fieldSize)) #[("seed", 1)]
+witness_kernel exampleKernel over FastField KoalaBear.fieldSize :=
+  compileSegments (FastWitnessExample.component (p := KoalaBear.fieldSize))
+    (FastField.ofZMod KoalaBear.fieldSize) #[("seed", 1)]
+
+/-- The trace of a segment-generated component, interpreted. -/
+def interpreted (component : Component F) (hints : Array (String × ℕ × ByteArray))
+    (logChunks : ℕ) : Except String (Array ByteArray) := do
+  let kernel ← compileSegments component (FastField.ofZMod p) (hints.map fun (key, width, _) =>
+    (key, width))
+  let height := (component.generation.height?.map (·.toNat)).getD 0
+  kernel.trace (hints.map (·.2.2)) height logChunks
 
 /-- Rows of field elements as CompStark's chunks of packed rows: `2 ^ logChunks` chunks of
 consecutive rows, each the `encode` of its values in Montgomery form (`rowChunks`). -/
@@ -59,11 +69,11 @@ def exampleChecks : Except String (List (String × Bool)) := do
   let expected ← generatedTrace (FastWitnessExample.ensemble (p := p)) () seeds
   let hints := #[("seed", 1, wordsOf seeds.toArray)]
   let changed := expected.modify 5 (·.modify 9 (· + 1))
-  let detected := match segmentTrace (FastWitnessExample.component (p := p)) hints 0 with
+  let detected := match interpreted (FastWitnessExample.component (p := p)) hints 0 with
     | .ok chunks => !sameChunks (rowChunks changed 0) chunks
     | .error _ => false
   return ("a changed cell is detected", detected) :: (List.range 3).flatMap fun logChunks =>
-    [(s!"example interpreted, 2^{logChunks} chunks", match segmentTrace
+    [(s!"example interpreted, 2^{logChunks} chunks", match interpreted
         (FastWitnessExample.component (p := p)) hints logChunks with
       | .ok chunks => sameChunks (rowChunks expected logChunks) chunks
       | .error _ => false),
@@ -80,6 +90,18 @@ def keccakProverInput (height : UInt64) (inputs : Array State) :
   let limbs := inputs.toList.flatMap preimageLimbs
   Vector.ofFn fun i => (limbs[i.val]?.getD 0 : F)
 
+/-- The trace of the permutations of `inputs`, interpreted. -/
+def keccakInterpreted (inputs : Array State) (logChunks : ℕ) : Except String (Array ByteArray) := do
+  let height := traceHeight inputs.size
+  let kernel ← compileSegments (KeccakAir.component (p := p) height.toUInt64) (FastField.ofZMod p)
+    (hintKeys (ensemble (p := p) height.toUInt64).hintTables)
+  kernel.trace (KeccakAir.hints (p := p) (FastField p) inputs) height logChunks
+
+/-- The trace of the permutations of `inputs`, compiled. -/
+def keccakCompiled (inputs : Array State) (logChunks : ℕ) : Except String (Array ByteArray) :=
+  koalaBearKernel.trace (KeccakAir.hints (p := p) (FastField p) inputs) (traceHeight inputs.size)
+    logChunks
+
 def keccakChecks : Except String (List (String × Bool)) := do
   -- one permutation and its padding
   let inputs := #[Test.input]
@@ -87,27 +109,27 @@ def keccakChecks : Except String (List (String × Bool)) := do
   let reference := Test.traceRows
   let checks := [("keccak generation is Plonky3's trace", expected == reference)] ++
     (List.range 4).flatMap fun logChunks =>
-      [(s!"keccak interpreted, 2^{logChunks} chunks", match fastTrace (p := p) inputs logChunks with
+      [(s!"keccak interpreted, 2^{logChunks} chunks", match keccakInterpreted inputs logChunks with
         | .ok chunks => sameChunks (rowChunks reference logChunks) chunks
         | .error _ => false),
-      (s!"keccak compiled, 2^{logChunks} chunks", match koalaBearTrace inputs logChunks with
+      (s!"keccak compiled, 2^{logChunks} chunks", match keccakCompiled inputs logChunks with
         | .ok chunks => sameChunks (rowChunks reference logChunks) chunks
         | .error _ => false)]
   -- 42 permutations: compiled and interpreted agree, in any number of chunks
   let many := (Array.range 42).map fun k =>
     Vector.ofFn fun i => Test.splitMix (k * 25 + i.val).toUInt64
-  let some one := (fastTrace (p := p) many 0).toOption | throw "fastTrace failed"
+  let some one := (keccakInterpreted many 0).toOption | throw "interpreted generation failed"
   let joined := one.foldl (· ++ ·) ByteArray.empty
   let checks := checks ++ [0, 3, 6].map fun logChunks =>
     (s!"keccak 2^10 rows, compiled in 2^{logChunks} chunks",
-      match koalaBearTrace many logChunks with
+      match keccakCompiled many logChunks with
       | .ok chunks => (chunks.foldl (· ++ ·) ByteArray.empty).data == joined.data
       | .error _ => false)
   -- Plonky3's trace of three permutations
   return checks ++ [
-    ("keccak compiled is Plonky3's", Test.rowHashes (koalaBearTrace Test.katInputs 2) ==
+    ("keccak compiled is Plonky3's", Test.rowHashes (keccakCompiled Test.katInputs 2) ==
       Test.plonky3RowHashes),
-    ("keccak interpreted is Plonky3's", Test.rowHashes (fastTrace (p := p) Test.katInputs 2) ==
+    ("keccak interpreted is Plonky3's", Test.rowHashes (keccakInterpreted Test.katInputs 2) ==
       Test.plonky3RowHashes)]
 
 end FastWitnessTest
