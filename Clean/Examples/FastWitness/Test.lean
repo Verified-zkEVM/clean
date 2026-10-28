@@ -75,7 +75,7 @@ def exampleChecks : Except String (List (String × Bool)) := do
 /-! ### Plonky3's Keccak AIR -/
 
 /-- The prover input of the ensemble of `height` rows for `inputs`, padded with zero inputs. -/
-def keccakProverInput (height : UInt64) (inputs : Array Trace.State) :
+def keccakProverInput (height : UInt64) (inputs : Array State) :
     (ensemble (p := p) height).ProverInput F :=
   let limbs := inputs.toList.flatMap preimageLimbs
   Vector.ofFn fun i => (limbs[i.val]?.getD 0 : F)
@@ -85,7 +85,7 @@ def keccakChecks : Except String (List (String × Bool)) := do
   let inputs := #[Test.input]
   let expected ← generatedTrace (ensemble (p := p) 32) () (keccakProverInput 32 inputs)
   let reference := Test.traceRows
-  let checks := [("keccak generation is the transcribed trace", expected == reference)] ++
+  let checks := [("keccak generation is Plonky3's trace", expected == reference)] ++
     (List.range 4).flatMap fun logChunks =>
       [(s!"keccak interpreted, 2^{logChunks} chunks", match fastTrace (p := p) inputs logChunks with
         | .ok chunks => sameChunks (rowChunks reference logChunks) chunks

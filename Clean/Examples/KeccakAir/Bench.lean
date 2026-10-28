@@ -25,14 +25,14 @@ def splitMix (seed : UInt64) : UInt64 :=
   let z := (z ^^^ (z >>> 27)) * 0x94d049bb133111eb
   z ^^^ (z >>> 31)
 
-def inputs (n : ℕ) : Array Trace.State :=
+def inputs (n : ℕ) : Array State :=
   (Array.range n).map fun k => Vector.ofFn fun i => splitMix (25 * k + i.val).toUInt64
 
 /-- The canonical value of a Montgomery word. -/
 def canonical (w : UInt32) : UInt64 :=
   if h : w.toNat < p then (FastField.toUInt32 (⟨w, h⟩ : FastField p)).toUInt64 else 0
 
-def generate (generator : String) (inputs : Array Trace.State) (logChunks : ℕ) :
+def generate (generator : String) (inputs : Array State) (logChunks : ℕ) :
     Except String (Array ByteArray) :=
   if generator = "compiled" then koalaBearTrace inputs logChunks
   else fastTrace (p := p) inputs logChunks

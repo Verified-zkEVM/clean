@@ -49,7 +49,6 @@ public import Clean.Examples.FibonacciVm.Ensemble
 public import Clean.Examples.OpcodeVm.Ensemble
 public import Clean.Examples.SquaresTable.Ensemble
 public import Clean.Examples.KeccakAir.Ensemble
-public import Clean.Examples.KeccakAir.Trace
 public import Clean.Examples.KeccakAir.FastKernel
 public import Clean.Gadgets.SHA256.SHA256Compress
 public import Clean.Backends.Circom.Ast
