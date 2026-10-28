@@ -131,7 +131,7 @@ theorem eval_cellExpr_publicValues (component : Component F) (A : Air K) (logN :
     (cellExpr component j).eval (Lookup.generationRow A logN trace publicValues r) =
       (cellExpr component j).eval (Lookup.generationRow A logN trace publicValues' r) := by
   unfold cellExpr
-  split <;> dsimp only <;> split_ifs <;> rfl
+  split <;> dsimp only [ownCell, ownCellNext] <;> split_ifs <;> rfl
 
 theorem eval_toExpr_publicValues (component : Component F) (A : Air K) (logN : ℕ)
     (trace : Array K) (publicValues publicValues' : List K) (r : ℕ) :
@@ -278,31 +278,69 @@ theorem toRows_eq_map_range (component : Component F) (logN : ℕ) (trace : Arra
 
 variable {S : Batch.Setup EF} {ens : Ensemble F PublicIO}
 
-/-- The tables read off traces of a batch that proves an ensemble, with the prover data derived
-from them. -/
-def toTables (h : ProvesEnsemble e S ens)
+/-- The tables read off traces of a batch that proves an ensemble, each with its own rows' prover
+data. -/
+def ownTables (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
     (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
     (traces : Fin S.k → Array K) : List (Table F) :=
-  withDerivedData (List.ofFn fun i =>
-    toTable e (S.logN i) (traces i) (componentAt ens h.length i) (fits i) fun _ _ => #[])
+  List.ofFn fun i => toTable e (S.logN i) (traces i) (componentAt ens h.length i)
+    (hb.components _ (List.getElem_mem _)) (fits i)
+
+theorem map_component_ownTables (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
+    (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
+    (traces : Fin S.k → Array K) :
+    (ownTables e h hb fits traces).map (·.component) = ens.tables := by
+  apply List.ext_getElem <;> simp [ownTables, toTable, componentAt, h.length]
+
+theorem nodup_ownTables (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
+    (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
+    (traces : Fin S.k → Array K) :
+    ((ownTables e h hb fits traces).map fun table => table.component.circuit.name).Nodup := by
+  have hu := ens.unique_names
+  rw [← map_component_ownTables e h hb fits traces, List.map_map] at hu
+  exact hu
+
+/-- The tables read off traces of a batch that proves an ensemble, with the prover data derived
+from them. -/
+def toTables (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
+    (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
+    (traces : Fin S.k → Array K) : List (Table F) :=
+  List.ofFn fun i => { toTable e (S.logN i) (traces i) (componentAt ens h.length i)
+      (hb.components _ (List.getElem_mem _)) (fits i) with
+    data := deriveProverData (ownTables e h hb fits traces)
+    data_consistent := deriveProverData_eq_of_mem _ (nodup_ownTables e h hb fits traces)
+      (List.mem_ofFn.mpr ⟨i, rfl⟩) _ }
+
+theorem map_toTables (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
+    (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
+    (traces : Fin S.k → Array K) :
+    (toTables e h hb fits traces).map (fun table => (table.component, table.table)) =
+      List.ofFn fun i => (componentAt ens h.length i,
+        toRows e (componentAt ens h.length i) (S.logN i) (traces i)) := by
+  simp [toTables, ownTables, toTable, List.map_ofFn, Function.comp_def]
 
 /-- The witness of an ensemble read off traces of a batch that proves it, with the public input
 `publicInput`. -/
-def toWitness (h : ProvesEnsemble e S ens)
+def toWitness (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
     (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
     (traces : Fin S.k → Array K) (publicInput : PublicIO F) : EnsembleWitness ens where
-  tables := toTables e h fits traces
+  tables := toTables e h hb fits traces
   publicInput
-  same_length := by simp [toTables, withDerivedData, h.length]
-  same_circuits i hi := by simp [toTables, withDerivedData, toTable, componentAt]
-  same_data := withDerivedData_data _
+  same_length := by simp [toTables, h.length]
+  same_circuits i hi := by simp [toTables, ownTables, toTable, componentAt]
+  same_data table htable := by
+    simp only [toTables, List.mem_ofFn] at htable
+    obtain ⟨i, rfl⟩ := htable
+    refine (deriveProverData_congr ?_).symm
+    rw [map_toTables]
+    simp [ownTables, toTable, List.map_ofFn, Function.comp_def]
 
-theorem toWitness_tables (h : ProvesEnsemble e S ens)
+theorem toWitness_tables (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
     (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
     (traces : Fin S.k → Array K) (publicInput : PublicIO F) :
-    (toWitness e h fits traces publicInput).tables.map (·.table) =
+    (toWitness e h hb fits traces publicInput).tables.map (·.table) =
       List.ofFn fun i => toRows e (componentAt ens h.length i) (S.logN i) (traces i) := by
-  simp [toWitness, toTables, withDerivedData, toTable, List.map_ofFn, Function.comp_def]
+  simp [toWitness, toTables, ownTables, toTable, List.map_ofFn, Function.comp_def]
 
 /-- The tables read off traces satisfying the AIRs of a batch that proves an ensemble satisfy
 their constraints. -/
@@ -310,14 +348,15 @@ theorem constraints_toWitness (h : ProvesEnsemble e S ens) (hb : EnsembleBridgea
     (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
     {traces : Fin S.k → Array K} {publicValues : Fin S.k → List K}
     (hsat : ∀ i, (S.air i).Satisfied (S.logN i) (traces i) (publicValues i))
-    (publicInput : PublicIO F) : (toWitness e h fits traces publicInput).Constraints := by
+    (publicInput : PublicIO F) : (toWitness e h hb fits traces publicInput).Constraints := by
   intro table htable
-  simp only [toWitness, toTables, withDerivedData, List.mem_map, List.mem_ofFn] at htable
-  obtain ⟨_, ⟨i, rfl⟩, rfl⟩ := htable
+  simp only [toWitness, toTables, List.mem_ofFn] at htable
+  obtain ⟨i, rfl⟩ := htable
   have hi := hsat i
   rw [h.air i] at hi
-  exact constraints_toTable e (S.logN i) (traces i)
-    (hb.components _ (List.getElem_mem _)) (fits i) _ hi.vanish
+  exact constraints_of_toRows e (S.logN i) (traces i)
+    (hb.components _ (List.getElem_mem _)) (fits i) hi.vanish
+    (by simp [ownTables, toTable]) (by simp [ownTables, toTable])
 
 theorem lookups_eq (h : ProvesEnsemble e S ens) (i : Fin S.k) :
     S.lookups i = Lookup.packSameBus
@@ -343,20 +382,19 @@ theorem balancedChannels_toWitness (h : ProvesEnsemble e S ens) (hb : EnsembleBr
     (hcount : interactionCount ens h.length S.logN < ringChar F)
     {traces : Fin S.k → Array K} {publicValues : Fin S.k → List K}
     (hsat : S.Satisfied traces publicValues) (publicInput : PublicIO F) :
-    (toWitness e h fits traces publicInput).BalancedChannels := by
+    (toWitness e h hb fits traces publicInput).BalancedChannels := by
   intro channel hchannel
   rw [EnsembleWitness.BalancedChannel,
     EnsembleWitness.interactionsWith_of_verifier_empty hb.verifier]
   -- the tables' interactions on the channel, row by row
   obtain ⟨data, hflat⟩ : ∃ data : ProverData F,
-      (toWitness e h fits traces publicInput).tables.flatMap (·.interactionsWith channel) =
+      (toWitness e h hb fits traces publicInput).tables.flatMap (·.interactionsWith channel) =
         (List.finRange S.k).flatMap fun i => (List.range (2 ^ S.logN i)).flatMap fun r =>
           (componentAt ens h.length i).operations.interactionValuesWith channel
             (Environment.fromArray (toRow e (componentAt ens h.length i) (S.logN i) (traces i) r)
               data) := by
-    refine ⟨deriveProverData (List.ofFn fun i =>
-      toTable e (S.logN i) (traces i) (componentAt ens h.length i) (fits i) fun _ _ => #[]), ?_⟩
-    simp only [toWitness, toTables, withDerivedData, List.flatMap_map, List.ofFn_eq_map]
+    refine ⟨deriveProverData (ownTables e h hb fits traces), ?_⟩
+    simp only [toWitness, toTables, List.ofFn_eq_map, List.flatMap_map]
     refine List.flatMap_congr fun i _ => ?_
     simp only [Table.interactionsWith, toTable, toRows_eq_map_range, List.flatMap_map,
       Table.environment]
@@ -407,7 +445,7 @@ theorem statement_of_satisfied (h : ProvesEnsemble e S ens) (hb : EnsembleBridge
     {traces : Fin S.k → Array K} {publicValues : Fin S.k → List K}
     (hsat : S.Satisfied traces publicValues) (publicInput : PublicIO F) :
     ens.Statement publicInput :=
-  ⟨toWitness e h fits traces publicInput, rfl,
+  ⟨toWitness e h hb fits traces publicInput, rfl,
     constraints_toWitness e h hb fits hsat.air publicInput,
     balancedChannels_toWitness e h hb fits hcount hsat publicInput⟩
 
@@ -428,7 +466,7 @@ theorem not_satisfied_of_witnessSound (h : ProvesEnsemble e S ens) (hb : Ensembl
     {traces : Fin S.k → Array K}
     (hfar : ¬ P (List.ofFn fun i => toRows e (componentAt ens h.length i) (S.logN i) (traces i))) :
     ¬ S.Satisfied traces publicValues := fun hsat ↦ by
-  have := hP (toWitness e h fits traces publicInput)
+  have := hP (toWitness e h hb fits traces publicInput)
     (constraints_toWitness e h hb fits hsat.air publicInput)
     (balancedChannels_toWitness e h hb fits hcount hsat publicInput)
   rw [toWitness_tables] at this

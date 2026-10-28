@@ -30,10 +30,9 @@ variable {F : Type} [FiniteField F] {K : Type} [BaseField K] {EF : Type} [Challe
   (e : F ≃+* K)
 
 /-- A property of the rows of a component's tables that its circuit proves: every table of the
-component with consistent prover data whose constraints hold has rows satisfying `P`. -/
+component whose constraints hold has rows satisfying `P`. -/
 def TableSound (component : Component F) (P : List (Array F) → Prop) : Prop :=
-  ∀ table : Table F, table.component = component → table.DataConsistency → table.Constraints →
-    P table.table
+  ∀ table : Table F, table.component = component → table.Constraints → P table.table
 
 /-- A trace whose rows fail a property that a bridgeable component's circuit proves of its tables
 does not satisfy the component's AIR. -/
@@ -44,9 +43,9 @@ theorem not_satisfied_of_tableSound (S : Iop.Setup EF) {component : Component F}
     (h : ¬ P (toRows e component S.logN trace)) : ¬ S.air.Satisfied S.logN trace publicValues :=
   fun hsat ↦ by
     rw [hair] at hsat
-    obtain ⟨table, hcomponent, hrows, hdata, hconstraints⟩ :=
+    obtain ⟨table, hcomponent, hrows, hconstraints⟩ :=
       table_of_satisfied e S.logN trace hc fits hsat
-    exact h (hrows ▸ hP table hcomponent hdata hconstraints)
+    exact h (hrows ▸ hP table hcomponent hconstraints)
 
 /-- **Knowledge soundness of a component's STARK.** If a STARK proves a bridgeable component's
 AIR and the component's circuit proves `P` of its tables, the verifier accepts a prover with

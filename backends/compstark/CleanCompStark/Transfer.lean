@@ -92,20 +92,22 @@ def rowExpressions (component : Component F) : List (Expression F) :=
     component.rowOperations.interactions.flatMap fun i => i.mult :: i.msg.toList
 
 /-- What a component's AIR needs to mean what its circuit means: the circuit has no legacy lookups,
-every constraint is a gate times a body that reads no selector (`gateConstraint`), and every
-expression reads cells of the row. -/
+every constraint is a gate times a body that reads no selector (`gateConstraint`), every
+expression reads cells of the row, and the fixed columns are cells of the row's own input. -/
 def bridgeable (component : Component F) : Bool :=
   component.rowOperations.lookups.isEmpty &&
     component.rowOperations.constraints.all
       (fun x => (gateConstraint (component.window.map (·.rowWidth)) x).isSome) &&
-    (expressionsBadVariable component.width (rowExpressions component)).isNone
+    (expressionsBadVariable component.width (rowExpressions component)).isNone &&
+    (fixedColumns component).all (· < component.ownInputWidth)
 
 /-- A trace height of `2 ^ logN` that a component's AIR proves: the trace domain is a two-adic
-subgroup of `K`, row indices fit in `u64`, and the fixed columns have this height. -/
+subgroup of `K`, row indices fit in `u64`, and a preallocated or standalone component has this
+height. -/
 structure Fits (component : Component F) (logN : ℕ) : Prop where
   twoAdic : logN ≤ twoAdicity K
   height_le : logN ≤ 64
-  fixedHeight : ∀ fixed ∈ component.fixedColumns, fixed.height.toNat = 2 ^ logN
+  fixedHeight : ∀ height ∈ component.generation.height?, height.toNat = 2 ^ logN
 
 namespace Bridgeable
 variable {component : Component F} (h : bridgeable component = true)
@@ -113,19 +115,23 @@ include h
 
 theorem lookups_eq_nil : component.rowOperations.lookups = [] := by
   simp only [bridgeable, Bool.and_eq_true, List.isEmpty_iff] at h
-  exact h.1.1
+  exact h.1.1.1
 
 theorem gated : ∀ x ∈ component.rowOperations.constraints,
     (gateConstraint (component.window.map (·.rowWidth)) x).isSome := by
   simp only [bridgeable, Bool.and_eq_true, List.all_eq_true] at h
-  exact h.1.2
+  exact h.1.1.2
 
 theorem cells_lt : ∀ x ∈ rowExpressions component, ∀ j ∈ expressionCells x,
     j < component.width := by
   simp only [bridgeable, Bool.and_eq_true, Option.isNone_iff_eq_none] at h
   intro x hx
   exact cells_lt_of_badVariable _ x
-    ((List.findSome?_eq_none_iff.mp h.2) x hx)
+    ((List.findSome?_eq_none_iff.mp h.1.2) x hx)
+
+theorem fixed_lt : ∀ j ∈ fixedColumns component, j < component.ownInputWidth := by
+  simp only [bridgeable, Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq] at h
+  exact h.2
 
 end Bridgeable
 
@@ -141,12 +147,6 @@ theorem rowWidth_le_size {component : Component F} {layout : WindowLayout compon
   have := component.circuit.size_eq
   simp only [Component.width]
   omega
-
-theorem fixedWidth_le_rowWidth {component : Component F} {layout : WindowLayout component.Input}
-    (hw : component.window = some layout) : component.fixedWidth ≤ layout.rowWidth := by
-  have := component.fixed_width_le_input
-  simp only [hw] at this
-  exact this
 
 variable (logN : ℕ) (trace : Array K)
 
@@ -165,11 +165,11 @@ theorem eval_cellExpr_congr (component : Component F) (publicValues : List K) (i
       (cellExpr component j).eval (rowEnv e logN trace component i) := by
   unfold cellExpr
   cases hw : component.window with
-  | none => dsimp only; split <;> rfl
+  | none => dsimp only [ownCell]; split <;> rfl
   | some layout =>
     have hsel : ¬ (2 * layout.rowWidth ≤ j ∧ j < 2 * layout.rowWidth + 3) :=
       fun h => hj ⟨layout, hw, h⟩
-    dsimp only
+    dsimp only [ownCell, ownCellNext]
     split_ifs <;> first | rfl | (exfalso; omega)
 
 /-- An expression without selector cells reads the same in both environments of a row. -/
@@ -380,69 +380,110 @@ theorem getElem_toRows (i : ℕ) (hi : i < (toRows e component logN trace).lengt
 theorem size_toRow (i : ℕ) : (toRow e component logN trace i).size = component.width :=
   Array.size_ofFn
 
-theorem cellExpr_of_lt_fixedWidth {K' : Type} {j : ℕ} (hj : j < component.fixedWidth) :
-    cellExpr (K := K') component j = .prepCur j := by
+theorem mem_fixedColumns_iff {j : ℕ} : j ∈ fixedColumns component ↔
+    ∃ value, component.generation.cells.1.toList[j]? = some (.fixed value) := by
+  simp only [fixedColumns, List.mem_map, List.mem_filter, List.mem_zipIdx_iff_getElem?]
+  constructor
+  · rintro ⟨⟨cell, k⟩, ⟨hk, hfixed⟩, rfl⟩
+    cases cell <;> simp_all [WitnessGeneration.Cell.isFixed]
+  · rintro ⟨value, hvalue⟩
+    exact ⟨⟨.fixed value, j⟩, ⟨hvalue, rfl⟩, rfl⟩
+
+/-- A fixed cell of the row's own input is its column of the preprocessed trace. -/
+theorem cellExpr_of_fixed {K' : Type} (hc : bridgeable component = true) {j : ℕ}
+    (hj : j ∈ fixedColumns component) :
+    cellExpr (K := K') component j = .prepCur ((fixedColumns component).idxOf j) := by
+  have hlt := Bridgeable.fixed_lt hc j hj
   unfold cellExpr
   cases hw : component.window with
-  | none => simp only [hj, ↓reduceIte]
+  | none => simp only [ownCell, hj, ↓reduceIte]
   | some layout =>
-    have := fixedWidth_le_rowWidth hw
-    simp only [show j < layout.rowWidth by omega, hj, ↓reduceIte]
+    simp only [Component.ownInputWidth, hw, Option.map_some, Option.getD_some] at hlt
+    simp only [hlt, ↓reduceIte, ownCell, hj]
 
-theorem getD_fixedTrace {fixed : FixedColumns F} (hf : component.fixedColumns = some fixed)
-    {i j : ℕ} (hi : i < 2 ^ logN) (hj : j < fixed.width) :
-    (fixedTrace e component logN).getD (i * fixed.width + j) 0 =
-      e ((fixed.values (UInt64.ofNat i))[j]?.getD 0) := by
-  have hlt : i * fixed.width + j < 2 ^ logN * fixed.width := by
-    have : (i + 1) * fixed.width ≤ 2 ^ logN * fixed.width := Nat.mul_le_mul_right _ hi
+theorem getD_fixedTrace {i k : ℕ} (hi : i < 2 ^ logN) (hk : k < fixedWidth component) :
+    (fixedTrace e component logN).getD (i * fixedWidth component + k) 0 =
+      e ((fixedValues component i)[k]?.getD 0) := by
+  have hlt : i * fixedWidth component + k < 2 ^ logN * fixedWidth component := by
+    have : (i + 1) * fixedWidth component ≤ 2 ^ logN * fixedWidth component :=
+      Nat.mul_le_mul_right _ hi
     rw [Nat.succ_mul] at this
     omega
-  have hdiv : (i * fixed.width + j) / fixed.width = i := by
-    rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hj, Nat.zero_add]
-  have hmod : (i * fixed.width + j) % fixed.width = j := by
-    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hj]
-  simp only [fixedTrace, hf, Array.getD_eq_getD_getElem?, Array.getElem?_ofFn, hlt, ↓reduceDIte,
+  have hdiv : (i * fixedWidth component + k) / fixedWidth component = i := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hk, Nat.zero_add]
+  have hmod : (i * fixedWidth component + k) % fixedWidth component = k := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hk]
+  simp only [fixedTrace, Array.getD_eq_getD_getElem?, Array.getElem?_ofFn, hlt, ↓reduceDIte,
     Option.getD_some, hdiv, hmod]
 
-/-- The rows read off a trace start with the fixed columns. -/
-theorem fixedRowsMatch_toRows
-    (hfixed : ∀ fixed ∈ component.fixedColumns, fixed.height.toNat = 2 ^ logN) :
+/-- A fixed cell of a row read off the trace is the fixed cell's value at the row index. -/
+theorem getD_toRow_of_fixed (hc : bridgeable component = true) {i j : ℕ} (hi : i < 2 ^ logN)
+    {value : Witgen.FExpr F}
+    (hj : component.generation.cells.1.toList[j]? = some (.fixed value)) :
+    (toRow e component logN trace i)[j]?.getD 0 = value.eval
+      (WitnessGeneration.inputContext component.generation.cells.2
+        (WitnessGeneration.rowEnvironment (.empty F)) i) := by
+  have hmem : j ∈ fixedColumns component := (mem_fixedColumns_iff component).mpr ⟨value, hj⟩
+  have hjw : j < component.width := by
+    have hlt := Bridgeable.fixed_lt hc j hmem
+    have hsize := component.circuit.size_eq
+    cases hw : component.window with
+    | none =>
+      simp only [Component.ownInputWidth, hw, Option.map_none, Option.getD_none] at hlt
+      simp only [Component.width]
+      omega
+    | some layout =>
+      have := rowWidth_le_size hw
+      simp only [Component.ownInputWidth, hw, Option.map_some, Option.getD_some] at hlt
+      omega
+  have hk : (fixedColumns component).idxOf j < fixedWidth component :=
+    List.idxOf_lt_length_iff.mpr hmem
+  rw [getD_toRow e logN trace component i j hjw, cellExpr_of_fixed component hc hmem]
+  simp only [Expr.eval, Lookup.generationRow, toAir]
+  rw [getD_fixedTrace e logN component hi hk, RingEquiv.symm_apply_apply]
+  simp only [fixedValues, List.getElem?_map, List.getElem?_eq_getElem hk, Option.map_some,
+    Option.getD_some]
+  have hidx : (fixedColumns component)[(fixedColumns component).idxOf j]'hk = j :=
+    List.getElem_idxOf hk
+  rw [hidx, hj]
+
+/-- The rows read off a trace agree with the fixed cells of the component's generation. -/
+theorem fixedRowsMatch_toRows (hc : bridgeable component = true)
+    (hheight : ∀ height ∈ component.generation.height?, height.toNat = 2 ^ logN)
+    (hlog : logN ≤ 64) :
     component.FixedRowsMatch (toRows e component logN trace) := by
+  have hfixedAt : ∀ i < 2 ^ logN,
+      List.Forall₂ (WitnessGeneration.Cell.FixedMatches (WitnessGeneration.inputContext
+          component.generation.cells.2 (WitnessGeneration.rowEnvironment (.empty F)) i))
+        component.generation.cells.1.toList
+        (toElements (component.inputOf (toRow e component logN trace i))).toList := by
+    intro i hi
+    rw [List.forall₂_iff_get]
+    refine ⟨by simp, fun j hj _ => ?_⟩
+    simp only [Vector.length_toList] at hj
+    simp only [List.get_eq_getElem, Component.inputOf, ProvableType.toElements_fromElements, rowPrefix,
+      Vector.toList_mk, List.getElem_ofFn]
+    have hcell : component.generation.cells.1.toList[j]? =
+        some component.generation.cells.1.toList[j] := List.getElem?_eq_getElem _
+    cases hc' : component.generation.cells.1.toList[j] with
+    | fixed value =>
+      rw [hc'] at hcell
+      exact (getD_toRow_of_fixed e logN trace component hc hi hcell).symm ▸ rfl
+    | witness _ | multiplicity => trivial
+  have hindex (i : ℕ) (hi : i < 2 ^ logN) : (UInt64.ofNat i).toNat = i :=
+    UInt64.toNat_ofNat_of_lt' (Nat.lt_of_lt_of_le hi
+      (Nat.pow_le_pow_right (by norm_num) hlog))
   unfold Component.FixedRowsMatch
-  cases hf : component.fixedColumns with
-  | none => trivial
-  | some fixed =>
-    have hheight := hfixed fixed hf
-    have hwidth : component.fixedWidth = fixed.width := by simp [Component.fixedWidth, hf]
-    have hle : fixed.width ≤ component.width := by
-      have := component.fixed_width_le_input
-      have := component.circuit.size_eq
-      cases hw : component.window with
-      | none => simp only [hf, hw, Option.map_some, Option.getD_some, Option.map_none,
-          Option.getD_none] at *; simp only [Component.width]; omega
-      | some layout =>
-        have := rowWidth_le_size hw
-        simp only [hf, hw, Option.map_some, Option.getD_some] at *
-        omega
-    simp only [FixedColumns.RowsMatch]
-    apply List.ext_getElem
-    · simp [length_toRows, hheight]
-    · intro i h1 h2
-      simp only [List.length_map, length_toRows] at h1
-      simp only [List.getElem_map, getElem_toRows, List.getElem_range, Function.comp_apply]
-      have hsize : (fixed.values (UInt64.ofNat i)).size = fixed.width := by
-        simp [FixedColumns.values]
-      apply Array.ext
-      · simp [size_toRow, hsize, hle]
-      · intro j hj _
-        simp only [Array.size_extract, size_toRow] at hj
-        have hjw : j < fixed.width := by omega
-        rw [Array.getElem_extract]
-        simp only [Nat.zero_add, toRow, Array.getElem_ofFn]
-        rw [cellExpr_of_lt_fixedWidth component (by omega)]
-        simp only [Expr.eval, Lookup.generationRow, toAir, hwidth]
-        rw [getD_fixedTrace e logN component hf h1 hjw, RingEquiv.symm_apply_apply,
-          Array.getElem?_eq_getElem (by omega), Option.getD_some]
+  cases hgen : component.generation with
+  | demand => trivial
+  | preallocated mode | standalone mode =>
+    have hh := hheight mode.height (by simp [WitnessGeneration.Generation.height?, hgen])
+    refine ⟨by rw [length_toRows, hh], fun i hi => ?_⟩
+    have hi' : i < 2 ^ logN := by rwa [length_toRows] at hi
+    have := hfixedAt i hi'
+    simp only [hgen, WitnessGeneration.Generation.cells, WitnessGeneration.inputCells] at this
+    simpa [WitnessGeneration.PreallocatedMode.FixedAt, WitnessGeneration.StandaloneMode.FixedAt,
+      getElem_toRows, hindex i hi', Component.inputOf] using this
 
 theorem cell_inputOf {layout : WindowLayout component.Input} (row : Array F) (j : ℕ)
     (h : j < 2 * layout.rowWidth + 3) :
@@ -468,7 +509,7 @@ theorem windowsMatch_toRows : component.WindowsMatch (toRows e component logN tr
       congr 1
       simp only [cellExpr, hw, show ¬ layout.rowWidth + j < layout.rowWidth by omega,
         show layout.rowWidth + j < 2 * layout.rowWidth by omega, hj,
-        Nat.add_sub_cancel_left, ↓reduceIte]
+        Nat.add_sub_cancel_left, ↓reduceIte, ownCell, ownCellNext]
       split <;> rfl
     · simp only [WindowLayout.isFirstRow, cell_inputOf, getElem_toRows]
       rw [getD_toRow e logN trace component _ _ (by omega),
@@ -486,12 +527,13 @@ theorem windowsMatch_toRows : component.WindowsMatch (toRows e component logN tr
       simp only [Expr.eval, Lookup.generationRow]
       split_ifs <;> first | omega | simp
 
-/-- The table of a component read off a trace of `2 ^ logN` rows of its AIR, with prover data
-`data`. -/
-def toTable (fits : Fits (K := K) component logN) (data : ProverData F) : Table F where
+/-- The table of a component read off a trace of `2 ^ logN` rows of its AIR, a bridgeable
+component, with the prover data of its own rows. -/
+def toTable (hc : bridgeable component = true) (fits : Fits (K := K) component logN) : Table F where
   component
   table := toRows e component logN trace
-  data
+  data name n := if name = component.circuit.name then
+    ((toRows e component logN trace).map (rowPrefix n)).toArray else #[]
   uniform_width row hrow := by
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hrow
     rw [getElem_toRows]
@@ -500,38 +542,49 @@ def toTable (fits : Fits (K := K) component logN) (data : ProverData F) : Table 
     rw [length_toRows]
     calc 2 ^ logN ≤ 2 ^ 64 := Nat.pow_le_pow_right (by norm_num) fits.height_le
       _ = UInt64.size := rfl
-  fixed_rows_match := fixedRowsMatch_toRows e logN trace component fits.fixedHeight
+  fixed_rows_match :=
+    fixedRowsMatch_toRows e logN trace component hc fits.fixedHeight fits.height_le
   windows_match := windowsMatch_toRows e logN trace component
+  data_consistent := by simp
 
-/-- If the trace's rows satisfy the component's AIR, the table's constraints hold. -/
-theorem constraints_toTable {component : Component F} (hc : bridgeable component = true)
-    (fits : Fits (K := K) component logN) (data : ProverData F) {publicValues : List K}
-    (h : (toAir e component logN).ConstraintsVanish logN trace publicValues) :
-    (toTable e logN trace component fits data).Constraints := by
+/-- If the trace's rows satisfy the component's AIR, the constraints of a table of the component
+with these rows hold, whatever its prover data. -/
+theorem constraints_of_toRows {component : Component F} (hc : bridgeable component = true)
+    (fits : Fits (K := K) component logN) {publicValues : List K}
+    (h : (toAir e component logN).ConstraintsVanish logN trace publicValues) {table : Table F}
+    (hcomponent : table.component = component)
+    (hrows : table.table = toRows e component logN trace) : table.Constraints := by
+  subst hcomponent
   intro row hrow
+  rw [hrows] at hrow
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hrow
   have hi' : i < 2 ^ logN := by
-    simpa only [toTable, length_toRows] using hi
-  simp only [toTable, getElem_toRows, Table.environment]
+    simpa only [length_toRows] using hi
+  simp only [getElem_toRows, Table.environment]
   rw [Component.constraintsHold_iff]
   refine ⟨fun x hx => ?_, fun l hl => by simp [Bridgeable.lookups_eq_nil hc] at hl⟩
   obtain ⟨g, hg⟩ := Option.isSome_iff_exists.mp (Bridgeable.gated hc x hx)
-  refine (eval_constraint_iff e logN trace hc fits.twoAdic publicValues hi' data hx hg).mpr ?_
+  refine (eval_constraint_iff e logN trace hc fits.twoAdic publicValues hi' _ hx hg).mpr ?_
   exact h _ (List.mem_map.mpr ⟨g, List.mem_filterMap.mpr ⟨x, hx, hg⟩, rfl⟩) i hi'
+
+/-- If the trace's rows satisfy the component's AIR, the table's constraints hold. -/
+theorem constraints_toTable {component : Component F} (hc : bridgeable component = true)
+    (fits : Fits (K := K) component logN) {publicValues : List K}
+    (h : (toAir e component logN).ConstraintsVanish logN trace publicValues) :
+    (toTable e logN trace component hc fits).Constraints :=
+  constraints_of_toRows e logN trace hc fits h rfl rfl
 
 end Table
 
 /-- **The transfer theorem for one component.** A trace satisfying a bridgeable component's AIR on
-`2 ^ logN` rows is, read as Clean rows (`toRows`), a table of the component with consistent prover
-data whose constraints hold. -/
+`2 ^ logN` rows is, read as Clean rows (`toRows`), a table of the component whose constraints
+hold. -/
 theorem table_of_satisfied {component : Component F} (hc : bridgeable component = true)
     (fits : Fits (K := K) component logN) {publicValues : List K}
     (h : (toAir e component logN).Satisfied logN trace publicValues) :
     ∃ table : Table F, table.component = component ∧ table.table = toRows e component logN trace ∧
-      table.DataConsistency ∧ table.Constraints := by
-  let table := toTable e logN trace component fits (fun _ _ => #[])
-  refine ⟨{ table with data := deriveProverData [table] }, rfl, rfl, ?_,
-    constraints_toTable e logN trace hc fits _ h.vanish⟩
-  simp [Table.DataConsistency, deriveProverData, Table.proverRows, table]
+      table.Constraints :=
+  ⟨toTable e logN trace component hc fits, rfl, rfl,
+    constraints_toTable e logN trace hc fits h.vanish⟩
 
 end CleanCompStark
