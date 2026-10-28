@@ -298,7 +298,8 @@ lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ}
       ring_nf
 
 /--
-Assume you have a list of channel interactions that is made up of pairs (pull_i, push_i), where for each i, `Guarantees pull_i → Requirements push_i`.
+Assume you have a list of channel interactions that is made up of pairs (pull_i, push_i),
+where for each i, `Guarantees pull_i → Requirements push_i`.
 We want to think of (pull_i → push_i) as the state transition of a VM circuit.
 
 Furthermore, assume pulls and pushes are balanced, and the channel is normal.
@@ -412,13 +413,11 @@ lemma activeCount_append (as bs : List (Interaction F)) (direction : Direction) 
     activeCount (as ++ bs) direction msg = activeCount as direction msg + activeCount bs direction msg :=
   List.countP_append ..
 
-
 lemma activeCount_eq_zero_of_direction_ne {interactions : List (Interaction F)}
     {direction : Direction} (h_direction : ∀ i ∈ interactions, i.direction ≠ direction)
     (msg : Array F) : activeCount interactions direction msg = 0 := by
   simp only [activeCount, List.countP_eq_zero, decide_eq_true_eq, not_and]
   exact fun i hi h => absurd h (h_direction i hi)
-
 
 /--
 Zero-padded variant of `guarantees_of_requirements_of_requirements_of_guarantees`.
