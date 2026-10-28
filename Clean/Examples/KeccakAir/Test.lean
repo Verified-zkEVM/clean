@@ -1,13 +1,13 @@
 module
 
 public import Clean.Examples.KeccakAir.Ensemble
-public import Clean.Examples.KeccakAir.FastTrace
+public import Clean.Examples.KeccakAir.Trace
 public import CompPoly.Fields.KoalaBear.Fast
 public import Clean.Backends.Program
 
 -- `#guard` runs compiled code from these modules.
 public meta import Clean.Examples.KeccakAir.Ensemble
-public meta import Clean.Examples.KeccakAir.FastTrace
+public meta import Clean.Examples.KeccakAir.Trace
 public meta import Clean.Backends.Program
 
 @[expose] public section
