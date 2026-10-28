@@ -47,25 +47,25 @@ pub mod component_0 {
         vec![
             Interaction {
                 channel: "fibonacci",
-                multiplicity: (-E::from_u64(1u64) * row[0].clone()),
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
                 message: vec![row[1].clone(), row[2].clone(), row[3].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "add8",
-                multiplicity: (-E::from_u64(1u64) * row[0].clone()),
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
                 message: vec![row[2].clone(), row[3].clone(), row[4].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "fibonacci",
+                direction: Direction::Push,
                 multiplicity: row[0].clone(),
                 message: vec![
                     (row[1].clone() + E::from_u64(1u64)),
                     row[3].clone(),
                     row[4].clone(),
                 ],
-                assume_guarantees: false,
             },
         ]
     }
@@ -164,15 +164,15 @@ pub mod component_1 {
         vec![
             Interaction {
                 channel: "bytes",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[2].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "add8",
+                direction: Direction::Push,
                 multiplicity: row[3].clone(),
                 message: vec![row[0].clone(), row[1].clone(), row[2].clone()],
-                assume_guarantees: false,
             },
         ]
     }
@@ -206,6 +206,7 @@ pub mod component_1 {
             multiplicity: Some(MultiplicityColumn {
                 interaction: 1,
                 column: 3,
+                direction: Direction::Push,
             }),
             padding: vec![
                 F::from_u64(0u64),
@@ -255,9 +256,9 @@ pub mod component_2 {
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "bytes",
+            direction: Direction::Push,
             multiplicity: row[1].clone(),
             message: vec![row[0].clone()],
-            assume_guarantees: false,
         }]
     }
 
@@ -269,6 +270,7 @@ pub mod component_2 {
             multiplicity: MultiplicityColumn {
                 interaction: 0,
                 column: 1,
+                direction: Direction::Push,
             },
         }
     }
@@ -290,15 +292,15 @@ pub mod verifier {
         vec![
             Interaction {
                 channel: "fibonacci",
-                multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+                direction: Direction::Pull,
+                multiplicity: E::from_u64(1u64),
                 message: vec![row[0].clone(), row[1].clone(), row[2].clone()],
-                assume_guarantees: true,
             },
             Interaction {
                 channel: "fibonacci",
+                direction: Direction::Push,
                 multiplicity: E::from_u64(1u64),
                 message: vec![E::from_u64(0u64), E::from_u64(0u64), E::from_u64(1u64)],
-                assume_guarantees: false,
             },
         ]
     }

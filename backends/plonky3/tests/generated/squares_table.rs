@@ -64,9 +64,9 @@ pub mod component_0 {
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "squares",
+            direction: Direction::Push,
             multiplicity: row[2].clone(),
             message: vec![row[0].clone(), row[1].clone()],
-            assume_guarantees: false,
         }]
     }
 
@@ -78,6 +78,7 @@ pub mod component_0 {
             multiplicity: MultiplicityColumn {
                 interaction: 0,
                 column: 2,
+                direction: Direction::Push,
             },
         }
     }
@@ -105,9 +106,9 @@ pub mod verifier {
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "squares",
-            multiplicity: (-E::from_u64(1u64) * E::from_u64(1u64)),
+            direction: Direction::Pull,
+            multiplicity: E::from_u64(1u64),
             message: vec![row[0].clone(), row[1].clone()],
-            assume_guarantees: true,
         }]
     }
 }

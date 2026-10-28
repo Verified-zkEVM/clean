@@ -108,11 +108,11 @@ theorem balanceOf_flatMap {α : Type*} (g : α → List (Interaction F)) (msg : 
     ∀ L : List α, balanceOf (L.flatMap g) msg = (L.map fun a => balanceOf (g a) msg).sum
   | [] => by simp [balanceOf]
   | a :: L => by
-    rw [List.flatMap_cons, balanceOf_append, balanceOf_flatMap g msg L, List.map_cons,
-      List.sum_cons]
+    rw [List.flatMap_cons, List.map_cons, List.sum_cons, ← balanceOf_flatMap g msg L]
+    simp only [balanceOf, List.filter_append, List.map_append, List.sum_append]
 
 theorem balanceOf_eq_sum (L : List (Interaction F)) (msg : Array F) :
-    balanceOf L msg = (L.map fun i => if i.msg = msg then i.mult else 0).sum := by
+    balanceOf L msg = (L.map fun i => if i.msg = msg then i.signedMult else 0).sum := by
   rw [balanceOf, sum_filter_eq]
   simp only [decide_eq_true_eq]
 
@@ -264,8 +264,14 @@ theorem rowBalance {component : Component F} (hc : bridgeable component = true)
         Vector.toList_map]
     by_cases hm : (AbstractInteraction.eval env a).msg = msg
     · simp only [hiff.mpr hm, hm, ↓reduceIte]
-      show (0 : K) - (toExpr e component a.mult).eval gen = -e (env a.mult)
-      rw [hmult, zero_sub]
+      cases hdir : a.direction
+      · show (0 : K) - (toExpr e component a.mult).eval gen =
+          -e (AbstractInteraction.eval env a).signedMult
+        simp only [Interaction.signedMult, AbstractInteraction.eval, hdir, hmult, zero_sub]
+      · show (toExpr e component a.mult).eval gen =
+          -e (AbstractInteraction.eval env a).signedMult
+        simp only [Interaction.signedMult, AbstractInteraction.eval, hdir, hmult, map_neg,
+          neg_neg]
     · simp only [mt hiff.mp hm, hm, ↓reduceIte, map_zero, neg_zero]
   · have hname : ¬ a.channel.name = channel.name := fun h => hca (hchannel a ha h)
     simp only [hca, hname, decide_false, Bool.false_eq_true, ↓reduceIte, map_zero, neg_zero]
@@ -377,15 +383,15 @@ theorem length_interactionValuesWith_le (component : Component F) (channel : Raw
 
 /-- Every channel of an ensemble balances on the tables read off traces satisfying a batch that
 proves it. -/
-theorem balancedChannels_toWitness (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
+theorem balanced_toWitness (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable ens)
     (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
     (hcount : interactionCount ens h.length S.logN < ringChar F)
     {traces : Fin S.k → Array K} {publicValues : Fin S.k → List K}
     (hsat : S.Satisfied traces publicValues) (publicInput : PublicIO F) :
-    (toWitness e h hb fits traces publicInput).BalancedChannels := by
+    (toWitness e h hb fits traces publicInput).Balanced .logUp := by
   intro channel hchannel
-  rw [EnsembleWitness.BalancedChannel,
-    EnsembleWitness.interactionsWith_of_verifier_empty hb.verifier]
+  show LogUpBalanced _
+  rw [EnsembleWitness.interactionsWith_of_verifier_empty hb.verifier]
   -- the tables' interactions on the channel, row by row
   obtain ⟨data, hflat⟩ : ∃ data : ProverData F,
       (toWitness e h hb fits traces publicInput).tables.flatMap (·.interactionsWith channel) =
@@ -400,8 +406,7 @@ theorem balancedChannels_toWitness (h : ProvesEnsemble e S ens) (hb : EnsembleBr
       Table.environment]
   rw [hflat]
   constructor
-  · left
-    refine lt_of_le_of_lt ?_ hcount
+  · refine lt_of_le_of_lt ?_ hcount
     rw [List.length_flatMap, interactionCount]
     refine List.sum_le_sum fun i _ => ?_
     rw [List.length_flatMap]
@@ -444,17 +449,17 @@ theorem statement_of_satisfied (h : ProvesEnsemble e S ens) (hb : EnsembleBridge
     (hcount : interactionCount ens h.length S.logN < ringChar F)
     {traces : Fin S.k → Array K} {publicValues : Fin S.k → List K}
     (hsat : S.Satisfied traces publicValues) (publicInput : PublicIO F) :
-    ens.Statement publicInput :=
+    ens.Statement .logUp publicInput :=
   ⟨toWitness e h hb fits traces publicInput, rfl,
     constraints_toWitness e h hb fits hsat.air publicInput,
-    balancedChannels_toWitness e h hb fits hcount hsat publicInput⟩
+    balanced_toWitness e h hb fits hcount hsat publicInput⟩
 
 /-! ### Knowledge soundness -/
 
 /-- A property of the tables of an ensemble's witnesses that its statement proves: the rows of
 every witness whose constraints hold and whose channels balance satisfy `P`. -/
 def WitnessSound (ens : Ensemble F PublicIO) (P : List (List (Array F)) → Prop) : Prop :=
-  ∀ witness : EnsembleWitness ens, witness.Constraints → witness.BalancedChannels →
+  ∀ witness : EnsembleWitness ens, witness.Constraints → witness.Balanced .logUp →
     P (witness.tables.map (·.table))
 
 /-- Traces whose rows fail a property that a bridgeable ensemble's statement proves of its
@@ -468,7 +473,7 @@ theorem not_satisfied_of_witnessSound (h : ProvesEnsemble e S ens) (hb : Ensembl
     ¬ S.Satisfied traces publicValues := fun hsat ↦ by
   have := hP (toWitness e h hb fits traces publicInput)
     (constraints_toWitness e h hb fits hsat.air publicInput)
-    (balancedChannels_toWitness e h hb fits hcount hsat publicInput)
+    (balanced_toWitness e h hb fits hcount hsat publicInput)
   rw [toWitness_tables] at this
   exact hfar this
 
@@ -496,7 +501,7 @@ theorem batchKnowledgeSoundness_of_soundness (h : ProvesEnsemble e S ens)
     (hb : EnsembleBridgeable ens)
     (fits : ∀ i, Fits (K := K) (componentAt ens h.length i) (S.logN i))
     (hcount : interactionCount ens h.length S.logN < ringChar F)
-    {Assumptions Spec : PublicIO F → Prop} (hsound : ens.Soundness Assumptions Spec)
+    {Assumptions Spec : PublicIO F → Prop} (hsound : ens.Soundness .logUp Assumptions Spec)
     {publicInput : PublicIO F} (hassumptions : Assumptions publicInput)
     (hspec : ¬ Spec publicInput) (publicValues : Fin S.k → List K) (prover : Batch.Prover S)
     (δ δ' : NNReal) (hδ' : (δ' : ℝ) < 1 - S.rate) :

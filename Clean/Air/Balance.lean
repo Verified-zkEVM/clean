@@ -1,6 +1,7 @@
 module
 
 public import Clean.Circuit
+public import Clean.Gadgets.Boolean
 
 @[expose] public section
 
@@ -10,177 +11,204 @@ variable {Message : TypeMap} [ProvableType Message]
 /-
 ## Channel balance
 
-This module treats channel interactions as multisets and asks what properties can be
-deduced from the condition of _balance_: that each element has multiplicity 0.
+This module treats channel interactions as multisets of pushed and pulled messages and asks what
+properties can be deduced from the condition of _balance_: that every pulled message is matched
+by a pushed one.
+
+What balance means depends on the proof system. `BalancedInteractions` collects the facts that the
+soundness theory uses, and a `Balance` is a check that a verifier performs on the interactions
+with a channel, together with the proof that the check implies these facts.
 -/
+
+namespace Interaction
+/-- A pull of multiplicity `1`: the interactions that typed channels give their guarantee. -/
+def Pull (i : Interaction F) : Prop := i.direction = .pull ∧ i.mult = 1
 
 /--
-Balance of one element of an interaction list.
-This is just multiplicity of the element when viewing the list as a multiset.
+An interaction that pushes its message: an active push, or a pull of multiplicity other than `0` or
+`1`, which acts as a push under field-sum balance.
 -/
-def balanceOf (interactions : List (Interaction F)) (msg : Array F) : F :=
-  interactions.filter (·.msg = msg) |>.map (·.mult) |>.sum
+def Push (i : Interaction F) : Prop := i.mult ≠ 0 ∧ (i.direction = .pull → i.mult ≠ 1)
+
+/-- Every interaction is in exactly one of three cases: inactive (`mult = 0`), a `Pull`, or a
+`Push`. -/
+lemma not_push_iff {i : Interaction F} : ¬i.Push ↔ i.mult = 0 ∨ i.Pull := by
+  simp only [Push, Pull, not_and, Classical.not_imp]
+  tauto
+end Interaction
+
+/-- The number of active interactions in a direction that carry a message. -/
+def activeCount (interactions : List (Interaction F)) (direction : Interaction.Direction) (msg : Array F) : ℕ :=
+  interactions.countP fun i => i.direction = direction ∧ i.msg = msg ∧ i.mult ≠ 0
+
+/-- The messages of the active interactions in a direction. -/
+def activeMessages (interactions : List (Interaction F)) (direction : Interaction.Direction) :
+    List (Array F) :=
+  (interactions.filter fun i => i.direction = direction ∧ i.mult ≠ 0).map (·.msg)
+
+lemma count_activeMessages (interactions : List (Interaction F)) (direction : Interaction.Direction)
+    (msg : Array F) :
+    (activeMessages interactions direction).count msg = activeCount interactions direction msg := by
+  simp only [activeMessages, activeCount, List.count_eq_countP, List.countP_map,
+    List.countP_filter]
+  apply List.countP_congr
+  intro i _
+  simp only [Function.comp_apply, beq_iff_eq, Bool.and_eq_true, decide_eq_true_eq]
+  tauto
 
 /--
-Channel balance: for any message, the sum of multiplicities is 0.
-We also require a side condition that ensures the interaction count does not overflow.
+The facts about balanced interactions that soundness proofs use:
+- a pull of multiplicity `1` is matched by a push of its message, and
+- if all interactions carrying a message have multiplicity `0` or `1`, it is pushed and pulled
+  equally often.
 -/
-def BalancedInteractions (interactions : List (Interaction F)) : Prop :=
-  (interactions.length < ringChar F ∨ ringChar F = 0) ∧
-  ∀ msg : Array F, balanceOf interactions msg = 0
-
-lemma balanceOf_append {as bs : List (Interaction F)} {msg : Array F} :
-    balanceOf (as ++ bs) msg = balanceOf as msg + balanceOf bs msg := by
-  simp [balanceOf, List.filter_append, List.map_append, List.sum_append]
-
-lemma balanceOf_cons {i : Interaction F} {is : List (Interaction F)} {msg : Array F} :
-    balanceOf (i :: is) msg = (if i.msg = msg then i.mult else 0) + balanceOf is msg := by
-  by_cases h : i.msg = msg <;> simp [balanceOf, h]
-
-lemma balanceOf_perm {as bs : List (Interaction F)} {msg : Array F} :
-    List.Perm as bs → balanceOf as msg = balanceOf bs msg := by
-  intro perm
-  apply List.Perm.sum_eq
-  exact perm.filter (·.msg = msg) |>.map (·.mult)
+structure BalancedInteractions (interactions : List (Interaction F)) : Prop where
+  exists_push_of_pull : ∀ a ∈ interactions, a.Pull →
+    ∃ b ∈ interactions, b.msg = a.msg ∧ b.Push
+  activeCount_push_eq_activeCount_pull_of_isBool : ∀ msg : Array F,
+    (∀ i ∈ interactions, i.msg = msg → IsBool i.mult) →
+    activeCount interactions .push msg = activeCount interactions .pull msg
 
 /-- Balance is invariant under permutation of the interaction list. -/
-lemma balancedInteractions_of_perm {as bs : List (Interaction F)} :
-   BalancedInteractions as → List.Perm as bs → BalancedInteractions bs := by
-  rintro ⟨ lt_ringChar, balance ⟩ perm
+lemma BalancedInteractions.of_perm {as bs : List (Interaction F)} :
+    BalancedInteractions as → List.Perm as bs → BalancedInteractions bs := by
+  rintro ⟨ push_of_pull, counts ⟩ perm
   constructor
-  · simp_all [perm.length_eq]
-  intro msg
-  rw [← balanceOf_perm perm, balance]
+  · intro a a_mem a_pull
+    obtain ⟨ b, b_mem, b_msg, b_push ⟩ := push_of_pull a (perm.mem_iff.mpr a_mem) a_pull
+    exact ⟨ b, perm.mem_iff.mp b_mem, b_msg, b_push ⟩
+  · intro msg isBool
+    simp only [activeCount, ← perm.countP_eq]
+    exact counts msg fun i hi => isBool i (perm.mem_iff.mp hi)
 
-lemma count_lt_ringChar_of_balancedInteractions {ins : List (Interaction F)} {msg : Array F} :
-    BalancedInteractions ins → ins.countP (·.msg = msg) < ringChar F ∨ ringChar F = 0 := by
-  intro ⟨ lt_ringChar, _ ⟩
-  grw [List.countP_le_length]
-  exact lt_ringChar
-
-lemma List.countP_and_left_le {α : Type} (l : List α) (p q : α → Bool) :
-    l.countP (fun x => p x && q x) ≤ l.countP p := by
-  induction l with
-  | nil => simp
-  | cons a l ih =>
-    by_cases hp : p a
-    · by_cases hq : q a
-      · simp [hp, hq, ih]
-      · simp [hp, hq, ih.trans (Nat.le_add_right _ _)]
-    · simp [hp, ih]
+lemma BalancedInteractions.nil : BalancedInteractions ([] : List (Interaction F)) :=
+  ⟨ by simp, by simp [activeCount] ⟩
 
 /--
-Useful mechanical lemma: if all multiplicities for a given message are the same,
-the balance sum can be written as multiplicity times message count.
+A balance check: the condition that a verifier checks on the interactions with each channel, and its
+proof that the condition implies `BalancedInteractions`.
 -/
-lemma balanceOf_eq_of_const_mult {interactions : List (Interaction F)} {msg : Array F} {mult : F} :
-    (∀ i ∈ interactions, i.msg = msg → i.mult = mult) →
-    balanceOf interactions msg = mult * ↑(interactions.countP (·.msg = msg)) := by
-  intro constant_mult
-  set count : ℕ := interactions.countP (·.msg = msg)
-  suffices (interactions.filter (·.msg = msg)).map (·.mult) = List.replicate count mult by
-    rw [balanceOf, this]
-    simp [mul_comm]
-  apply List.ext_getElem
-  · simp [count, List.countP_eq_length_filter]
-  intro i hi hi'
-  simp only [List.getElem_map, List.getElem_replicate]
-  rw [List.length_map] at hi
-  set a := (interactions.filter (·.msg = msg))[i] with ha
-  have a_mem_filter : a ∈ interactions.filter (·.msg = msg) := by simp [a]
-  simp only [List.mem_filter, decide_eq_true_eq] at a_mem_filter
-  apply constant_mult a <;> simp_all
+structure Balance (F : Type) [FiniteField F] where
+  Balanced : List (Interaction F) → Prop
+  balancedInteractions_of_balanced : ∀ interactions,
+    Balanced interactions → BalancedInteractions interactions
+
+/-
+## LogUp: field-sum balance
+-/
+
+/-- The multiplicity of an interaction with sign: pushes count positively, pulls negatively. -/
+def Interaction.signedMult (i : Interaction F) : F :=
+  match i.direction with
+  | .push => i.mult
+  | .pull => -i.mult
+
+/-- Balance of one message: the sum of signed multiplicities of the interactions carrying it. -/
+def balanceOf (interactions : List (Interaction F)) (msg : Array F) : F :=
+  interactions.filter (·.msg = msg) |>.map (·.signedMult) |>.sum
+
+lemma balanceOf_cons {i : Interaction F} {is : List (Interaction F)} {msg : Array F} :
+    balanceOf (i :: is) msg = (if i.msg = msg then i.signedMult else 0) + balanceOf is msg := by
+  by_cases h : i.msg = msg <;> simp [balanceOf, h]
 
 /--
-Special case of `balanceOf_eq_of_const_mult` for when the exact message doesn't matter.
+If all interactions carrying a message have multiplicity `0` or `1`, its balance is the number of
+active pushes minus the number of active pulls.
 -/
-lemma balanceOf_eq_of_const_mult' {interactions : List (Interaction F)} {msg : Array F} {mult : F} :
-    (∀ i ∈ interactions, i.mult = mult) →
-    balanceOf interactions msg = mult * ↑(interactions.countP (·.msg = msg)) :=
-  fun constant_mult => balanceOf_eq_of_const_mult (fun i hi _ => constant_mult i hi)
-
-lemma balanceOf_eq_of_const_zero {interactions : List (Interaction F)} {msg : Array F} :
-    (∀ i ∈ interactions, i.mult = 0) → balanceOf interactions msg = 0 := by
-  intro const_zero
-  rw [balanceOf_eq_of_const_mult' const_zero]
-  simp
-
-lemma balanceOf_eq_add_filter {interactions : List (Interaction F)} {msg : Array F} (p : F → Prop) [DecidablePred p] :
+lemma balanceOf_eq_sub_of_isBool {interactions : List (Interaction F)} {msg : Array F}
+    (isBool : ∀ i ∈ interactions, i.msg = msg → IsBool i.mult) :
     balanceOf interactions msg =
-      balanceOf (interactions.filter (fun i => decide (p i.mult))) msg
-      + balanceOf (interactions.filter (fun i => decide (¬p i.mult))) msg := by
-  simp only [balanceOf, List.filter_filter]
-  conv in _ && decide (p _) => rw [Bool.and_comm]
-  conv in _ && decide (¬ p _) => rw [Bool.and_comm]
-  simp_rw [← List.filter_filter]
-  rw [List.sum_map_filter_add_sum_map_filter_not]
-
-lemma balanceOf_eq_filter_ne_zero {interactions : List (Interaction F)} {msg : Array F} :
-    balanceOf interactions msg =
-      (interactions.filter (fun i => i.msg = msg && i.mult ≠ 0) |>.map (·.mult) |>.sum) := by
-  rw [balanceOf_eq_add_filter (· = 0)]
-  simp only [balanceOf, List.filter_filter, decide_not, ne_eq, add_eq_right]
-  simp_rw [←List.filter_filter]
-  set l := interactions.filter (·.mult = 0) with hl
-  show balanceOf l msg = 0
-  apply balanceOf_eq_of_const_zero
-  grind
+      activeCount interactions .push msg - activeCount interactions .pull msg := by
+  induction interactions with
+  | nil => simp [balanceOf, activeCount]
+  | cons i is ih =>
+    rw [balanceOf_cons, ih (fun j hj => isBool j (List.mem_cons_of_mem i hj))]
+    simp only [activeCount, List.countP_cons]
+    by_cases h_msg : i.msg = msg
+    · rcases isBool i List.mem_cons_self h_msg with h_mult | h_mult <;>
+        cases h_direction : i.direction <;>
+        simp [h_msg, h_mult, h_direction, Interaction.signedMult] <;> ring
+    · simp [h_msg]
 
 /--
-If every interaction for `msg` has multiplicity either nonzero `mult` or `0`, the
-balance is `mult` times the count of the `mult` interactions. This is the zero-padding
-variant of `balanceOf_eq_of_const_mult`.
+LogUp balance: for every message, the signed multiplicities sum to zero, and there are fewer
+interactions than the characteristic, so that counts can't wrap around.
 -/
-lemma balanceOf_eq_of_mult_or_zero
-    {interactions : List (Interaction F)} {msg : Array F} {mult : F} :
-    (∀ i ∈ interactions, i.msg = msg → i.mult ≠ 0 → i.mult = mult) →
-    balanceOf interactions msg =
-      mult * ↑(interactions.countP fun i => i.msg = msg && i.mult ≠ 0) := by
-  intro constant_mult
-  set count : ℕ := interactions.countP fun i => i.msg = msg && i.mult ≠ 0
-  suffices (interactions.filter (fun i => i.msg = msg && i.mult ≠ 0)).map (·.mult) = List.replicate count mult by
-    rw [balanceOf_eq_filter_ne_zero]
-    convert (congrArg List.sum this)
-    simp [mul_comm]
-  apply List.ext_getElem
-  · simp [count, List.countP_eq_length_filter]
-  intro i hi hi'
-  simp only [List.getElem_map, List.getElem_replicate]
-  rw [List.length_map] at hi
-  set a := (interactions.filter (fun i ↦ decide (i.msg = msg) && decide (i.mult ≠ 0)))[i] with ha
-  have a_mem_filter : a ∈ interactions.filter (fun i ↦ decide (i.msg = msg) && decide (i.mult ≠ 0)) := by simp [a]
-  simp [List.mem_filter] at a_mem_filter
-  apply constant_mult a <;> simp_all
+def LogUpBalanced (interactions : List (Interaction F)) : Prop :=
+  interactions.length < ringChar F ∧ ∀ msg, balanceOf interactions msg = 0
+
+/-- If all interactions carrying a message have multiplicity `0` or `1`, it is pushed and pulled
+equally often. -/
+theorem LogUpBalanced.activeCount_push_eq_activeCount_pull_of_isBool
+    {interactions : List (Interaction F)} (balanced : LogUpBalanced interactions) (msg : Array F)
+    (isBool : ∀ i ∈ interactions, i.msg = msg → IsBool i.mult) :
+    activeCount interactions .push msg = activeCount interactions .pull msg := by
+  obtain ⟨ length_lt, sums ⟩ := balanced
+  have activeCount_lt (direction : Interaction.Direction) :
+      activeCount interactions direction msg < ringChar F :=
+    lt_of_le_of_lt (List.countP_le_length) length_lt
+  have sum := sums msg
+  rw [balanceOf_eq_sub_of_isBool isBool, sub_eq_zero,
+    Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ (activeCount_lt _) (activeCount_lt _)] at sum
+  exact sum
+
+/-- Every pull of multiplicity `1` is matched by a push of its message. -/
+theorem LogUpBalanced.exists_push_of_pull {interactions : List (Interaction F)}
+    (balanced : LogUpBalanced interactions) :
+    ∀ a ∈ interactions, a.Pull → ∃ b ∈ interactions, b.msg = a.msg ∧ b.Push := by
+  intro a a_mem a_pull
+  -- assuming no such push exists, all interactions with the message are pulls of multiplicity `1`
+  -- or inactive, so balance says that there are none
+  by_contra! no_push
+  have isBool : ∀ i ∈ interactions, i.msg = a.msg → IsBool i.mult := by
+    intro i i_mem i_msg
+    rcases Interaction.not_push_iff.mp (no_push i i_mem i_msg) with h | h
+    · exact .inl h
+    · exact .inr h.2
+  have no_active_push : activeCount interactions .push a.msg = 0 := by
+    simp only [activeCount, List.countP_eq_zero, decide_eq_true_eq, not_and]
+    intro i i_mem i_push i_msg i_mult
+    rcases Interaction.not_push_iff.mp (no_push i i_mem i_msg) with h | h
+    · exact i_mult h
+    · simp [h.1] at i_push
+  have pull_pos : 0 < activeCount interactions .pull a.msg := by
+    apply List.countP_pos_iff.mpr
+    exact ⟨ a, a_mem, by simp [a_pull.1, a_pull.2] ⟩
+  have := balanced.activeCount_push_eq_activeCount_pull_of_isBool a.msg isBool
+  omega
+
+/-- LogUp: field sums with the interaction-count bound. -/
+def Balance.logUp : Balance F where
+  Balanced := LogUpBalanced
+  balancedInteractions_of_balanced _ balanced :=
+    ⟨ balanced.exists_push_of_pull, balanced.activeCount_push_eq_activeCount_pull_of_isBool ⟩
+
+/-
+## Multiset balance with `0`/`1` activations
+-/
 
 /--
-If an interaction list is balanced, then for every pull there must be a corresponding "push",
-where "push" means an interaction with multiplicity neither `-1` nor `0`.
+Multiset balance: every multiplicity is `0` or `1`, and the messages of the active pushes are a
+permutation of the messages of the active pulls. There are fewer interactions than field elements.
 -/
-theorem exists_push_of_pull (interactions : List (Interaction F)) (balance : BalancedInteractions interactions) :
-    ∀ a ∈ interactions, a.mult = -1 → ∃ b ∈ interactions, b.msg = a.msg ∧ b.mult ≠ 0 ∧ b.mult ≠ -1 := by
-  intro a h_mem_a h_pull
-  set msg := a.msg
-  set count : ℕ := interactions.countP fun i => i.msg = msg && i.mult ≠ 0
-  have count_lt_ringChar : count < ringChar F ∨ ringChar F = 0 := by
-    simp only [count]
-    grw [List.countP_le_length]
-    exact balance.1
-  replace balance := balance.2 msg
-  -- assuming no such push exists => all interactions with the same message have multiplicity -1 or 0
-  -- this leads to a contradiction with the 0 balance + no overflow
-  by_contra! const_minus_one
-  suffices count = 0 by
-    simp only [count, msg, List.countP_eq_zero, Bool.and_eq_true, decide_eq_true_eq, not_and] at this
-    apply this a h_mem_a rfl
-    show a.mult ≠ 0
-    rw [h_pull, ne_eq, neg_eq_zero]
-    exact one_ne_zero
-  rw [balanceOf_eq_of_mult_or_zero const_minus_one] at balance
-  simp only [neg_mul, one_mul, neg_eq_zero] at balance
-  change (count : F) = 0 at balance
-  rcases count_lt_ringChar with count_lt_ringChar | ringChar_zero
-  · simp_all [Lean.Grind.IsCharP.natCast_eq_zero_iff_of_lt _ count_lt_ringChar]
-  · simp_all [CharP.ringChar_zero_iff_CharZero]
+def Balance.multiset : Balance F where
+  Balanced interactions :=
+    interactions.length < FiniteField.size F ∧ (∀ i ∈ interactions, IsBool i.mult) ∧
+      (activeMessages interactions .push).Perm (activeMessages interactions .pull)
+  balancedInteractions_of_balanced interactions h_check := by
+    have counts (msg : Array F) :
+        activeCount interactions .push msg = activeCount interactions .pull msg := by
+      rw [← count_activeMessages, ← count_activeMessages]
+      exact h_check.2.2.count_eq msg
+    refine ⟨ ?_, fun msg _ => counts msg ⟩
+    intro a a_mem a_pull
+    have pull_pos : 0 < activeCount interactions .pull a.msg := by
+      apply List.countP_pos_iff.mpr
+      exact ⟨ a, a_mem, by simp [a_pull.1, a_pull.2] ⟩
+    rw [← counts] at pull_pos
+    obtain ⟨ b, b_mem, h_b ⟩ := List.countP_pos_iff.mp pull_pos
+    simp only [decide_eq_true_eq] at h_b
+    exact ⟨ b, b_mem, h_b.2.1, h_b.2.2, by simp [h_b.1] ⟩
 
 /- ## Conditions on channels that strengthen the implications of interaction balance. -/
 
@@ -192,7 +220,7 @@ imply guarantees on all interactions.
 This can be proved for individual channels without reference to any constraints,
 essentially just means that reqs and grts are reasonably related.
 
-For `Channel` it holds by definition, see `NormalChannel` below.
+For `Channel` it holds by definition, see `Normal` below.
 -/
 class Consistent (channel : RawChannel F) : Prop where
   consistent : ∀ (interactions : List (Interaction F)) (data : ProverData F),
@@ -202,48 +230,44 @@ class Consistent (channel : RawChannel F) : Prop where
 
 /--
 A "normal" channel is one where
-- the requirements for a push interaction imply the guarantees of the corresponding pull interaction
-- only pull interactions cause guarantees to be added
+- the requirements of an interaction that provides a message imply the guarantees of a unit pull
+  of the same message
+- only unit pulls cause guarantees to be added
 -/
 class Normal (channel : RawChannel F) : Prop where
-  grts_of_reqs : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ 0 → mult ≠ -1 →
-    channel.Requirements mult msg data → channel.Guarantees (-1) msg data
-  grts_of_ne_neg_one : ∀ (msg : Vector F channel.arity) (mult : F) data, mult ≠ -1 →
-    channel.Guarantees mult msg data
+  guarantees_of_requirements : ∀ (a b : Interaction F) (data : ProverData F),
+    a.channel = channel → b.channel = channel → a.msg = b.msg →
+    a.Pull → b.Push → b.Requirements data → a.Guarantees data
+  guarantees_of_not_pull : ∀ (a : Interaction F) (data : ProverData F),
+    a.channel = channel → ¬a.Pull → a.Guarantees data
 
 /-- Typed `Channel`s are normal by definition! -/
 instance (channel : Channel F Message) : Normal channel.toRaw where
-  grts_of_reqs := by
-    intro msg mult data mult_ne_zero mult_ne_neg_one reqs
-    simp [Channel.toRaw, mult_ne_zero, mult_ne_neg_one] at reqs ⊢
-    exact reqs
-  grts_of_ne_neg_one := by
-    intro msg mult data mult_ne_neg_one
-    simp [Channel.toRaw, mult_ne_neg_one]
+  guarantees_of_requirements := by
+    rintro ⟨ _, a_direction, a_mult, a_msg, a_size ⟩ ⟨ _, b_direction, b_mult, b_msg, b_size ⟩
+      data rfl rfl (rfl : a_msg = b_msg) a_pull ⟨ b_ne_zero, b_ne_one ⟩ b_reqs
+    simp only [Interaction.Guarantees, Interaction.Requirements, Interaction.msgVector,
+      Channel.toRaw] at b_reqs ⊢
+    cases b_direction
+    · exact fun _ _ => b_reqs b_ne_zero
+    · exact absurd (b_reqs.resolve_left b_ne_zero) (b_ne_one rfl)
+  guarantees_of_not_pull := by
+    rintro ⟨ _, direction, mult, msg, size ⟩ data rfl not_pull
+    simp only [Interaction.Pull, not_and] at not_pull
+    simp only [Interaction.Guarantees, Channel.toRaw]
+    exact fun h_direction h_mult => absurd h_mult (not_pull h_direction)
 
-/-- Normal channels are consistent, thanks to `exists_push_of_pull` -/
+/-- Normal channels are consistent: every pull of multiplicity `1` is matched by a push, whose requirements
+give the guarantee. -/
 theorem consistent_of_normal (channel : RawChannel F) [channel.Normal] :
     channel.Consistent := by
   constructor
   intro interactions data balance reqs a a_mem
-  simp only [Interaction.Guarantees, Interaction.Requirements, Interaction.msgVector] at reqs ⊢
-  intro _
-  have a_channel_eq := reqs a a_mem |>.left
-  have a_msg_size : a.msg.size = channel.arity := by rw [a.same_size, a_channel_eq]
-  -- we need to prove the guarantees for a given interaction from the requirements of _all_ interactions
-  suffices channel.Guarantees a.mult ⟨ a.msg, a_msg_size ⟩ data by convert this
-  by_cases a_mult : a.mult = -1
-  -- if the multiplitity is not -1, this is trivial by `grts_of_ne_neg_one`
-  case neg => exact RawChannel.Normal.grts_of_ne_neg_one ⟨ a.msg, a_msg_size ⟩ a.mult data a_mult
-  -- if the multiplicity is -1, we get the corresponding push interaction and apply `grts_of_reqs`
-  rw [a_mult]
-  have ⟨ b, b_mem, b_msg_eq, b_mult_ne_neg_one, b_mult_ne_zero ⟩ :=
-    exists_push_of_pull interactions balance a a_mem a_mult
-  apply RawChannel.Normal.grts_of_reqs ⟨ a.msg, a_msg_size ⟩ b.mult data b_mult_ne_neg_one b_mult_ne_zero
-  have ⟨ b_channel_eq, b_reqs ⟩ := reqs _ b_mem
-  symm at b_channel_eq
-  simp only [b_msg_eq] at b_reqs
-  convert b_reqs
+  by_cases a_pull : a.Pull
+  case neg => exact Normal.guarantees_of_not_pull a data (reqs a a_mem).1 a_pull
+  obtain ⟨ b, b_mem, b_msg, b_push ⟩ := balance.exists_push_of_pull a a_mem a_pull
+  exact Normal.guarantees_of_requirements a b data (reqs a a_mem).1 (reqs b b_mem).1 b_msg.symm
+    a_pull b_push (reqs b b_mem).2
 
 instance (channel : RawChannel F) [channel.Normal] : channel.Consistent :=
   consistent_of_normal channel
@@ -253,14 +277,11 @@ end RawChannel
 ## Theory of "VM channels"
 
 This section establishes a subtle soundness property for (normal) channels that
-only ever emit 1 or -1 multiplicities.
+only ever emit multiplicity 1 or 0.
 
 See `Vm.lean` for a detailed motivation and application of the main theorem,
 `guarantees_of_requirements_of_requirements_of_guarantees`.
 -/
-
-lemma one_ne_neg_one [Fact (ringChar F ≠ 2)] : (1 : F) ≠ -1 :=
-  Ne.symm (Ring.neg_one_ne_one_of_char_ne_two ‹Fact (ringChar F ≠ 2)›.out)
 
 -- Missing stlib lemma needed below
 lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ} (hi : i < l.length) :
@@ -277,13 +298,13 @@ lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ}
       ring_nf
 
 /--
-Assume you have a list of channel interactions that is made up of pairs (-1, pull_i), (1, push_i),
-where for each i, `Guarantees (-1, pull_i) → Requirements (1, push_i)`.
+Assume you have a list of channel interactions that is made up of pairs (pull_i, push_i),
+where for each i, `Guarantees pull_i → Requirements push_i`.
 We want to think of (pull_i → push_i) as the state transition of a VM circuit.
 
-Furthermore, assume the list is balanced and the channel is normal.
+Furthermore, assume pulls and pushes are balanced, and the channel is normal.
 
-Then, for any i, the **converse** is true: `Requirements (1, push_i) → Guarantees (-1, pull_i)`.
+Then, for any i, the **converse** is true: `Requirements push_i → Guarantees pull_i`.
 
 The intuition is that when the requirements for a push hold unconditionally, we
 can "follow implications around the cycle" to show that _all_ the guarantees/requirements must hold
@@ -292,53 +313,45 @@ can "follow implications around the cycle" to show that _all_ the guarantees/req
 By narrowing the conclusion to only the guarantees of the push, the formulation cleverly
 avoids talking about cycles at all, and achieves a comparatively simple proof by induction.
 -/
-theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar F ≠ 2)]
+theorem guarantees_of_requirements_of_requirements_of_guarantees
     (channel : RawChannel F) [channel.Normal]
     (pulls pushes : List (Interaction F))
-    (balance : BalancedInteractions (pulls ++ pushes)) (data : ProverData F)
+    (count_eq : ∀ msg, pulls.countP (·.msg = msg) = pushes.countP (·.msg = msg))
+    (data : ProverData F)
   -- same length
   (n : ℕ) (len_pulls : pulls.length = n) (len_pushes : pushes.length = n)
   -- all interactions are on the input channel
   (pulls_channel : ∀ a ∈ pulls, a.channel = channel) (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
-  -- the multiplicities are -1 for pulls and 1 for pushes
-  (pulls_mult : ∀ a ∈ pulls, a.mult = -1) (pushes_mult : ∀ b ∈ pushes, b.mult = 1) :
+  -- all pulls and pushes have multiplicity 1
+  (pulls_unit : ∀ a ∈ pulls, a.Pull)
+  (pushes_unit : ∀ b ∈ pushes, b.direction = .push ∧ b.mult = 1) :
     (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →
     ∀ (i : ℕ) (hi: i < n), pushes[i].Requirements data → pulls[i].Guarantees data := by
   intro constraints
   induction n generalizing pulls pushes with
   | zero => intro i hi; nomatch hi
   | succ n ih =>
-    -- first, a little inline version of `exists_push_of_pull`
+    -- every pulled message is pushed
     have exists_push_of_pull : ∀ pull ∈ pulls, ∃ push ∈ pushes, push.msg = pull.msg := by
       intro pull pull_mem
-      have pull_mem_append : pull ∈ pulls ++ pushes := by simp [pull_mem]
-      have ⟨ push, push_mem, push_msg_eq, push_mult_ne_neg_one, _ ⟩ := exists_push_of_pull (pulls ++ pushes)
-        balance pull pull_mem_append (pulls_mult pull pull_mem)
-      have push_mem : push ∈ pushes := by simp only [List.mem_append] at push_mem; tauto
-      exists push
+      have : 0 < pushes.countP (·.msg = pull.msg) := by
+        rw [← count_eq]
+        exact List.countP_pos_iff.mpr ⟨ pull, pull_mem, by simp ⟩
+      obtain ⟨ push, push_mem, h_msg ⟩ := List.countP_pos_iff.mp this
+      exact ⟨ push, push_mem, by simpa using h_msg ⟩
     -- we identify the "previous" transition (pulls[j], pushes[j]) in the chain, where pushes[j] = pulls[i]
     intro i hi push_i_req
     have ⟨ push', push'_mem, push_j_msg ⟩ := exists_push_of_pull pulls[i] (List.getElem_mem ..)
-    set msg := pulls[i].msg with pull_i_msg
     have ⟨ j, hj, hpush' ⟩ := List.getElem_of_mem push'_mem
     subst hpush'
     rw [len_pushes] at hj
-    -- thanks to the channel being consistent, it suffices to show the requirements of pushes[j]
+    -- thanks to the channel being normal, it suffices to show the requirements of pushes[j]
     have push_j_imp_pull_i : pushes[j].Requirements data → pulls[i].Guarantees data := by
-      intro push_j_req
-      have pulls_i_channel := pulls_channel pulls[i] (List.getElem_mem ..)
-      have pushes_j_channel := pushes_channel pushes[j] (List.getElem_mem ..) |>.symm
-      have pulls_i_mult := pulls_mult pulls[i] (List.getElem_mem ..)
-      have pushes_j_mult := pushes_mult pushes[j] (List.getElem_mem ..) |>.symm
-      have msg_size : msg.size = channel.arity := by rw [pulls[i].same_size, pulls_i_channel]
-      suffices grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
-        simp only [Interaction.Guarantees]
-        intro _
-        convert grt'
-        simp only [Interaction.msgVector, pull_i_msg]
-      apply RawChannel.Normal.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_zero one_ne_neg_one
-      simp only [Interaction.Requirements, Interaction.msgVector, push_j_msg] at push_j_req
-      convert push_j_req
+      have push_j_unit := pushes_unit pushes[j] (List.getElem_mem ..)
+      apply RawChannel.Normal.guarantees_of_requirements pulls[i] pushes[j] data
+        (pulls_channel _ (List.getElem_mem ..)) (pushes_channel _ (List.getElem_mem ..))
+        push_j_msg.symm (pulls_unit _ (List.getElem_mem ..))
+      simp [Interaction.Push, push_j_unit.1, push_j_unit.2]
     -- if i = j, we're done
     by_cases h_ij : j = i
     · subst h_ij; exact push_j_imp_pull_i push_i_req
@@ -363,15 +376,16 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
     suffices push_i_imp_pull_j : pushes'[j'].Requirements data → pulls'[j'].Guarantees data by
       simp only [pulls'_getElem, pushes'_getElem] at push_i_imp_pull_j
       exact push_i_req |> push_i_imp_pull_j |> constraints j hj |> push_j_imp_pull_i
-    -- we need to re-check all assumptions about as', bs' for the induction hypothesis
+    -- we need to re-check all assumptions about pulls', pushes' for the induction hypothesis
     -- most of these are straightforward
-    have pulls'_mult : ∀ a ∈ pulls', a.mult = -1 := by
+    have pulls'_unit : ∀ a ∈ pulls', a.Pull := by
       simp only [pulls', List.forall_mem_iff_getElem, List.getElem_eraseIdx]
       intros; split_ifs <;> simp [*]
-    have pushes'_mult : ∀ b ∈ pushes', b.mult = 1 := by
+    have pushes'_unit : ∀ b ∈ pushes', b.direction = .push ∧ b.mult = 1 := by
       simp only [pushes', List.forall_mem_iff_getElem, List.getElem_eraseIdx, List.getElem_set]
       intros; split_ifs <;> simp [*]
-    apply ih pulls' pushes' ?balance' pulls'_len pushes'_len ?pulls'_channel ?pushes'_channel pulls'_mult pushes'_mult ?constraints' j' hj'
+    apply ih pulls' pushes' ?count_eq' pulls'_len pushes'_len ?pulls'_channel ?pushes'_channel
+      pulls'_unit pushes'_unit ?constraints' j' hj'
     <;> clear ih
     case pulls'_channel | pushes'_channel =>
       simp only [pulls', pushes', List.forall_mem_iff_getElem, List.getElem_set, List.getElem_eraseIdx]
@@ -383,229 +397,115 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
         exact pulls_j_imp_push_i
       simp only [pulls', pushes', h_ij', List.getElem_eraseIdx, ne_eq, not_false_eq_true, List.getElem_set_ne]
       split_ifs <;> exact constraints _ (by linarith)
-    -- it only remains to prove the balance condition for pulls' ++ pushes'.
+    -- it only remains to prove that counts still agree on pulls' and pushes'.
     -- at a high level, this is obvious because we removed two opposing elements with the same message
-    -- (pushes[j] and pulls[i]), so balance for any message is unaffected.
-    rcases balance with ⟨ lt_ringChar, balance ⟩
-    simp only [len_pulls, len_pushes, List.length_append] at lt_ringChar
-    constructor
-    · simp only [pulls'_len, pushes'_len, List.length_append]
-      rcases lt_ringChar with lt_ringChar | ringChar_zero
-      · left; linarith
-      · right; assumption
+    -- (pushes[j] and pulls[i]), so counts for any message are unaffected.
     intro msg'
-    specialize balance msg'
-    simp only [balanceOf_append] at balance ⊢
-    rw [balanceOf_eq_of_const_mult' pulls_mult, balanceOf_eq_of_const_mult' pushes_mult] at balance
-    rw [balanceOf_eq_of_const_mult' pulls'_mult, balanceOf_eq_of_const_mult' pushes'_mult]
-    simp only [neg_mul, one_mul, neg_add_eq_zero] at balance ⊢
-    have count_eq : pulls.countP (·.msg = msg') = pushes.countP (·.msg = msg') := by
-      rcases lt_ringChar with lt_ringChar | ringChar_zero
-      · have a_lt_ringChar : pulls.countP (·.msg = msg') < ringChar F := by
-          grw [List.countP_le_length, len_pulls, Nat.le_add_right (n + 1) (n + 1)]
-          exact lt_ringChar
-        have b_lt_ringChar : pushes.countP (·.msg = msg') < ringChar F := by
-          grw [List.countP_le_length, len_pushes, Nat.le_add_right (n + 1) (n + 1)]
-          exact lt_ringChar
-        rw [Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ a_lt_ringChar b_lt_ringChar] at balance
-        exact balance
-      · rw [CharP.ringChar_zero_iff_CharZero] at ringChar_zero
-        rw [Nat.cast_inj] at balance
-        exact balance
     have pushes_eq : pushes' = (pushes.set j pushes[i]).eraseIdx i := by
       simp [pushes', List.eraseIdx_set, j']
       split_ifs <;> (simp_all; try omega)
     simp only [pulls', pushes_eq]
-    rw [List.countP_eraseIdx (by linarith), ←pull_i_msg]
+    rw [List.countP_eraseIdx (by linarith)]
     rw [List.countP_eraseIdx (by simp_all), List.countP_set (len_pushes ▸ hj), push_j_msg]
-    simp [h_ij, count_eq]
+    simp [h_ij, count_eq msg']
 
-def activeInteractions (interactions : List (Interaction F)) : List (Interaction F) :=
-  interactions.filter (fun i => i.mult ≠ 0)
+lemma activeCount_append (as bs : List (Interaction F)) (direction : Interaction.Direction) (msg : Array F) :
+    activeCount (as ++ bs) direction msg = activeCount as direction msg + activeCount bs direction msg :=
+  List.countP_append ..
 
-lemma activeInteractions_length_eq {pulls pushes : List (Interaction F)}
-    (h_len : pulls.length = pushes.length)
-    (h_pair : ∀ i (hpi : i < pulls.length) (hqi : i < pushes.length),
-      pulls[i].mult = 0 ↔ pushes[i].mult = 0) :
-    (activeInteractions pulls).length = (activeInteractions pushes).length := by
-  simp only [activeInteractions]
-  induction pulls generalizing pushes with
-  | nil =>
-    cases pushes <;> simp at h_len ⊢
-  | cons pull pulls ih =>
-    cases pushes with
-    | nil => simp at h_len
-    | cons push pushes =>
-      simp only [List.length_cons, Nat.succ.injEq] at h_len
-      have h_pair_tail : ∀ i (hpi : i < pulls.length) (hqi : i < pushes.length),
-          pulls[i].mult = 0 ↔ pushes[i].mult = 0 := by
-        intro i hpi hqi
-        exact h_pair (i + 1) (by simpa) (by simpa)
-      specialize ih h_len h_pair_tail
-      simp only [ne_eq, decide_not] at ih
-      have h_pair_head : pull.mult = 0 ↔ push.mult = 0 := h_pair 0 (by simp) (by simp)
-      by_cases h_pull : pull.mult = 0
-      <;> simp [←h_pair_head, h_pull, ih]
-
-lemma activePair_mem_zip {pulls pushes : List (Interaction F)}
-    (h_len : pulls.length = pushes.length)
-    (h_pair : ∀ i (hpi : i < pulls.length) (hqi : i < pushes.length),
-      pulls[i].mult = 0 ↔ pushes[i].mult = 0)
-    (i : ℕ) (hi : i < (activeInteractions pulls).length) :
-    ((activeInteractions pulls)[i],
-      (activeInteractions pushes)[i]'(activeInteractions_length_eq h_len h_pair ▸ hi))
-      ∈ pulls.zip pushes := by
-  induction pulls generalizing pushes i with
-  | nil => simp [activeInteractions] at hi
-  | cons pull pulls ih =>
-    cases pushes with
-    | nil => simp at h_len
-    | cons push pushes =>
-      simp only [List.length_cons, Nat.succ.injEq] at h_len
-      have h_pair_tail : ∀ i (hpi : i < pulls.length) (hqi : i < pushes.length),
-          pulls[i].mult = 0 ↔ pushes[i].mult = 0 := by
-        intro i hpi hqi
-        exact h_pair (i + 1) (by simpa) (by simpa)
-      by_cases h_zero : pull.mult = 0
-      · have h_push_zero : push.mult = 0 := (h_pair 0 (by simp) (by simp)).mp h_zero
-        simp [activeInteractions, h_zero, h_push_zero] at hi ⊢
-        have hi' : i < (activeInteractions pulls).length := by
-          simpa [activeInteractions] using hi
-        exact Or.inr (by
-          simpa [activeInteractions] using ih h_len h_pair_tail i hi')
-      · cases i with
-        | zero =>
-          have h_push_ne_zero : push.mult ≠ 0 := by
-            intro h_push_zero
-            exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
-          simp [activeInteractions, h_zero, h_push_ne_zero]
-        | succ i =>
-          have h_push_ne_zero : push.mult ≠ 0 := by
-            intro h_push_zero
-            exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
-          simp [activeInteractions, h_zero, h_push_ne_zero] at hi ⊢
-          have hi' : i < (activeInteractions pulls).length := by
-            simpa [activeInteractions] using hi
-          exact Or.inr (by
-            simpa [activeInteractions] using ih h_len h_pair_tail i hi')
-
-lemma balanceOf_active_append_eq {pulls pushes : List (Interaction F)} {msg : Array F}
-    (h_len : pulls.length = pushes.length)
-    (h_pair : ∀ i (hpi : i < pulls.length) (hqi : i < pushes.length),
-      pulls[i].mult = 0 ↔ pushes[i].mult = 0) :
-    balanceOf (activeInteractions pulls ++ activeInteractions pushes) msg =
-      balanceOf (pulls ++ pushes) msg := by
-  induction pulls generalizing pushes with
-  | nil =>
-    cases pushes <;> simp [activeInteractions, balanceOf] at h_len ⊢
-  | cons pull pulls ih =>
-    cases pushes with
-    | nil => simp at h_len
-    | cons push pushes =>
-      simp only [List.length_cons, Nat.succ.injEq] at h_len
-      have h_pair_tail : ∀ i (hpi : i < pulls.length) (hqi : i < pushes.length),
-          pulls[i].mult = 0 ↔ pushes[i].mult = 0 := by
-        intro i hpi hqi
-        exact h_pair (i+1) (by simpa) (by simpa)
-      have ih' := ih h_len h_pair_tail
-      by_cases h_zero : pull.mult = 0
-      · have h_push_zero : push.mult = 0 := (h_pair 0 (by simp) (by simp)).mp h_zero
-        simp [activeInteractions, h_zero, h_push_zero, balanceOf_append,
-          balanceOf_cons] at ih' ⊢
-        exact ih'
-      · have h_push_ne_zero : push.mult ≠ 0 := by
-          intro h_push_zero
-          exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
-        simp [activeInteractions, h_zero, h_push_ne_zero, balanceOf_append,
-          balanceOf_cons] at ih' ⊢
-        rw [add_left_comm, ih', add_left_comm]
-
-lemma balancedInteractions_active_append {pulls pushes : List (Interaction F)}
-    (balance : BalancedInteractions (pulls ++ pushes))
-    (h_len : pulls.length = pushes.length)
-    (h_pair : ∀ i (hpi : i < pulls.length) (hqi : i < pushes.length),
-      pulls[i].mult = 0 ↔ pushes[i].mult = 0) :
-    BalancedInteractions (activeInteractions pulls ++ activeInteractions pushes) := by
-  constructor
-  · rcases balance.1 with h_lt | h_char
-    · left
-      have h_len_pulls : (activeInteractions pulls).length ≤ pulls.length := by
-        rw [activeInteractions]
-        have h := pulls.length_eq_length_filter_add (fun i => i.mult ≠ 0)
-        omega
-      have h_len_pushes : (activeInteractions pushes).length ≤ pushes.length := by
-        rw [← activeInteractions_length_eq h_len h_pair, ← h_len]
-        exact h_len_pulls
-      simp only [List.length_append] at h_lt ⊢
-      omega
-    · right
-      exact h_char
-  · intro msg
-    rw [balanceOf_active_append_eq h_len h_pair]
-    exact balance.2 msg
+lemma activeCount_eq_zero_of_direction_ne {interactions : List (Interaction F)}
+    {direction : Interaction.Direction} (h_direction : ∀ i ∈ interactions, i.direction ≠ direction)
+    (msg : Array F) : activeCount interactions direction msg = 0 := by
+  simp only [activeCount, List.countP_eq_zero, decide_eq_true_eq, not_and]
+  exact fun i hi h => absurd h (h_direction i hi)
 
 /--
 Zero-padded variant of `guarantees_of_requirements_of_requirements_of_guarantees`.
 
-The input lists may contain padded pull/push pairs with multiplicity `0`. The active
-subsequence, where pull multiplicity is `-1` and push multiplicity is `1`, satisfies
-the original VM theorem. `0` multiplicities can be discarded as they don't affect balance.
+Pulls and pushes come in pairs, which are either active, with multiplicity `1`, or disabled, with
+multiplicity `0` on both sides. Disabled pairs don't affect balance, and the guarantees of their
+pulls hold trivially.
 -/
-theorem guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_iff [Fact (ringChar F ≠ 2)]
+theorem guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_iff
     (channel : RawChannel F) [channel.Normal]
     (pulls pushes : List (Interaction F))
     (balance : BalancedInteractions (pulls ++ pushes)) (data : ProverData F)
-  -- same length before filtering
   (len_pulls_pushes : pulls.length = pushes.length)
   -- all interactions are on the input channel
-  (pulls_channel : ∀ a ∈ pulls, a.channel = channel) (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
-  -- pulls are either active `-1` pulls or disabled, pushes are either active `1` pushes or disabled
-  (pulls_mult : ∀ a ∈ pulls, a.mult = 0 ∨ a.mult = -1)
-  (pushes_mult : ∀ b ∈ pushes, b.mult = 0 ∨ b.mult = 1)
+  (pulls_channel : ∀ a ∈ pulls, a.channel = channel)
+  (pushes_channel : ∀ b ∈ pushes, b.channel = channel)
+  -- pulls and pushes are either active, with multiplicity `1`, or disabled
+  (pulls_direction : ∀ a ∈ pulls, a.direction = .pull ∧ IsBool a.mult)
+  (pushes_direction : ∀ b ∈ pushes, b.direction = .push ∧ IsBool b.mult)
   -- a pair is disabled on one side iff it is disabled on the other
-  (pair_zero : ∀ i (hi_p : i < pulls.length) (hi_q : i < pushes.length),
-    pulls[i].mult = 0 ↔ pushes[i].mult = 0) :
-    (∀ (i : ℕ) (hi : i < (activeInteractions pulls).length),
-      (activeInteractions pulls)[i].Guarantees data →
-        ((activeInteractions pushes)[i]'(activeInteractions_length_eq len_pulls_pushes pair_zero ▸ hi)).Requirements data) →
-    ∀ (i : ℕ) (hi : i < (activeInteractions pulls).length),
-      ((activeInteractions pushes)[i]'(activeInteractions_length_eq len_pulls_pushes pair_zero ▸ hi)).Requirements data →
-        (activeInteractions pulls)[i].Guarantees data := by
+  (pair_zero : ∀ pair ∈ pulls.zip pushes, pair.1.mult = 0 ↔ pair.2.mult = 0) :
+    (∀ pair ∈ pulls.zip pushes, pair.1.Guarantees data → pair.2.Requirements data) →
+    ∀ pair ∈ pulls.zip pushes, pair.2.Requirements data → pair.1.Guarantees data := by
   intro constraints
-  let active_pulls := activeInteractions pulls
-  let active_pushes := activeInteractions pushes
-  have active_balance : BalancedInteractions (active_pulls ++ active_pushes) := by
-    simpa [active_pulls, active_pushes] using
-      balancedInteractions_active_append balance len_pulls_pushes pair_zero
-  have active_pulls_channel : ∀ a ∈ active_pulls, a.channel = channel := by
-    intro a ha
-    simp only [active_pulls, activeInteractions, List.mem_filter] at ha
-    exact pulls_channel a ha.1
-  have active_pushes_channel : ∀ b ∈ active_pushes, b.channel = channel := by
-    intro b hb
-    simp only [active_pushes, activeInteractions, List.mem_filter] at hb
-    exact pushes_channel b hb.1
-  have active_pulls_mult : ∀ a ∈ active_pulls, a.mult = -1 := by
-    intro a ha
-    simp only [active_pulls, activeInteractions, List.mem_filter] at ha
-    have a_mult_ne_zero : a.mult ≠ 0 := by simpa using ha.2
-    rcases pulls_mult a ha.1 with h_mult | h_mult
-    · contradiction
-    · exact h_mult
-  have active_pushes_mult : ∀ b ∈ active_pushes, b.mult = 1 := by
-    intro b hb
-    simp only [active_pushes, activeInteractions, List.mem_filter] at hb
-    have b_mult_ne_zero : b.mult ≠ 0 := by simpa using hb.2
-    rcases pushes_mult b hb.1 with h_mult | h_mult
-    · contradiction
-    · exact h_mult
-  have active_len : active_pulls.length = active_pushes.length := by
-    simpa [active_pulls, active_pushes] using
-      activeInteractions_length_eq len_pulls_pushes pair_zero
+  let active := (pulls.zip pushes).filter fun pair => pair.1.mult ≠ 0
+  have mem_active : ∀ pair ∈ active, pair ∈ pulls.zip pushes ∧ pair.1.mult ≠ 0 := by
+    intro pair h
+    simpa [active] using h
+  have count_eq : ∀ msg, (active.map (·.1)).countP (·.msg = msg) =
+      (active.map (·.2)).countP (·.msg = msg) := by
+    intro msg
+    have pulls_ne_push : ∀ a ∈ pulls, a.direction ≠ .push := by
+      intro a ha; simp [(pulls_direction a ha).1]
+    have pushes_ne_pull : ∀ b ∈ pushes, b.direction ≠ .pull := by
+      intro b hb; simp [(pushes_direction b hb).1]
+    have counts := balance.activeCount_push_eq_activeCount_pull_of_isBool msg (by
+      intro i hi _
+      rcases List.mem_append.mp hi with hi | hi
+      · exact (pulls_direction i hi).2
+      · exact (pushes_direction i hi).2)
+    rw [activeCount_append, activeCount_append, activeCount_eq_zero_of_direction_ne pulls_ne_push,
+      activeCount_eq_zero_of_direction_ne pushes_ne_pull] at counts
+    have pulls_count : (active.map (·.1)).countP (·.msg = msg) = activeCount pulls .pull msg := by
+      conv_rhs => rw [← List.map_fst_zip (l₁ := pulls) (l₂ := pushes) (by omega)]
+      simp only [active, activeCount, List.countP_map, List.countP_filter]
+      apply List.countP_congr
+      intro pair h
+      simp [(pulls_direction _ (List.of_mem_zip h).1).1]
+    have pushes_count : (active.map (·.2)).countP (·.msg = msg) = activeCount pushes .push msg := by
+      conv_rhs => rw [← List.map_snd_zip (l₁ := pulls) (l₂ := pushes) (by omega)]
+      simp only [active, activeCount, List.countP_map, List.countP_filter]
+      apply List.countP_congr
+      intro pair h
+      simp [(pushes_direction _ (List.of_mem_zip h).2).1, pair_zero pair h]
+    omega
   have theorem_active := guarantees_of_requirements_of_requirements_of_guarantees
-    channel active_pulls active_pushes active_balance data active_pulls.length rfl active_len.symm
-    active_pulls_channel active_pushes_channel active_pulls_mult active_pushes_mult
-  have constraints' : ∀ (i : ℕ) (hi : i < active_pulls.length),
-      active_pulls[i].Guarantees data → (active_pushes[i]'(by rw [← active_len]; exact hi)).Requirements data := by
-    simpa [active_pulls, active_pushes] using constraints
-  exact theorem_active constraints'
+    channel (active.map (·.1)) (active.map (·.2)) count_eq data active.length (by simp) (by simp)
+    (by
+      simp only [List.mem_map]
+      rintro a ⟨pair, h, rfl⟩
+      exact pulls_channel _ (List.of_mem_zip (mem_active pair h).1).1)
+    (by
+      simp only [List.mem_map]
+      rintro b ⟨pair, h, rfl⟩
+      exact pushes_channel _ (List.of_mem_zip (mem_active pair h).1).2)
+    (by
+      simp only [List.mem_map]
+      rintro a ⟨pair, h, rfl⟩
+      obtain ⟨pair_mem, mult_ne_zero⟩ := mem_active pair h
+      obtain ⟨h_direction, h_mult⟩ := pulls_direction _ (List.of_mem_zip pair_mem).1
+      exact ⟨h_direction, h_mult.resolve_left mult_ne_zero⟩)
+    (by
+      simp only [List.mem_map]
+      rintro b ⟨pair, h, rfl⟩
+      obtain ⟨pair_mem, mult_ne_zero⟩ := mem_active pair h
+      obtain ⟨h_direction, h_mult⟩ := pushes_direction _ (List.of_mem_zip pair_mem).2
+      exact ⟨h_direction, h_mult.resolve_left ((pair_zero pair pair_mem).not.mp mult_ne_zero)⟩)
+    (by
+      intro i hi
+      simp only [List.getElem_map]
+      exact constraints _ (mem_active _ (List.getElem_mem _)).1)
+  intro pair pair_mem requirements
+  by_cases mult_zero : pair.1.mult = 0
+  · apply RawChannel.Normal.guarantees_of_not_pull _ _
+      (pulls_channel _ (List.of_mem_zip pair_mem).1)
+    simp [Interaction.Pull, mult_zero]
+  have pair_active : pair ∈ active := by simp [active, pair_mem, mult_zero]
+  obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem pair_active
+  have := theorem_active i (by simpa using hi)
+  simp only [List.getElem_map] at this
+  exact this requirements
