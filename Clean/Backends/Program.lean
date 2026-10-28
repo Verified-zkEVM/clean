@@ -335,6 +335,16 @@ theorem eval_of_splitSelector {width : ℕ} {expression body : Expression F} {ga
         obtain ⟨cell, hcell, heval⟩ := ihRight hsplit
         exact ⟨cell, hcell, by simp only [Expression.eval, heval]; ring⟩
 
+/-- Whether the constraints of a component hold on a complete row: each body, times the selector of
+its gate. -/
+def ComponentProgram.constraintsHold (component : ComponentProgram F) (row : Array F)
+    (data : ProverData F) : Bool :=
+  let environment := Environment.fromArray row data
+  let width := component.window.getD 0
+  component.constraints.all fun constraint =>
+    let gate := (constraint.gate.selectorCell width).elim 1 environment.get
+    gate * constraint.body.eval environment == 0
+
 def lowerConstraints (component : ℕ) (window : Option ℕ) (constraints : List (Expression F)) :
     Except LoweringError (List (GatedConstraint F)) :=
   constraints.zipIdx.mapM fun (constraint, index) =>
