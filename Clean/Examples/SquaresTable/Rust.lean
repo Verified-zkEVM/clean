@@ -7,6 +7,7 @@ public import Clean.Utils.Primes
 @[expose] public section
 
 def main : IO Unit := do
-  match Backends.Plonky3.Print.ensembleToRust (SquaresTable.ensemble (p := pBabybear) 16) 1000 with
+  match Backends.Plonky3.Print.ensembleToRust (SquaresTable.formalEnsemble (p := pBabybear) 16)
+      1000 with
   | .ok rust => IO.print rust
   | .error error => throw (IO.userError error)

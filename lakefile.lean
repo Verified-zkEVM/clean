@@ -30,6 +30,9 @@ lean_exe export_squares_table_rust where
 lean_exe export_witness_ir_reference_rust where
   root := `Clean.Backends.Plonky3.Test.Reference
 
+lean_exe export_differential_rust where
+  root := `Clean.Backends.Plonky3.Test.Differential
+
 lean_exe keccak_air_trace where
   root := `Clean.Examples.KeccakAir.Bench
 

@@ -74,12 +74,11 @@ def circuit : GeneralFormalCircuit (F p) (Window Row) unit where
     obtain ⟨h_control, h_theta, h_chi, h_flags, h_iota⟩ := h_assumptions
     exact ⟨h_control, h_theta, ⟨⟨_, h_theta.2.2.2⟩, h_chi⟩, h_flags, h_iota⟩
 
-/-- The Keccak-f AIR with `height` rows. The fixed columns are empty and only fix the height. The
-rows are computed by `Witness.program`, 24 per permutation, whose inputs are the rows of the
-prover's hint table `keccak`. -/
+/-- The Keccak-f AIR with `height` rows, which answer no demand. The rows are computed by
+`Witness.program`, 24 per permutation, whose inputs are the rows of the prover's hint table
+`keccak`. -/
 def component (height : UInt64) : Component (F p) where
   circuit := circuit
-  fixedColumns := some { Row := unit, row _ := pure (), height }
   window := Window.layout Row
   circuit_assumptions_of_assumptions := by
     rintro i window data - - previous -
@@ -93,6 +92,6 @@ def component (height : UInt64) : Component (F p) where
         simpa only [ProvableType.fromElements_toElements] using congrArg fromElements h_next
       rw [← h_next]
       exact carried_of_windowSpec h_spec h_transition
-  generation := .segments Witness.program
+  generation := .segments { height, program := Witness.program }
 
 end KeccakAir

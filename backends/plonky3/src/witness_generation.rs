@@ -1,6 +1,7 @@
 //! Witness generation for ensembles extracted from Clean. Generated Rust implements [`Program`], and
 //! [`generate`] runs it with a channel worklist.
 
+use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -91,7 +92,7 @@ pub enum WitnessGenerationError {
         expected: usize,
         actual: usize,
     },
-    /// A preallocated component has fewer rows than the minimum trace height.
+    /// A preallocated or standalone component has fewer rows than the minimum trace height.
     PreallocatedHeight {
         component: &'static str,
         height: usize,
@@ -141,20 +142,12 @@ pub enum Direction {
     Push,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Aggregation {
-    PerOccurrence,
-    ByMessage,
-}
-
-#[derive(Clone, Debug)]
-pub enum InputCell<F> {
-    Message(usize),
-    Constant(F),
-}
-
 /// A condition on a demanded message, which can read the prover data and the hint.
 pub type Guard<F> = fn(&[F], &WitnessData<F>, &WitnessData<F>) -> bool;
+
+/// The input of a new row for a demanded message, which can read the prover data and the hint, with
+/// the given value in its multiplicity cell.
+pub type DemandInput<F> = fn(&[F], &WitnessData<F>, &WitnessData<F>, F) -> Vec<F>;
 
 #[derive(Clone, Debug)]
 pub struct DemandMode<F> {
@@ -163,30 +156,38 @@ pub struct DemandMode<F> {
     pub trigger: Direction,
     /// Which of these messages the component answers.
     pub guard: Guard<F>,
-    pub aggregation: Aggregation,
-    /// The input of a new row, without its counters.
-    pub input: Vec<InputCell<F>>,
-    /// With `ByMessage` aggregation, the counter on `channel`.
-    pub counters: Vec<Counter>,
+    pub input: DemandInput<F>,
+    /// The multiplicity cell, which counts repeated demand for a message in one row. Without one,
+    /// every occurrence gets its own row.
+    pub multiplicity: Option<MultiplicityColumn>,
     /// The input of the rows that pad the component's table to a power-of-two height.
     pub padding: Vec<F>,
 }
 
-/// A counter: the multiplicity of a component's interaction on `channel`, which answers unmatched
-/// pulls on that channel.
-#[derive(Clone, Debug)]
-pub struct Counter {
-    pub channel: &'static str,
+/// A multiplicity cell: the multiplicity of a component's interaction on its channel, which cancels
+/// demand for the interaction's message on that channel.
+#[derive(Clone, Copy, Debug)]
+pub struct MultiplicityColumn {
     /// The position of the counted interaction among the component's interactions.
     pub interaction: usize,
-    /// The input column holding the interaction's multiplicity.
+    /// The input column of the cell.
     pub column: usize,
 }
 
 #[derive(Clone, Debug)]
 pub enum Mode<F> {
     Demand(DemandMode<F>),
-    Preallocated { rows: usize, counters: Vec<Counter> },
+    Preallocated {
+        channel: &'static str,
+        /// Which unanswered messages the rows answer, like `DemandMode::trigger`.
+        trigger: Direction,
+        rows: usize,
+        multiplicity: MultiplicityColumn,
+    },
+    /// A fixed number of rows, which answer no demand.
+    Standalone {
+        rows: usize,
+    },
 }
 
 /// A named hint table viewing the flattened private input: `rows` rows of `width` elements,
@@ -234,16 +235,8 @@ impl<F: Field + Copy> WitnessData<F> {
         Self::from_entries(entries)
     }
 
-    fn from_initial_tables(names: &[&'static str], tables: &[Vec<Row<F>>]) -> Self {
-        let entries = names
-            .iter()
-            .zip(tables)
-            .map(|(name, table)| {
-                let rows = table.iter().map(|row| row.input.clone()).collect();
-                (*name, rows)
-            })
-            .collect();
-        Self::from_entries(entries)
+    fn from_initial_tables(names: &[&'static str], inputs: &[Vec<Vec<F>>]) -> Self {
+        Self::from_entries(names.iter().copied().zip(inputs.iter().cloned()).collect())
     }
 
     /// Reads column `column` of the named rows cut off or zero-padded at `width` elements, as in
@@ -288,6 +281,13 @@ pub const fn window_width(window: Option<usize>) -> usize {
     }
 }
 
+/// The input columns of a two-row component whose own input has width `window` that are window
+/// cells.
+pub fn window_columns(window: Option<usize>) -> core::ops::Range<usize> {
+    let start = window.unwrap_or(0);
+    start..start + window_width(window)
+}
+
 #[derive(Clone, Debug)]
 pub struct Interaction<F> {
     pub channel: &'static str,
@@ -300,7 +300,7 @@ pub struct Interaction<F> {
 /// two-row components filled.
 #[derive(Clone, Debug)]
 pub struct EnsembleWitness<F> {
-    fixed_widths: Vec<usize>,
+    fixed_columns: Vec<&'static [usize]>,
     windows: Vec<Option<usize>>,
     pub tables: Vec<Vec<Vec<F>>>,
 }
@@ -311,9 +311,9 @@ impl<F: Field> EnsembleWitness<F> {
     pub fn into_traces(self) -> Result<Vec<RowMajorMatrix<F>>, String> {
         self.tables
             .into_iter()
-            .zip(self.fixed_widths.into_iter().zip(self.windows))
+            .zip(self.fixed_columns.into_iter().zip(self.windows))
             .enumerate()
-            .map(|(component, (rows, (fixed_width, window)))| {
+            .map(|(component, (rows, (fixed_columns, window)))| {
                 if rows.is_empty() || !rows.len().is_power_of_two() {
                     return Err(format!(
                         "component {component} has non-power-of-two height {}",
@@ -321,8 +321,9 @@ impl<F: Field> EnsembleWitness<F> {
                     ));
                 }
                 let semantic_width = rows[0].len();
+                let window_columns = window_columns(window);
                 let width = semantic_width
-                    .checked_sub(fixed_width + window_width(window))
+                    .checked_sub(fixed_columns.len() + window_columns.len())
                     .ok_or_else(|| {
                         format!("component {component} fixed width exceeds its semantic row width")
                     })?;
@@ -331,14 +332,16 @@ impl<F: Field> EnsembleWitness<F> {
                         "component {component} contains a row of the wrong width"
                     ));
                 }
-                let own_width = window.unwrap_or(semantic_width);
-                let rest = own_width + window_width(window);
                 Ok(RowMajorMatrix::new(
                     rows.into_iter()
                         .flat_map(|row| {
-                            let mut committed = row[fixed_width..own_width].to_vec();
-                            committed.extend_from_slice(&row[rest..]);
-                            committed
+                            row.into_iter()
+                                .enumerate()
+                                .filter(|(column, _)| {
+                                    !fixed_columns.contains(column)
+                                        && !window_columns.contains(column)
+                                })
+                                .map(|(_, value)| value)
                         })
                         .collect(),
                     width,
@@ -357,7 +360,8 @@ pub trait Program<F: WitnessField> {
     const PUBLIC_INPUTS: usize;
     const PROVER_INPUTS: usize;
     const HINT_TABLES: &'static [HintTable];
-    const FIXED_WIDTHS: &'static [usize];
+    /// The input columns that are fixed columns, per component.
+    const FIXED_COLUMNS: &'static [&'static [usize]];
     /// The own-input width of each two-row component.
     const WINDOWS: &'static [Option<usize>];
     const COMPONENT_NAMES: &'static [&'static str];
@@ -365,8 +369,6 @@ pub trait Program<F: WitnessField> {
     fn modes() -> Vec<Mode<F>>;
     /// The initial input of row `row` of a preallocated component.
     fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F>;
-    /// Complete a row from its own input. The window cells of a two-row component's row stay zero
-    /// until the table is final.
     fn complete_row(
         component: usize,
         input: &[F],
@@ -409,63 +411,129 @@ impl<F: WitnessField> Demand<F> {
     }
 }
 
+type MessageKey<F> = (&'static str, Vec<F>);
+
+/// The nonzero net multiplicities of channel messages, in the order they became nonzero.
+struct Demands<F> {
+    /// The net multiplicity of each message, with its position in `order`.
+    net: BTreeMap<MessageKey<F>, (F, u64)>,
+    order: BTreeMap<u64, MessageKey<F>>,
+    next_position: u64,
+}
+
+impl<F: WitnessField> Demands<F> {
+    fn new() -> Self {
+        Self {
+            net: BTreeMap::new(),
+            order: BTreeMap::new(),
+            next_position: 0,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.net.is_empty()
+    }
+
+    /// Add a multiplicity for a channel message, dropping the entry when it cancels to zero.
+    fn add(&mut self, channel: &'static str, message: Vec<F>, multiplicity: F) {
+        if multiplicity == F::ZERO {
+            return;
+        }
+        let key = (channel, message);
+        if let Some((total, position)) = self.net.get_mut(&key) {
+            *total += multiplicity;
+            if *total == F::ZERO {
+                let position = *position;
+                self.net.remove(&key);
+                self.order.remove(&position);
+            }
+        } else {
+            self.order.insert(self.next_position, key.clone());
+            self.net.insert(key, (multiplicity, self.next_position));
+            self.next_position += 1;
+        }
+    }
+
+    fn add_interactions(&mut self, interactions: impl IntoIterator<Item = Interaction<F>>) {
+        for interaction in interactions {
+            self.add(
+                interaction.channel,
+                interaction.message,
+                interaction.multiplicity,
+            );
+        }
+    }
+
+    fn remove_interactions(&mut self, interactions: impl IntoIterator<Item = Interaction<F>>) {
+        for interaction in interactions {
+            self.add(
+                interaction.channel,
+                interaction.message,
+                -interaction.multiplicity,
+            );
+        }
+    }
+
+    /// The demands, in the order their messages became unbalanced.
+    fn iter(&self) -> impl Iterator<Item = Demand<F>> + '_ {
+        self.order.values().map(|key| Demand {
+            channel: key.0,
+            message: key.1.clone(),
+            multiplicity: self.net[key].0,
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 struct Row<F> {
     input: Vec<F>,
     values: Vec<F>,
 }
 
-/// Add a multiplicity for a channel message, dropping the entry when it cancels to zero.
-fn add_multiplicity<F: WitnessField>(
-    demands: &mut Vec<Demand<F>>,
-    channel: &'static str,
-    message: Vec<F>,
-    multiplicity: F,
-) {
-    if let Some(index) = demands
-        .iter()
-        .position(|current| current.channel == channel && current.message == message)
-    {
-        let total = demands[index].multiplicity + multiplicity;
-        if total == F::ZERO {
-            demands.remove(index);
-        } else {
-            demands[index].multiplicity = total;
+/// The rows of a component, indexed by the message of their counted interaction.
+struct Table<F> {
+    rows: Vec<Row<F>>,
+    /// The position of the counted interaction, if the component has a multiplicity cell.
+    counted_interaction: Option<usize>,
+    /// The first row whose counted interaction carries each message. Counting does not change the
+    /// message, since Clean's validation rejects counted messages that read the multiplicity cell.
+    counted_rows: BTreeMap<Vec<F>, usize>,
+}
+
+impl<F: WitnessField> Table<F> {
+    fn new(mode: &Mode<F>) -> Self {
+        let counted_interaction = match mode {
+            Mode::Demand(mode) => mode
+                .multiplicity
+                .map(|multiplicity| multiplicity.interaction),
+            Mode::Preallocated { multiplicity, .. } => Some(multiplicity.interaction),
+            Mode::Standalone { .. } => None,
+        };
+        Self {
+            rows: Vec::new(),
+            counted_interaction,
+            counted_rows: BTreeMap::new(),
         }
-    } else if multiplicity != F::ZERO {
-        demands.push(Demand {
-            channel,
-            message,
-            multiplicity,
-        });
     }
-}
 
-fn add_interactions<F: WitnessField>(
-    demands: &mut Vec<Demand<F>>,
-    interactions: impl IntoIterator<Item = Interaction<F>>,
-) {
-    for interaction in interactions {
-        add_multiplicity(
-            demands,
-            interaction.channel,
-            interaction.message,
-            interaction.multiplicity,
-        );
+    /// Append a row, and return its interactions.
+    fn push<P: Program<F>>(&mut self, component: usize, row: Row<F>) -> Vec<Interaction<F>> {
+        let interactions = P::interactions(component, &row.values);
+        if let Some(counted) = self
+            .counted_interaction
+            .and_then(|position| interactions.get(position))
+        {
+            self.counted_rows
+                .entry(counted.message.clone())
+                .or_insert(self.rows.len());
+        }
+        self.rows.push(row);
+        interactions
     }
-}
 
-fn remove_interactions<F: WitnessField>(
-    demands: &mut Vec<Demand<F>>,
-    interactions: impl IntoIterator<Item = Interaction<F>>,
-) {
-    for interaction in interactions {
-        add_multiplicity(
-            demands,
-            interaction.channel,
-            interaction.message,
-            -interaction.multiplicity,
-        );
+    /// The first row whose counted interaction carries the demanded message.
+    fn counted_row(&self, demand: &Demand<F>) -> Option<usize> {
+        self.counted_rows.get(&demand.message).copied()
     }
 }
 
@@ -473,37 +541,45 @@ fn remove_interactions<F: WitnessField>(
 enum Answer<'a, F> {
     /// With the component's demand mode.
     Demand(&'a DemandMode<F>),
-    /// By incrementing the counter of the row at `row_index`.
-    Counter {
-        counter: &'a Counter,
+    /// By incrementing the multiplicity cell of the row at `row_index`.
+    Multiplicity {
+        multiplicity: &'a MultiplicityColumn,
         row_index: usize,
     },
 }
 
-/// How the component answers the demand, if it accepts it: a demand component accepts the messages
-/// on its channel that trigger it and that its guard holds for, a preallocated one those it has a
-/// row for.
-fn accepts<'a, F: WitnessField, P: Program<F>>(
-    component: usize,
+/// How the component answers the demand, if it accepts it: a component accepts the messages on its
+/// channel that trigger it, and that a demand component's guard holds for, or that a preallocated
+/// component has a row for.
+fn accepts<'a, F: WitnessField>(
     mode: &'a Mode<F>,
     demand: &Demand<F>,
-    table: &[Row<F>],
+    table: &Table<F>,
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
-) -> Result<Option<Answer<'a, F>>, String> {
+) -> Option<Answer<'a, F>> {
     match mode {
-        Mode::Demand(mode) => Ok((mode.channel == demand.channel
+        Mode::Demand(mode) => (mode.channel == demand.channel
             && mode.trigger == demand.direction()
             && (mode.guard)(&demand.message, data, hint))
-        .then_some(Answer::Demand(mode))),
-        Mode::Preallocated { counters, .. } => {
-            let found = find_counted_row::<F, P>(component, counters, demand, table)?;
-            Ok(found.map(|(counter, row_index)| Answer::Counter { counter, row_index }))
-        }
+        .then_some(Answer::Demand(mode)),
+        Mode::Preallocated {
+            channel,
+            trigger,
+            multiplicity,
+            ..
+        } => (demand.channel == *channel && demand.direction() == *trigger)
+            .then(|| table.counted_row(demand))
+            .flatten()
+            .map(|row_index| Answer::Multiplicity {
+                multiplicity,
+                row_index,
+            }),
+        Mode::Standalone { .. } => None,
     }
 }
 
-/// A new row answering the demanded message, whose counter, if any, starts at the demanded count.
+/// A new row answering the demanded message, whose multiplicity cell, if any, cancels the demand.
 fn make_demand_row<F: WitnessField, P: Program<F>>(
     component: usize,
     mode: &DemandMode<F>,
@@ -511,91 +587,35 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<Row<F>, String> {
-    let mut input = mode
-        .input
-        .iter()
-        .map(|cell| match cell {
-            InputCell::Message(index) => demand
-                .message
-                .get(*index)
-                .copied()
-                .ok_or_else(|| format!("channel message has no element at index {index}")),
-            InputCell::Constant(value) => Ok(*value),
-        })
-        .collect::<Result<Vec<F>, String>>()?;
-    let mut columns = mode
-        .counters
-        .iter()
-        .map(|counter| counter.column)
-        .collect::<Vec<_>>();
-    columns.sort_unstable();
-    for column in columns {
-        if column > input.len() {
-            return Err(format!("counter column {column} is out of bounds"));
-        }
-        input.insert(column, F::from_canonical_u64(demand.count() as u64));
-    }
+    let input = (mode.input)(&demand.message, data, hint, -demand.multiplicity);
     let values = P::complete_row(component, &input, data, hint)?;
     Ok(Row { input, values })
 }
 
-/// The row whose counted interaction carries the demanded message, with its counter.
-fn find_counted_row<'a, F: WitnessField, P: Program<F>>(
-    component: usize,
-    counters: &'a [Counter],
-    demand: &Demand<F>,
-    table: &[Row<F>],
-) -> Result<Option<(&'a Counter, usize)>, String> {
-    if demand.direction() != Direction::Pull {
-        return Ok(None);
-    }
-    let mut matches = counters
-        .iter()
-        .filter(|counter| counter.channel == demand.channel)
-        .flat_map(|counter| {
-            table
-                .iter()
-                .enumerate()
-                .filter_map(move |(row_index, row)| {
-                    let interaction = P::interactions(component, &row.values)
-                        .into_iter()
-                        .nth(counter.interaction)?;
-                    (interaction.message == demand.message).then_some((counter, row_index))
-                })
-        });
-    let found = matches.next();
-    if matches.next().is_some() {
-        return Err(format!(
-            "component {component} has multiple rows for a message on channel '{}'",
-            demand.channel
-        ));
-    }
-    Ok(found)
-}
-
-/// Add the demanded count to the counter of a row, and complete the row again.
+/// Cancel the demand in the multiplicity cell of a row, and complete the row again.
 #[allow(clippy::too_many_arguments)]
-fn increment_counter<F: WitnessField, P: Program<F>>(
+fn increment_multiplicity<F: WitnessField, P: Program<F>>(
     component: usize,
-    counter: &Counter,
+    multiplicity: &MultiplicityColumn,
     row_index: usize,
     demand: &Demand<F>,
-    table: &mut [Row<F>],
-    demands: &mut Vec<Demand<F>>,
+    table: &mut Table<F>,
+    demands: &mut Demands<F>,
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
-    let row = &mut table[row_index];
-    let current = row
-        .input
-        .get(counter.column)
-        .copied()
-        .ok_or_else(|| format!("counter column {} is out of bounds", counter.column))?;
+    let row = &mut table.rows[row_index];
+    let current = row.input.get(multiplicity.column).copied().ok_or_else(|| {
+        format!(
+            "multiplicity column {} is out of bounds",
+            multiplicity.column
+        )
+    })?;
     let old_interactions = P::interactions(component, &row.values);
-    row.input[counter.column] = current + F::from_canonical_u64(demand.count() as u64);
+    row.input[multiplicity.column] = current - demand.multiplicity;
     row.values = P::complete_row(component, &row.input, data, hint)?;
-    remove_interactions(demands, old_interactions);
-    add_interactions(demands, P::interactions(component, &row.values));
+    demands.remove_interactions(old_interactions);
+    demands.add_interactions(P::interactions(component, &row.values));
     Ok(())
 }
 
@@ -603,36 +623,40 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     component: usize,
     mode: &DemandMode<F>,
     demand: &Demand<F>,
-    table: &mut Vec<Row<F>>,
-    demands: &mut Vec<Demand<F>>,
+    table: &mut Table<F>,
+    demands: &mut Demands<F>,
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
-    let new_rows = match mode.aggregation {
-        Aggregation::PerOccurrence => demand.count(),
-        Aggregation::ByMessage => {
-            match find_counted_row::<F, P>(component, &mode.counters, demand, table)? {
-                Some((counter, row_index)) => {
-                    return increment_counter::<F, P>(
-                        component, counter, row_index, demand, table, demands, data, hint,
-                    );
-                }
-                None => 1,
+    let new_rows = match &mode.multiplicity {
+        None => demand.count(),
+        Some(multiplicity) => match table.counted_row(demand) {
+            Some(row_index) => {
+                return increment_multiplicity::<F, P>(
+                    component,
+                    multiplicity,
+                    row_index,
+                    demand,
+                    table,
+                    demands,
+                    data,
+                    hint,
+                );
             }
-        }
+            None => 1,
+        },
     };
     for _ in 0..new_rows {
         let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
-        add_interactions(demands, P::interactions(component, &row.values));
-        table.push(row);
+        demands.add_interactions(table.push::<P>(component, row));
     }
     Ok(())
 }
 
 fn balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
-    tables: &mut [Vec<Row<F>>],
-    demands: &mut Vec<Demand<F>>,
+    tables: &mut [Table<F>],
+    demands: &mut Demands<F>,
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
@@ -642,12 +666,10 @@ fn balance<F: WitnessField, P: Program<F>>(
         }
 
         let mut action = None;
-        for (demand_index, demand) in demands.iter().enumerate() {
+        for demand in demands.iter() {
             let mut answers = Vec::new();
-            for (component, mode) in modes.iter().enumerate() {
-                if let Some(answer) =
-                    accepts::<F, P>(component, mode, demand, &tables[component], data, hint)?
-                {
+            for (component, (mode, table)) in modes.iter().zip(tables.iter()).enumerate() {
+                if let Some(answer) = accepts(mode, &demand, table, data, hint) {
                     answers.push((component, answer));
                 }
             }
@@ -663,12 +685,12 @@ fn balance<F: WitnessField, P: Program<F>>(
                 ));
             }
             if let Some((component, answer)) = answers.pop() {
-                action = Some((demand_index, component, answer));
+                action = Some((demand, component, answer));
                 break;
             }
         }
 
-        let (demand_index, component, answer) = action.ok_or_else(|| {
+        let (demand, component, answer) = action.ok_or_else(|| {
             let channels = demands
                 .iter()
                 .map(|demand| demand.channel)
@@ -677,7 +699,6 @@ fn balance<F: WitnessField, P: Program<F>>(
             format!("unhandled channel imbalance on: {channels}")
         })?;
         // The demand stays in the worklist: the interactions of the new or updated row cancel it.
-        let demand = demands[demand_index].clone();
         match answer {
             Answer::Demand(mode) => handle_demand::<F, P>(
                 component,
@@ -688,9 +709,12 @@ fn balance<F: WitnessField, P: Program<F>>(
                 data,
                 hint,
             )?,
-            Answer::Counter { counter, row_index } => increment_counter::<F, P>(
+            Answer::Multiplicity {
+                multiplicity,
+                row_index,
+            } => increment_multiplicity::<F, P>(
                 component,
-                counter,
+                multiplicity,
                 row_index,
                 &demand,
                 &mut tables[component],
@@ -709,40 +733,38 @@ fn balance<F: WitnessField, P: Program<F>>(
 fn target_height<F>(row_count: usize, mode: &Mode<F>, minimum_height: usize) -> usize {
     match mode {
         Mode::Demand(_) => row_count.max(minimum_height).next_power_of_two(),
-        Mode::Preallocated { .. } => row_count,
+        Mode::Preallocated { .. } | Mode::Standalone { .. } => row_count,
     }
 }
 
 fn pad_and_balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
-    tables: &mut [Vec<Row<F>>],
+    tables: &mut [Table<F>],
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
     minimum_height: usize,
 ) -> Result<(), String> {
     for _ in 0..P::FUEL {
-        let mut demands = Vec::new();
+        let mut demands = Demands::new();
         for (component, (table, mode)) in tables.iter_mut().zip(modes).enumerate() {
             let Mode::Demand(DemandMode { padding, .. }) = mode else {
                 continue;
             };
-            let height = target_height(table.len(), mode, minimum_height);
-            for _ in table.len()..height {
+            let height = target_height(table.rows.len(), mode, minimum_height);
+            for _ in table.rows.len()..height {
                 let values = P::complete_row(component, padding, data, hint)?;
-                add_interactions(&mut demands, P::interactions(component, &values));
-                table.push(Row {
+                let row = Row {
                     input: padding.clone(),
                     values,
-                });
+                };
+                demands.add_interactions(table.push::<P>(component, row));
             }
         }
 
         balance::<F, P>(modes, tables, &mut demands, data, hint)?;
-        if tables
-            .iter()
-            .zip(modes)
-            .all(|(table, mode)| table.len() == target_height(table.len(), mode, minimum_height))
-        {
+        if tables.iter().zip(modes).all(|(table, mode)| {
+            table.rows.len() == target_height(table.rows.len(), mode, minimum_height)
+        }) {
             return Ok(());
         }
     }
@@ -776,10 +798,10 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         )
         .into());
     }
-    if P::FIXED_WIDTHS.len() != P::COMPONENTS {
+    if P::FIXED_COLUMNS.len() != P::COMPONENTS {
         return Err(format!(
-            "fixed-width count {} does not match component count {}",
-            P::FIXED_WIDTHS.len(),
+            "fixed-column count {} does not match component count {}",
+            P::FIXED_COLUMNS.len(),
             P::COMPONENTS
         )
         .into());
@@ -814,80 +836,56 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     }
     let hint = &WitnessData::from_hint_tables(P::HINT_TABLES, prover_input);
 
-    let mut tables = Vec::with_capacity(modes.len());
-    for (component, mode) in modes.iter().enumerate() {
-        let inputs = match mode {
+    let inputs: Vec<Vec<Vec<F>>> = modes
+        .iter()
+        .enumerate()
+        .map(|(component, mode)| match mode {
             Mode::Demand(_) => Vec::new(),
-            Mode::Preallocated { rows, .. } => (0..*rows as u64)
+            Mode::Preallocated { rows, .. } | Mode::Standalone { rows } => (0..*rows as u64)
                 .map(|row| P::initial_row(component, row, hint))
                 .collect(),
-        };
-        let rows = inputs
-            .into_iter()
-            .map(|input| Row {
-                values: input.clone(),
-                input,
-            })
-            .collect();
-        tables.push(rows);
-    }
+        })
+        .collect();
 
     for (component, mode) in modes.iter().enumerate() {
-        let fixed_width = P::FIXED_WIDTHS[component];
-        match mode {
-            Mode::Demand(_) if fixed_width != 0 => {
-                return Err(format!(
-                    "fixed-column component {component} must use preallocated generation"
-                )
-                .into());
+        if let Mode::Preallocated { rows, .. } | Mode::Standalone { rows } = mode {
+            if *rows < minimum_height {
+                return Err(WitnessGenerationError::PreallocatedHeight {
+                    component: P::COMPONENT_NAMES[component],
+                    height: *rows,
+                    minimum: minimum_height,
+                });
             }
-            Mode::Preallocated { rows, counters } => {
-                if *rows < minimum_height {
-                    return Err(WitnessGenerationError::PreallocatedHeight {
-                        component: P::COMPONENT_NAMES[component],
-                        height: *rows,
-                        minimum: minimum_height,
-                    });
-                }
-                if let Some(counter) = counters.iter().find(|counter| counter.column < fixed_width)
-                {
-                    return Err(format!(
-                        "counter of component {component} is fixed column {}",
-                        counter.column
-                    )
-                    .into());
-                }
-            }
-            Mode::Demand(_) => {}
         }
     }
 
-    let data = WitnessData::from_initial_tables(P::COMPONENT_NAMES, &tables);
-    for (component, table) in tables.iter_mut().enumerate() {
-        for row in table {
-            row.values = P::complete_row(component, &row.input, &data, hint)?;
+    let data = WitnessData::from_initial_tables(P::COMPONENT_NAMES, &inputs);
+    let mut demands = Demands::new();
+    demands.add_interactions(P::verifier_interactions(public_input));
+    let mut tables = Vec::with_capacity(modes.len());
+    for (component, (mode, inputs)) in modes.iter().zip(inputs).enumerate() {
+        let mut table = Table::new(mode);
+        for input in inputs {
+            let values = P::complete_row(component, &input, &data, hint)?;
+            demands.add_interactions(table.push::<P>(component, Row { input, values }));
         }
-    }
-
-    let mut demands = Vec::new();
-    add_interactions(&mut demands, P::verifier_interactions(public_input));
-    for (component, table) in tables.iter().enumerate() {
-        for row in table {
-            add_interactions(&mut demands, P::interactions(component, &row.values));
-        }
+        tables.push(table);
     }
 
     balance::<F, P>(&modes, &mut tables, &mut demands, &data, hint)?;
     pad_and_balance::<F, P>(&modes, &mut tables, &data, hint, minimum_height)?;
 
     Ok(EnsembleWitness {
-        fixed_widths: P::FIXED_WIDTHS.to_vec(),
+        fixed_columns: P::FIXED_COLUMNS.to_vec(),
         windows: P::WINDOWS.to_vec(),
         tables: tables
             .into_iter()
             .zip(P::WINDOWS)
             .map(|(table, window)| {
-                fill_windows(table.into_iter().map(|row| row.values).collect(), *window)
+                fill_windows(
+                    table.rows.into_iter().map(|row| row.values).collect(),
+                    *window,
+                )
             })
             .collect(),
     })

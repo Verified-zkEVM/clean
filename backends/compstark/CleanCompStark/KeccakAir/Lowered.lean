@@ -50,7 +50,7 @@ theorem cellExpr_of_lt (hw : component.window = some layout) {j : ℕ}
       cellExpr (K := K) component j = .prepCur c ∨ cellExpr (K := K) component j = .prepNext c := by
   unfold cellExpr
   rw [hw]
-  dsimp only
+  dsimp only [ownCell, ownCellNext]
   split_ifs <;> first
     | exact ⟨_, Or.inl rfl⟩ | exact ⟨_, Or.inr (Or.inl rfl)⟩
     | exact ⟨_, Or.inr (Or.inr (Or.inl rfl))⟩ | exact ⟨_, Or.inr (Or.inr (Or.inr rfl))⟩
@@ -116,7 +116,8 @@ theorem degProfile_lower (hw : component.window = some layout) {x : Expression F
   cases g.gate <;>
     simp only [gateExpr, gateWeight, HMul.hMul, Mul.mul, Expr.degProfile, hprofile] <;> omega
 
-theorem colsBelow_toExpr (hw : component.window = some layout) (logN : ℕ) :
+theorem colsBelow_toExpr (hw : component.window = some layout)
+    (hfixed : fixedColumns component = []) (logN : ℕ) :
     ∀ y : Expression F, (∀ j ∈ expressionCells y, j < 2 * layout.rowWidth) →
       (toExpr e component y).colsBelow (toAir e component logN).width
         (toAir e component logN).mainNextWidth (toAir e component logN).preprocessedWidth
@@ -124,40 +125,34 @@ theorem colsBelow_toExpr (hw : component.window = some layout) (logN : ℕ) :
   | .var v, h => by
     have hj := h v.index (by simp [expressionCells])
     have hsize := rowWidth_le_size hw
-    have hfixed := fixedWidth_le_rowWidth hw
-    have hwidth : (toAir e component logN).width = component.width - component.fixedWidth -
-        (layout.rowWidth + 3) := by
-      simp only [toAir, traceWidth, Component.windowWidth, hw, Option.map_some, Option.getD_some,
-        WindowLayout.windowWidth]
+    have hwidth : (toAir e component logN).width = component.width - (layout.rowWidth + 3) := by
+      simp only [toAir, traceWidth, fixedWidth, hfixed, Component.windowWidth, hw,
+        Option.map_some, Option.getD_some, WindowLayout.windowWidth, List.length_nil,
+        Nat.sub_zero]
     have hnext : (toAir e component logN).mainNextWidth = (toAir e component logN).width := rfl
-    have hprep : (toAir e component logN).preprocessedWidth = component.fixedWidth := rfl
-    simp only [toExpr, cellExpr, hw]
-    split_ifs with h1 h2 h2
-    · simp only [Expr.colsBelow, hprep, decide_eq_true_eq]
-      omega
+    simp only [toExpr, cellExpr, hw, ownCell, ownCellNext, hfixed, fixedBefore, List.not_mem_nil,
+      ↓reduceIte, List.filter_nil, List.length_nil, Nat.sub_zero]
+    split_ifs with h1
     · simp only [Expr.colsBelow, hwidth, decide_eq_true_eq]
       omega
-    · have hpos : 0 < component.fixedWidth := by omega
-      simp only [Expr.colsBelow, Air.preprocessedNextWidth, Air.opensPreprocessedNext, hprep,
-        hpos, decide_true, Bool.true_and, decide_eq_true_eq]
-      exact h2
     · simp only [Expr.colsBelow, hnext, hwidth, decide_eq_true_eq]
       omega
   | .const _, _ => rfl
   | .add a b, h | .mul a b, h => by
     simp only [expressionCells, List.mem_append] at h
     simp only [toExpr, colsBelow_addExpr, Expr.colsBelow, Bool.and_eq_true]
-    exact ⟨colsBelow_toExpr hw logN a fun j hj => h j (Or.inl hj),
-      colsBelow_toExpr hw logN b fun j hj => h j (Or.inr hj)⟩
+    exact ⟨colsBelow_toExpr hw hfixed logN a fun j hj => h j (Or.inl hj),
+      colsBelow_toExpr hw hfixed logN b fun j hj => h j (Or.inr hj)⟩
 
-theorem colsBelow_lower (hw : component.window = some layout) (logN : ℕ) {x : Expression F}
+theorem colsBelow_lower (hw : component.window = some layout)
+    (hfixed : fixedColumns component = []) (logN : ℕ) {x : Expression F}
     {g : GatedConstraint F} (hcells : ∀ j ∈ expressionCells x, j < 2 * layout.rowWidth + 3)
     (hg : gateConstraint (some layout.rowWidth) x = some g) :
     (gateExpr g.gate (toExpr e component g.body)).colsBelow (toAir e component logN).width
       (toAir e component logN).mainNextWidth (toAir e component logN).preprocessedWidth
       (toAir e component logN).preprocessedNextWidth := by
   obtain ⟨hbody, -⟩ := gateConstraint_weight hcells hg
-  have := colsBelow_toExpr e hw logN g.body hbody
+  have := colsBelow_toExpr e hw hfixed logN g.body hbody
   cases g.gate <;> simp only [gateExpr, HMul.hMul, Mul.mul, Expr.colsBelow, Bool.true_and, this]
 
 end Lowering

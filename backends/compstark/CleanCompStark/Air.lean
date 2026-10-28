@@ -6,9 +6,9 @@ public import CompStark.Lookup.LogUp
 /-!
 # A Clean component as a CompStark AIR
 
-A component becomes one AIR (`toAir`), as the Plonky3 backend lays it out. The fixed columns, a
-prefix of the row's own input, are the preprocessed trace; the trace commits the rest of the row's
-own input and the witnesses. A two-row component's window cells are not committed: the next row's
+A component becomes one AIR (`toAir`), as the Plonky3 backend lays it out. The fixed columns, the
+input cells that the component's generation makes fixed cells, are the preprocessed trace; the trace
+commits the other cells of the row's own input and the witnesses. A two-row component's window cells are not committed: the next row's
 input reads the next row, and the selectors are Plonky3's. Every constraint is lowered with
 `Backends.gateConstraint` and becomes its body times its gate's selector, as Plonky3's
 `when_first_row`, `when_last_row` and `when_transition` do; Clean's subtraction `x + (-1) * z`
@@ -31,27 +31,48 @@ open Air.Flat Backends CompStark.Stark
 
 variable {F : Type} [FiniteField F] {K : Type} [CompStark.BaseField K]
 
+/-- The input columns of a component that are fixed columns, in increasing order: the fixed cells
+of its generation. -/
+def fixedColumns (component : Component F) : List ℕ :=
+  (component.generation.cells.1.toList.zipIdx.filter (·.1.isFixed)).map (·.2)
+
+/-- The number of fixed columns. -/
+def fixedWidth (component : Component F) : ℕ := (fixedColumns component).length
+
+/-- The number of fixed columns before column `j`. -/
+def fixedBefore (component : Component F) (j : ℕ) : ℕ :=
+  ((fixedColumns component).filter (· < j)).length
+
 /-- The width of the committed trace of a component: its cells except the fixed and the window
 cells. -/
 def traceWidth (component : Component F) : ℕ :=
-  component.width - component.fixedWidth - component.windowWidth
+  component.width - fixedWidth component - component.windowWidth
+
+/-- Cell `j` of the row's own input on the current row: a fixed column of the preprocessed trace, or
+a column of the trace. -/
+def ownCell (component : Component F) (j : ℕ) : Expr K :=
+  if j ∈ fixedColumns component then .prepCur ((fixedColumns component).idxOf j)
+  else .cur (j - fixedBefore component j)
+
+/-- Cell `j` of the row's own input on the next row. -/
+def ownCellNext (component : Component F) (j : ℕ) : Expr K :=
+  if j ∈ fixedColumns component then .prepNext ((fixedColumns component).idxOf j)
+  else .next (j - fixedBefore component j)
 
 /-- The value of cell `j` of a component's row in an AIR environment: a fixed cell is the
 preprocessed trace, a window cell of the next row's input is the next row, a selector cell is the
 selector, and every other cell is a column of the trace. -/
 def cellExpr (component : Component F) (j : ℕ) : Expr K :=
-  let fixedWidth := component.fixedWidth
   match component.window with
-  | none => if j < fixedWidth then .prepCur j else .cur (j - fixedWidth)
+  | none => ownCell component j
   | some layout =>
     let w := layout.rowWidth
-    if j < w then (if j < fixedWidth then .prepCur j else .cur (j - fixedWidth))
-    else if j < 2 * w then
-      (if j - w < fixedWidth then .prepNext (j - w) else .next (j - w - fixedWidth))
+    if j < w then ownCell component j
+    else if j < 2 * w then ownCellNext component (j - w)
     else if j = 2 * w then .isFirstRow
     else if j = 2 * w + 1 then .isLastRow
     else if j = 2 * w + 2 then .isTransition
-    else .cur (j - (w + 3) - fixedWidth)
+    else .cur (j - (w + 3) - fixedWidth component)
 
 /-- The sum `x + y` of AIR expressions, where a summand `(-1) * z`, Clean's subtraction
 `x - z = x + (-1) * z`, becomes a subtraction `x - z`, which the quotient's program computes
@@ -125,12 +146,21 @@ def toLookup (component : Component F) (interaction : AbstractInteraction F) :
     [(interaction.msg.toList.map (toExpr e component),
       .provided (.const 0 - toExpr e component interaction.mult))]⟩
 
+/-- The values of the fixed columns on row `i`: the fixed cells of the generation, evaluated at the
+row index. -/
+def fixedValues (component : Component F) (i : ℕ) : List F :=
+  let (cells, steps) := component.generation.cells
+  let ctx := WitnessGeneration.inputContext steps (WitnessGeneration.rowEnvironment (.empty F)) i
+  (fixedColumns component).map fun j =>
+    match cells.toList[j]? with
+    | some (WitnessGeneration.Cell.fixed value) => value.eval ctx
+    | _ => 0
+
 /-- The preprocessed trace of `2 ^ logN` rows: the fixed columns' values, row-major. -/
 def fixedTrace (component : Component F) (logN : ℕ) : Array K :=
-  match component.fixedColumns with
-  | none => #[]
-  | some fixed => Array.ofFn (n := 2 ^ logN * fixed.width) fun k =>
-      e ((fixed.values (UInt64.ofNat (k / fixed.width)))[k % fixed.width]?.getD 0)
+  let width := fixedWidth component
+  Array.ofFn (n := 2 ^ logN * width) fun k =>
+    e ((fixedValues component (k / width))[k % width]?.getD 0)
 
 /-- The AIR of a component on `2 ^ logN` rows. -/
 def toAir (component : Component F) (logN : ℕ) : Air K where
@@ -138,14 +168,15 @@ def toAir (component : Component F) (logN : ℕ) : Air K where
   numPublicValues := 0
   constraints := (gatedConstraints component).map fun g =>
     gateExpr g.gate (toExpr e component g.body)
-  preprocessedWidth := component.fixedWidth
+  preprocessedWidth := fixedWidth component
   preprocessed := fixedTrace e component logN
   lookups := component.rowOperations.interactions.map (toLookup e component)
 
 /-- The committed trace of Clean rows: each row's cells but the fixed and the window cells. -/
 def toTrace (component : Component F) (rows : List (Array F)) : Array K :=
   let w := component.ownInputWidth
-  (rows.toArray.flatMap fun row => row.extract component.fixedWidth w ++
+  (rows.toArray.flatMap fun row =>
+    ((row.extract 0 w).zipIdx.filter (·.2 ∉ fixedColumns component)).map (·.1) ++
     row.extract (w + component.windowWidth) component.width).map e
 
 /-- Row `i` of a Clean table read off a trace of `2 ^ logN` rows of the component's AIR: every

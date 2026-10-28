@@ -1,6 +1,7 @@
 module
 
 public import Clean.Air.Circuit
+public import Clean.Air.WitnessGeneration.Generation
 
 @[expose] public section
 
@@ -141,6 +142,16 @@ lemma getElem_toElements (window : Window Row F) (j : ℕ) (h : j < size (Window
     List.getElem_append_right (by simp [Window.layout]; omega)]
   simp only [Window.layout, Vector.length_toList]
   simp [show ∀ n m : ℕ, 2 * n + m - n - n = m by omega]
+
+/-- The input cells of a two-row component's row, from the cells of the row's own input. The window
+cells are witness cells that generation fills in once the table is final. -/
+def cells [Zero F] (current : Row (WitnessGeneration.Cell F)) :
+    Window Row (WitnessGeneration.Cell F) where
+  current
+  next := fromElements (.replicate (size Row) (.witness (.const 0)))
+  isFirstRow := .witness (.const 0)
+  isLastRow := .witness (.const 0)
+  isTransition := .witness (.const 0)
 
 end Window
 end Air.Flat

@@ -51,14 +51,16 @@ def program : SegmentProgram (F p) where
 /-- The component with 16 rows. -/
 def component : Component (F p) where
   circuit
-  fixedColumns := some { Row := unit, row _ := pure (), height := 16 }
-  generation := .segments program
+  generation := .segments { height := 16, program }
 
 /-- The ensemble of the component, whose prover input is the seeds of its six segments. -/
 def ensemble : Ensemble (F p) unit where
   tables := [component]
   unique_names := by simp
   channels := []
+  unique_channel_names := by simp
+  tables_channels := by simp [circuit_norm, component, circuit, main]
+  verifier_channels := by simp [circuit_norm, Verifier.Program.empty]
   ProverInput := fields 6
   hintTables := [{ key := "seed", width := 1, offset := 0, rows := 6 }]
 

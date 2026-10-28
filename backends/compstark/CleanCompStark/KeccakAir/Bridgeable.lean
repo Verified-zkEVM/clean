@@ -414,6 +414,18 @@ theorem admissible_component (height : UInt64) (a b : ℕ) :
   rw [rowOperations_component]
   exact admissible_main (windowShaped_vars a b) _
 
+/-- The Keccak-f component has no fixed columns: its segment program computes all its cells. -/
+theorem fixedColumns_component (height : UInt64) : fixedColumns (component (p := p) height) = [] := by
+  refine List.eq_nil_iff_forall_not_mem.mpr fun j hj => ?_
+  simp only [fixedColumns, component, WitnessGeneration.Generation.cells, Vector.toList_replicate,
+    List.mem_map, List.mem_filter] at hj
+  obtain ⟨⟨cell, _⟩, ⟨hmem, hfixed⟩, -⟩ := hj
+  rw [List.mem_zipIdx_iff_getElem?, List.getElem?_replicate] at hmem
+  split at hmem
+  · cases hmem
+    exact absurd hfixed Bool.false_ne_true
+  · cases hmem
+
 /-- **The Keccak-f component is bridgeable**: no legacy lookups, every constraint is a gate times
 a body that reads no selector, and every expression reads cells of the row. -/
 theorem bridgeable_component (height : UInt64) : bridgeable (component (p := p) height) = true := by
@@ -425,8 +437,8 @@ theorem bridgeable_component (height : UInt64) : bridgeable (component (p := p) 
   have hadmissible := admissible_component (p := p) height 0 0
   simp only [bridgeable, Bool.and_eq_true, List.isEmpty_iff, List.all_eq_true,
     Option.isNone_iff_eq_none, hwindow]
-  refine ⟨⟨by rw [rowOperations_component]; exact lookups_main _ _,
-    fun x hx => (hadmissible x hx).1⟩, ?_⟩
+  refine ⟨⟨⟨by rw [rowOperations_component]; exact lookups_main _ _,
+    fun x hx => (hadmissible x hx).1⟩, ?_⟩, by simp [fixedColumns_component]⟩
   simp only [rowExpressions, hinteractions, List.flatMap_nil, List.append_nil,
     expressionsBadVariable]
   exact List.findSome?_eq_none_iff.mpr fun x hx => expressionBadVariable_eq_none _ x

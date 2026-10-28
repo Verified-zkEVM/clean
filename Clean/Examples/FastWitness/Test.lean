@@ -33,7 +33,7 @@ def rowChunks (rows : Array (Array F)) (logChunks : ℕ) : Array ByteArray :=
 def sameChunks (expected actual : Array ByteArray) : Bool :=
   expected.size == actual.size && (expected.zip actual).all fun (a, b) => a.data == b.data
 
-/-- The trace of the generated table: each row's cells but the fixed and the window cells. -/
+/-- The trace of the generated table: each row's cells but the window cells. -/
 def generatedTrace {PublicIO : TypeMap} [ProvableType PublicIO] (ens : Ensemble F PublicIO)
     (publicInput : PublicIO F) (proverInput : ens.ProverInput F) :
     Except String (Array (Array F)) :=
@@ -43,7 +43,7 @@ def generatedTrace {PublicIO : TypeMap} [ProvableType PublicIO] (ens : Ensemble 
     | [table] =>
       let component := table.component
       let own := component.ownInputWidth
-      .ok (table.table.toArray.map fun row => row.extract component.fixedWidth own ++
+      .ok (table.table.toArray.map fun row => row.extract 0 own ++
         row.extract (own + component.windowWidth) component.width)
     | _ => .error "expected one table"
 

@@ -63,8 +63,9 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
         .expect("second runtime memory produced invalid traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
-    let (proof, _) = prove_ensemble(&config, &statement, traces, &public_values)
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
+    let proof = prove_ensemble(&config, &statement, traces, &public_values)
         .expect("second runtime memory produced an invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("proof with the second runtime memory failed verification");
@@ -90,8 +91,9 @@ fn extracted_femtocairo_air_proves_and_verifies() {
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
-    let (proof, _) =
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
+    let proof =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("extracted FemtoCairo AIR proof failed verification");
@@ -109,11 +111,9 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
     const FIELD_ORDER: u64 = Spec::FIELD_ORDER;
     const PUBLIC_VALUES: usize = Spec::PUBLIC_VALUES;
     const WIDTHS: &'static [usize] = Spec::WIDTHS;
-    const FIXED_WIDTHS: &'static [usize] = Spec::FIXED_WIDTHS;
-    const FIXED_HEIGHTS: &'static [usize] = Spec::FIXED_HEIGHTS;
+    const FIXED_COLUMNS: &'static [&'static [usize]] = Spec::FIXED_COLUMNS;
     const WINDOWS: &'static [Option<usize>] = Spec::WINDOWS;
-    const INTERACTIONS_PER_ROW: &'static [usize] = Spec::INTERACTIONS_PER_ROW;
-    const VERIFIER_INTERACTIONS: usize = Spec::VERIFIER_INTERACTIONS;
+    const FIXED_HEIGHTS: &'static [usize] = Spec::FIXED_HEIGHTS;
 
     fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F> {
         let row = match (component, row) {
@@ -138,7 +138,9 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
         Spec::interactions(component, row)
     }
 
-    fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>> {
+    fn verifier_interactions<E: PrimeCharacteristicRing + Clone>(
+        public_values: &[E],
+    ) -> Vec<Interaction<E>> {
         Spec::verifier_interactions(public_values)
     }
 }
@@ -163,15 +165,19 @@ fn verifier_rejects_permuted_memory() {
     }
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
 
-    let permuted = GeneratedEnsemble::<BabyBear, PermutedMemoryAddresses>::new(&trace_heights)
-        .expect("invalid permuted AIR shape");
-    let (proof, _) =
+    let permuted = GeneratedEnsemble::<BabyBear, PermutedMemoryAddresses>::new(
+        &trace_heights,
+        setup::MINIMUM_TRACE_HEIGHT,
+    )
+    .expect("invalid permuted AIR shape");
+    let proof =
         prove_ensemble(&config, &permuted, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &permuted, &proof, &public_values)
         .expect("the permuted-memory proof must be valid for the permuted address table");
 
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
     assert!(matches!(
         verify_ensemble(&config, &statement, &proof, &public_values),
         Err(EnsembleVerificationError::Proof(_))

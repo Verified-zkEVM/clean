@@ -226,7 +226,7 @@ def specState (row : Array F) (column : ℕ → ℕ → ℕ → ℕ) : Vector �
 
 The segment program computes the 24 rows of a permutation from its input. Generation computes the
 trace of one permutation and its padding. Fast generation is tested natively, by
-`Clean.Examples.KeccakAir.FastTest`.
+`fast_witness_test` (`Clean/Examples/FastWitness/Test.lean`).
 -/
 
 /-- The permutation's input in `plonky3-trace.txt`. -/

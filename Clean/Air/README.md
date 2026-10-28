@@ -17,9 +17,9 @@ A component may also be a **two-row component**, whose circuit additionally read
 `FlatComponent.lean` defines the flat AIR component layer:
 
 - `Flat.Component`: the static one-row component, backed by a `GeneralFormalCircuit`.
-- `Flat.Table`: concrete array of rows for one component, together with the prover data used to evaluate constraints and channel interactions.
+- `Flat.Table`: concrete array of rows for one component, together with the prover data used to evaluate constraints and channel interactions. Its fields guarantee that the rows agree with the component's fixed cells, and that the prover data contains the table's inputs under the component's name, so component soundness proofs can use both.
 - `Flat.Tables`: a bundle of tables sharing one prover data object.
-- `Flat.FixedColumns`: verifier-known columns that form a prefix of a component's input.
+- `Component.FixedRowsMatch`: the rows of a preallocated component agree with its fixed cells, the verifier-known columns.
 
 It also proves the basic row-level transport lemmas: instantiated component operations agree with row operations, component soundness lifts to table soundness, and table interactions can be collected per channel.
 
@@ -29,7 +29,7 @@ It also proves the basic row-level transport lemmas: instantiated component oper
 
 `Verifier.lean` defines the verifier program language: an append-only list of public interactions, together with the verifier's spec and its soundness.
 
-`RowProgram.lean` defines index-aware row programs, which compute fixed columns and the prover-committed inputs of preallocated components, and segment programs, which compute rows from the previous row.
+`RowProgram.lean` decides which witness IR a row program may use: the fixed cells of a preallocated component are computed from the row index alone, and its witness cells can also read the hint. It also defines segment programs, which compute rows from the previous row.
 
 `Lookup.lean` defines a convenience wrapper for static lookups.
 
@@ -53,17 +53,18 @@ For example, the verifier of a VM pushes the initial state and pulls the final s
 
 Each component declares how it answers demand in its `generation` field, whose types are defined in `WitnessGeneration/Generation.lean`:
 
-- **demand**: the component starts empty and gets a new row whenever a message on its channel is unanswered. The row's input is built from the message. Repeated messages either get a row each (a VM step) or share one row whose counter counts them (a chip). After balancing, these tables are padded to a power-of-two height. Padding rows can interact too, so the generator balances again until no table grows. A proving backend may also need a minimum trace height, which the Plonky3 backend pads to.
-- **preallocated**: the component has one row per row of its fixed columns from the start, like a memory with one row per address or a lookup table. Demand only increments counters.
-- **segments**: the component has one row per row of its fixed columns from the start, computed by a segment program, and never answers demand. See segment programs below.
+- **demand**: the component starts empty and gets a new row whenever a message on its channel is unanswered. The row's input is built from the message. How it answers repeated messages depends on whether its input uses a multiplicity cell: if not, each occurrence gets its own row (a VM step); if yes, they share one row whose multiplicity cell counts them (a chip). After balancing, these tables are padded to a power-of-two height. Padding rows can interact too, so the generator balances again until no table grows. A proving backend may also need a minimum trace height, which the Plonky3 backend pads to.
+- **preallocated**: the component has a fixed number of rows from the start, like a memory with one row per address or a lookup table. Its input must have exactly one multiplicity cell, and demand on its channel in its trigger direction only changes it.
+- **standalone**: the component has a fixed number of rows from the start, and answers no demand, like an AIR without channels such as Plonky3's Keccak-f AIR. Its input has no multiplicity cell.
+- **segments**: the component has a fixed number of rows from the start, computed by a segment program, and answers no demand. See segment programs below.
 
 Several components may answer the same channel, like the opcode tables of a VM, which share its state channel. A demand component can then restrict the messages it answers by a *guard*, a witness program over the message: an opcode table's guard reads the opcode at the state's `pc` from the program table. Each message must be accepted by exactly one component: a demand component whose guard holds, or a preallocated component with a row for it. `Clean/Examples/OpcodeVm` is a toy VM built this way.
 
-A *counter* is an input variable that is the multiplicity of one of a row's interactions. The generation names it with an accessor on the component's input: a chip row emitting `add8.emit m (x, y, z)` has the counter `fun row => row.m`, and the generator finds the interaction whose multiplicity it is. To answer a pulled message, the generator finds the row whose counted interaction carries that message and increments its counter, or, in a chip, creates the row if there is none yet. Counters may not influence the message they count, so incrementing one never changes which message a row answers.
+Both modes describe the input of a row as a witness program producing the component's input type, with a *cell* for every input variable: a fixed cell, whose value the verifier knows and which only preallocated rows have; a witness cell, which the prover computes; or the multiplicity cell, the multiplicity of the component's interaction on its channel. A memory row emitting `memoryChannel.emit multiplicity { address, value }` has the input `{ address := .fixed i.toField, value := .witness ..., multiplicity := .multiplicity }`, and a chip row emitting `add8.emit m (x, y, z)` gets the input `{ x, y, z, m := .multiplicity }` from the message `(x, y, z)`. To answer a message, the generator finds the row whose interaction on the channel carries it and changes its multiplicity cell by the amount that cancels the demand, or, in a chip, creates the row if there is none yet. A message pushed more often than pulled makes the cell negative. The multiplicity may not influence the message it counts, so changing it never changes which message a row answers.
 
-Fixed columns are never generated. They belong to the component, and the generator copies them into the first cells of each row, so components with fixed columns are exactly the preallocated ones. The remaining cells of a preallocated row, apart from its counters, come from a row program, which may read the prover's private input.
+The fixed cells of a preallocated component are its fixed columns, wherever they sit in the input. Every table's rows agree with them, and the Plonky3 backend commits them as preprocessed columns.
 
-That private input is declared by the `Ensemble`: its type, and the hint tables through which witness programs read it. The `FormalEnsemble` adds the `ProverAssumptions` on public and private input that witness generation needs. The Plonky3 backend in `backends/plonky3` implements the same algorithm in Rust, and runs it on generation modes and witness programs extracted by `Clean/Backends`.
+The prover's private input is declared by the `Ensemble`: its type, and the hint tables through which witness programs read it. The `FormalEnsemble` adds the `ProverAssumptions` on public and private input that witness generation needs. The Plonky3 backend in `backends/plonky3` implements the same algorithm in Rust, and runs it on generation modes and witness programs extracted by `Clean/Backends`.
 
 The generator currently makes assumptions that come from our examples rather than from the idea, listed in the module doc of `WitnessGeneration.lean`. None of them is fundamental.
 
@@ -75,7 +76,7 @@ A trace stores the window cells in every row of a two-row table, like any other 
 
 **Soundness across rows.** A circuit's soundness is about one window. Facts that hold along the whole table are proved by induction along it, which the framework does: a two-row circuit may assume an invariant of its current row unless it is the first row, and its spec establishes the invariant for the next row on transitions. Concretely, the component's `circuit_assumptions_of_assumptions` receives `PreviousRowAt`: the row is the first row, or the previous row is a transition into it whose spec holds. `Table.weakSoundness` proves every row's spec by induction from there, so the invariant is part of every row's spec, and can establish the requirements of the row's channel interactions. In `Clean/Examples/SquaresTable`, every row assumes that its square is the square of its counter, and the last row pushes both to the verifier, who learns that the public square is a square.
 
-The window's selectors are 0 or 1 in Clean's semantics. Plonky3's selectors are only nonzero on the same rows, so a constraint can only use a selector as a factor of the whole constraint, which backends check under the selector's gate; lowering rejects other uses. Interactions and witness programs read only the row's own cells: witness generation completes rows and balances their interactions before the window cells are known, and fills them in when the tables are final. Rows that depend on the previous row are generated by segment programs.
+The window's selectors are 0 or 1 in Clean's semantics. Plonky3's selectors are only nonzero on the same rows, so a constraint can only use a selector as a factor of the whole constraint, which backends check under the selector's gate; lowering rejects other uses. Interactions and witness programs read only the row's own cells: witness generation completes rows and balances their interactions before the window cells are known, and fills them in when the tables are final. So the input program of a two-row component leaves the window cells to generation: `Window.cells` makes them witness cells around the cells of the row's own input, and validation rejects window cells that are fixed or multiplicity cells. Rows that depend on the previous row are generated by segment programs.
 
 VM tables are single-row, since the VM soundness argument derives each row's requirements from its own guarantees.
 
@@ -87,7 +88,7 @@ VM tables are single-row, since the VM soundness argument derives each row's req
 
 ## Segment programs
 
-A segment program (`Witgen.SegmentProgram`, in `RowProgram.lean`) computes the cells after the fixed columns of a component's rows in segments of `length` consecutive rows, where row `i` starts a segment if `i % length = 0`. A row that starts a segment is computed from its index, like a row program, and may read the hints. Every other row is computed from its index and the previous row: `next i previous` receives the previous row's values as the circuit expressions `previous : Row (Expression F)`, which the IR reads with `.expr`, so the previous row is the program's environment. The state carried across rows is the previous row itself, which is what a two-row AIR constrains. Plonky3's Keccak AIR (`Clean/Examples/KeccakAir/Witness.lean`) is one segment of 24 rows per permutation: the first row reads the permutation's input from the hint, every later row the previous row's output limbs. Validation checks that the first rows read no cells and that the other rows read only the previous row's cells.
+A segment program (`Witgen.SegmentProgram`, in `RowProgram.lean`) computes the own input of a component's rows in segments of `length` consecutive rows, where row `i` starts a segment if `i % length = 0`. A row that starts a segment is computed from its index, like a row program, and may read the hints. Every other row is computed from its index and the previous row: `next i previous` receives the previous row's values as the circuit expressions `previous : Row (Expression F)`, which the IR reads with `.expr`, so the previous row is the program's environment. The state carried across rows is the previous row itself, which is what a two-row AIR constrains. Plonky3's Keccak AIR (`Clean/Examples/KeccakAir/Witness.lean`) is one segment of 24 rows per permutation: the first row reads the permutation's input from the hint, every later row the previous row's output limbs. Validation checks that the first rows read no cells and that the other rows read only the previous row's cells.
 
 ## Fast witness generation
 

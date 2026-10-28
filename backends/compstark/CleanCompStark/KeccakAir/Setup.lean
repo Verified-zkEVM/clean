@@ -112,7 +112,8 @@ theorem width_toAir : (A).width = size Row := by
   have hlocal : (_root_.KeccakAir.component (p := p) height).circuit.localLength
       (varFromOffset (Window Row) 0) = 0 := rfl
   have hwindow : size (Window Row) = 2 * size Row + 3 := (Window.layout Row).size_eq
-  have hfixed : (_root_.KeccakAir.component (p := p) height).fixedWidth = 0 := rfl
+  have hfixed : fixedWidth (_root_.KeccakAir.component (p := p) height) = 0 := by
+    simp only [fixedWidth, fixedColumns_component, List.length_nil]
   have hwidth : (_root_.KeccakAir.component (p := p) height).windowWidth = size Row + 3 := rfl
   show (_root_.KeccakAir.component (p := p) height).circuit.size - _ - _ = _
   rw [GeneralFormalCircuit.size_eq, hfixed, hwidth]
@@ -140,7 +141,7 @@ theorem logQuotientChunks_toAir : (A).logQuotientChunks logN = 1 := by
 
 theorem colsInWidth_toAir : (A).ColsInWidth := fun _ hy => by
   obtain ⟨x, -, g, hg, hcells, rfl⟩ := lower_of_mem e height logN hy
-  exact colsBelow_lower e (window_component height) logN hcells hg
+  exact colsBelow_lower e (window_component height) (fixedColumns_component height) logN hcells hg
 
 theorem degreeFits_toAir : (A).DegreeFits logN := by
   unfold Air.DegreeFits
@@ -149,7 +150,6 @@ theorem degreeFits_toAir : (A).DegreeFits logN := by
 
 theorem preprocessedSize_toAir : (A).preprocessed.size = 2 ^ logN * (A).preprocessedWidth := by
   simp only [toAir, fixedTrace, _root_.KeccakAir.component, Array.size_ofFn]
-  rfl
 
 end Air
 
@@ -202,8 +202,11 @@ theorem width_setup : (setup params logN h).air.width = 2633 :=
 
 theorem numOpened_setup : (setup params logN h).numOpened = 5274 := by
   have hnext : (setup params logN h).air.mainNextWidth = (setup params logN h).air.width := rfl
-  have hprep : (setup params logN h).air.preprocessedWidth = 0 := rfl
-  have hprepNext : (setup params logN h).air.preprocessedNextWidth = 0 := rfl
+  have hprep : (setup params logN h).air.preprocessedWidth = 0 := by
+    simp only [setup, toAir, fixedWidth, fixedColumns_component, List.length_nil]
+  have hprepNext : (setup params logN h).air.preprocessedNextWidth = 0 := by
+    simp only [Air.preprocessedNextWidth, Air.opensPreprocessedNext, hprep, lt_self_iff_false,
+      decide_false, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
   have hd : Challenge.d KoalaBear.Fast.Ext4 = 4 := rfl
   rw [Setup.numOpened_nil, chunks_setup, hnext, hprep, hprepNext, hd, width_setup]
 
