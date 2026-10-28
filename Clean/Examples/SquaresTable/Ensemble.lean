@@ -74,7 +74,7 @@ def step : GeneralFormalCircuit (F p) (Window Row) unit where
       rcases h_assumptions with h_first | h_square
       · simp_all
       · exact h_square
-    refine ⟨⟨h_current, fun h_transition => ?_⟩, fun _ _ => h_current⟩
+    refine ⟨⟨h_current, fun h_transition => ?_⟩, fun _ => h_current⟩
     simp only [h_transition, one_mul, sub_eq_zero] at h_next_index h_next_square
     linear_combination h_next_square + h_current -
       (input_next_index + input_current_index + 1) * h_next_index
@@ -137,7 +137,7 @@ def ensemble (height : UInt64) : Ensemble (F p) fieldPair where
   verifier_channels := by simp [circuit_norm, verifier]
 
 /-- The table proves that the public square is the square of the public counter. -/
-def formalEnsemble (height : UInt64) : FormalEnsemble (F p) fieldPair where
+def formalEnsemble (height : UInt64) : FormalEnsemble (F p) fieldPair .logUp where
   ensemble := ensemble height
   Spec
   | (index, square) => square = index * index
@@ -159,7 +159,7 @@ def generate (height : UInt64) (publicInput : fieldPair (F p)) :
   WitnessGeneration.generate (ensemble height) 1000 publicInput ()
 
 theorem soundness (height : UInt64) (index square : F p) :
-    (ensemble height).Statement (index, square) → square = index * index :=
+    (ensemble height).Statement .logUp (index, square) → square = index * index :=
   (formalEnsemble height).soundness (index, square) trivial
 
 end SquaresTable
