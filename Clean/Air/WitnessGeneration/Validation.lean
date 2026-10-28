@@ -219,8 +219,8 @@ def dataReaders (component : Component F) : List (DataReader × List DataRead) :
     | .preallocated _ | .standalone _ | .segments _ => []
   witnesses ++ demand
 
-/-- Whether the input program of a preallocated or standalone row is computed from the row index, except for its
-witness cells, which may also read the hint. -/
+/-- Whether the input program of a preallocated or standalone row is computed from the row index,
+except for its witness cells, which may also read the hint. -/
 def rowProgramValid (steps : List (Witgen.Step F)) (cells : List (Cell F)) : Bool :=
   steps.all (·.validForRow .fixed) && cells.all fun
     | .fixed value => value.validForRow .fixed

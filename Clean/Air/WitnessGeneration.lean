@@ -211,7 +211,8 @@ def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
 
 /-! ### Generating a witness -/
 
-/-- The prover data of the preallocated and standalone rows' inputs, under their components' names. -/
+/-- The prover data of the preallocated and standalone rows' inputs, under their components'
+names. -/
 def initialData (states : Array (ComponentState F)) (inputs : Array (List (Array F))) :
     List (String × PreparedRows F) :=
   (states.zip inputs).toList.map fun (state, inputs) =>
