@@ -61,7 +61,7 @@ def params : String → IO Fri.Params
   | name => throw (IO.userError s!"unknown configuration {name}: example or proven")
 
 /-- The Clean trace of the inputs, in row chunks of CompStark's fast prover. -/
-def trace (logN : ℕ) (inputs : Array KeccakAir.Trace.State) : Except String (Array ByteArray) :=
+def trace (logN : ℕ) (inputs : Array KeccakAir.State) : Except String (Array ByteArray) :=
   KeccakAir.koalaBearTrace inputs (min logN 6)
 
 variable (I : CompStark.KoalaBear.Instances)
@@ -85,7 +85,7 @@ def rust (bin : String) (args : Array String) : IO String := do
     throw (IO.userError s!"{bin} {" ".intercalate args.toList} failed:\n{out.stdout}{out.stderr}")
   return out.stdout
 
-def readInputs (file : String) : IO (Array KeccakAir.Trace.State) := do
+def readInputs (file : String) : IO (Array KeccakAir.State) := do
   let lines := (← IO.FS.readFile file).splitOn "\n" |>.filter (· ≠ "")
   lines.toArray.mapM fun line => do
     let lanes := (line.splitOn " ").toArray.map (·.toNat!.toUInt64)
@@ -147,7 +147,7 @@ def kat : IO Unit := do
   fingerprint
   kernelApplies 6
   let expected := (← IO.FS.readFile s!"{data}/keccak_trace_5.txt").splitOn "\n" |>.filter (· ≠ "")
-  let inputs : Array KeccakAir.Trace.State := (Array.range 5).map fun k =>
+  let inputs : Array KeccakAir.State := (Array.range 5).map fun k =>
     Vector.ofFn fun i => (25 * k + i.val + 1).toUInt64 * 0x9e3779b97f4a7c15
   let chunks ← IO.ofExcept (trace 7 inputs)
   let words := chunks.foldl (· ++ ·) .empty
