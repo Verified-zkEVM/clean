@@ -76,7 +76,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     circuit_proof_start [bytes, add8Channel]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
-    intro hm h0 hx hy
+    intro h0 hx hy
     have add_soundness :=
       Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
@@ -232,7 +232,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
     simp only [circuit_norm, fibonacciVerifier, fibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
 
-def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
+def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple .logUp
   |>.addLookup bytes
   |>.addChannel add8Channel.toRaw (by simp [circuit_norm, add8Channel, bytes])
   |>.addTable add8Component
@@ -281,7 +281,7 @@ Then let the guarantees/requirements access that state (the guarantees _before_ 
 _after_ the interaction).
 -/
 theorem fibonacci_soundness : ∀ (n x y : F p) heights,
-  fibonacciEnsemble.ensemble.Statement (n, x, y) heights →
+  fibonacciEnsemble.ensemble.Statement .logUp (n, x, y) heights →
     ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
   intro n x y heights statement
   exact fibonacciEnsemble.soundness (n, x, y) heights trivial statement
@@ -315,7 +315,7 @@ abbrev falseComponent : Component (F p) where
     padding := ()
   }
 
-def falseEnsemble := SoundEnsemble.empty (F p) unit
+def falseEnsemble := SoundEnsemble.empty (F p) unit .logUp
   |>.addFinishedChannel falseChannel.toRaw
   |>.addTable falseComponent
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])

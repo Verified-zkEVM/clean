@@ -38,13 +38,24 @@ def fieldIn (ty : String) (value : F) : String :=
   if 2 * value > fieldOrder (F := F) then s!"-{ty}::from_u64({fieldOrder (F := F) - value}u64)"
   else s!"{ty}::from_u64({value}u64)"
 
-def quoted (value : String) : String := reprStr value
+/-- A Rust string literal: printable ASCII characters as they are, except `"` and `\`, which are
+escaped, and every other character as a `\u{..}` escape. -/
+def quoted (value : String) : String :=
+  let escape (c : Char) : String :=
+    if c == '"' || c == '\\' then "\\" ++ c.toString
+    else if ' ' ≤ c && c ≤ '~' then c.toString
+    else "\\u{" ++ String.ofList (Nat.toDigits 16 c.toNat) ++ "}"
+  "\"" ++ String.join (value.toList.map escape) ++ "\""
 
 def commaSep (values : List String) : String :=
   String.intercalate ", " values
 
 def lines (values : List String) : String :=
   String.intercalate "\n" values
+
+/-- A `u64` index as a `usize`: indices that don't fit are out of range, like in Lean. -/
+def indexToRust (index : String) : String :=
+  s!"usize::try_from({index}).unwrap_or(usize::MAX)"
 
 /-! ## Constraints and interactions, generic over the ring type `E` -/
 
@@ -54,11 +65,15 @@ def exprToRust : Expression F → String
   | .add left right => s!"({exprToRust left} + {exprToRust right})"
   | .mul left right => s!"({exprToRust left} * {exprToRust right})"
 
+def directionToRust : Direction → String
+  | .pull => "Direction::Pull"
+  | .push => "Direction::Push"
+
 def interactionToRust (interaction : AbstractInteraction F) : String :=
   let message := commaSep (interaction.msg.toList.map exprToRust)
   s!"Interaction \{ channel: {quoted interaction.channel.name}, \
-      multiplicity: {exprToRust interaction.mult}, message: vec![{message}], \
-      assume_guarantees: {interaction.assumeGuarantees} }"
+      direction: {directionToRust interaction.direction}, \
+      multiplicity: {exprToRust interaction.mult}, message: vec![{message}] }"
 
 /-- `fn constraints<E>(row: &[E]) -> Vec<E>` -/
 def constraintsToRust (constraints : List (Expression F)) : String :=
@@ -93,11 +108,11 @@ def fexprToRust (inLoop : Bool) : Witgen.FExpr F → String
           else \{ {fexprToRust inLoop elseValue} }"
   | .listGet values index =>
       s!"[{commaSep (fexprListToRust inLoop values)}]\
-          .get(({u64exprToRust inLoop index}) as usize).copied().unwrap_or(F::ZERO)"
+          .get({indexToRust (u64exprToRust inLoop index)}).copied().unwrap_or(F::ZERO)"
   | .dataGet key width row column =>
-      s!"data.get({quoted key}, {width}, ({u64exprToRust inLoop row}) as usize, {column})"
+      s!"data.get({quoted key}, {width}, {indexToRust (u64exprToRust inLoop row)}, {column})"
   | .hintGet key width row column =>
-      s!"hint.get({quoted key}, {width}, ({u64exprToRust inLoop row}) as usize, {column})"
+      s!"hint.get({quoted key}, {width}, {indexToRust (u64exprToRust inLoop row)}, {column})"
 
 def fexprListToRust (inLoop : Bool) : List (Witgen.FExpr F) → List String
   | [] => []
@@ -158,7 +173,8 @@ def outputToRust : {n : ℕ} → Witgen.VExpr F n → List String
       [s!"for idx in 0u64..{count}u64 \{ output.push({fexprToRust true body}); }"]
   | count, .envRange offset =>
       [s!"for idx in 0u64..{count}u64 \{ \
-          output.push(row.get({offset} + idx as usize).copied().unwrap_or(F::ZERO)); }"]
+          output.push({offset}u64.checked_add(idx).and_then(|index| usize::try_from(index).ok())\
+          .and_then(|index| row.get(index)).copied().unwrap_or(F::ZERO)); }"]
   | count, .bitsOf value =>
       [s!"for idx in 0u64..{count}u64 \{ \
           output.push(F::from_u64(bit_u64(({fexprToRust false value}).canonical_u64(), idx))); }"]
@@ -213,12 +229,9 @@ def completeToRust (witnesses : List (WitnessBlock F)) : String :=
 {lines blocks}
 }"
 
-def directionToRust : Direction → String
-  | .pull => "Direction::Pull"
-  | .push => "Direction::Push"
-
 def multiplicityToRust (multiplicity : MultiplicityColumn) : String :=
-  s!"MultiplicityColumn \{ interaction: {multiplicity.interaction}, column: {multiplicity.column} }"
+  s!"MultiplicityColumn \{ interaction: {multiplicity.interaction}, column: {multiplicity.column}, \
+    direction: {directionToRust multiplicity.direction} }"
 
 def paddingToRust (padding : Array F) : String :=
   s!"vec![{commaSep (padding.toList.map (fieldIn "F"))}]"
@@ -327,9 +340,12 @@ clean_backend::ensemble! \{
 }
 "
 
-/-- Lower an ensemble to an extraction program and print it as Rust. -/
-def ensembleToRust (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except String String := do
-  let program ← lower ensemble fuel |>.mapError toString
+/-- Lower a proven ensemble to an extraction program and print it as Rust. The ensemble is sound
+under LogUp, the balance check of the Plonky3 backend, over a prime field, whose constants are
+printed as their canonical values, the values that Rust's prime fields compute with. -/
+def ensembleToRust {p : ℕ} [Fact p.Prime] (ensemble : FormalEnsemble (ZMod p) PublicIO .logUp)
+    (fuel : ℕ) : Except String String := do
+  let program ← lower ensemble.ensemble fuel |>.mapError toString
   return programToRustFile program
 
 end Backends.Plonky3.Print

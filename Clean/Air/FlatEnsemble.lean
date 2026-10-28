@@ -345,6 +345,16 @@ def BalancedChannels {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
 /-- The number of rows of each table, in the order of the ensemble's components. -/
 def heights {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List ℕ :=
   witness.tables.map (·.table.length)
+
+/-- The interactions with every ensemble channel pass the balance check. -/
+def Balanced {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) (balance : Balance F) :
+    Prop :=
+  ∀ channel ∈ ens.channels, balance.Balanced (witness.interactionsWith channel)
+
+lemma balancedChannels_of_balanced {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
+    {balance : Balance F} (balanced : witness.Balanced balance) : witness.BalancedChannels :=
+  fun channel h_channel =>
+    balance.balancedInteractions_of_balanced _ (balanced channel h_channel)
 end EnsembleWitness
 
 /- ## Soundness, Completeness and related definitions -/
@@ -352,41 +362,42 @@ end EnsembleWitness
 namespace Ensemble
 
 /--
-The raw "statement" that a proof about an ensemble makes. Could also be called "relation". Like the
-public input, the table heights are part of a proof.
+The raw "statement" that a proof about an ensemble makes, for a balance check that the proof system
+performs on every channel. Could also be called "relation". Like the public input, the table heights
+are part of a proof.
 
-TODO: we currently assume a proof system that already provides us with the fact that the
-total interaction length doesn't overflow (as part of `BalancedChannels`). Instead, that bound
-should follow from the table heights.
+TODO: the balance checks bound the number of interactions with a channel directly, like LogUp's
+bound by the characteristic. Instead, that bound should follow from the table heights.
 -/
-def Statement (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (heights : List ℕ) : Prop :=
+def Statement (ens : Ensemble F PublicIO) (balance : Balance F) (publicInput : PublicIO F)
+    (heights : List ℕ) : Prop :=
   ∃ witness : EnsembleWitness ens,
     witness.publicInput = publicInput ∧ witness.heights = heights ∧
-    witness.Constraints ∧ witness.BalancedChannels
+    witness.Constraints ∧ witness.Balanced balance
 
 /-- Soundness: assumptions on the public input and the table heights, plus the raw statement,
 imply the spec. -/
-def Soundness (ens : Ensemble F PublicIO) (Assumptions : PublicIO F → List ℕ → Prop)
-    (Spec : PublicIO F → Prop) : Prop :=
+def Soundness (ens : Ensemble F PublicIO) (balance : Balance F)
+    (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop) : Prop :=
   ∀ publicInput heights, Assumptions publicInput heights →
-    ens.Statement publicInput heights → Spec publicInput
+    ens.Statement balance publicInput heights → Spec publicInput
 
 /-- Completeness: the spec implies the raw statement, for some table heights satisfying the
 assumptions. -/
-def Completeness (ens : Ensemble F PublicIO) (Assumptions : PublicIO F → List ℕ → Prop)
-    (Spec : PublicIO F → Prop) : Prop :=
+def Completeness (ens : Ensemble F PublicIO) (balance : Balance F)
+    (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop) : Prop :=
   ∀ publicInput, Spec publicInput →
-    ∃ heights, Assumptions publicInput heights ∧ ens.Statement publicInput heights
+    ∃ heights, Assumptions publicInput heights ∧ ens.Statement balance publicInput heights
 end Ensemble
 
-/-- An ensemble with its specification and soundness proof. -/
+/-- An ensemble with its specification and its soundness proof under a balance check. -/
 structure FormalEnsemble (F : Type) [FiniteField F]
-    (PublicIO : TypeMap) [ProvableType PublicIO] where
+    (PublicIO : TypeMap) [ProvableType PublicIO] (balance : Balance F) where
   ensemble : Ensemble F PublicIO
   /-- Assumptions on the public input and the table heights. -/
   Assumptions : PublicIO F → List ℕ → Prop := fun _ _ => True
   Spec : PublicIO F → Prop
-  soundness : ensemble.Soundness Assumptions Spec
+  soundness : ensemble.Soundness balance Assumptions Spec
   /-- What the public and private inputs must satisfy for witness generation to succeed. -/
   ProverAssumptions : PublicIO F → ensemble.ProverInput F → Prop := fun _ _ => True
 
@@ -398,11 +409,11 @@ assuming constraints and channel balance.
 This is just Soundness, except for per-table soundness implying global soundness.
 -/
 @[circuit_norm]
-def TableSoundness (ens : Ensemble F PublicIO) : Prop :=
+def TableSoundness (ens : Ensemble F PublicIO) (balance : Balance F) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →
-    witness.BalancedChannels →
+    witness.Balanced balance →
     witness.Spec
 
 /-- The verifier spec and table specs imply the ensemble's public specification. -/
@@ -430,18 +441,18 @@ lemma assumptions_of_assumptionsConsistency {ens : Ensemble F PublicIO}
   exact consistency _ _ assumptions _ (EnsembleWitness.component_mem_tables_of_mem htable) _ _
 
 theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F PublicIO)
-  (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop) :
-  ens.TableSoundness →
+  (balance : Balance F) (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop) :
+  ens.TableSoundness balance →
   ens.AssumptionsConsistency Assumptions →
   ens.SpecConsistency Spec →
-    ens.Soundness Assumptions Spec := by
+    ens.Soundness balance Assumptions Spec := by
   simp only [Soundness, TableSoundness, AssumptionsConsistency, SpecConsistency, Statement,
     forall_exists_index, and_imp]
   intro table_soundness assumptions_consistency spec_consistency
-    publicInput heights assumptions witness publicInput_eq heights_eq constraints balance
+    publicInput heights assumptions witness publicInput_eq heights_eq constraints balanced
   simp only [← publicInput_eq, ← heights_eq] at *
   apply spec_consistency witness
-  apply table_soundness witness ?assumptions constraints balance
+  apply table_soundness witness ?assumptions constraints balanced
   exact assumptions_of_assumptionsConsistency assumptions_consistency witness assumptions
 end Ensemble
 

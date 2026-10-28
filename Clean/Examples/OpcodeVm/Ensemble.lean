@@ -197,7 +197,7 @@ def step (program : Program) (h_program : program.length < p) (opcode : Opcode) 
   requirementsChannelsLawful input_var i₀ := by
     obtain ⟨enabled, pc, acc⟩ := input_var
     simp only [circuit_norm, stateChannel, programLookup]
-    intro env h_bool h_one h_zero
+    intro env h_bool
     rcases mul_eq_zero.mp h_bool with h | h <;> simp_all [sub_eq_zero]
 
   soundness := by
@@ -208,7 +208,7 @@ def step (program : Program) (h_program : program.length < p) (opcode : Opcode) 
     rw [sub_eq_zero] at h_one
     subst h_one
     simp_all
-    exact fun _ => stateChannel_guarantees_step h_program h_state h_instruction
+    exact stateChannel_guarantees_step h_program h_state h_instruction
   completeness := by
     circuit_proof_start [programCell, programCellIn]
     rcases h_assumptions with h | ⟨h, h_state, h_contains⟩ <;> simp_all
@@ -248,7 +248,7 @@ def vm (program : Program) (h_program : program.length < p) : VmTables (F p) Pub
     simp [circuit_norm, verifier, stateChannel, run, ProverData.getPublicInput]
 
 def soundEnsemble (program : Program) (h_program : program.length < p) :=
-  SoundEnsemble.empty (F p) PublicInput
+  SoundEnsemble.empty (F p) PublicInput .logUp
   |>.addLookup (programLookup program)
   |>.addVm (vm program h_program)
     (by simp +instances [circuit_norm, vm, programLookup, stateChannel])
@@ -270,7 +270,7 @@ def formalEnsemble (program : Program) (h_program : program.length < p) :=
 initial accumulator ends with its final accumulator. -/
 theorem opcodeVm_soundness (program : Program) (h_program : program.length < p)
     (publicInput : PublicInput (F p)) (heights : List ℕ) :
-    (soundEnsemble program h_program).ensemble.Statement publicInput heights →
+    (soundEnsemble program h_program).ensemble.Statement .logUp publicInput heights →
       Spec program publicInput :=
   (formalEnsemble program h_program).soundness publicInput heights trivial
 

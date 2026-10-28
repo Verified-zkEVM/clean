@@ -9,7 +9,7 @@ This crate proves channel-based Clean AIR ensembles with Plonky3.
 5. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation, builds fixed traces from the generated fixed-row functions, places them at their input columns of each row, and pushes the generated channel interactions to Plonky3's LogUp buses, one bus per channel name. Lean ensembles have unique channel names and declare every channel they use, so balancing each name balances each channel.
 6. `src/ensemble_prover.rs` proves or verifies an opaque generated statement containing every component AIR exactly once in canonical order, followed by a verifier AIR. The verifier AIR makes the verifier's interactions on its first row, selected by a fixed column, from the public input, which are its public values. Its trace has no other content, and the minimum trace height that the statement is constructed with, the smallest that the proof configuration accepts, so verification cost doesn't depend on the prover's trace heights.
 
-Statement construction binds component trace heights, exact fixed heights, and the complete component inventory. It also checks the Clean channel-soundness side condition `verifier interactions + Σ(trace height × interactions per row) < field order` before proving or verification. Clean's channels balance as sums of field multiplicities, so every interaction is a provided LogUp count, and this condition replaces Plonky3's multiplicity height check. Every channel must have one message width. Individual component AIRs cannot be assembled through the public API. Zero-knowledge configurations are rejected: a hiding PCS salts the fixed-column commitments, which the verifier recomputes.
+Statement construction binds component trace heights, exact fixed heights, and the complete component inventory. It also checks the interaction-count bound of Clean's LogUp balance check, `verifier interactions + Σ(trace height × interactions per row) < field order`, before proving or verification. The ensemble must be proven sound under that check, `Balance.logUp`. It balances sums of field multiplicities, a push counting its multiplicity and a pull its negation, so every interaction is a provided LogUp count, and the bound replaces Plonky3's multiplicity height check. Every channel must have one message width. Individual component AIRs cannot be assembled through the public API. Zero-knowledge configurations are rejected: a hiding PCS salts the fixed-column commitments, which the verifier recomputes.
 
 The Fibonacci example is documented in [`Clean/Examples/FibonacciVm/README.md`](../../Clean/Examples/FibonacciVm/README.md). The generated artifacts live in `tests/generated/` and are included by their corresponding Rust tests.
 
@@ -28,6 +28,9 @@ lake exe export_opcode_vm_rust \
 lake exe export_witness_ir_reference_rust \
   | rustfmt --edition 2021 --emit stdout \
   > backends/plonky3/tests/generated/witness_ir_reference.rs
+lake exe export_differential_rust \
+  | rustfmt --edition 2021 --emit stdout \
+  > backends/plonky3/tests/generated/differential.rs
 ```
 
 Run the generated witness and end-to-end proof tests:
@@ -41,9 +44,11 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test opcode_vm_tests
 cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test witness_ir_reference_tests
+cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
+  --test differential_tests
 ```
 
-`witness_ir_reference_tests` checks the printed witness IR against Lean's semantics. Its cases (`Clean/Backends/Plonky3/Test/Reference.lean`) cover every witness IR constructor with wrapping, out-of-range, and division-by-zero edge cases.
+`witness_ir_reference_tests` checks the printed witness IR against Lean's semantics. Its cases (`Clean/Backends/Plonky3/Test/Reference.lean`) cover every witness IR constructor with wrapping, out-of-range, and division-by-zero edge cases. `differential_tests` checks the printed AIRs and witness generators of the examples against Lean (`Clean/Backends/Plonky3/Test/Differential.lean`): constraints and interactions on pseudo-random rows, every fixed row, verifier interactions on pseudo-random public inputs, and the generated traces.
 
 The largest test generates, proves, and verifies a 4,096-step Fibonacci execution and reports witness generation, proving, verification, trace dimensions, and serialized proof size.
 

@@ -15,11 +15,6 @@ open Spec
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 512)]
 
-instance (p : ℕ) [p_large_enough : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) :=
-  .mk <| by
-    simp [F, ZMod.ringChar_zmod_n]
-    linarith [p_large_enough.out]
-
 structure ProviderInput F where
   address : F
   value : F
@@ -384,7 +379,7 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   channelsWithRequirements := [memoryChannel.toRaw]
   soundness := by
     circuit_proof_start [memoryChannel]
-    intro _ _
+    intro _
     exact h_assumptions
   completeness := by circuit_proof_start
 
@@ -467,7 +462,7 @@ def executeStep (program : Array (F p)) (h_program : ValidProgram program) :
     rcases h_bool with rfl | rfl
     · simp
     obtain ⟨steps, hsteps⟩ := h_pull rfl
-    refine ⟨by simp, fun _ _ => ⟨steps + 1, ?_⟩⟩
+    refine ⟨by simp, fun _ => ⟨steps + 1, ?_⟩⟩
     simp only [Spec.femtoCairoMachineBoundedExecution, hsteps]
     exact h_step
 
@@ -517,7 +512,7 @@ def vm (program : Array (F p)) (h_program : ValidProgram program) : VmTables (F 
 
 def soundEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) :=
-  SoundEnsemble.empty (F p) PublicInput
+  SoundEnsemble.empty (F p) PublicInput .logUp
   |>.addLookup (programLookup program h_program)
   |>.addChannel memoryChannel.toRaw (by simp [circuit_norm, memoryChannel, programLookup])
   |>.addTable (memoryComponent memorySize h_memorySize)
@@ -575,7 +570,7 @@ initial state and run on some memory of size `memorySize`, halts with its final 
 theorem femtoCairo_soundness {memorySize : UInt64}
     (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) (publicInput : PublicInput (F p)) (heights : List ℕ) :
-    (soundEnsemble program h_program h_memorySize).ensemble.Statement publicInput heights →
+    (soundEnsemble program h_program h_memorySize).ensemble.Statement .logUp publicInput heights →
       Spec program memorySize publicInput :=
   (formalEnsemble program h_program h_memorySize).soundness publicInput heights trivial
 
