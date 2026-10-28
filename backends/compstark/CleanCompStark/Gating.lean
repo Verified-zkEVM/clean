@@ -498,7 +498,6 @@ theorem shaped_fieldFromBitsExpr {p : ℕ} [Fact p.Prime] {n d : ℕ}
   | succ n =>
     exact shaped_hornerExpr (fun i => by simpa using hbits i.castSucc) (hbits (Fin.last n))
 
-
 theorem constraints_assertBool (x : Expression (F p)) (offset : ℕ) :
     ((assertBool.main x).operations offset).constraints = [x * (x - 1)] := rfl
 

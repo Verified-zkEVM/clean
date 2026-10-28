@@ -362,7 +362,7 @@ theorem constraints_toWitness (h : ProvesEnsemble e S ens) (hb : EnsembleBridgea
   rw [h.air i] at hi
   exact constraints_of_toRows e (S.logN i) (traces i)
     (hb.components _ (List.getElem_mem _)) (fits i) hi.vanish
-    (by simp [ownTables, toTable]) (by simp [ownTables, toTable])
+    (by simp [toTable]) (by simp [toTable])
 
 theorem lookups_eq (h : ProvesEnsemble e S ens) (i : Fin S.k) :
     S.lookups i = Lookup.packSameBus
