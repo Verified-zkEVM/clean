@@ -326,7 +326,7 @@ opaque evalNat (e : Expr) : TermElabM ℕ
 `name.first`, `name.next` and `name : CompiledKernel K`. The elements of `K` must have values below
 `2 ^ 64`, so that constants are the elements of their words. -/
 elab "witness_kernel " name:ident " over " K:term " := " kernel:term : command => do
-  let name := name.getId
+  let name := (← getCurrNamespace) ++ name.getId
   let (K, first, next, width, length) ← liftTermElabM do
     let K ← Term.elabType K
     Term.synthesizeSyntheticMVarsNoPostponing
