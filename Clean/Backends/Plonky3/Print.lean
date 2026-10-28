@@ -208,7 +208,7 @@ pub const FIXED_HEIGHT: usize = 0;
 pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
     Vec::new()
 }"
-  | .preallocated _ _ rows input _ =>
+  | .preallocated _ _ rows input _ _ =>
     let fixed := input.cells.filter (·.isFixed)
     s!"pub const FIXED_COLUMNS: &[usize] = &[{commaSep (input.fixedColumns.map toString)}];
 pub const FIXED_HEIGHT: usize = {rows};
@@ -229,10 +229,6 @@ def completeToRust (witnesses : List (WitnessBlock F)) : String :=
 {lines blocks}
 }"
 
-def multiplicityToRust (multiplicity : MultiplicityColumn) : String :=
-  s!"MultiplicityColumn \{ interaction: {multiplicity.interaction}, column: {multiplicity.column}, \
-    direction: {directionToRust multiplicity.direction} }"
-
 def paddingToRust (padding : Array F) : String :=
   s!"vec![{commaSep (padding.toList.map (fieldIn "F"))}]"
 
@@ -244,13 +240,20 @@ def guardToRust (guard : Witgen.BExpr F) : String :=
     {bexprToRust false guard}
 }"
 
+/-- `fn row_of(row, hint)`, the index of the row that answers the demanded message `row`. -/
+def rowOfToRust (rowOf : Witgen.U64Expr F) : String :=
+  s!"pub fn row_of<F: WitnessField>(row: &[F], hint: &WitnessData<F>) -> u64 \{
+    let row_index = 0u64;
+    {u64exprToRust false rowOf}
+}"
+
 /-- `fn mode()`, and `fn initial_row(row_index, hint)`, the input of a preallocated row. A demand
 mode also gets `fn guard` and `fn input(row, data, hint, multiplicity)`, the input of a new row for
-the demanded message `row`. -/
+the demanded message `row`; a preallocated mode gets `fn row_of`. -/
 def modeToRust : ModeProgram F → String
   | .demand mode =>
     let multiplicity := match mode.multiplicity with
-      | some multiplicity => s!"Some({multiplicityToRust multiplicity})"
+      | some column => s!"Some({column})"
       | none => "None"
     s!"{guardToRust mode.guard}
 
@@ -273,10 +276,12 @@ pub fn mode<F: WitnessField>() -> Mode<F> \{
 pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> \{
     Vec::new()
 }"
-  | .preallocated channel trigger rows input multiplicity =>
-    s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
+  | .preallocated channel trigger rows input rowOf multiplicity =>
+    s!"{rowOfToRust rowOf}
+
+pub fn mode<F: WitnessField>() -> Mode<F> \{
     Mode::Preallocated \{ channel: {quoted channel}, trigger: {directionToRust trigger}, \
-        rows: {rows}, multiplicity: {multiplicityToRust multiplicity} }
+        rows: {rows}, row_of: row_of::<F>, multiplicity: {multiplicity} }
 }
 
 pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> \{

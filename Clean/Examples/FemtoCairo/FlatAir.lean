@@ -35,6 +35,7 @@ def programLookup (program : Array (F p)) (h_program : ValidProgram program) :
   name := "program"
   height := program.size.toUInt64
   row i := pure (i, program[i])
+  rowOf | (address, _) => address.val
   Contains
   | (address, value) => ∃ h : address.val < program.size, value = program[address.val]
   contains_iff value := by
@@ -399,6 +400,7 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
       address := .fixed i.toField
       value := .witness (.hintGet memoryValuesKey 1 i 0)
       multiplicity := .multiplicity }
+    rowOf message := message.address.val
   }
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
