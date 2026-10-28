@@ -67,8 +67,7 @@ def ensemble (height : UInt64) : Ensemble (F p) unit where
   unique_names := by simp
   channels := []
   unique_channel_names := by simp
-  tables_channels := by simp [circuit_norm, component, circuit, main, RoundControl.circuit,
-    Theta.circuit, RhoPiChi.circuit, Iota.circuit]
+  tables_channels := by simp [circuit_norm, component, circuit]
   verifier_channels := by simp [circuit_norm, Verifier.Program.empty]
   ProverInput := fields (height.toNat * size Row)
   hintTables := [{ key := "keccak", width := size Row, offset := 0, rows := height.toNat }]
