@@ -40,14 +40,6 @@ After that, we recommend open the repo in VSCode to get immediate inline feedbac
 
 Make sure to install the `lean4` extension for VSCode!
 
-## Documentation
-
-We are actively working on creating proper documentation for `clean`.
-In the meantime, we recommend checking out our [AI-generated DeepWiki](https://deepwiki.com/Verified-zkEVM/clean).
-
-⚠️ **Disclaimer:** The wiki may contain inaccuracies or outdated details.
-Please take all information with a grain of salt until the official documentation is released.
-
 ## Code Style
 
 We follow standard Lean/Mathlib conventions with some local variations.

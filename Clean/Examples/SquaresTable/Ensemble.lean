@@ -90,10 +90,10 @@ def step : GeneralFormalCircuit (F p) (Window Row) unit where
     · rw [h_last h]; ring
     · exact (h_transition h).right.right
 
-/-- The table, of `height` rows. The fixed columns are empty and only fix the height. -/
+/-- The table, of `height` rows. Its rows answer the verifier's pull of the result: `last` counts it
+on the row that carries the pulled counter and square. -/
 def component (height : UInt64) : Component (F p) where
   circuit := step
-  fixedColumns := some { Row := unit, row _ := pure (), height }
   window := Window.layout Row
   circuit_assumptions_of_assumptions := by
     rintro i window data - - previous -
@@ -109,13 +109,14 @@ def component (height : UInt64) : Component (F p) where
       rw [h_next] at h_square
       exact h_square
   generation := .preallocated {
-    Row
-    row i := pure {
-      index := .ofU64 i
-      square := .ofU64 (i * i)
-      last := .ite (.neq i (height - 1 : UInt64)) 1 0
-    }
-    counters := []
+    channel := resultChannel
+    trigger := .pull
+    height
+    input i := pure (Window.cells {
+      index := .witness (.ofU64 i)
+      square := .witness (.ofU64 (i * i))
+      last := .multiplicity
+    })
   }
 
 /-- The verifier pulls the public counter and square. -/
@@ -130,7 +131,10 @@ def ensemble (height : UInt64) : Ensemble (F p) fieldPair where
   tables := [component height]
   unique_names := by simp
   channels := [resultChannel.toRaw]
+  unique_channel_names := by simp
   verifier := verifier
+  tables_channels := by simp [circuit_norm, component, step]
+  verifier_channels := by simp [circuit_norm, verifier]
 
 /-- The table proves that the public square is the square of the public counter. -/
 def formalEnsemble (height : UInt64) : FormalEnsemble (F p) fieldPair where

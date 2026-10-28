@@ -14,10 +14,10 @@ invocation lists the modules; the macro implements the crate's traits on top of 
 width checks, and Plonky3 plumbing are written once in Rust.
 
 Constraints and interactions are printed as functions generic over a Rust ring type `E`, reading a
-complete row whose fixed columns come first, and whose window cells, for a two-row component, hold
-the next row's input. The crate instantiates them with field elements for witness generation and
-with symbolic Plonky3 expressions for the AIR. Witness programs are printed over field elements,
-reading the partially built row.
+complete row, with the fixed columns at their input cells, and whose window cells, for a two-row
+component, hold the next row's input and the selectors. The crate instantiates them with field
+elements for witness generation and with symbolic Plonky3 expressions for the AIR. Witness programs
+are printed over field elements, reading the partially built row.
 -/
 
 namespace Backends.Plonky3.Print
@@ -39,13 +39,24 @@ def fieldIn (ty : String) (value : F) : String :=
   if 2 * value > fieldOrder (F := F) then s!"-{ty}::from_u64({fieldOrder (F := F) - value}u64)"
   else s!"{ty}::from_u64({value}u64)"
 
-def quoted (value : String) : String := reprStr value
+/-- A Rust string literal: printable ASCII characters as they are, except `"` and `\`, which are
+escaped, and every other character as a `\u{..}` escape. -/
+def quoted (value : String) : String :=
+  let escape (c : Char) : String :=
+    if c == '"' || c == '\\' then "\\" ++ c.toString
+    else if ' ' ≤ c && c ≤ '~' then c.toString
+    else "\\u{" ++ String.ofList (Nat.toDigits 16 c.toNat) ++ "}"
+  "\"" ++ String.join (value.toList.map escape) ++ "\""
 
 def commaSep (values : List String) : String :=
   String.intercalate ", " values
 
 def lines (values : List String) : String :=
   String.intercalate "\n" values
+
+/-- A `u64` index as a `usize`: indices that don't fit are out of range, like in Lean. -/
+def indexToRust (index : String) : String :=
+  s!"usize::try_from({index}).unwrap_or(usize::MAX)"
 
 /-! ## Constraints and interactions, generic over the ring type `E` -/
 
@@ -78,9 +89,7 @@ def constraintsToRust (constraints : List (GatedConstraint F)) : String :=
 
 /-- `fn interactions<E>(row: &[E]) -> Vec<Interaction<E>>` -/
 def interactionsToRust (interactions : List (AbstractInteraction F)) : String :=
-  s!"pub const INTERACTIONS: usize = {interactions.length};
-
-pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> \{
+  s!"pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> \{
     vec![{commaSep (interactions.map interactionToRust)}]
 }"
 
@@ -105,11 +114,11 @@ def fexprToRust (inLoop : Bool) : Witgen.FExpr F → String
           else \{ {fexprToRust inLoop elseValue} }"
   | .listGet values index =>
       s!"[{commaSep (fexprListToRust inLoop values)}]\
-          .get(({u64exprToRust inLoop index}) as usize).copied().unwrap_or(F::ZERO)"
+          .get({indexToRust (u64exprToRust inLoop index)}).copied().unwrap_or(F::ZERO)"
   | .dataGet key width row column =>
-      s!"data.get({quoted key}, {width}, ({u64exprToRust inLoop row}) as usize, {column})"
+      s!"data.get({quoted key}, {width}, {indexToRust (u64exprToRust inLoop row)}, {column})"
   | .hintGet key width row column =>
-      s!"hint.get({quoted key}, {width}, ({u64exprToRust inLoop row}) as usize, {column})"
+      s!"hint.get({quoted key}, {width}, {indexToRust (u64exprToRust inLoop row)}, {column})"
 
 def fexprListToRust (inLoop : Bool) : List (Witgen.FExpr F) → List String
   | [] => []
@@ -170,7 +179,8 @@ def outputToRust : {n : ℕ} → Witgen.VExpr F n → List String
       [s!"for idx in 0u64..{count}u64 \{ output.push({fexprToRust true body}); }"]
   | count, .envRange offset =>
       [s!"for idx in 0u64..{count}u64 \{ \
-          output.push(row.get({offset} + idx as usize).copied().unwrap_or(F::ZERO)); }"]
+          output.push({offset}u64.checked_add(idx).and_then(|index| usize::try_from(index).ok())\
+          .and_then(|index| row.get(index)).copied().unwrap_or(F::ZERO)); }"]
   | count, .bitsOf value =>
       [s!"for idx in 0u64..{count}u64 \{ \
           output.push(F::from_u64(bit_u64(({fexprToRust false value}).canonical_u64(), idx))); }"]
@@ -183,20 +193,35 @@ def programToRust {n : ℕ} (steps : List (Witgen.Step F)) (output : Witgen.VExp
 
 /-! ## Components -/
 
-/-- `fn fixed_row(row_index) -> Vec<F>` -/
-def fixedRowToRust : Option (FixedColumnsProgram F) → String
-  | none => "pub const FIXED_WIDTH: usize = 0;
+def cellToRust (multiplicity : String) : Cell F → String
+  | .fixed value | .witness value => fexprToRust false value
+  | .multiplicity => multiplicity
+
+/-- A block computing `cells` of an input program into a fresh vector `output`, with `multiplicity`
+for the multiplicity cell. -/
+def inputToRust (input : InputProgram F) (cells : List (Cell F)) (multiplicity : String) :
+    String :=
+  lines ([s!"let mut output: Vec<F> = Vec::with_capacity({cells.length});"] ++
+    stepsToRust 0 input.steps ++
+    cells.map fun cell => s!"output.push({cellToRust multiplicity cell});")
+
+/-- `FIXED_COLUMNS`, the input cells that are fixed columns, and `fn fixed_row(row_index)`, their
+values. -/
+def fixedRowToRust : ModeProgram F → String
+  | .demand _ => "pub const FIXED_COLUMNS: &[usize] = &[];
 pub const FIXED_HEIGHT: usize = 0;
 
 pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
     Vec::new()
 }"
-  | some fixed => s!"pub const FIXED_WIDTH: usize = {fixed.width};
-pub const FIXED_HEIGHT: usize = {fixed.height};
+  | .preallocated _ _ rows input _ =>
+    let fixed := input.cells.filter (·.isFixed)
+    s!"pub const FIXED_COLUMNS: &[usize] = &[{commaSep (input.fixedColumns.map toString)}];
+pub const FIXED_HEIGHT: usize = {rows};
 
 pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> \{
     let row: &[F] = &[];
-    {programToRust fixed.program.steps fixed.program.output}
+    {inputToRust input fixed "F::ZERO"}
     output
 }"
 
@@ -210,20 +235,12 @@ def completeToRust (witnesses : List (WitnessBlock F)) : String :=
 {lines blocks}
 }"
 
-def inputCellToRust : InputCell F → String
-  | .message index => s!"InputCell::Message({index})"
-  | .const value => s!"InputCell::Constant({fieldIn "F" value})"
-
 def directionToRust : Direction → String
   | .pull => "Direction::Pull"
   | .push => "Direction::Push"
 
-def aggregationToRust (byMessage : Bool) : String :=
-  if byMessage then "Aggregation::ByMessage" else "Aggregation::PerOccurrence"
-
-def counterToRust (counter : Counter) : String :=
-  s!"Counter \{ channel: {quoted counter.channel}, interaction: {counter.interaction}, \
-      column: {counter.column} }"
+def multiplicityToRust (multiplicity : MultiplicityColumn) : String :=
+  s!"MultiplicityColumn \{ interaction: {multiplicity.interaction}, column: {multiplicity.column} }"
 
 def paddingToRust (padding : Array F) : String :=
   s!"vec![{commaSep (padding.toList.map (fieldIn "F"))}]"
@@ -236,40 +253,45 @@ def guardToRust (guard : Witgen.BExpr F) : String :=
     {bexprToRust false guard}
 }"
 
-/-- `fn mode()`, and `fn initial_row(row_index, hint)`, which for preallocated components is the
-fixed prefix followed by the row program's values, with zeros inserted at the counter columns. A
-demand mode also gets `fn guard`. -/
+/-- `fn mode()`, and `fn initial_row(row_index, hint)`, the input of a preallocated row. A demand
+mode also gets `fn guard` and `fn input(row, data, hint, multiplicity)`, the input of a new row for
+the demanded message `row`. -/
 def modeToRust : ModeProgram F → String
-  | .demand mode counters =>
+  | .demand mode =>
+    let multiplicity := match mode.multiplicity with
+      | some multiplicity => s!"Some({multiplicityToRust multiplicity})"
+      | none => "None"
     s!"{guardToRust mode.guard}
+
+pub fn input<F: WitnessField>(\
+    row: &[F], data: &WitnessData<F>, hint: &WitnessData<F>, multiplicity: F) -> Vec<F> \{
+    let row_index = 0u64;
+    {inputToRust mode.input mode.input.cells "multiplicity"}
+    output
+}
 
 pub fn mode<F: WitnessField>() -> Mode<F> \{
     Mode::Demand(DemandMode \{ channel: {quoted mode.channel}, \
         trigger: {directionToRust mode.trigger}, \
         guard: guard::<F>, \
-        aggregation: {aggregationToRust mode.byMessage}, \
-        input: vec![{commaSep (mode.input.map inputCellToRust)}], \
-        counters: vec![{commaSep (counters.map counterToRust)}], \
+        input: input::<F>, \
+        multiplicity: {multiplicity}, \
         padding: {paddingToRust mode.padding} })
 }
 
 pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> \{
     Vec::new()
 }"
-  | .preallocated rows program counters =>
-    let zeros := (counters.map (·.column)).mergeSort.map fun column =>
-      s!"input.insert({column}, F::ZERO);"
+  | .preallocated channel trigger rows input multiplicity =>
     s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
-    Mode::Preallocated \{ rows: {rows}, counters: vec![{commaSep (counters.map counterToRust)}] }
+    Mode::Preallocated \{ channel: {quoted channel}, trigger: {directionToRust trigger}, \
+        rows: {rows}, multiplicity: {multiplicityToRust multiplicity} }
 }
 
 pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> \{
     let row: &[F] = &[];
-    let mut input = fixed_row::<F>(row_index);
-    {programToRust program.steps program.output}
-    input.extend(output);
-    {String.intercalate "\n    " zeros}
-    input
+    {inputToRust input input.cells "F::ZERO"}
+    output
 }"
 
 def windowToRust : Option ℕ → String
@@ -287,7 +309,7 @@ pub const INPUT_WIDTH: usize = {component.inputWidth};
 pub const WINDOW: Option<usize> = {windowToRust component.window};
 pub const WIDTH: usize = {component.width};
 
-{fixedRowToRust component.fixedColumns}
+{fixedRowToRust mode}
 
 {completeToRust component.witnesses}
 
@@ -332,9 +354,12 @@ clean_backend::ensemble! \{
 }
 "
 
-/-- Lower an ensemble to an extraction program and print it as Rust. -/
-def ensembleToRust (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except String String := do
-  let program ← lower ensemble fuel |>.mapError toString
+/-- Lower a proven ensemble to an extraction program and print it as Rust. The ensemble is over a
+prime field, whose constants are printed as their canonical values, the values that Rust's prime
+fields compute with. -/
+def ensembleToRust {p : ℕ} [Fact p.Prime] (ensemble : FormalEnsemble (ZMod p) PublicIO)
+    (fuel : ℕ) : Except String String := do
+  let program ← lower ensemble.ensemble fuel |>.mapError toString
   return programToRustFile program
 
 end Backends.Plonky3.Print
