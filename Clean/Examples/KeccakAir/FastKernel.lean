@@ -19,7 +19,7 @@ fast_witness_kernel koalaBearKernel for KoalaBear.fieldSize :=
   FastWitness.compileSegments (component (p := KoalaBear.fieldSize) 24) #[("keccak", 100)]
 
 /-- `fastTrace` over KoalaBear, with the compiled kernel. -/
-def koalaBearTrace (inputs : Array Trace.State) (logChunks : ℕ) : Except String (Array ByteArray) :=
+def koalaBearTrace (inputs : Array State) (logChunks : ℕ) : Except String (Array ByteArray) :=
   koalaBearKernel.trace #[hintWords (p := KoalaBear.fieldSize) inputs] (traceHeight inputs.size)
     logChunks
 

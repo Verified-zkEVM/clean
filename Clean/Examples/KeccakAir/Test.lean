@@ -172,12 +172,25 @@ def loweredValues (cells : Array F) : List F :=
   let cells := samples seed (2 * size Row + 3)
   loweredValues cells == Reference.constraints.map (·.eval cells (size Row))
 
-/-! ## The trace satisfies the constraints and computes Keccak-f -/
+/-! ## Plonky3's trace satisfies the constraints and computes Keccak-f
 
-def input : Trace.State := Vector.ofFn fun i => (i.val.toUInt64 + 1) * 0x0123456789abcdef
+`plonky3-trace.txt` is the trace of Plonky3's `generate_trace_rows` (at a4982ec, over KoalaBear) for
+one permutation, whose lane `i` (lane `(x, y)` at `x + 5 y`) is `(i + 1) * 0x0123456789abcdef`: its
+24 rows and 8 rows of the permutation of the zero state. A line is a row; a cell is `0`, `1`, or `x`
+and four hex digits.
+-/
+
+/-- The cells of a line of `plonky3-trace.txt`. -/
+def parseCells : List Char → List F
+  | 'x' :: a :: b :: c :: d :: rest =>
+    (([a, b, c, d].foldl (fun n digit => 16 * n + if digit.isDigit then digit.toNat - '0'.toNat
+      else digit.toNat - 'a'.toNat + 10) 0 : ℕ) : F) :: parseCells rest
+  | digit :: rest => (if digit = '1' then 1 else 0) :: parseCells rest
+  | [] => []
 
 def traceRows : Array (Array F) :=
-  ((Trace.rows [input]).map fun row => (row.map fun cell => (cell : F)).toArray).toArray
+  (((include_str "plonky3-trace.txt").splitOn "\n").filter (· ≠ "")).toArray.map
+    fun line => (parseCells line.toList).toArray
 
 /-- Row `i` with its window cells. -/
 def windowCells (rows : Array (Array F)) (i : ℕ) : Array F :=
@@ -191,17 +204,18 @@ def satisfies (rows : Array (Array F)) : Bool :=
   | .ok component => (List.range rows.size).all fun i =>
     component.constraintsHold (windowCells rows i) fun _ _ => #[]
 
-/-- A state in `Specs.Keccak256`'s order from Plonky3's. -/
-def specState (state : Trace.State) : Vector ℕ 25 :=
-  Vector.ofFn fun i => (state[i.val / 5 + 5 * (i.val % 5)]!).toNat
+/-- The state in `Specs.Keccak256`'s order whose lane `(x, y)` has the limbs `column y x l` of a
+row. -/
+def specState (row : Array F) (column : ℕ → ℕ → ℕ → ℕ) : Vector ℕ 25 :=
+  Vector.ofFn fun i => (List.range 4).foldl (fun lane l =>
+    lane + 2 ^ (16 * l) * (row[column (i.val % 5) (i.val / 5) l]!).val) 0
 
 -- One permutation and its padding, 32 rows, satisfy the constraints.
-#guard traceRows.size = 32 && satisfies traceRows
+#guard traceRows.size = 32 && traceRows.all (·.size = size Row) && satisfies traceRows
 
--- The trace computes Keccak-f.
-#guard specState (Trace.permutationRows input).2 =
-  Specs.Keccak256.keccakPermutation (specState input)
-#guard ((Trace.permutationRows (Vector.replicate 25 0)).2[0]!) = 0xF1258F7940E1DDE7
+-- The last round's output is Keccak-f of the first round's preimage.
+#guard specState traceRows[23]! Reference.apppCol =
+  Specs.Keccak256.keccakPermutation (specState traceRows[0]! Reference.preimage)
 
 -- Flipping a bit of `A'`, a preimage limb on a later row, or a step flag violates the constraints.
 #guard !satisfies (traceRows.modify 3 fun row => row.modify 900 (1 - ·))
@@ -214,6 +228,9 @@ The segment program computes the 24 rows of a permutation from its input. Genera
 trace of one permutation and its padding. Fast generation is tested natively, by
 `Clean.Examples.KeccakAir.FastTest`.
 -/
+
+/-- The permutation's input in `plonky3-trace.txt`. -/
+def input : State := Vector.ofFn fun i => (i.val.toUInt64 + 1) * 0x0123456789abcdef
 
 /-- The prover input of the ensemble of 32 rows: the permutation's input, and the zero input of
 the padding permutation. -/
@@ -242,7 +259,7 @@ def splitMix (seed : UInt64) : UInt64 :=
   let z := (z ^^^ (z >>> 27)) * 0x94d049bb133111eb
   z ^^^ (z >>> 31)
 
-def katInputs : Array Trace.State :=
+def katInputs : Array State :=
   (Array.range 3).map fun k => Vector.ofFn fun i => splitMix (25 * k + i.val).toUInt64
 
 def plonky3RowHashes : List UInt64 := [

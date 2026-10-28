@@ -6,7 +6,6 @@ module
 
 public import Clean.Air.FastWitness.Run
 public import Clean.Examples.KeccakAir.Ensemble
-public import Clean.Examples.KeccakAir.Trace
 
 @[expose] public section
 
@@ -18,12 +17,17 @@ variable {p : ℕ} [Mont32Field p] [Fact (2 ^ 16 < p)]
 /-- The height of the trace of `n` permutations, Plonky3's `(24 n).next_power_of_two()`. -/
 def traceHeight (n : ℕ) : ℕ := (24 * n).nextPowerOfTwo
 
-/-- The 100 16-bit limbs of a permutation's input, in the order of the `preimage` columns. -/
-def preimageLimbs (input : Trace.State) : List ℕ := Trace.yMajor Trace.limbs (Trace.lane input)
+/-- A Keccak-f state in Plonky3's input order: lane `(x, y)` at `x + 5 y`. -/
+abbrev State := Vector UInt64 25
+
+/-- The 100 16-bit limbs of a permutation's input, in the order of the `preimage` columns: limb `l`
+of lane `(x, y)` at `(5 y + x) 4 + l`. -/
+def preimageLimbs (input : State) : List ℕ :=
+  (List.range 100).map fun j => (input[j / 4]! >>> (16 * (j % 4)).toUInt64).toNat % 2 ^ 16
 
 /-- The hint table `keccak` of the inputs as packed Montgomery words, a row of limbs per input:
 limb `l` of lane `(x, y)` at `(5 y + x) 4 + l`, as in `preimageLimbs`. -/
-def hintWords (inputs : Array Trace.State) : ByteArray := Id.run do
+def hintWords (inputs : Array State) : ByteArray := Id.run do
   let mut words := ByteArray.zeros (400 * inputs.size)
   for h : k in [0:inputs.size] do
     let input := inputs[k]
@@ -36,7 +40,7 @@ def hintWords (inputs : Array Trace.State) : ByteArray := Id.run do
 
 /-- The trace of the permutations of `inputs`, padded with the permutations of the zero state, as
 packed Montgomery words in `2 ^ logChunks` chunks of consecutive rows. -/
-def fastTrace (inputs : Array Trace.State) (logChunks : ℕ) : Except String (Array ByteArray) :=
+def fastTrace (inputs : Array State) (logChunks : ℕ) : Except String (Array ByteArray) :=
   FastWitness.segmentTrace (component (p := p) (traceHeight inputs.size).toUInt64)
     #[("keccak", 100, hintWords (p := p) inputs)] logChunks
 
