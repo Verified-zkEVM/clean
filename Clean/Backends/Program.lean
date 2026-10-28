@@ -112,27 +112,20 @@ structure WitnessBlock (F : Type) [FiniteField F] where
   output : Witgen.VExpr F outputWidth
   well_formed : witnessProgramWellFormed steps output = true
 
-namespace WitnessBlock
+def cellWellFormed (locals : List LocalSort) : Cell F → Bool
+  | .fixed value | .witness value => fexprWellFormed locals value
+  | .multiplicity => true
 
-def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
-    (row : ℕ := 0) : Vector F block.outputWidth :=
-  block.output.eval {
-    env := environment
-    locals := Witgen.evalSteps environment block.steps #[] row
-    idx := row
-  }
+/-- The input program of a generation mode: its `let`-steps, and its input cells. -/
+structure InputProgram (F : Type) [FiniteField F] where
+  steps : List (Witgen.Step F)
+  cells : List (Cell F)
+  well_formed :
+    (stepsWellFormedFrom [] steps && cells.all (cellWellFormed (stepSorts [] steps))) = true
 
-end WitnessBlock
-
-structure FixedColumnsProgram (F : Type) [FiniteField F] where
-  height : UInt64
-  program : WitnessBlock F
-
-namespace FixedColumnsProgram
-
-abbrev width (fixed : FixedColumnsProgram F) : ℕ := fixed.program.outputWidth
-
-end FixedColumnsProgram
+/-- The input columns of the fixed cells. -/
+def InputProgram.fixedColumns (input : InputProgram F) : List ℕ :=
+  (input.cells.zipIdx.filter (·.1.isFixed)).map (·.2)
 
 /-- The rows a constraint is checked on: every row, or the rows one of the selectors marks. -/
 inductive Gate where
@@ -149,9 +142,7 @@ structure GatedConstraint (F : Type) where
 
 structure ComponentProgram (F : Type) [FiniteField F] where
   name : String
-  /-- The width of the row's own input, which generation produces. -/
   inputWidth : ℕ
-  fixedColumns : Option (FixedColumnsProgram F)
   /-- For a two-row component, the width of the row's own input: cells `[w, 2w)` of a row hold the
   next row's first `w` cells, and cells `2w`, `2w + 1` and `2w + 2` the selectors `isFirstRow`,
   `isLastRow` and `isTransition`. A backend reads these cells from the next row and from its
@@ -162,73 +153,25 @@ structure ComponentProgram (F : Type) [FiniteField F] where
   constraints : List (GatedConstraint F)
   interactions : List (AbstractInteraction F)
 
-namespace ComponentProgram
-
-/-- The number of window cells of a row. -/
-def windowWidth (component : ComponentProgram F) : ℕ :=
-  (component.window.map (· + 3)).getD 0
-
-def evalWitnesses (data : ProverData F) (hint : ProverHint F) :
-    List (WitnessBlock F) → Array F → Array F
-  | [], row => row
-  | block :: blocks, row =>
-      let environment : ProverEnvironment F := {
-        get index := row[index]?.getD 0
-        data
-        hint
-      }
-      evalWitnesses data hint blocks (row ++ (block.eval environment).toArray)
-
-/-- Complete a component row from its own input. The window cells stay zero. -/
-def completeRow (component : ComponentProgram F) (input : Array F)
-    (data : ProverData F) (hint : ProverHint F := .empty F) : Except String (Array F) := do
-  unless input.size = component.inputWidth do
-    throw s!"component input has width {input.size}, expected {component.inputWidth}"
-  let cells := input ++ Array.replicate component.windowWidth 0
-  let row := evalWitnesses data hint component.witnesses cells
-  unless row.size = component.width do
-    throw s!"generated row has width {row.size}, expected {component.width}"
-  return row
-
-/-- Whether the constraints hold on a row, whose window cells are filled. -/
-def constraintsHold (component : ComponentProgram F) (row : Array F)
-    (data : ProverData F) : Bool :=
-  let environment := Environment.fromArray row data
-  let selector (offset : ℕ) := (component.window.map fun width =>
-    environment.get (2 * width + offset)).getD 1
-  component.constraints.all fun constraint =>
-    let gate := match constraint.gate with
-      | .everyRow => 1
-      | .firstRow => selector 0
-      | .lastRow => selector 1
-      | .transition => selector 2
-    gate * constraint.body.eval environment == 0
-
-def interactionValues (component : ComponentProgram F) (row : Array F)
-    (data : ProverData F) : List (Interaction F) :=
-  let environment := Environment.fromArray row data
-  component.interactions.map (·.eval environment)
-
-end ComponentProgram
-
-/-- A `DemandMode`, apart from its counter. -/
-structure DemandProgram (F : Type) where
+/-- A `DemandMode`. -/
+structure DemandProgram (F : Type) [FiniteField F] where
   channel : String
   trigger : Direction
   /-- The guard, as a condition on the message cells. -/
   guard : Witgen.BExpr F
-  /-- Whether the mode aggregates by message, with its counter in `ModeProgram.demand`. -/
-  byMessage : Bool
-  input : List (InputCell F)
+  /-- The input of a new row, reading the message cells. -/
+  input : InputProgram F
+  multiplicity : Option MultiplicityColumn
   padding : Array F
 
 /-- How the rows of one component are generated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
-  /-- The `counters` exist with `byMessage` aggregation only: one on the mode's channel. -/
-  | demand (mode : DemandProgram F) (counters : List Counter)
-  /-- `rows` rows, whose inputs after the fixed columns are the values of `program` with zeros
-  inserted at the counter columns. -/
-  | preallocated (rows : UInt64) (program : WitnessBlock F) (counters : List Counter)
+  | demand (mode : DemandProgram F)
+  /-- `rows` rows, whose inputs are `input` at the row index, with multiplicity 0. -/
+  | preallocated (channel : String) (trigger : Direction) (rows : UInt64) (input : InputProgram F)
+      (multiplicity : MultiplicityColumn)
+  /-- `rows` rows, whose inputs are `input` at the row index, which answer no demand. -/
+  | standalone (rows : UInt64) (input : InputProgram F)
 
 /-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
@@ -244,10 +187,10 @@ structure Program (F : Type) [FiniteField F] where
 
 inductive LoweringError where
   | validation (error : ValidationError)
+  | noComponents
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
-  | malformedFixedProgram (component : ℕ)
-  | malformedRowProgram (component : ℕ)
+  | malformedInputProgram (component : ℕ)
   | malformedGuard (component : ℕ)
   | legacyLookup (component : ℕ)
   | componentVariable (component index width : ℕ)
@@ -258,14 +201,13 @@ deriving Repr, DecidableEq
 instance : ToString LoweringError where
   toString
     | .validation error => toString error
+    | .noComponents => "the ensemble has no components"
     | .nativeWitness component operation =>
         s!"component {component} witness operation {operation} is a native Lean closure"
     | .malformedWitnessLocals component operation =>
         s!"component {component} witness operation {operation} has an invalid local reference"
-    | .malformedFixedProgram component =>
-        s!"component {component} fixed-column program has an invalid local reference"
-    | .malformedRowProgram component =>
-        s!"component {component} preallocated row program has an invalid local reference"
+    | .malformedInputProgram component =>
+        s!"component {component} input program has an invalid local reference"
     | .malformedGuard component =>
         s!"component {component} guard has an invalid local reference"
     | .legacyLookup component =>
@@ -304,15 +246,13 @@ def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F)) :
     | .witness _ code => return some (← lowerWitness component index code)
     | _ => return none
 
-def lowerRowProgram {source : Witgen.RowProgram.Source} (error : LoweringError)
-    (program : Witgen.RowProgram F source) : Except LoweringError (WitnessBlock F) :=
-  match program.ir with
-  | .ir steps output =>
-    if h : witnessProgramWellFormed steps output then
-      .ok { outputWidth := program.width, steps, output, well_formed := h }
-    else
-      .error error
-  | .native _ => .error error
+def lowerInputProgram {Input : TypeMap} [ProvableType Input] (index : ℕ)
+    (cells : Vector (Cell F) (size Input)) (steps : List (Witgen.Step F)) :
+    Except LoweringError (InputProgram F) :=
+  let cells := cells.toList
+  if h : (stepsWellFormedFrom [] steps && cells.all (cellWellFormed (stepSorts [] steps))) = true
+  then .ok { steps, cells, well_formed := h }
+  else .error (.malformedInputProgram index)
 
 /-- The selector cell of a gate, for a two-row component whose own input has width `width`. -/
 def Gate.selectorCell (width : ℕ) : Gate → Option ℕ
@@ -397,6 +337,16 @@ theorem eval_of_splitSelector {width : ℕ} {expression body : Expression F} {ga
         obtain ⟨cell, hcell, heval⟩ := ihRight hsplit
         exact ⟨cell, hcell, by simp only [Expression.eval, heval]; ring⟩
 
+/-- Whether the constraints of a component hold on a complete row: each body, times the selector of
+its gate. -/
+def ComponentProgram.constraintsHold (component : ComponentProgram F) (row : Array F)
+    (data : ProverData F) : Bool :=
+  let environment := Environment.fromArray row data
+  let width := component.window.getD 0
+  component.constraints.all fun constraint =>
+    let gate := (constraint.gate.selectorCell width).elim 1 environment.get
+    gate * constraint.body.eval environment == 0
+
 def lowerConstraints (component : ℕ) (window : Option ℕ) (constraints : List (Expression F)) :
     Except LoweringError (List (GatedConstraint F)) :=
   constraints.zipIdx.mapM fun (constraint, index) =>
@@ -411,9 +361,6 @@ def lowerComponent (index : ℕ) (component : Component F) :
     throw (.legacyLookup index)
   let flat := operations.toFlat
   let witnesses ← lowerWitnesses index flat
-  let fixedColumns ← component.fixedColumns.mapM fun fixed => do
-    let program ← lowerRowProgram (.malformedFixedProgram index) fixed.toRowProgram
-    return { height := fixed.height, program }
   let window := component.window.map (·.rowWidth)
   let constraints ← lowerConstraints index window operations.constraints
   let interactions := operations.interactions
@@ -424,8 +371,7 @@ def lowerComponent (index : ℕ) (component : Component F) :
   | none => pure ()
   return {
     name := component.circuit.name
-    inputWidth := component.ownInputWidth
-    fixedColumns
+    inputWidth := component.rowOffset
     window
     width := component.width
     witnesses
@@ -433,33 +379,36 @@ def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-def lowerGeneration (index : ℕ) (component : Component F) (counters : List Counter) :
-    Except LoweringError (ModeProgram F) := do
-  match component.generation with
-  | .demand mode =>
-      let byMessage := match mode.aggregation with
-        | .perOccurrence => false
-        | .byMessage _ => true
+def lowerGeneration (index : ℕ) (component : Component F)
+    (multiplicity : Option MultiplicityColumn) : Except LoweringError (ModeProgram F) := do
+  let (cells, steps) := component.generation.cells
+  let input ← lowerInputProgram index cells steps
+  match component.generation, multiplicity with
+  | .demand mode, multiplicity =>
       let guard := mode.guardCondition
       unless bexprWellFormed [] guard do
         throw (.malformedGuard index)
-      let { channel, trigger, input, padding, .. } := mode
-      return .demand { channel := channel.name, trigger, guard, byMessage, input, padding } counters
-  | .preallocated mode =>
-      let program ← lowerRowProgram (.malformedRowProgram index) mode.toRowProgram
-      let rows := component.fixedColumns.map (·.height) |>.getD 0
-      return .preallocated rows program counters
+      let { channel, trigger, padding, .. } := mode
+      return .demand {
+        channel := channel.name, trigger, guard, input, multiplicity
+        padding := (toElements padding).toArray }
+  | .preallocated mode, some multiplicity =>
+      return .preallocated mode.channel.name mode.trigger mode.height input multiplicity
+  | .preallocated _, none =>
+      throw (.validation (.multiplicity component.circuit.name (.cells 0)))
+  | .standalone mode, _ => return .standalone mode.height input
 
 /-- Validate the generation of an ensemble, and lower it to an extraction program. `fuel` bounds the
 number of witness generation steps. -/
 def lower (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except LoweringError (Program F) := do
+  if ensemble.tables.isEmpty then throw .noComponents
   match validateGeneration ensemble with
   | .error error => throw (.validation error)
   | .ok valid =>
     let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
       lowerComponent index component
-    let modes ← (ensemble.tables.zip valid.counters).zipIdx.mapM
-      fun ((component, counters), index) => lowerGeneration index component counters
+    let modes ← (ensemble.tables.zip valid.multiplicities).zipIdx.mapM
+      fun ((component, multiplicity), index) => lowerGeneration index component multiplicity
     let verifierOperations := ensemble.verifierOperations.toFlat
     let verifierInteractions := FlatOperation.interactions verifierOperations
     let verifierExpressions := verifierInteractions.flatMap fun interaction =>

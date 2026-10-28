@@ -48,22 +48,18 @@ structure HintTable where
   rows : ℕ
 deriving Repr, DecidableEq
 
-/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
-data, rows are cut off or zero-padded at the requested width. -/
-def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
-  match tables.find? (·.key == key) with
-  | none => #[]
-  | some table => Array.ofFn fun (row : Fin table.rows) => rowPrefix width <|
-      elements.extract (table.offset + row.val * table.width)
-        (table.offset + (row.val + 1) * table.width)
-
 /-- An ensemble of AIR components: everything a prover and a verifier implementation need. -/
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components have unique names. Their order is the order of the traces. -/
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
+  /-- Every channel that the components and the verifier interact with. Channels have unique
+  names, so a proof system can tell them apart by name. -/
   channels : List (RawChannel F)
+  unique_channel_names : (channels.map (·.name)).Nodup
   verifier : Verifier.Program F PublicIO := .empty F PublicIO
+  tables_channels : ∀ table ∈ tables, table.circuit.channels ⊆ channels
+  verifier_channels : verifier.channels ⊆ channels
   /-- The prover's private input to witness generation. -/
   ProverInput : TypeMap := unit
   [provableProverInput : ProvableType ProverInput]
@@ -71,10 +67,6 @@ structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   hintTables : List HintTable := []
 
 instance (ens : Ensemble F PublicIO) : ProvableType ens.ProverInput := ens.provableProverInput
-
-/-- The hint tables encoding a private input. -/
-def Ensemble.hint (ens : Ensemble F PublicIO) (proverInput : ens.ProverInput F) : ProverHint F :=
-  HintTable.hint ens.hintTables (toElements proverInput).toArray
 
 /-- The public input and the component traces of an ensemble proof. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where
@@ -103,6 +95,9 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
     tables := []
     unique_names := by simp
     channels := []
+    unique_channel_names := by simp
+    tables_channels := by simp
+    verifier_channels := by simp [circuit_norm, Verifier.Program.empty]
 
 @[circuit_norm] lemma empty_tables :
   (empty F PublicIO).tables = [] := rfl
@@ -200,22 +195,6 @@ lemma tables_map_component (witness : EnsembleWitness ens) :
   intro i hi hi'
   simp [witness.same_circuits i hi']
 
-lemma tableNames_nodup (witness : EnsembleWitness ens) :
-    (witness.tables.map (fun table => table.component.circuit.name)).Nodup := by
-  rw [show witness.tables.map (fun table => table.component.circuit.name) =
-    ens.tables.map (·.circuit.name) by
-      calc
-        _ = (witness.tables.map (·.component)).map (·.circuit.name) := by simp
-        _ = ens.tables.map (·.circuit.name) :=
-          congrArg (List.map (·.circuit.name)) witness.tables_map_component]
-  exact ens.unique_names
-
-lemma dataConsistency_of_mem (witness : EnsembleWitness ens) :
-    ∀ table ∈ witness.tables, table.DataConsistency := by
-  intro table htable
-  rw [Table.DataConsistency, witness.same_data table htable]
-  exact deriveProverData_eq_of_mem witness.tables witness.tableNames_nodup htable _
-
 def toTables (witness : EnsembleWitness ens) : Tables F where
   tables := witness.tables
   data := witness.data
@@ -232,18 +211,19 @@ lemma component_mem_tables_of_mem {witness : EnsembleWitness ens} {table : Table
   rw [← witness.tables_map_component]
   grind
 
-/-- A component with fixed columns has exactly one row of prover data per fixed row. -/
-lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : Component F}
-    (hcomponent : component ∈ ens.tables) {fixed : FixedColumns F}
-    (hfixed : component.fixedColumns = some fixed) :
-    (witness.data.getRows component.circuit.name component.Input).size = fixed.height.toNat := by
+/-- A preallocated component has exactly one row of prover data per row index. -/
+lemma getRows_size_of_preallocated (witness : EnsembleWitness ens) {component : Component F}
+    (hcomponent : component ∈ ens.tables)
+    {mode : WitnessGeneration.PreallocatedMode F component.Input}
+    (hgeneration : component.generation = .preallocated mode) :
+    (witness.data.getRows component.circuit.name component.Input).size = mode.height.toNat := by
   rw [← witness.tables_map_component, List.mem_map] at hcomponent
   obtain ⟨table, htable, rfl⟩ := hcomponent
   have hmatch := table.fixed_rows_match
-  simp only [Component.FixedRowsMatch, hfixed] at hmatch
+  simp only [Component.FixedRowsMatch, hgeneration] at hmatch
   rw [ProverData.getRows, EnsembleWitness.data, ← witness.same_data table htable,
-    witness.dataConsistency_of_mem table htable]
-  simpa [Table.proverRows] using congrArg List.length hmatch
+    table.data_consistent]
+  simpa using hmatch.1
 
 @[circuit_norm]
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
@@ -289,6 +269,47 @@ lemma channel_eq_of_mem_interactionsWith {witness : EnsembleWitness ens}
     obtain ⟨interaction, h_interaction, rfl⟩ := h_verifier
     exact Operations.channel_eq_of_mem_interactionsWith h_interaction
   · exact table.channel_eq_of_mem_interactionsWith h_table
+
+/-- Every interaction of a witness is on a channel of the ensemble. -/
+lemma channel_mem_of_mem_interactions {witness : EnsembleWitness ens} {i : Interaction F} :
+    i ∈ witness.interactions → i.channel ∈ ens.channels := by
+  simp only [interactions, List.mem_append, List.mem_flatMap]
+  rintro (h_verifier | ⟨table, h_table, h_i⟩)
+  · simp only [Operations.interactionValues, List.mem_map] at h_verifier
+    obtain ⟨interaction, h_interaction, rfl⟩ := h_verifier
+    rw [AbstractInteraction.eval_channel]
+    change interaction ∈ (ens.verifier.operations.circuitOperations).interactions at h_interaction
+    rw [Verifier.Operations.circuitOperations_interactions] at h_interaction
+    exact ens.verifier_channels (Verifier.Operations.channel_mem_of_mem_interactions h_interaction)
+  · apply ens.tables_channels _ (component_mem_tables_of_mem h_table)
+    by_contra h_not_mem
+    have h_nil := table.interactionsWith_nil_of_channel_not_mem h_not_mem
+    classical
+    rw [Table.interactionsWith_eq_filter, List.filter_eq_nil_iff] at h_nil
+    exact h_nil i h_i (by simp)
+
+open Classical in
+/-- The interactions with a channel of the ensemble are the interactions with its name, since
+channel names are unique. So a proof system that balances the interactions with each channel name
+balances every channel. -/
+lemma interactionsWith_eq_filter_name {witness : EnsembleWitness ens} {channel : RawChannel F}
+    (h_channel : channel ∈ ens.channels) :
+    witness.interactionsWith channel =
+      witness.interactions.filter (·.channel.name = channel.name) := by
+  have h_eq : witness.interactionsWith channel =
+      witness.interactions.filter (·.channel = channel) := by
+    simp only [interactionsWith, verifierInteractionsWith, Tables.interactionsWith, toTables,
+      interactions, List.filter_append, List.filter_flatMap,
+      Operations.interactionValuesWith_eq_filter, Table.interactionsWith_eq_filter]
+  rw [h_eq]
+  apply List.filter_congr
+  intro i h_i
+  have h_mem := channel_mem_of_mem_interactions h_i
+  simp only [decide_eq_decide]
+  constructor
+  · rintro rfl; rfl
+  · intro h_name
+    exact List.inj_on_of_nodup_map ens.unique_channel_names h_mem h_channel h_name
 
 lemma verifierChannelRequirements_iff_forall {witness : EnsembleWitness ens}
     {channel : RawChannel F} :
@@ -430,28 +451,51 @@ end Ensemble
 namespace Ensemble
 /-- Takes the verifier and the prover input from the second ensemble. -/
 def merge (ens1 ens2 : Ensemble F PublicIO)
-    (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup) :
+    (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup)
+    (unique_channel_names : ((ens2.channels ++ ens1.channels).map (·.name)).Nodup) :
     Ensemble F PublicIO :=
   { ens2 with
     tables := ens2.tables ++ ens1.tables,
     unique_names
-    channels := ens2.channels ++ ens1.channels }
+    channels := ens2.channels ++ ens1.channels
+    unique_channel_names
+    tables_channels table htable := by
+      rcases List.mem_append.mp htable with htable | htable
+      · exact List.Subset.trans (ens2.tables_channels table htable) (List.subset_append_left _ _)
+      · exact List.Subset.trans (ens1.tables_channels table htable) (List.subset_append_right _ _)
+    verifier_channels := List.Subset.trans ens2.verifier_channels (List.subset_append_left _ _) }
 
-@[circuit_norm] lemma merge_tables (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
-  (ens1.merge ens2 unique_names).tables = ens2.tables ++ ens1.tables := rfl
-@[circuit_norm] lemma merge_verifier (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
-  (ens1.merge ens2 unique_names).verifier = ens2.verifier := rfl
+@[circuit_norm] lemma merge_tables (ens1 ens2 : Ensemble F PublicIO) (unique_names)
+    (unique_channel_names) :
+  (ens1.merge ens2 unique_names unique_channel_names).tables = ens2.tables ++ ens1.tables := rfl
+@[circuit_norm] lemma merge_channels (ens1 ens2 : Ensemble F PublicIO) (unique_names)
+    (unique_channel_names) :
+  (ens1.merge ens2 unique_names unique_channel_names).channels = ens2.channels ++ ens1.channels :=
+  rfl
+@[circuit_norm] lemma merge_verifier (ens1 ens2 : Ensemble F PublicIO) (unique_names)
+    (unique_channel_names) :
+  (ens1.merge ens2 unique_names unique_channel_names).verifier = ens2.verifier := rfl
 
 def addTable (ens : Ensemble F PublicIO) (table : Component F)
-    (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name)) : Ensemble F PublicIO :=
+    (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name))
+    (table_channels : table.circuit.channels ⊆ ens.channels) : Ensemble F PublicIO :=
   { ens with
     tables := table :: ens.tables
-    unique_names := by simpa using List.nodup_cons.mpr ⟨fresh, ens.unique_names⟩ }
+    unique_names := by simpa using List.nodup_cons.mpr ⟨fresh, ens.unique_names⟩
+    tables_channels table' htable' := by
+      rcases List.mem_cons.mp htable' with rfl | htable'
+      · exact table_channels
+      · exact ens.tables_channels table' htable' }
 
-@[circuit_norm] lemma addTable_tables (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
-  (ens.addTable table fresh).tables = table :: ens.tables := rfl
-@[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
-  (ens.addTable table fresh).verifier = ens.verifier := rfl
+@[circuit_norm] lemma addTable_tables (ens : Ensemble F PublicIO) (table : Component F) (fresh)
+    (table_channels) :
+  (ens.addTable table fresh table_channels).tables = table :: ens.tables := rfl
+@[circuit_norm] lemma addTable_channels (ens : Ensemble F PublicIO) (table : Component F) (fresh)
+    (table_channels) :
+  (ens.addTable table fresh table_channels).channels = ens.channels := rfl
+@[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F) (fresh)
+    (table_channels) :
+  (ens.addTable table fresh table_channels).verifier = ens.verifier := rfl
 
 /-- Declare the prover's private input: its type, and the hint tables viewing it. -/
 def withProverInput (ens : Ensemble F PublicIO) (ProverInput : TypeMap)
