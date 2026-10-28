@@ -43,18 +43,11 @@ def program : Except LoweringError (ComponentProgram F) := do
   | [component] => return component
   | _ => throw (.validation (.preallocatedHeight "squares" 0))
 
-/-- Whether the lowered constraints hold on a row whose window cells are filled: each body, times
-the selector of its gate. -/
 def checkRow (row : List ℕ) : Bool :=
   match program with
   | .error _ => false
-  | .ok component =>
-      let environment := Environment.fromArray (row.map (FiniteField.fromNat ·)).toArray
-        (fun _ _ => #[])
-      let width := component.window.getD 0
-      component.constraints.all fun constraint =>
-        let gate := (constraint.gate.selectorCell width).elim 1 environment.get
-        gate * constraint.body.eval environment == 0
+  | .ok component => component.constraintsHold (row.map (FiniteField.fromNat ·)).toArray
+      (fun _ _ => #[])
 
 -- The constraints are lowered with their gates: the boundary constraints and the transitions to
 -- the next row.
