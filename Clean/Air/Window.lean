@@ -68,6 +68,20 @@ def current (layout : WindowLayout Input) (input : Input F) : Vector F layout.ro
 def next (layout : WindowLayout Input) (input : Input F) : Vector F layout.rowWidth :=
   .ofFn fun j => layout.cell input (layout.rowWidth + j.val) (by omega)
 
+/-- `current`, reading the input's cells once. -/
+def currentImpl (layout : WindowLayout Input) (input : Input F) : Vector F layout.rowWidth :=
+  let cells := toElements input
+  .ofFn fun j => cells[j.val]'(by have := layout.size_eq; omega)
+
+/-- `next`, reading the input's cells once. -/
+def nextImpl (layout : WindowLayout Input) (input : Input F) : Vector F layout.rowWidth :=
+  let cells := toElements input
+  .ofFn fun j => cells[layout.rowWidth + j.val]'(by have := layout.size_eq; omega)
+
+@[csimp] theorem current_eq_currentImpl : @current = @currentImpl := rfl
+
+@[csimp] theorem next_eq_nextImpl : @next = @nextImpl := rfl
+
 def isFirstRow (layout : WindowLayout Input) (input : Input F) : F :=
   layout.cell input (2 * layout.rowWidth) (by omega)
 
