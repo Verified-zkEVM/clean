@@ -66,11 +66,15 @@ def exprToRust : Expression F → String
   | .add left right => s!"({exprToRust left} + {exprToRust right})"
   | .mul left right => s!"({exprToRust left} * {exprToRust right})"
 
+def directionToRust : Interaction.Direction → String
+  | .pull => "Direction::Pull"
+  | .push => "Direction::Push"
+
 def interactionToRust (interaction : AbstractInteraction F) : String :=
   let message := commaSep (interaction.msg.toList.map exprToRust)
   s!"Interaction \{ channel: {quoted interaction.channel.name}, \
-      multiplicity: {exprToRust interaction.mult}, message: vec![{message}], \
-      assume_guarantees: {interaction.assumeGuarantees} }"
+      direction: {directionToRust interaction.direction}, \
+      multiplicity: {exprToRust interaction.mult}, message: vec![{message}] }"
 
 def gateToRust : Gate → String
   | .everyRow => "Gate::EveryRow"
@@ -235,12 +239,9 @@ def completeToRust (witnesses : List (WitnessBlock F)) : String :=
 {lines blocks}
 }"
 
-def directionToRust : Direction → String
-  | .pull => "Direction::Pull"
-  | .push => "Direction::Push"
-
 def multiplicityToRust (multiplicity : MultiplicityColumn) : String :=
-  s!"MultiplicityColumn \{ interaction: {multiplicity.interaction}, column: {multiplicity.column} }"
+  s!"MultiplicityColumn \{ interaction: {multiplicity.interaction}, column: {multiplicity.column}, \
+    direction: {directionToRust multiplicity.direction} }"
 
 def paddingToRust (padding : Array F) : String :=
   s!"vec![{commaSep (padding.toList.map (fieldIn "F"))}]"
@@ -364,10 +365,10 @@ clean_backend::ensemble! \{
 }
 "
 
-/-- Lower a proven ensemble to an extraction program and print it as Rust. The ensemble is over a
-prime field, whose constants are printed as their canonical values, the values that Rust's prime
-fields compute with. -/
-def ensembleToRust {p : ℕ} [Fact p.Prime] (ensemble : FormalEnsemble (ZMod p) PublicIO)
+/-- Lower a proven ensemble to an extraction program and print it as Rust. The ensemble is sound
+under LogUp, the balance check of the Plonky3 backend, over a prime field, whose constants are
+printed as their canonical values, the values that Rust's prime fields compute with. -/
+def ensembleToRust {p : ℕ} [Fact p.Prime] (ensemble : FormalEnsemble (ZMod p) PublicIO .logUp)
     (fuel : ℕ) : Except String String := do
   let program ← lower ensemble.ensemble fuel |>.mapError toString
   return programToRustFile program

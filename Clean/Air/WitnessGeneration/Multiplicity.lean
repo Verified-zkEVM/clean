@@ -22,6 +22,15 @@ structure MultiplicityColumn where
   column : ℕ
   /-- The position of the counted interaction among the component's row interactions. -/
   interaction : ℕ
+  /-- The direction of the counted interaction. -/
+  direction : Interaction.Direction
+
+/-- The multiplicity cell that cancels a net multiplicity `demand` on top of the value `cell`. -/
+def MultiplicityColumn.cancel {F : Type} [Field F] (multiplicity : MultiplicityColumn) (cell : F)
+    (demand : ℤ) : F :=
+  match multiplicity.direction with
+  | .push => cell - demand
+  | .pull => cell + demand
 
 /-- Why the multiplicity cell of a component is invalid. -/
 inductive MultiplicityError where
@@ -73,7 +82,7 @@ def MultiplicityColumn.resolve (component : Component F) (column : ℕ) :
   let cells := interaction.msg.toList.flatMap expressionCells
   unless cells.all fun cell => cell < component.rowOffset && cell ≠ column do
     throw (.message column)
-  return { column, interaction := index }
+  return { column, interaction := index, direction := interaction.direction }
 
 /-- The multiplicity cell of a component, resolved: exactly one in a preallocated component, at most
 one in a demand component, and none in a standalone component. -/

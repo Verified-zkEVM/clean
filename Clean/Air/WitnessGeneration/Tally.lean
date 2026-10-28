@@ -11,7 +11,8 @@ public import Std.Data.TreeMap
 
 The generator's record of the channel messages whose pushes and pulls don't cancel yet. A `Tally`
 holds the nonzero net multiplicities as demands, in the order they became nonzero, stored so that
-both updating a message and iterating in order are fast.
+both updating a message and iterating in order are fast. Net multiplicities are integers, pushes
+minus pulls, so that they count the same in every field, including binary ones.
 
 Reasoning about a tally only needs its net multiplicities `Tally.net`, its demands `Tally.demands`,
 and their lemmas: `net_add`, `mem_demands` and `isEmpty_iff`.
@@ -31,24 +32,16 @@ structure Demand (F : Type) where
   channel : String
   message : Array F
   /-- The net multiplicity of the message, pushes minus pulls. -/
-  multiplicity : F
+  multiplicity : ℤ
 
 namespace Demand
 
 /-- The channel and the message: what the tally records a net multiplicity for. -/
 def key (demand : Demand F) : String × Array F := (demand.channel, demand.message)
 
-/-- Whether the message was pushed or pulled more often, and by how much. Multiplicities above half
-the field order are read as negative. -/
-def surplus (demand : Demand F) : Direction × ℕ :=
-  if 2 * FiniteField.val demand.multiplicity ≤ FiniteField.size (F := F) then
-    (.push, FiniteField.val demand.multiplicity)
-  else
-    (.pull, FiniteField.val (-demand.multiplicity))
-
-def direction (demand : Demand F) : Direction := demand.surplus.1
-
-def count (demand : Demand F) : ℕ := demand.surplus.2
+/-- Whether the message was pushed or pulled more often. -/
+def direction (demand : Demand F) : Interaction.Direction :=
+  if 0 < demand.multiplicity then .push else .pull
 
 end Demand
 
@@ -79,7 +72,7 @@ def empty : Tally F where
   lt_next := by simp
 
 /-- The net multiplicity of a channel message. -/
-def net (tally : Tally F) (key : String × Array F) : F :=
+def net (tally : Tally F) (key : String × Array F) : ℤ :=
   ((tally.positions[key]?.bind fun position => tally.byPosition[position]?).map
     (·.multiplicity)).getD 0
 
@@ -95,7 +88,7 @@ lemma getElem?_byPosition_of_positions {tally : Tally F} {key : String × Array 
 
 /-- Set the demand at `position` to a new nonzero multiplicity, keeping its message. -/
 def update (tally : Tally F) (position : ℕ) (demand : Demand F)
-    (hdemand : tally.byPosition[position]? = some demand) (multiplicity : F)
+    (hdemand : tally.byPosition[position]? = some demand) (multiplicity : ℤ)
     (hmultiplicity : multiplicity ≠ 0) : Tally F where
   byPosition := tally.byPosition.insert position { demand with multiplicity }
   positions := tally.positions
@@ -192,7 +185,7 @@ def append (tally : Tally F) (demand : Demand F) (hkey : tally.positions[demand.
     · exact Nat.lt_succ_of_lt (tally.lt_next _ h)
 
 /-- Add a multiplicity for a channel message, dropping its demand when it cancels to zero. -/
-def add (tally : Tally F) (channel : String) (message : Array F) (multiplicity : F) : Tally F :=
+def add (tally : Tally F) (channel : String) (message : Array F) (multiplicity : ℤ) : Tally F :=
   match hposition : tally.positions[(channel, message)]? with
   | some position =>
       match hdemand : tally.byPosition[position]? with
@@ -205,13 +198,20 @@ def add (tally : Tally F) (channel : String) (message : Array F) (multiplicity :
       if hmultiplicity : multiplicity = 0 then tally
       else tally.append { channel, message, multiplicity } hposition hmultiplicity
 
+/-- What an interaction adds to the net multiplicity of its message: its multiplicity read as a
+natural number, positive for a push and negative for a pull. -/
+def signedCount (interaction : Interaction F) : ℤ :=
+  match interaction.direction with
+  | .push => FiniteField.val interaction.mult
+  | .pull => -FiniteField.val interaction.mult
+
 def addInteractions (tally : Tally F) (interactions : List (Interaction F)) : Tally F :=
   interactions.foldl (fun tally interaction =>
-    tally.add interaction.channel.name interaction.msg interaction.mult) tally
+    tally.add interaction.channel.name interaction.msg (signedCount interaction)) tally
 
 def removeInteractions (tally : Tally F) (interactions : List (Interaction F)) : Tally F :=
   interactions.foldl (fun tally interaction =>
-    tally.add interaction.channel.name interaction.msg (-interaction.mult)) tally
+    tally.add interaction.channel.name interaction.msg (-signedCount interaction)) tally
 
 /-! ### Net multiplicities and demands -/
 
@@ -229,7 +229,7 @@ lemma net_eq_zero {tally : Tally F} {key : String × Array F} (h : tally.positio
   net_eq_zero Std.HashMap.getElem?_empty
 
 lemma net_update {tally : Tally F} {position : ℕ} {demand : Demand F}
-    (hdemand : tally.byPosition[position]? = some demand) {multiplicity : F}
+    (hdemand : tally.byPosition[position]? = some demand) {multiplicity : ℤ}
     (hmultiplicity : multiplicity ≠ 0) (key : String × Array F) :
     (tally.update position demand hdemand multiplicity hmultiplicity).net key =
       if key = demand.key then multiplicity else tally.net key := by
@@ -282,7 +282,7 @@ lemma net_append {tally : Tally F} {demand : Demand F}
           Std.TreeMap.getElem?_insert, Nat.ne_of_gt hlt]
 
 /-- Adding a multiplicity adds it to the net multiplicity of its message. -/
-theorem net_add (tally : Tally F) (channel : String) (message : Array F) (multiplicity : F)
+theorem net_add (tally : Tally F) (channel : String) (message : Array F) (multiplicity : ℤ)
     (key : String × Array F) :
     (tally.add channel message multiplicity).net key =
       tally.net key + if key = (channel, message) then multiplicity else 0 := by

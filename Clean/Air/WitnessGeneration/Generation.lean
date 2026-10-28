@@ -33,8 +33,8 @@ a `Cell` for every input variable:
 
 A multiplicity cell makes a component answer repeated demand for a message by counting it in one
 row: the generator finds the row whose interaction on the channel carries the message, and changes
-the cell by the amount that cancels the demand. Messages pulled more often than pushed make the cell
-positive, messages pushed more often than pulled make it negative.
+the cell by the amount that cancels the demand. A row that pushes its message counts the pulls it
+answers, and a row that pulls it counts the pushes.
 Preallocated components must have exactly one multiplicity cell. For demand components, behavior
 depends on whether you use a multiplicity cell in the input: if yes, the component gets one row per
 distinct message, like an addition chip; if not, it gets one row per occurrence, like a VM, where
@@ -53,16 +53,6 @@ channel, and each table's guard checks the opcode at the state's `pc`.
 namespace Air.Flat.WitnessGeneration
 
 variable {F : Type}
-
-/-- Whether a channel message was pushed or pulled. -/
-inductive Direction where
-  | pull
-  | push
-deriving Repr, DecidableEq, BEq
-
-def Direction.name : Direction → String
-  | .pull => "pull"
-  | .push => "push"
 
 /-- How generation fills one input cell of a component row. -/
 inductive Cell (F : Type) where
@@ -138,7 +128,7 @@ structure DemandMode (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType 
   channel : Channel F Message
   /-- Which unanswered messages create rows: `.push` means messages pushed more often than pulled,
   so the new row pulls them; `.pull` means the opposite. -/
-  trigger : Direction
+  trigger : Interaction.Direction
   /-- Which of these messages the component answers, by default all of them. Components sharing a
   channel, like the opcode tables of a VM, are told apart by guards. A guard is a witness program
   over the message, so it can read prover data and hints, like the opcode at the message's `pc`. -/
@@ -158,9 +148,9 @@ structure PreallocatedMode (F : Type) (Input : TypeMap) [ProvableType Input] whe
   /-- The channel on which the rows answer demand. -/
   channel : Channel F Message
   /-- Which unanswered messages the rows answer: `.pull` means messages pulled more often than
-  pushed, which the multiplicity cell counts positively, like the reads of a lookup table; `.push`
-  means the opposite, which it counts negatively. -/
-  trigger : Direction
+  pushed, like the reads of a lookup table, which a row pushing its message counts; `.push` means
+  the opposite. -/
+  trigger : Interaction.Direction
   /-- The number of rows, a power of two. -/
   height : UInt64
   /-- The input of row `i`. Its `let`-steps and fixed cells are computed from `i` alone; its witness

@@ -89,7 +89,7 @@ def proveAndVerify (values : List ℕ) : Except String Unit :=
 /-! ### Soundness -/
 
 /-- The range check proves its tables' specs: every query is a byte. -/
-theorem tableSoundness (height : UInt64) : (ensemble height).TableSoundness := by
+theorem tableSoundness (height : UInt64) : (ensemble height).TableSoundness .logUp := by
   apply Ensemble.tableSoundness_of_soundChannels
   refine ⟨[bytes.channel.toRaw], by simp [ensemble], ?_, ?_, ?_⟩
   · simp [circuit_norm, ensemble, queries, query, bytes]

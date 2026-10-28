@@ -5,6 +5,7 @@ use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::ops::Neg;
 
 use p3_field::{Field, PrimeField64};
 use p3_matrix::dense::RowMajorMatrix;
@@ -172,6 +173,18 @@ pub struct MultiplicityColumn {
     pub interaction: usize,
     /// The input column of the cell.
     pub column: usize,
+    /// The direction of the counted interaction.
+    pub direction: Direction,
+}
+
+impl MultiplicityColumn {
+    /// The multiplicity cell that cancels a net multiplicity `demand` on top of the value `cell`.
+    fn cancel<F: Field>(&self, cell: F, demand: i128) -> F {
+        match self.direction {
+            Direction::Push => cell - F::from_i128(demand),
+            Direction::Pull => cell + F::from_i128(demand),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -291,9 +304,19 @@ pub fn window_columns(window: Option<usize>) -> core::ops::Range<usize> {
 #[derive(Clone, Debug)]
 pub struct Interaction<F> {
     pub channel: &'static str,
+    pub direction: Direction,
     pub multiplicity: F,
     pub message: Vec<F>,
-    pub assume_guarantees: bool,
+}
+
+impl<F: Clone + Neg<Output = F>> Interaction<F> {
+    /// The multiplicity with sign: pushes count positively, pulls negatively.
+    pub fn signed_multiplicity(&self) -> F {
+        match self.direction {
+            Direction::Push => self.multiplicity.clone(),
+            Direction::Pull => -self.multiplicity.clone(),
+        }
+    }
 }
 
 /// A generated ensemble witness: the rows of each component, as in Clean, with the window cells of
@@ -379,35 +402,32 @@ pub trait Program<F: WitnessField> {
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>>;
 }
 
-/// A nonzero net multiplicity of one channel message.
+/// What an interaction adds to the net multiplicity of its message: its multiplicity read as a
+/// natural number, positive for a push and negative for a pull.
+fn signed_count<F: WitnessField>(interaction: &Interaction<F>) -> i128 {
+    let count = i128::from(interaction.multiplicity.canonical_u64());
+    match interaction.direction {
+        Direction::Push => count,
+        Direction::Pull => -count,
+    }
+}
+
+/// A nonzero net multiplicity of one channel message, pushes minus pulls.
 #[derive(Clone, Debug)]
 struct Demand<F> {
     channel: &'static str,
     message: Vec<F>,
-    multiplicity: F,
+    multiplicity: i128,
 }
 
 impl<F: WitnessField> Demand<F> {
-    /// The direction and size of a net multiplicity: pushes count positively and pulls negatively,
-    /// so values above half the field order are read as negative.
-    fn surplus(&self) -> (Direction, usize) {
-        let value = self.multiplicity.canonical_u64();
-        if 2 * u128::from(value) <= u128::from(F::ORDER_U64) {
-            (Direction::Push, value as usize)
-        } else {
-            (
-                Direction::Pull,
-                (-self.multiplicity).canonical_u64() as usize,
-            )
-        }
-    }
-
+    /// Whether the message was pushed or pulled more often.
     fn direction(&self) -> Direction {
-        self.surplus().0
-    }
-
-    fn count(&self) -> usize {
-        self.surplus().1
+        if self.multiplicity > 0 {
+            Direction::Push
+        } else {
+            Direction::Pull
+        }
     }
 }
 
@@ -416,7 +436,7 @@ type MessageKey<F> = (&'static str, Vec<F>);
 /// The nonzero net multiplicities of channel messages, in the order they became nonzero.
 struct Demands<F> {
     /// The net multiplicity of each message, with its position in `order`.
-    net: BTreeMap<MessageKey<F>, (F, u64)>,
+    net: BTreeMap<MessageKey<F>, (i128, u64)>,
     order: BTreeMap<u64, MessageKey<F>>,
     next_position: u64,
 }
@@ -435,14 +455,14 @@ impl<F: WitnessField> Demands<F> {
     }
 
     /// Add a multiplicity for a channel message, dropping the entry when it cancels to zero.
-    fn add(&mut self, channel: &'static str, message: Vec<F>, multiplicity: F) {
-        if multiplicity == F::ZERO {
+    fn add(&mut self, channel: &'static str, message: Vec<F>, multiplicity: i128) {
+        if multiplicity == 0 {
             return;
         }
         let key = (channel, message);
         if let Some((total, position)) = self.net.get_mut(&key) {
             *total += multiplicity;
-            if *total == F::ZERO {
+            if *total == 0 {
                 let position = *position;
                 self.net.remove(&key);
                 self.order.remove(&position);
@@ -456,21 +476,15 @@ impl<F: WitnessField> Demands<F> {
 
     fn add_interactions(&mut self, interactions: impl IntoIterator<Item = Interaction<F>>) {
         for interaction in interactions {
-            self.add(
-                interaction.channel,
-                interaction.message,
-                interaction.multiplicity,
-            );
+            let count = signed_count(&interaction);
+            self.add(interaction.channel, interaction.message, count);
         }
     }
 
     fn remove_interactions(&mut self, interactions: impl IntoIterator<Item = Interaction<F>>) {
         for interaction in interactions {
-            self.add(
-                interaction.channel,
-                interaction.message,
-                -interaction.multiplicity,
-            );
+            let count = signed_count(&interaction);
+            self.add(interaction.channel, interaction.message, -count);
         }
     }
 
@@ -587,7 +601,10 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<Row<F>, String> {
-    let input = (mode.input)(&demand.message, data, hint, -demand.multiplicity);
+    let count = mode.multiplicity.map_or(F::ZERO, |multiplicity| {
+        multiplicity.cancel(F::ZERO, demand.multiplicity)
+    });
+    let input = (mode.input)(&demand.message, data, hint, count);
     let values = P::complete_row(component, &input, data, hint)?;
     Ok(Row { input, values })
 }
@@ -612,7 +629,7 @@ fn increment_multiplicity<F: WitnessField, P: Program<F>>(
         )
     })?;
     let old_interactions = P::interactions(component, &row.values);
-    row.input[multiplicity.column] = current - demand.multiplicity;
+    row.input[multiplicity.column] = multiplicity.cancel(current, demand.multiplicity);
     row.values = P::complete_row(component, &row.input, data, hint)?;
     demands.remove_interactions(old_interactions);
     demands.add_interactions(P::interactions(component, &row.values));
@@ -628,28 +645,22 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
-    let new_rows = match &mode.multiplicity {
-        None => demand.count(),
-        Some(multiplicity) => match table.counted_row(demand) {
-            Some(row_index) => {
-                return increment_multiplicity::<F, P>(
-                    component,
-                    multiplicity,
-                    row_index,
-                    demand,
-                    table,
-                    demands,
-                    data,
-                    hint,
-                );
-            }
-            None => 1,
-        },
-    };
-    for _ in 0..new_rows {
-        let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
-        demands.add_interactions(table.push::<P>(component, row));
+    if let Some(multiplicity) = &mode.multiplicity {
+        if let Some(row_index) = table.counted_row(demand) {
+            return increment_multiplicity::<F, P>(
+                component,
+                multiplicity,
+                row_index,
+                demand,
+                table,
+                demands,
+                data,
+                hint,
+            );
+        }
     }
+    let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
+    demands.add_interactions(table.push::<P>(component, row));
     Ok(())
 }
 
