@@ -22,7 +22,7 @@ The side conditions are explicit: `bridgeable` (no legacy lookups, gated constra
 
 ## The keccak-air showcase
 
-Plonky3's Keccak-f AIR, `p3-keccak-air` at `a4982ec` (2633 columns, 3182 constraints, 24 rows per permutation), is the two-row Clean component `KeccakAir.component`, with exactly upstream's layout and constraint order, proved sound against Clean's Keccak-f specification `Specs.Keccak256.keccakPermutation`. CompStark proves it, and the proof is Plonky3's: from the Clean AIR and Clean's fast trace, CompStark's prover produces Plonky3's proof byte for byte.
+Plonky3's Keccak-f AIR, `p3-keccak-air` at `a4982ec` (2633 columns, 3182 constraints, 24 rows per permutation), is the two-row Clean component `KeccakAir.component`, with exactly upstream's layout and constraint order, proved sound against Clean's Keccak-f specification `Specs.Keccak256.keccakPermutation`. CompStark proves it, and the proof is Plonky3's: from the Clean AIR and Clean's packed trace, CompStark's prover produces Plonky3's proof byte for byte.
 
 ### The theorem
 
@@ -63,7 +63,7 @@ The theorems compose CompStark's knowledge soundness in the random-oracle model,
 
 - fingerprint: the fingerprint report of the Clean AIR (`toAir`), the values of its 3182 constraints at pseudorandom points and their Poseidon2 digest, is that of Plonky3's `KeccakAir` from its symbolic constraints (CompStark's `tests/data/fingerprint/keccak_4.json`);
 - quotient kernel: the program of the Clean AIR's constraints (CompStark's `Prog.compile`, the same on every trace length) is the code of the quotient kernel `KeccakShowcase/Kernel.lean`, so that CompStark's fast backend runs it: straight-line code CompStark's `#gen_group_chunks` generates from the program in 19 chunks of 2000 instructions, in four modules (`KeccakShowcase/Kernel/`) that build in parallel, each chunk checked equal to the program on CompStark's group machine by the kernel's `rfl`;
-- trace: Clean's fast trace (`KeccakAir.koalaBearTrace`) is Plonky3's `generate_trace_rows` on the example's inputs, row by row, padding included;
+- trace: Clean's packed trace (`KeccakAir.koalaBearKernel`) is Plonky3's `generate_trace_rows` on the example's inputs, row by row, padding included;
 - the example's configuration: CompStark's fast prover, from the Clean AIR and the Clean trace, produces Plonky3's proof byte for byte, and CompStark's verifier accepts Plonky3's proof;
 - the proven configuration of `keccak_soundness_ro` (the example's with `203` queries): Plonky3's `verify` accepts CompStark's proof and rejects it with an opened value changed, CompStark's verifier accepts Plonky3's proof, and the two proofs are byte for byte the same.
 
@@ -81,7 +81,7 @@ It builds `rust/` and the executable, runs `lake exe keccak_showcase kat` (CompS
 scripts/showcase.sh bench 16 3
 ```
 
-times trace generation, the proof, both together and the proof's verification on `2 ^ 16` rows, `lake exe keccak_showcase bench CONFIG 16 3` (Lean: Clean's fast trace, CompStark's fast prover and its fast verifier `verifyFast`, Plonky3's verifier by `verifyFast_eq`, with the AIR, the prover's backend and the verifying key made once, as Plonky3's side makes its configuration once) interleaved with `rust/target/release/keccak-showcase bench CONFIG 16 3` (Plonky3, built for the native CPU), both configurations, medians of 3, two rounds each, with each process's peak memory. `LEAN_NUM_THREADS=1 RAYON_NUM_THREADS=1 scripts/showcase.sh bench 16 1` runs both sides on one thread.
+times trace generation, the proof, both together and the proof's verification on `2 ^ 16` rows, `lake exe keccak_showcase bench CONFIG 16 3` (Lean: Clean's packed trace, CompStark's fast prover and its fast verifier `verifyFast`, Plonky3's verifier by `verifyFast_eq`, with the AIR, the prover's backend and the verifying key made once, as Plonky3's side makes its configuration once) interleaved with `rust/target/release/keccak-showcase bench CONFIG 16 3` (Plonky3, built for the native CPU), both configurations, medians of 3, two rounds each, with each process's peak memory. `LEAN_NUM_THREADS=1 RAYON_NUM_THREADS=1 scripts/showcase.sh bench 16 1` runs both sides on one thread.
 
 At CompStark `fd2cbab` (CompPoly `7596b8e`) on a Ryzen 7 3700X (8 cores, 16 threads), shared with other jobs, all threads, medians of 3 in each of three interleaved rounds, the median of the rounds. Total is trace generation and proof, end to end from the inputs, at the example configuration (87 queries):
 

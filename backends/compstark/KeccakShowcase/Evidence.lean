@@ -62,9 +62,9 @@ def params : String → IO Fri.Params
 
 /-- The Clean trace of the inputs, in row chunks of CompStark's fast prover. -/
 def trace (logN : ℕ) (inputs : Array KeccakAir.State) : Except String (Array ByteArray) :=
-  (KeccakAir.koalaBearKernel).trace
-    (KeccakAir.hints (p := KoalaBear.fieldSize) (FastField KoalaBear.fieldSize) inputs)
-    (KeccakAir.traceHeight inputs.size) (min logN 6)
+  KeccakAir.koalaBearKernel.trace
+    (KeccakAir.hints (p := KoalaBear.fieldSize) (Montgomery.Native32.FastField KoalaBear.fieldSize)
+      inputs) (KeccakAir.traceHeight inputs.size) (min logN 6)
 
 variable (I : CompStark.KoalaBear.Instances)
 
@@ -164,7 +164,7 @@ def kat : IO Unit := do
       fun x => toString (CompPoly.CanonicalNat.toNat x)
     unless " ".intercalate digest = line do
       throw (IO.userError s!"trace differs from Plonky3's at row {r}")
-  IO.println "trace: the 128 rows of Clean's fast trace of 5 permutations are Plonky3's"
+  IO.println "trace: the 128 rows of Clean's packed trace of 5 permutations are Plonky3's"
   let chunks ← IO.ofExcept (trace 6 (← readInputs s!"{data}/keccak_example_6_inputs.txt"))
   let theirsText ← IO.FS.readFile s!"{data}/keccak_example_6.json"
   let theirsProof ← parseProof theirsText
@@ -193,7 +193,7 @@ def check (logN : ℕ) (bin : String) : IO Unit := do
     let hex := String.ofList (Nat.toDigits 16 h.toNat)
     unless "".pushn '0' (16 - hex.length) ++ hex = theirs[i]! do
       throw (IO.userError s!"trace: row {i} differs from Plonky3's")
-  IO.println s!"trace: the {2 ^ logN} rows of Clean's fast trace of {inputs.size} permutations \
+  IO.println s!"trace: the {2 ^ logN} rows of Clean's packed trace of {inputs.size} permutations \
     are Plonky3's generate_trace_rows"
   -- Plonky3's example: the same proof.
   let exampleFile := s!"{dir}/example_{logN}.json"
