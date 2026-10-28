@@ -11,7 +11,7 @@ pub mod component_0 {
     pub const INPUT_WIDTH: usize = 4;
     pub const WIDTH: usize = 5;
 
-    pub const FIXED_WIDTH: usize = 0;
+    pub const FIXED_COLUMNS: &[usize] = &[];
     pub const FIXED_HEIGHT: usize = 0;
 
     pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
@@ -38,8 +38,6 @@ pub mod component_0 {
     pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
         vec![(row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64))))]
     }
-
-    pub const INTERACTIONS: usize = 3;
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![
@@ -73,19 +71,28 @@ pub mod component_0 {
         true
     }
 
+    pub fn input<F: WitnessField>(
+        row: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        multiplicity: F,
+    ) -> Vec<F> {
+        let row_index = 0u64;
+        let mut output: Vec<F> = Vec::with_capacity(4);
+        output.push(F::from_u64(1u64));
+        output.push(row.get(0).copied().unwrap_or(F::ZERO));
+        output.push(row.get(1).copied().unwrap_or(F::ZERO));
+        output.push(row.get(2).copied().unwrap_or(F::ZERO));
+        output
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "fibonacci",
             trigger: Direction::Push,
             guard: guard::<F>,
-            aggregation: Aggregation::PerOccurrence,
-            input: vec![
-                InputCell::Constant(F::from_u64(1u64)),
-                InputCell::Message(0),
-                InputCell::Message(1),
-                InputCell::Message(2),
-            ],
-            counters: vec![],
+            input: input::<F>,
+            multiplicity: None,
             padding: vec![
                 F::from_u64(0u64),
                 F::from_u64(0u64),
@@ -108,7 +115,7 @@ pub mod component_1 {
     pub const INPUT_WIDTH: usize = 4;
     pub const WIDTH: usize = 5;
 
-    pub const FIXED_WIDTH: usize = 0;
+    pub const FIXED_COLUMNS: &[usize] = &[];
     pub const FIXED_HEIGHT: usize = 0;
 
     pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
@@ -140,8 +147,6 @@ pub mod component_1 {
         ]
     }
 
-    pub const INTERACTIONS: usize = 2;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![
             Interaction {
@@ -164,22 +169,31 @@ pub mod component_1 {
         true
     }
 
+    pub fn input<F: WitnessField>(
+        row: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        multiplicity: F,
+    ) -> Vec<F> {
+        let row_index = 0u64;
+        let mut output: Vec<F> = Vec::with_capacity(4);
+        output.push(row.get(0).copied().unwrap_or(F::ZERO));
+        output.push(row.get(1).copied().unwrap_or(F::ZERO));
+        output.push(row.get(2).copied().unwrap_or(F::ZERO));
+        output.push(multiplicity);
+        output
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "add8",
             trigger: Direction::Pull,
             guard: guard::<F>,
-            aggregation: Aggregation::ByMessage,
-            input: vec![
-                InputCell::Message(0),
-                InputCell::Message(1),
-                InputCell::Message(2),
-            ],
-            counters: vec![Counter {
-                channel: "add8",
+            input: input::<F>,
+            multiplicity: Some(MultiplicityColumn {
                 interaction: 1,
                 column: 3,
-            }],
+            }),
             padding: vec![
                 F::from_u64(0u64),
                 F::from_u64(0u64),
@@ -202,7 +216,7 @@ pub mod component_2 {
     pub const INPUT_WIDTH: usize = 2;
     pub const WIDTH: usize = 2;
 
-    pub const FIXED_WIDTH: usize = 1;
+    pub const FIXED_COLUMNS: &[usize] = &[0];
     pub const FIXED_HEIGHT: usize = 256;
 
     pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> {
@@ -224,8 +238,6 @@ pub mod component_2 {
         vec![]
     }
 
-    pub const INTERACTIONS: usize = 1;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "bytes",
@@ -237,30 +249,28 @@ pub mod component_2 {
 
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
+            channel: "bytes",
+            trigger: Direction::Pull,
             rows: 256,
-            counters: vec![Counter {
-                channel: "bytes",
+            multiplicity: MultiplicityColumn {
                 interaction: 0,
                 column: 1,
-            }],
+            },
         }
     }
 
     pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> {
         let row: &[F] = &[];
-        let mut input = fixed_row::<F>(row_index);
-        let mut output: Vec<F> = Vec::with_capacity(0);
-        input.extend(output);
-        input.insert(1, F::ZERO);
-        input
+        let mut output: Vec<F> = Vec::with_capacity(2);
+        output.push(F::from_u64(row_index));
+        output.push(F::ZERO);
+        output
     }
 }
 
 #[allow(unused_variables, unused_parens)]
 pub mod verifier {
     use super::*;
-
-    pub const INTERACTIONS: usize = 2;
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![

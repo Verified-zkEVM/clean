@@ -388,11 +388,6 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
     exact h_assumptions
   completeness := by circuit_proof_start
 
-def memoryFixedColumns (memorySize : UInt64) : FixedColumns (F p) where
-  Row := field
-  height := memorySize
-  row i := pure i
-
 /-- Name of the hint table holding the prover's memory values, one per address. -/
 def memoryValuesKey : String := "memoryValues"
 
@@ -401,20 +396,22 @@ the reads of that address. -/
 def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) :
     Component (F p) where
   circuit := provideMemory
-  fixedColumns := some (memoryFixedColumns memorySize)
+  generation := .preallocated {
+    channel := memoryChannel
+    trigger := .pull
+    height := memorySize
+    input i := pure {
+      address := .fixed i.toField
+      value := .witness (.hintGet memoryValuesKey 1 i 0)
+      multiplicity := .multiplicity }
+  }
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
-    simp [memoryFixedColumns, Witgen.RowProgram.width, provideMemory, circuit_norm,
-      explicit_provable_type] at hfixed hdata
+    simp [circuit_norm, provideMemory, memoryChannel] at hfixed hdata ⊢
     obtain ⟨hi, rfl⟩ := hfixed
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
     obtain ⟨hsize, hentry⟩ := Array.getElem?_eq_some_iff.mp hdata
-    simp [provideMemory, memoryChannel, hval, hsize, hentry]
-  generation := .preallocated {
-    Row := field
-    row i := pure (.hintGet memoryValuesKey 1 i 0)
-    counters := [fun row => row.multiplicity]
-  }
+    simp [hval, hsize, hentry]
 
 def stateChannel (program : Array (F p))
     (initialState : State (F p)) : Channel (F p) State where
@@ -482,9 +479,8 @@ abbrev executionComponent (program : Array (F p)) (h_program : ValidProgram prog
   generation := .demand {
     channel := stateChannel program initialState
     trigger := .push
-    aggregation := .perOccurrence
-    input := [.const 1, .message 0, .message 1, .message 2]
-    padding := #[0, initialState.pc, initialState.ap, initialState.fp]
+    input state := pure { enabled := 1, state }
+    padding := { enabled := 0, state := initialState }
   }
 
 /-- The state in which a program has run to completion: `pc` points just past the program, where no
@@ -520,16 +516,16 @@ def soundEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : Val
     (h_memorySize : memorySize.toNat < p) (initialState : State (F p)) :=
   SoundEnsemble.empty (F p) fieldPair
   |>.addLookup (programLookup program h_program)
+  |>.addChannel memoryChannel.toRaw (by simp [circuit_norm, memoryChannel, programLookup])
   |>.addTable (memoryComponent memorySize h_memorySize)
     (by simp +instances [circuit_norm, memoryComponent, provideMemory])
     (by simp [circuit_norm, memoryComponent, provideMemory, programLookup, memoryChannel])
     (by simp [circuit_norm, memoryComponent, provideMemory, programLookup])
-  |>.addFinishedChannel memoryChannel.toRaw
+  |>.markFinished memoryChannel.toRaw
   |>.addVm (vm program h_program initialState)
-    (by simp +instances [circuit_norm, vm, programLookup, memoryComponent, provideMemory,
-      stateChannel, memoryChannel])
+    (by simp [circuit_norm, vm, programLookup, stateChannel, memoryChannel])
     (by simp +instances [circuit_norm, vm, executeStep, verifier])
-    (by simp [circuit_norm, vm, executeStep, verifier, stateChannel,
+    (by simp +instances [circuit_norm, vm, executeStep, verifier, stateChannel,
       programLookup, memoryChannel])
     (by simp [circuit_norm, vm, executeStep, memoryComponent, provideMemory, programLookup])
   |>.withProverInput (fields memorySize.toNat)
@@ -559,10 +555,9 @@ def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : Va
     (by simp [circuit_norm, soundEnsemble, vm, memoryComponent])
     (by
       rintro witness - spec
-      have hsize := witness.getRows_size_of_fixedColumns
+      have hsize := witness.getRows_size_of_preallocated
         (component := memoryComponent memorySize h_memorySize)
         (by simp [soundEnsemble, circuit_norm]) rfl
-      simp only [memoryComponent, provideMemory, memoryFixedColumns] at hsize
       simp only [circuit_norm, soundEnsemble, vm, verifier, stateChannel] at spec
       obtain ⟨steps, hsteps⟩ := spec
       refine ⟨ memory witness.data, ?_, steps, hsteps ⟩

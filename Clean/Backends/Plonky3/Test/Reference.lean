@@ -101,6 +101,8 @@ def cases : List Case := [
         (.append (.envRange (n := 4) 6)
           (.append (.bitsOf (n := 70) (cell 2))
             (.append (.bitsOf (n := 3) idx) (.lit #v[])))) },
+  -- an environment range whose indices overflow `u64` reads zeros
+  { width := 2, steps := [], output := .envRange (n := 2) 0xFFFFFFFFFFFFFFFF },
   -- `let` steps of both sorts, referenced from later steps and from the output
   { width := 5,
     steps := [

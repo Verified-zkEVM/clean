@@ -98,7 +98,6 @@ def programLookup (program : Program) : Lookup (F p) Instruction where
   name := "program"
   height := programHeight program
   row i := pure (programRow program i)
-  valid := by simp [circuit_norm, programRow]
   Contains
   | { pc, opcode, operand } => ∃ i < programHeight program, pc = i.toNat ∧
       match program[i.toNat]? with
@@ -160,13 +159,17 @@ def step (program : Program) (h_program : program.length < p) (initial : F p) (o
     GeneralFormalCircuit (F p) StepInput unit where
   name := opcode.name
   main input := do
+    -- enabled flag is boolean
     assertZero (input.enabled * (input.enabled - 1))
+    -- pull current state
     (stateChannel program initial).pullIf input.enabled { pc := input.pc, acc := input.acc }
+    -- look up current operand in the program
     let operand ← witness (programCell input.pc 2)
-    (programLookup program).channel.pullIf input.enabled
-      { pc := input.pc, opcode := .const (opcode.code : F p), operand }
-    (stateChannel program initial).pushIf input.enabled
-      { pc := input.pc + 1, acc := opcode.apply input.acc operand }
+    (programLookup program).channel.pullIf input.enabled ⟨ input.pc, .const opcode.code, operand ⟩
+    -- compute next accumulator (this statically branches the circuit layout based on the operand)
+    let acc := opcode.apply input.acc operand
+    -- push next state
+    (stateChannel program initial).pushIf input.enabled { pc := input.pc + 1, acc }
 
   exposedChannels
   | { enabled, pc, acc }, i₀ =>
@@ -204,18 +207,17 @@ def step (program : Program) (h_program : program.length < p) (initial : F p) (o
     circuit_proof_start [programCell, programCellIn]
     rcases h_assumptions with h | ⟨h, h_state, h_contains⟩ <;> simp_all
 
-/-- The table of `opcode`: one row per state whose `pc` holds `opcode`. Padding rows are
-disabled. -/
+/-- The table of `opcode`: one row per state whose `pc` holds `opcode`. -/
 abbrev stepComponent (program : Program) (h_program : program.length < p) (initial : F p)
     (opcode : Opcode) : Component (F p) where
   circuit := step program h_program initial opcode
+  -- witness generation: whenever someone pushes to the state channel,
   generation := .demand {
     channel := stateChannel program initial
     trigger := .push
+    -- we handle this message if the current program opcode matches the static opcode parameter
     guard state := programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
-    aggregation := .perOccurrence
-    input := [.const 1, .message 0, .message 1]
-    padding := #[0, 0, 0]
+    input | { pc, acc } => pure { enabled := 1, pc, acc }
   }
 
 /-- The public input `final` claims that running the program on the initial accumulator ends with
@@ -246,7 +248,7 @@ def soundEnsemble (program : Program) (h_program : program.length < p) (initial 
   |>.addVm (vm program h_program initial)
     (by simp +instances [circuit_norm, vm, programLookup, stateChannel])
     (by simp +instances [circuit_norm, vm, step, verifier])
-    (by simp [circuit_norm, vm, step, verifier, programLookup, stateChannel])
+    (by simp +instances [circuit_norm, vm, step, verifier, programLookup, stateChannel])
     (by simp [circuit_norm, vm, step, programLookup, Opcode.name])
 
 /-- The public statement: running the program on the initial accumulator ends with `final`. -/
@@ -256,10 +258,8 @@ def Spec (program : Program) (initial final : F p) : Prop :=
 def formalEnsemble (program : Program) (h_program : program.length < p) (initial : F p) :=
   (soundEnsemble program h_program initial).toFormal (fun _ => True) (Spec program initial)
     (by simp [circuit_norm, soundEnsemble, vm])
-    (by
-      rintro witness - spec
-      simp_all [circuit_norm, soundEnsemble, vm, verifier, stateChannel, Spec,
-        ZMod.val_cast_of_lt h_program])
+    (by simp [circuit_norm, soundEnsemble, vm, verifier, stateChannel, Spec,
+      ZMod.val_cast_of_lt h_program])
 
 /-- End-to-end soundness: a valid proof for the public input `final` shows that running the program
 on the initial accumulator ends with `final`. -/
