@@ -59,7 +59,7 @@ def ensemble : Ensemble (F p) unit where
   unique_names := by simp
   channels := []
   unique_channel_names := by simp
-  tables_channels := by simp [circuit_norm, component, circuit, main]
+  tables_channels := by simp [circuit_norm, component, circuit]
   verifier_channels := by simp [circuit_norm, Verifier.Program.empty]
   ProverInput := fields 6
   hintTables := [{ key := "seed", width := 1, offset := 0, rows := 6 }]
