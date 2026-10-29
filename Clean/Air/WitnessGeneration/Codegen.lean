@@ -37,8 +37,10 @@ structure Chain where
   words : Std.HashMap ℕ Expr := {}
   /-- The current rows buffer, of type `Rows n`. -/
   rows : Expr
-  /-- The binding of the elements `0` and `1`, as a `Vector K 2`. -/
-  bits : Expr := .bvar 0
+
+def u64 (v : UInt64) : Expr := toExpr v
+
+def u64Type : Expr := mkConst ``UInt64
 
 /-- A function of `K`: the constant `name` applied to `K` and the instances it takes, up to its
 first other argument. -/
@@ -127,10 +129,48 @@ def Operations.define (pre : Name) (K : Expr) : MetaM Operations := do
     ofWord := get `ofWord, ofSmallWord := get `ofSmallWord, tableElement := get `tableElement
     hintElement := get `hintElement, storeAt := get `storeAt, loadAt := get `loadAt }
 
-/-- The parameters, proofs and operations that the generated code refers to: the rows are a
-`Rows n` with room for the row's `width` elements from the element offsets `current` and
+/-- Add a closed value as a constant, which the program computes once, when it initializes the
+module, rather than at every row. -/
+def defineConstant (declName : Name) (type value : Expr) : MetaM Expr := do
+  let decl := Declaration.defnDecl <|
+    mkDefinitionValEx declName [] type value .opaque .safe []
+  addDecl decl
+  match Compiler.setInlineAttribute (← getEnv) declName .noinline with
+  | .ok env => setEnv env
+  | .error message => throwError message
+  compileDecl decl
+  return mkConst declName
+
+/-- The constant arrays of `table` instructions, as the words of their elements. -/
+partial def Instr.tables : Instr UInt64 → List (Array UInt64)
+  | .table _ _ values => [values]
+  | .loop _ _ _ _ body => body.toList.flatMap Instr.tables
+  | _ => []
+
+/-- The constants that the generated code reads: the elements `0` and `1` as a `Vector K 2`, and
+the arrays of `table` instructions, by their words. -/
+structure Constants where
+  bits : Expr
+  tables : Std.HashMap (Array UInt64) Expr
+
+/-- Add the constants of the code of a kernel over `K` under `pre`. -/
+def Constants.define (pre : Name) (K : Expr) (operations : Operations)
+    (code : Array (Instr UInt64)) : MetaM Constants := do
+  let element (word : UInt64) : Expr := mkApp operations.ofWord (u64 word)
+  let bits ← defineConstant (pre ++ `bits) (← mkAppM ``Vector #[K, mkNatLit 2])
+    (← mkAppM ``Vector.mk #[← mkArrayLit K [element 0, element 1], ← mkEqRefl (mkNatLit 2)])
+  let mut tables : Std.HashMap (Array UInt64) Expr := {}
+  for values in code.toList.flatMap Instr.tables do
+    unless tables.contains values do
+      let table ← defineConstant (pre ++ .mkSimple s!"table{tables.size}")
+        (mkApp (mkConst ``Array [0]) K) (← mkArrayLit K (values.toList.map element))
+      tables := tables.insert values table
+  return { bits, tables }
+
+/-- The parameters, proofs, operations and constants that the generated code refers to: the rows
+are a `Rows n` with room for the row's `width` elements from the element offsets `current` and
 `previous`. -/
-structure Target extends Operations where
+structure Target extends Operations, Constants where
   K : Expr
   hints : Expr
   rowsType : Expr
@@ -148,10 +188,6 @@ def bind (name : Name) (type value : Expr) : GenM Expr := do
   let s ← get
   set { s with bindings := s.bindings.push (name, type, value) }
   return .bvar s.bindings.size
-
-def u64 (v : UInt64) : Expr := toExpr v
-
-def u64Type : Expr := mkConst ``UInt64
 
 def field (r : ℕ) : GenM Expr := do
   match (← get).fields[r]? with
@@ -227,7 +263,8 @@ partial def instr (t : Target) : Instr UInt64 → GenM Unit
   | .ofSmallWord dest source => do setField t dest (mkApp t.ofSmallWord (← word source))
   | .inverse dest source => do setField t dest (mkApp t.inv (← field source))
   | .table dest index values => do
-      let values ← mkArrayLit t.K (values.toList.map (constant t))
+      let some values := t.tables[values]?
+        | throwError "witness_kernel: a table of the code is not among its constants"
       setField t dest (mkApp2 t.tableElement values (← word index))
   | .pick dest index sources => do
       let sources ← sources.mapM field
@@ -241,7 +278,7 @@ partial def instr (t : Target) : Instr UInt64 → GenM Unit
   | .storeBits column source shift count => do
       let value ← word source
       for k in [0:count] do
-        store t (column + k) (mkApp3 t.bitElement (← get).bits value (u64 (shift + k).toUInt64))
+        store t (column + k) (mkApp3 t.bitElement t.bits value (u64 (shift + k).toUInt64))
   | .copy column previousColumn count => do
       for k in [0:count] do
         let element ← bind `element t.K (← load t false (previousColumn + k))
@@ -254,8 +291,8 @@ partial def instr (t : Target) : Instr UInt64 → GenM Unit
 
 /-- The function `rows hints current previous row ↦ rows` running `code`: if the rows have room
 for the row and the previous row, the `let`-chain of `code`, else the rows unchanged. -/
-def rowFunction (K : Expr) (operations : Operations) (kernel : Kernel UInt64)
-    (code : Array (Instr UInt64)) : MetaM Expr := do
+def rowFunction (K : Expr) (operations : Operations) (constants : Constants)
+    (kernel : Kernel UInt64) (code : Array (Instr UInt64)) : MetaM Expr := do
   let byteArray := mkConst ``ByteArray
   let room ← atField K ``Room
   withLocalDeclD `rows byteArray fun rows =>
@@ -273,7 +310,7 @@ def rowFunction (K : Expr) (operations : Operations) (kernel : Kernel UInt64)
     let body ← withLocalDeclD `room condition fun hroom => do
       let rowsType := mkApp (mkConst ``Rows) n
       let t : Target := {
-        operations with
+        operations, constants with
         K, hints, rowsType, n, width := kernel.width
         current := offset currentElements
         currentRoom := mkApp3 (mkConst ``And.left) (roomAt (offset currentElements))
@@ -287,10 +324,6 @@ def rowFunction (K : Expr) (operations : Operations) (kernel : Kernel UInt64)
         modify fun s => { s with words := s.words.insert kernel.index row }
         for (r, v) in kernel.wordConstants do
           modify fun s => { s with words := s.words.insert r (u64 v) }
-        let bits ← mkAppM ``Vector.mk #[← mkArrayLit K [constant t 0, constant t 1],
-          ← mkEqRefl (mkNatLit 2)]
-        let bits ← bind `bits (← mkAppM ``Vector #[K, mkNatLit 2]) bits
-        modify fun s => { s with bits }
         for (r, v) in kernel.fieldConstants do setField t r (constant t v)
         for i in code do instr t i
       let ((), chain) ← generate.run { rows := initial }
@@ -343,8 +376,9 @@ elab "witness_kernel " name:ident " over " K:term " := " kernel:term : command =
       | .ok kernel => pure kernel
       | .error message => throwError "witness_kernel: {message}"
     let operations ← Operations.define (name ++ `operations) K
-    let first ← rowFunction K operations kernel kernel.first
-    let next ← rowFunction K operations kernel kernel.next
+    let constants ← Constants.define name K operations (kernel.first ++ kernel.next)
+    let first ← rowFunction K operations constants kernel kernel.first
+    let next ← rowFunction K operations constants kernel kernel.next
     return (K, first, next, kernel.width, kernel.length)
   let byteArray := mkConst ``ByteArray
   let type := mkForall `rows .default byteArray <| mkForall `hints .default
