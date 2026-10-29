@@ -108,6 +108,7 @@ def addLookup (soundEns : SoundEnsemble F PublicIO balance) (lookup : Lookup F R
         exact List.mem_map.mpr ⟨_, soundEns.finished_subset h_finished, rfl⟩)
       fresh
     |>.markFinished lookup.channel.toRaw (List.mem_cons_self ..)
+      fun h => fresh_channel (List.mem_map.mpr ⟨_, soundEns.closed_subset h, rfl⟩)
 
 variable {soundEns : SoundEnsemble F PublicIO balance} {lookup : Lookup F Row}
   {fresh fresh_channel}
@@ -118,9 +119,11 @@ variable {soundEns : SoundEnsemble F PublicIO balance} {lookup : Lookup F Row}
 @[circuit_norm] lemma addLookup_channels :
     (soundEns.addLookup lookup fresh fresh_channel).channels =
       lookup.channel.toRaw :: soundEns.channels := rfl
-@[circuit_norm] lemma addLookup_finished :
-    (soundEns.addLookup lookup fresh fresh_channel).finished =
-      lookup.channel.toRaw :: soundEns.finished := rfl
+@[circuit_norm] lemma addLookup_ordered :
+    (soundEns.addLookup lookup fresh fresh_channel).ordered =
+      lookup.channel.toRaw :: soundEns.ordered := rfl
+@[circuit_norm] lemma addLookup_closed :
+    (soundEns.addLookup lookup fresh fresh_channel).closed = soundEns.closed := rfl
 @[circuit_norm] lemma addLookup_verifier :
     (soundEns.addLookup lookup fresh fresh_channel).verifier = soundEns.verifier := rfl
 
