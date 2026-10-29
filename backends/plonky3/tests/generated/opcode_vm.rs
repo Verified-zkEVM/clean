@@ -299,16 +299,18 @@ pub mod component_2 {
         }]
     }
 
+    pub fn row_of<F: WitnessField>(row: &[F], hint: &WitnessData<F>) -> u64 {
+        let row_index = 0u64;
+        (row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
             channel: "program",
             trigger: Direction::Pull,
             rows: 16,
-            multiplicity: MultiplicityColumn {
-                interaction: 0,
-                column: 3,
-                direction: Direction::Push,
-            },
+            row_of: row_of::<F>,
+            multiplicity: 3,
         }
     }
 
