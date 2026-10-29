@@ -37,4 +37,4 @@ require "leanprover-community" / "mathlib" @ git "v4.35.0"
 -- The CompPoly commit CompStark pins (fork branch `koalabear-fast-ext5`), so that a package can
 -- require both Clean and CompStark.
 require CompPoly from git "https://github.com/mitschabaude-bot/CompPoly.git" @
-    "7596b8e735e693547fa4e86308f23e2ced15ef78"
+    "6de4e90026a12ea10a2a24f53f332aed3e877961"
