@@ -304,7 +304,7 @@ lemma drop_take_cycle_same_endpoints (path : List S) (x : S) (n m : Fin path.len
   have h_head : ((path.drop n.val).take (m.val - n.val + 1)).head? = some x := by
     rw [List.head?_take]
     have h_take_nonzero : m.val - n.val + 1 ≠ 0 := by omega
-    simp only [if_neg h_take_nonzero]
+    simp only [ite_eq_right h_take_nonzero]
     rw [List.head?_drop]
     have h_n_in_bounds : n.val < path.length := h_n_lt_len
     aesop

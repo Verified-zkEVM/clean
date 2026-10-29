@@ -80,7 +80,7 @@ theorem everyRowTwoRowsInduction' {P : (N : ℕ+) → TraceOfLength F S N → Pr
     intro N curr next rest h_rest h_curr
     exact more N curr next rest h_curr) N trace
   simp only [P'] at goal'
-  rw [dif_neg N.pos.ne'] at goal'
+  rw [dite_eq_right N.pos.ne'] at goal'
   exact goal'
 
 theorem two_row_induction {prop : Row F S → ℕ → Prop}

@@ -30,5 +30,8 @@ lean_exe export_witness_ir_reference_rust where
 lean_exe export_differential_rust where
   root := `Clean.Backends.Plonky3.Test.Differential
 
-require "leanprover-community" / "mathlib" @ git "v4.33.1"
-require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git"@"0804bcc83cd98f5f3e933adc6783aa99dacdedc1"
+require "leanprover-community" / "mathlib" @ git "v4.35.0"
+-- The CompPoly commit CompStark pins (fork branch `koalabear-fast-ext5`), so that a package can
+-- require both Clean and CompStark.
+require CompPoly from git "https://github.com/mitschabaude-bot/CompPoly.git" @
+    "6de4e90026a12ea10a2a24f53f332aed3e877961"

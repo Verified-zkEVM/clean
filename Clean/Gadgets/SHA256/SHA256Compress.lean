@@ -195,7 +195,7 @@ private lemma sha256Compress_eq_valStateAfterRound
   | zero => simp [valStateAfterRound, Fin.foldl_zero]
   | succ k ih =>
     rw [Fin.foldl_succ_last, valStateAfterRound]
-    rw [dif_pos (by omega : k < 64)]
+    rw [dite_eq_left (by omega : k < 64)]
     have hk' : k ≤ 64 := by omega
     specialize ih hk'
     rw [show Fin.foldl k
@@ -265,7 +265,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
         rw [getElem_eval_vector] at h
         exact h, h2, h3⟩
       obtain ⟨h_value, h_norm⟩ := h_spec
-      rw [stateVar, valStateAfterRound, dif_pos hk'']
+      rw [stateVar, valStateAfterRound, dite_eq_left hk'']
       refine ⟨?_, ?_⟩
       · -- Value equality: h_value gives the LHS = sha256Round (...)
         rw [h_value, ih_val,
