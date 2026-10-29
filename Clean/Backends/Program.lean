@@ -161,15 +161,17 @@ structure DemandProgram (F : Type) [FiniteField F] where
   guard : Witgen.BExpr F
   /-- The input of a new row, reading the message cells. -/
   input : InputProgram F
-  multiplicity : Option MultiplicityColumn
+  /-- The input column of the multiplicity cell. -/
+  multiplicity : Option ℕ
   padding : Array F
 
 /-- How the rows of one component are generated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
   | demand (mode : DemandProgram F)
-  /-- `rows` rows, whose inputs are `input` at the row index, with multiplicity 0. -/
+  /-- `rows` rows, whose inputs are `input` at the row index, with multiplicity 0 in input column
+  `multiplicity`. `rowOf` reads the message cells. -/
   | preallocated (channel : String) (trigger : Interaction.Direction) (rows : UInt64) (input : InputProgram F)
-      (multiplicity : MultiplicityColumn)
+      (rowOf : Witgen.U64Expr F) (multiplicity : ℕ)
   /-- `rows` rows, whose inputs are `input` at the row index, which answer no demand. -/
   | standalone (rows : UInt64) (input : InputProgram F)
 
@@ -192,6 +194,7 @@ inductive LoweringError where
   | malformedWitnessLocals (component operation : ℕ)
   | malformedInputProgram (component : ℕ)
   | malformedGuard (component : ℕ)
+  | malformedRowOf (component : ℕ)
   | legacyLookup (component : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
@@ -211,6 +214,8 @@ instance : ToString LoweringError where
         s!"component {component} input program has an invalid local reference"
     | .malformedGuard component =>
         s!"component {component} guard has an invalid local reference"
+    | .malformedRowOf component =>
+        s!"component {component} row index program has an invalid local reference"
     | .legacyLookup component =>
         s!"component {component} contains a legacy lookup; extraction supports channels only"
     | .componentVariable component index width =>
@@ -383,8 +388,8 @@ def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-def lowerGeneration (index : ℕ) (component : Component F)
-    (multiplicity : Option MultiplicityColumn) : Except LoweringError (ModeProgram F) := do
+def lowerGeneration (index : ℕ) (component : Component F) (multiplicity : Option ℕ) :
+    Except LoweringError (ModeProgram F) := do
   let (cells, steps) := component.generation.cells
   let input ← lowerInputProgram index cells steps
   match component.generation, multiplicity with
@@ -397,9 +402,12 @@ def lowerGeneration (index : ℕ) (component : Component F)
         channel := channel.name, trigger, guard, input, multiplicity
         padding := (toElements padding).toArray }
   | .preallocated mode, some multiplicity =>
-      return .preallocated mode.channel.name mode.trigger mode.height input multiplicity
+      unless u64exprWellFormed [] mode.rowIndex do
+        throw (.malformedRowOf index)
+      return .preallocated mode.channel.name mode.trigger mode.height input mode.rowIndex
+        multiplicity
   | .preallocated _, none =>
-      throw (.validation (.multiplicity component.circuit.name (.cells 0)))
+      throw (.validation (.multiplicityCells component.circuit.name 0))
   | .standalone mode, _ => return .standalone mode.height input
   | .segments _, _ => throw (.segmentGeneration index)
 

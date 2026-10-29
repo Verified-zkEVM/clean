@@ -116,13 +116,13 @@ theorem balanceOf_eq_sum (L : List (Interaction F)) (msg : Array F) :
   rw [balanceOf, sum_filter_eq]
   simp only [decide_eq_true_eq]
 
-theorem sum_map_eq_neg {α : Type*} (g : α → K) (h : α → F) :
-    ∀ l : List α, (∀ a ∈ l, g a = -e (h a)) → (l.map g).sum = -e ((l.map h).sum)
+theorem sum_map_eq {α : Type*} (g : α → K) (h : α → F) :
+    ∀ l : List α, (∀ a ∈ l, g a = e (h a)) → (l.map g).sum = e ((l.map h).sum)
   | [], _ => by simp
   | a :: l, hl => by
     rw [List.map_cons, List.sum_cons, hl a List.mem_cons_self,
-      sum_map_eq_neg g h l fun b hb => hl b (List.mem_cons_of_mem _ hb), List.map_cons,
-      List.sum_cons, map_add, neg_add]
+      sum_map_eq g h l fun b hb => hl b (List.mem_cons_of_mem _ hb), List.map_cons,
+      List.sum_cons, map_add]
 
 /-! ### One row's balance -/
 
@@ -166,7 +166,7 @@ theorem eval_toExpr_interaction {component : Component F} (hc : bridgeable compo
   exact eval_toExpr_publicValues e component _ logN trace publicValues [] r x
 
 /-- **One row's balance.** On a row of a bridgeable component's AIR, the multiplicities of the
-tuples with the values `msg` on the bus of a channel sum to the negated multiplicities of the
+tuples with the values `msg` on the bus of a channel sum to the signed multiplicities of the
 row's interactions with `msg` on the channel, given bus numbers `ids` that name the buses through
 `N`. -/
 theorem rowBalance {component : Component F} (hc : bridgeable component = true)
@@ -189,7 +189,7 @@ theorem rowBalance {component : Component F} (hc : bridgeable component = true)
           t.2.eval (Lookup.generationRow (toAir e component logN) logN trace publicValues r))).map
       fun (x : (ℕ × List K) × K) =>
         if x.1 = (N channel.name, msg.toList.map e) then x.2 else 0).sum =
-      -e (balanceOf (component.operations.interactionValuesWith channel
+      e (balanceOf (component.operations.interactionValuesWith channel
         (Environment.fromArray (toRow e component logN trace r) data)) msg) := by
   set A := toAir e component logN
   set gen := Lookup.generationRow A logN trace publicValues r
@@ -246,7 +246,7 @@ theorem rowBalance {component : Component F} (hc : bridgeable component = true)
   rw [sum_filter_eq, Operations.interactionValuesWith_eq_map,
     Operations.interactionsWith, balanceOf_eq_sum, List.map_map, sum_filter_eq,
     Component.interactions_eq]
-  refine sum_map_eq_neg e _ _ _ fun a ha => ?_
+  refine sum_map_eq e _ _ _ fun a ha => ?_
   simp only [Function.comp_apply, toLookup, beq_iff_eq, Option.some.injEq, decide_eq_true_eq]
   by_cases hca : a.channel = channel
   · simp only [hca, decide_true, ↓reduceIte, f]
@@ -265,16 +265,15 @@ theorem rowBalance {component : Component F} (hc : bridgeable component = true)
     by_cases hm : (AbstractInteraction.eval env a).msg = msg
     · simp only [hiff.mpr hm, hm, ↓reduceIte]
       cases hdir : a.direction
+      · show (toExpr e component a.mult).eval gen = e (AbstractInteraction.eval env a).signedMult
+        simp only [Interaction.signedMult, AbstractInteraction.eval, hdir, hmult]
       · show (0 : K) - (toExpr e component a.mult).eval gen =
-          -e (AbstractInteraction.eval env a).signedMult
-        simp only [Interaction.signedMult, AbstractInteraction.eval, hdir, hmult, zero_sub]
-      · show (toExpr e component a.mult).eval gen =
-          -e (AbstractInteraction.eval env a).signedMult
-        simp only [Interaction.signedMult, AbstractInteraction.eval, hdir, hmult, map_neg,
-          neg_neg]
-    · simp only [mt hiff.mp hm, hm, ↓reduceIte, map_zero, neg_zero]
+          e (AbstractInteraction.eval env a).signedMult
+        simp only [Interaction.signedMult, AbstractInteraction.eval, hdir, hmult, zero_sub,
+          map_neg]
+    · simp only [mt hiff.mp hm, hm, ↓reduceIte, map_zero]
   · have hname : ¬ a.channel.name = channel.name := fun h => hca (hchannel a ha h)
-    simp only [hca, hname, decide_false, Bool.false_eq_true, ↓reduceIte, map_zero, neg_zero]
+    simp only [hca, hname, decide_false, Bool.false_eq_true, ↓reduceIte, map_zero]
 
 /-! ### The witness -/
 
@@ -420,11 +419,11 @@ theorem balanced_toWitness (h : ProvesEnsemble e S ens) (hb : EnsembleBridgeable
     rw [Sound.Batch.sum_filter_key, Sound.Batch.messages_eq, sum_map_flatMap] at hbal
     rw [balanceOf_flatMap]
     apply e.injective
-    rw [map_zero, ← neg_eq_zero, ← hbal]
+    rw [map_zero, ← hbal]
     symm
-    refine sum_map_eq_neg e _ _ _ fun i _ => ?_
+    refine sum_map_eq e _ _ _ fun i _ => ?_
     rw [balanceOf_flatMap, Sound.Batch.instanceMessages, sum_map_flatMap]
-    refine sum_map_eq_neg e _ _ _ fun r _ => ?_
+    refine sum_map_eq e _ _ _ fun r _ => ?_
     have hmem : ∀ x ∈ (S.lookups i).zip (Sound.Batch.busNumbers S i),
         x ∈ ((List.ofFn S.lookups)[i.val]'(by simp)).zip
           ((Lookup.busIds (List.ofFn S.lookups)).getD i []) := by

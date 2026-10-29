@@ -13,7 +13,7 @@ input reads the next row, and the selectors are Plonky3's. Every constraint is l
 `Backends.gateConstraint` and becomes its body times its gate's selector, as Plonky3's
 `when_first_row`, `when_last_row` and `when_transition` do; Clean's subtraction `x + (-1) * z`
 becomes a subtraction (`addExpr`). Every interaction becomes a global lookup on the bus named
-after its channel, with the signed multiplicity negated and weight `0`, as the Plonky3 backend registers
+after its channel, with the signed multiplicity and weight `0`, as the Plonky3 backend registers
 it.
 
 The constraints are over a Clean field `F` and the AIR over a CompStark base field `K`; a ring
@@ -138,16 +138,15 @@ def gatedConstraints (component : Component F) : List (GatedConstraint F) :=
   component.rowOperations.constraints.filterMap
     (gateConstraint (component.window.map (·.rowWidth)))
 
-/-- An interaction as a global lookup on the bus of its channel's name, one tuple with the
-negated signed multiplicity, a provided entry of weight `0`: a push counts `-mult`, a pull
-`mult`. -/
+/-- An interaction as a global lookup on the bus of its channel's name, one tuple with the signed
+multiplicity, a provided entry of weight `0`: a push counts `mult`, a pull `-mult`. -/
 def toLookup (component : Component F) (interaction : AbstractInteraction F) :
     CompStark.Stark.Lookup K :=
   ⟨some interaction.channel.name,
     [(interaction.msg.toList.map (toExpr e component),
       .provided (match interaction.direction with
-        | .push => .const 0 - toExpr e component interaction.mult
-        | .pull => toExpr e component interaction.mult))]⟩
+        | .push => toExpr e component interaction.mult
+        | .pull => .const 0 - toExpr e component interaction.mult))]⟩
 
 /-- The values of the fixed columns on row `i`: the fixed cells of the generation, evaluated at the
 row index. -/
