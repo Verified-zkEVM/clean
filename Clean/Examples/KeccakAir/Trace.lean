@@ -27,10 +27,16 @@ def preimageLimbs (input : State) : List ℕ :=
 `preimageLimbs` per input. Elements past the inputs read as zero, the limbs of the zero state that
 pads the trace. -/
 def proverInput {K : Type} [FiniteField K] [WordField K] [CompPoly.PackedRepr K]
-    (inputs : Array State) : ByteArray :=
-  CompPoly.PackedRepr.encode (inputs.flatMap fun input =>
-    Array.ofFn fun (j : Fin 100) =>
-      (WordField.ofSmallWord ((input[j.val / 4]! >>> (16 * (j.val % 4)).toUInt64) &&& 0xffff) : K))
+    (inputs : Array State) : ByteArray := Id.run do
+  let mut elements := ByteArray.zeros (CompPoly.PackedRepr.width K * (100 * inputs.size))
+  for h : k in [0:inputs.size] do
+    let input := inputs[k]
+    for i in [0:25] do
+      for l in [0:4] do
+        let limb := (input[i]! >>> (16 * l).toUInt64) &&& 0xffff
+        elements := WitnessGeneration.storeElement elements (100 * k + 4 * i + l)
+          (WordField.ofSmallWord limb : K)
+  return elements
 
 variable {p : ℕ} [Fact p.Prime] [Fact (2 ^ 16 < p)]
 
