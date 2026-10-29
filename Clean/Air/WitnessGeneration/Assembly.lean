@@ -8,7 +8,8 @@ public import Clean.Air.WitnessGeneration.State
 # Assembling generated tables
 
 Turns the generated rows of every component into the tables of an ensemble witness, checking the
-facts that the witness type requires: row widths, table heights and fixed cells.
+facts that the witness type requires: row widths, table heights, fixed cells and windows. The
+window cells of two-row components are filled in here, once the rows are final.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -26,6 +27,21 @@ lemma AssembledTables.map_component {components : List (Component F)}
   List.ext_getElem (by simp [assembled.same_length]) fun i _ hi => by
     simpa using (assembled.same_circuits i hi).symm
 
+/-- The rows of a two-row component, with their window cells filled from the next rows and the
+selectors. -/
+def fillWindows (component : Component F) (rows : List (Array F)) : List (Array F) :=
+  match component.window with
+  | none => rows
+  | some layout =>
+      let width := layout.rowWidth
+      rows.zipIdx.map fun (row, i) =>
+        let next := rows[(i + 1) % rows.length]?.getD #[]
+        let last := i + 1 = rows.length
+        let selectors : Array F :=
+          #[if i = 0 then 1 else 0, if last then 1 else 0, if last then 0 else 1]
+        row.extract 0 width ++ next.extract 0 width ++ selectors ++
+          row.extract (2 * width + 3) row.size
+
 def assembleTables :
     (components : List (Component F)) → List (ComponentState F) →
       Except GenerationError (AssembledTables components)
@@ -35,35 +51,39 @@ def assembleTables :
       same_circuits := by simp
     }
   | component :: components, state :: states => do
-      let rows := state.rows.toList.map (·.values)
+      let rows := fillWindows component (state.rows.toList.map (·.values))
       if hlength : rows.length > UInt64.size then
         throw (.assembly s!"generated table for component '{component.circuit.name}' has more \
           than 2^64 rows")
       else if h : ∀ row ∈ rows, row.size = component.width then
-        if hfixed : component.FixedRowsMatch rows then do
-          let table : Table F := {
-            component
-            table := rows
-            -- the table's own rows, replaced by the ensemble's derived data in `generateValid`
-            data name n :=
-              if name = component.circuit.name then (rows.map (rowPrefix n)).toArray else #[]
-            uniform_width := h
-            length_le := Nat.le_of_not_lt hlength
-            fixed_rows_match := hfixed
-            data_consistent := by simp
-          }
-          let rest ← assembleTables components states
-          return {
-            tables := table :: rest.tables
-            same_length := by simp [rest.same_length]
-            same_circuits := by
-              intro index hindex
-              cases index with
-              | zero => rfl
-              | succ index =>
-                  simp only [List.getElem_cons_succ]
-                  exact rest.same_circuits index (by simp at hindex; omega)
-          }
+        if hfixed : component.FixedRowsMatch rows then
+          if hwindows : component.WindowsMatch rows then do
+            let table : Table F := {
+              component
+              table := rows
+              -- the table's own rows, replaced by the ensemble's derived data in `generateValid`
+              data name n :=
+                if name = component.circuit.name then (rows.map (rowPrefix n)).toArray else #[]
+              uniform_width := h
+              length_le := Nat.le_of_not_lt hlength
+              fixed_rows_match := hfixed
+              windows_match := hwindows
+              data_consistent := by simp
+            }
+            let rest ← assembleTables components states
+            return {
+              tables := table :: rest.tables
+              same_length := by simp [rest.same_length]
+              same_circuits := by
+                intro index hindex
+                cases index with
+                | zero => rfl
+                | succ index =>
+                    simp only [List.getElem_cons_succ]
+                    exact rest.same_circuits index (by simp at hindex; omega)
+            }
+          else
+            throw (.assembly "generated table does not match its windows")
         else
           throw (.assembly "generated table does not match its fixed columns")
       else

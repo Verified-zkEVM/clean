@@ -19,7 +19,9 @@ mod expected {
     include!("generated/differential.rs");
 }
 
-use clean_backend::witness_generation::{EnsembleWitness, Interaction, WitnessGenerationError};
+use clean_backend::witness_generation::{
+    EnsembleWitness, Gate, Interaction, WitnessGenerationError,
+};
 use clean_backend::GeneratedAirSpec;
 use expected::{ExpectedEnsemble, ExpectedInteraction};
 use p3_baby_bear::BabyBear;
@@ -64,6 +66,24 @@ fn assert_interactions(
     }
 }
 
+/// The printed constraints of a component on a complete row, each the selector of its gate times
+/// its body, as Lean evaluates the constraint before lowering splits it.
+fn gated_constraints<P: GeneratedAirSpec>(component: usize, row: &[BabyBear]) -> Vec<BabyBear> {
+    let selector = |offset: usize| {
+        let width = P::WINDOWS[component].expect("a gated constraint of a single-row component");
+        row[2 * width + offset]
+    };
+    P::constraints(component, row)
+        .into_iter()
+        .map(|constraint| match constraint.gate {
+            Gate::EveryRow => constraint.value,
+            Gate::FirstRow => selector(0) * constraint.value,
+            Gate::LastRow => selector(1) * constraint.value,
+            Gate::Transition => selector(2) * constraint.value,
+        })
+        .collect()
+}
+
 /// Compare the printed AIR of an ensemble with Lean's values: constraints and interactions of every
 /// component on pseudo-random rows, fixed rows, and verifier interactions on pseudo-random public
 /// inputs.
@@ -74,7 +94,7 @@ fn check_air<P: GeneratedAirSpec>(expected: &ExpectedEnsemble) {
             let context = format!("component {component}, row {index}");
             let row = field(row);
             assert_eq!(
-                canonical(&P::constraints(component, &row)),
+                canonical(&gated_constraints::<P>(component, &row)),
                 expected.constraints[index],
                 "{context}: constraints"
             );

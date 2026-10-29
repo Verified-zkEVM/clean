@@ -43,6 +43,9 @@ inductive ValidationError where
   | unknownDataRead (component : String) (reader : DataReader) (key : String)
   | dataReadWidth (component : String) (reader : DataReader) (key : String) (expected actual : ℕ)
   | unstableDataRead (component : String) (reader : DataReader) (key : String) (column : ℕ)
+  | windowInputCell (component : String) (column : ℕ)
+  | windowWitnessRead (component : String) (operation : ℕ)
+  | windowInteractionRead (component : String) (interaction : ℕ)
 deriving Repr, DecidableEq
 
 instance : ToString ValidationError where
@@ -66,6 +69,12 @@ instance : ToString ValidationError where
     | .unstableDataRead component reader key column =>
         s!"component '{component}' {reader} reads cell {column} of '{key}', which generation \
           changes"
+    | .windowInputCell component column =>
+        s!"component '{component}' input cell {column} is a window cell, but not a witness cell"
+    | .windowWitnessRead component operation =>
+        s!"component '{component}' witness operation {operation} reads a window cell"
+    | .windowInteractionRead component interaction =>
+        s!"component '{component}' interaction {interaction} reads a window cell"
 
 /-! ### Prover-data reads
 
@@ -130,6 +139,66 @@ def stepDataReads : Witgen.Step F → List DataRead
 def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
   | _, .native _ => []
   | _, .ir steps output => steps.flatMap stepDataReads ++ vexprDataReads output
+
+/-! ### Cell reads -/
+
+/-- The cells an expression reads. -/
+def expressionCells : Expression F → List ℕ
+  | .var cell => [cell.index]
+  | .const _ => []
+  | .add left right | .mul left right => expressionCells left ++ expressionCells right
+
+mutual
+
+def fexprCells : Witgen.FExpr F → List ℕ
+  | .expr expression => expressionCells expression
+  | .const _ | .localVar _ => []
+  | .add left right | .mul left right => fexprCells left ++ fexprCells right
+  | .inv value => fexprCells value
+  | .ofU64 value => u64exprCells value
+  | .ite condition thenValue elseValue =>
+      bexprCells condition ++ fexprCells thenValue ++ fexprCells elseValue
+  | .listGet values index => fexprListCells values ++ u64exprCells index
+  | .dataGet _ _ row _ | .hintGet _ _ row _ => u64exprCells row
+
+def fexprListCells : List (Witgen.FExpr F) → List ℕ
+  | [] => []
+  | value :: values => fexprCells value ++ fexprListCells values
+
+def u64exprCells : Witgen.U64Expr F → List ℕ
+  | .const _ | .idx | .localVar _ => []
+  | .val value => fexprCells value
+  | .add left right | .mul left right | .div left right | .mod left right |
+      .land left right | .lor left right | .lxor left right |
+      .shiftL left right | .shiftR left right => u64exprCells left ++ u64exprCells right
+  | .ite condition thenValue elseValue =>
+      bexprCells condition ++ u64exprCells thenValue ++ u64exprCells elseValue
+
+def bexprCells : Witgen.BExpr F → List ℕ
+  | .true | .false => []
+  | .feq left right | .flt left right => fexprCells left ++ fexprCells right
+  | .neq left right | .lt left right => u64exprCells left ++ u64exprCells right
+  | .bit value _ => fexprCells value
+  | .not condition => bexprCells condition
+  | .and left right => bexprCells left ++ bexprCells right
+
+end
+
+def vexprCells : {n : ℕ} → Witgen.VExpr F n → List ℕ
+  | _, .lit values => values.toList.flatMap fexprCells
+  | _, .mapRange _ body => fexprCells body
+  | n, .envRange offset => List.range' offset n
+  | _, .bitsOf value => fexprCells value
+  | _, .append left right => vexprCells left ++ vexprCells right
+
+def stepCells : Witgen.Step F → List ℕ
+  | .letF value => fexprCells value
+  | .letU value => u64exprCells value
+
+/-- The row cells a witness program reads. -/
+def witnessCells : {n : ℕ} → Witgen.WitgenIR F n → List ℕ
+  | _, .native _ => []
+  | _, .ir steps output => steps.flatMap stepCells ++ vexprCells output
 
 /-! ### Validation -/
 
@@ -199,13 +268,33 @@ def validateDataReads (components : List (Component F)) (multiplicities : List (
         match target.generation with
         | .demand _ => throw (.unstableDataRead name reader read.key read.column)
         | .preallocated _ =>
-            if targetMultiplicity = some read.column then
+            if targetMultiplicity = some read.column || target.isWindowCell read.column then
               throw (.unstableDataRead name reader read.key read.column)
+
+/-- Check that the window cells of a two-row component are only filled in by generation: its input
+cells there are witness cells, and its witness programs and interactions only read the row's own
+cells, since generation completes rows, and balances their interactions, before it fills in the
+window cells. -/
+def validateWindowCells (component : Component F) : Except ValidationError Unit := do
+  let name := component.circuit.name
+  for (cell, column) in component.generation.cells.1.toList.zipIdx do
+    if component.isWindowCell column then
+      unless cell matches .witness _ do
+        throw (.windowInputCell name column)
+  for (operation, index) in component.rowOperations.toFlat.zipIdx do
+    if let .witness _ code := operation then
+      if (witnessCells code).any component.isWindowCell then
+        throw (.windowWitnessRead name index)
+  for (interaction, index) in component.rowOperations.interactions.zipIdx do
+    let cells := (interaction.mult :: interaction.msg.toList).flatMap expressionCells
+    if cells.any component.isWindowCell then
+      throw (.windowInteractionRead name index)
 
 /-- All checks of the components' generations; returns the multiplicity cell of every component. -/
 def validateComponents (components : List (Component F)) :
     Except ValidationError (List (Option ℕ)) := do
   let multiplicities ← components.mapM validateComponent
+  components.forM validateWindowCells
   validateDataReads components multiplicities
   return multiplicities
 
