@@ -938,16 +938,18 @@ pub mod component_1 {
         }]
     }
 
+    pub fn row_of<F: WitnessField>(row: &[F], hint: &WitnessData<F>) -> u64 {
+        let row_index = 0u64;
+        (row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
             channel: "memory",
             trigger: Direction::Pull,
             rows: 8,
-            multiplicity: MultiplicityColumn {
-                interaction: 0,
-                column: 2,
-                direction: Direction::Push,
-            },
+            row_of: row_of::<F>,
+            multiplicity: 2,
         }
     }
 
@@ -1045,16 +1047,18 @@ pub mod component_2 {
         }]
     }
 
+    pub fn row_of<F: WitnessField>(row: &[F], hint: &WitnessData<F>) -> u64 {
+        let row_index = 0u64;
+        (row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
             channel: "program",
             trigger: Direction::Pull,
             rows: 32,
-            multiplicity: MultiplicityColumn {
-                interaction: 0,
-                column: 2,
-                direction: Direction::Push,
-            },
+            row_of: row_of::<F>,
+            multiplicity: 2,
         }
     }
 

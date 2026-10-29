@@ -26,25 +26,27 @@ a `Cell` for every input variable:
   alone, so only preallocated rows have fixed cells.
 - `.witness value`: a value the prover computes, from the message a demand row answers, prover data
   and the hint. Witness IR expressions and circuit variables coerce to witness cells.
-- `.multiplicity`: the multiplicity of the component's interaction on its channel.
+- `.multiplicity`: the multiplicity of the component's interaction on its channel opposite to the
+  trigger, which counts the demand the row answers.
 
 A multiplicity cell makes a component answer repeated demand for a message by counting it in one
-row: the generator finds the row whose interaction on the channel carries the message, and changes
-the cell by the amount that cancels the demand. A row that pushes its message counts the pulls it
-answers, and a row that pulls it counts the pushes.
+row: the generator adds the demanded count to the cell of the row for the message. A preallocated
+component finds that row with `rowOf`, a witness program mapping the message to a row index, and
+answers if the row has an interaction on the channel, opposite to the trigger, with the message.
 Preallocated components must have exactly one multiplicity cell. For demand components, behavior
 depends on whether you use a multiplicity cell in the input: if yes, the component gets one row per
-distinct message, like an addition chip; if not, it gets one row per occurrence, like a VM, where
-every step is its own row even if two steps happen to agree. For example, a memory row
+distinct demanded message, like an addition chip; if not, it gets one row per occurrence, like a
+VM, where every step is its own row even if two steps happen to agree. For example, a memory row
 emits `memoryChannel.emit multiplicity { address, value }`, so its input is
-`{ address := .fixed i.toField, value := .witness ..., multiplicity := .multiplicity }`.
+`{ address := .fixed i.toField, value := .witness ..., multiplicity := .multiplicity }`, and its
+`rowOf` maps a message to `address.val`.
 
 The component's witness programs compute the rest of the row from its input.
 
 Several components may answer demand on the same channel. Each demanded message is then routed to
 the one component that accepts it: a demand component accepts the messages its guard holds for, a
-preallocated one those it has a row for. For example, the opcode tables of a VM share its state
-channel, and each table's guard checks the opcode at the state's `pc`.
+preallocated one those whose `rowOf` row carries them. For example, the opcode tables of a VM
+share its state channel, and each table's guard checks the opcode at the state's `pc`.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -57,7 +59,8 @@ inductive Cell (F : Type) where
   | fixed (value : Witgen.FExpr F)
   /-- A value the prover computes. -/
   | witness (value : Witgen.FExpr F)
-  /-- The multiplicity of the component's interaction on its channel, which generation counts. -/
+  /-- The multiplicity of the component's interaction on its channel opposite to the trigger, which
+  generation counts. -/
   | multiplicity
 
 namespace Cell
@@ -131,7 +134,7 @@ structure DemandMode (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType 
   over the message, so it can read prover data and hints, like the opcode at the message's `pc`. -/
   guard : Var Message F → Witgen.BExpr F := fun _ => .true
   /-- The input of a new row, built from the message it answers. A multiplicity cell starts at the
-  value that cancels the demand. -/
+  demanded count. -/
   input : Var Message F → Witgen.M F (Input (Cell F))
   /-- The input of the rows appended after balancing, to make the table's height a power of two.
   Padding rows are completed by the component's witness programs like any other row; if they
@@ -153,6 +156,9 @@ structure PreallocatedMode (F : Type) (Input : TypeMap) [ProvableType Input] whe
   /-- The input of row `i`. Its `let`-steps and fixed cells are computed from `i` alone; its witness
   cells may also read the hint. Its multiplicity cell starts at 0. -/
   input (i : Witgen.U64Expr F) : Witgen.M F (Input (Cell F))
+  /-- The index of the row that answers a demanded message, computed from the message and the hint.
+  Indices at or above `height` mean that no row answers it. -/
+  rowOf : Var Message F → Witgen.U64Expr F
 
 variable [FiniteField F]
 
@@ -168,6 +174,11 @@ instance {Input : TypeMap} [ProvableType Input] (mode : PreallocatedMode F Input
 def DemandMode.guardCondition {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
     Witgen.BExpr F :=
   mode.guard (varFromOffset mode.Message 0)
+
+/-- `rowOf` as a program on the cells of the message. -/
+def PreallocatedMode.rowIndex {Input : TypeMap} [ProvableType Input]
+    (mode : PreallocatedMode F Input) : Witgen.U64Expr F :=
+  mode.rowOf (varFromOffset mode.Message 0)
 
 /-- How the generator builds the rows of a component with input `Input`. -/
 inductive Generation (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType Input] where

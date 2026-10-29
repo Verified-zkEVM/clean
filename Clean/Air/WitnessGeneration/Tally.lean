@@ -43,6 +43,9 @@ def key (demand : Demand F) : String × Array F := (demand.channel, demand.messa
 def direction (demand : Demand F) : Direction :=
   if 0 < demand.multiplicity then .push else .pull
 
+/-- How many more times the message was pushed than pulled, or the opposite. -/
+def count (demand : Demand F) : ℕ := demand.multiplicity.natAbs
+
 end Demand
 
 /-! ### Tally -/
