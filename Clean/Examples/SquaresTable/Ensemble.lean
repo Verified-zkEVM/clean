@@ -91,7 +91,7 @@ def step : GeneralFormalCircuit (F p) (Window Row) unit where
     · exact (h_transition h).right.right
 
 /-- The table, of `height` rows. Its rows answer the verifier's pull of the result: `last` counts it
-on the row that carries the pulled counter and square. -/
+on the row of the pulled counter. -/
 def component (height : UInt64) : Component (F p) where
   circuit := step
   window := Window.layout Row
@@ -117,6 +117,8 @@ def component (height : UInt64) : Component (F p) where
       square := .witness (.ofU64 (i * i))
       last := .multiplicity
     })
+    -- the row of counter `i` is row `i`
+    rowOf | (index, _) => index.val
   }
 
 /-- The verifier pulls the public counter and square. -/

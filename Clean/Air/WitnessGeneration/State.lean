@@ -29,19 +29,18 @@ structure GeneratedRow (F : Type) where
 /-- One component's generation state. -/
 structure ComponentState (F : Type) [FiniteField F] where
   component : Component F
-  /-- The component's multiplicity cell, resolved by validation. -/
-  multiplicity : Option MultiplicityColumn
+  /-- The input column of the component's multiplicity cell, found by validation. -/
+  multiplicity : Option ℕ
   /-- The component's row operations, whose witness programs complete a row from its input. -/
   operations : List (FlatOperation F)
   /-- The component's channel interactions on a row. -/
   interactions : List (AbstractInteraction F)
   /-- The rows generated so far. -/
   rows : Array (GeneratedRow F) := #[]
-  /-- The index of the first row whose counted interaction carries each message, see
-  `countedMessage`. -/
-  countedRows : Std.HashMap (Array F) ℕ := {}
+  /-- The row created for each demanded message, in a demand component with a multiplicity cell. -/
+  messageRows : Std.HashMap (Array F) ℕ := {}
 
-def ComponentState.initial (component : Component F) (multiplicity : Option MultiplicityColumn) :
+def ComponentState.initial (component : Component F) (multiplicity : Option ℕ) :
     ComponentState F :=
   let operations := component.rowOperations
   {
@@ -61,25 +60,17 @@ def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : Pr
   let environment := Environment.fromArray row.values data
   state.interactions.map (·.eval environment)
 
-/-- The message of a row's counted interaction, if the component has a multiplicity cell. -/
-def ComponentState.countedMessage (state : ComponentState F) (row : GeneratedRow F)
-    (data : ProverData F) : Option (Array F) :=
-  state.multiplicity.bind fun multiplicity =>
-    state.interactions[multiplicity.interaction]?.map fun interaction =>
-      (interaction.eval (Environment.fromArray row.values data)).msg
+def ComponentState.pushRow (state : ComponentState F) (row : GeneratedRow F) : ComponentState F :=
+  { state with rows := state.rows.push row }
 
-/-- Append a row, which counts its message if no earlier row does. -/
-def ComponentState.pushRow (state : ComponentState F) (data : ProverData F)
+/-- Append a row created for the demanded `message`, which counts it. -/
+def ComponentState.pushMessageRow (state : ComponentState F) (message : Array F)
     (row : GeneratedRow F) : ComponentState F :=
-  let message := state.countedMessage row data
-  let index := state.rows.size
   { state with
     rows := state.rows.push row
-    countedRows := match message with
-      | some message => state.countedRows.insertIfNew message index
-      | none => state.countedRows }
+    messageRows := state.messageRows.insert message state.rows.size }
 
-/-- Replace the row at `index`, which must count the same message. -/
+/-- Replace the row at `index`. -/
 def ComponentState.setRow (state : ComponentState F) (index : ℕ) (row : GeneratedRow F) :
     ComponentState F :=
   { state with rows := state.rows.set! index row }
