@@ -577,17 +577,21 @@ pub mod component_0 {
             },
             Constraint {
                 gate: Gate::EveryRow,
-                value: (row[4].clone()
-                    + (-E::from_u64(1u64)
-                        * ((((((((E::from_u64(0u64)
-                            + (row[8].clone() * E::from_u64(1u64)))
-                            + (row[9].clone() * E::from_u64(2u64)))
-                            + (row[10].clone() * E::from_u64(4u64)))
-                            + (row[11].clone() * E::from_u64(8u64)))
-                            + (row[12].clone() * E::from_u64(16u64)))
-                            + (row[13].clone() * E::from_u64(32u64)))
-                            + (row[14].clone() * E::from_u64(64u64)))
-                            + (row[15].clone() * E::from_u64(128u64))))),
+                value: (((E::from_u64(2u64)
+                    * ((E::from_u64(2u64)
+                        * ((E::from_u64(2u64)
+                            * ((E::from_u64(2u64)
+                                * ((E::from_u64(2u64)
+                                    * ((E::from_u64(2u64)
+                                        * ((E::from_u64(2u64) * row[15].clone())
+                                            + row[14].clone()))
+                                        + row[13].clone()))
+                                    + row[12].clone()))
+                                + row[11].clone()))
+                            + row[10].clone()))
+                        + row[9].clone()))
+                    + row[8].clone())
+                    + (-E::from_u64(1u64) * row[4].clone())),
             },
             Constraint {
                 gate: Gate::EveryRow,

@@ -35,6 +35,7 @@ public import Clean.Tables.KeccakInductive
 public import Clean.Tables.BLAKE3.ProcessBlocksInductive
 public import Clean.Gadgets.Bits
 public import Clean.Gadgets.Conditional
+public import Clean.Gadgets.ConditionalEquality
 public import Clean.Gadgets.IsEqual
 public import Clean.Gadgets.IsZeroField
 public import Clean.Gadgets.IsZero
@@ -48,6 +49,7 @@ public import Clean.Gadgets.BLAKE3.FinalizeChunk
 public import Clean.Examples.FibonacciVm.Ensemble
 public import Clean.Examples.OpcodeVm.Ensemble
 public import Clean.Examples.SquaresTable.Ensemble
+public import Clean.Examples.KeccakAir.Ensemble
 public import Clean.Examples.BinaryFibonacci.Ensemble
 public import Clean.Gadgets.SHA256.SHA256Compress
 public import Clean.Backends.Circom.Ast

@@ -15,6 +15,12 @@ def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
 instance {α : Type*} [Zero α] [One α] [DecidableEq α] {x : α} : Decidable (IsBool x) :=
   inferInstanceAs (Decidable (x = 0 ∨ x = 1))
 
+/-- The exclusive or of bits `x` and `y`, as the polynomial `x + y - x (2 y)`. -/
+def bitXor {α : Type*} [Add α] [Sub α] [Mul α] [OfNat α 2] (x y : α) : α := x + y - x * (2 * y)
+
+/-- `¬x ∧ y` of bits `x` and `y`, as the polynomial `(1 - x) y`. -/
+def bitAndNot {α : Type*} [Sub α] [Mul α] [OfNat α 1] (x y : α) : α := (1 - x) * y
+
 namespace IsBool
 
 @[circuit_norm]
@@ -96,14 +102,8 @@ theorem not_is_bool {α : Type*} [Ring α] {x : α} (hx : IsBool x) :
 
 /-- If x and y are boolean, then x XOR y is boolean -/
 theorem xor_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
-    IsBool (x + y - 2*x*y) := by
-  rcases hx with hx0 | hx1
-  · simp [hx0, zero_add, zero_mul, mul_zero, sub_zero, hy]
-  · rcases hy with hy0 | hy1
-    · simp [hx1, hy0, add_zero, mul_zero, sub_zero, one]
-    · simp only [hx1, hy1, mul_one]
-      norm_num
-      exact zero
+    IsBool (bitXor x y) := by
+  rcases hx with rfl | rfl <;> rcases hy with rfl | rfl <;> norm_num [IsBool, bitXor]
 
 /-- If x and y are boolean, then NAND(x,y) is boolean -/
 theorem nand_is_bool {α : Type*} [Ring α] {x y : α} (hx : IsBool x) (hy : IsBool y) :
@@ -148,8 +148,8 @@ variable {p : ℕ} [Fact p.Prime]
 
 /-- For boolean field elements, XOR operation matches bitwise XOR of values -/
 theorem xor_eq_val_xor {a b : F p} (ha : IsBool a) (hb : IsBool b) :
-    (a + b - 2*a*b).val = a.val ^^^ b.val := by
-  rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]; norm_num
+    (bitXor a b).val = a.val ^^^ b.val := by
+  rcases ha with rfl | rfl <;> rcases hb with rfl | rfl <;> norm_num [bitXor, ZMod.val_one]
 
 /-- For boolean field elements, AND operation matches bitwise AND of values -/
 theorem and_eq_val_and {a b : F p} (ha : IsBool a) (hb : IsBool b) :
@@ -178,6 +178,26 @@ theorem not_eq_val_not {a : F p} (ha : IsBool a) :
 
 end BinaryOps
 end IsBool
+
+section BitOperations
+variable {p : ℕ} [Fact p.Prime]
+
+@[circuit_norm]
+lemma Expression.eval_bitXor (env : Environment (F p)) (x y : Expression (F p)) :
+    Expression.eval env (bitXor x y) = bitXor (Expression.eval env x) (Expression.eval env y) := by
+  simp only [bitXor, eval_sub]
+  rfl
+
+@[circuit_norm]
+lemma Expression.eval_bitAndNot (env : Environment (F p)) (x y : Expression (F p)) :
+    Expression.eval env (bitAndNot x y) =
+      bitAndNot (Expression.eval env x) (Expression.eval env y) := by
+  simp only [bitAndNot]
+  show Expression.eval env (1 - x) * _ = _
+  rw [eval_sub]
+  rfl
+
+end BitOperations
 
 section
 variable {p : ℕ} [Fact p.Prime]

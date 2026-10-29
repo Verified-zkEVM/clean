@@ -14,10 +14,10 @@ private input. Each component says how its rows come into existence in its `gene
 
 Channel balance means that, for every channel message, pushes and pulls cancel out. The generator
 keeps a tally of the messages that don't cancel yet: their *demand*. It starts with the
-interactions of the verifier and of the preallocated rows, and then repeats one step: pick an
-unanswered message, and let the component that handles it add or update a row that answers it.
-The new row brings interactions of its own, which may create new demand, and so on, until the
-tally is empty.
+interactions of the verifier and of the preallocated and standalone rows, and then repeats one
+step: pick an unanswered message, and let the component that handles it add or update a row that
+answers it. The new row brings interactions of its own, which may create new demand, and so on,
+until the tally is empty.
 
 For example, the verifier of a VM pushes the initial state and pulls the final state. The pushed
 initial state has no pull, so the VM gets a row that pulls it and pushes the next state. That state
@@ -41,8 +41,8 @@ so the generator balances and pads again until no table grows.
 
 TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
 rather than from the idea. None of them is fundamental:
-- Witness programs only read prover data from cells of preallocated components that aren't
-  multiplicity cells, see `Clean.Air.WitnessGeneration.Validation`.
+- Witness programs only read prover data from cells of preallocated or standalone components that
+  aren't multiplicity cells, see `Clean.Air.WitnessGeneration.Validation`.
 - All padding rows of a component have the same input.
 
 Generation can also fail, because we hacked around non-termination with a `fuel` parameter that can
@@ -152,6 +152,7 @@ def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data 
           (mode.findRow state demand data hint).map
             (incrementMultiplicity state column demand data hint)
       else none
+  | .standalone _ => none
 
 /-- The answers of all components that accept the demand, with their indices and names. -/
 def answers (states : Array (ComponentState F)) (demand : Demand F) (data : ProverData F)
@@ -195,18 +196,19 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
           let (states, tally) := applyAnswer states tally index change data
           generateLoop data hint fuel states tally
 
-/-- The padded height of a demand-generated table. Preallocated tables are never padded. -/
+/-- The padded height of a demand-generated table. Preallocated and standalone tables are never
+padded. -/
 def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
   match state.component.generation with
   | .demand _ => nextPowerOfTwo state.rows.size
-  | .preallocated _ => state.rows.size
+  | .preallocated _ | .standalone _ => state.rows.size
 
 /-- Pad a demand-generated table to its target height; returns the padded state and the
 interactions of the padding rows. -/
 def ComponentState.pad (state : ComponentState F) (data : ProverData F) (hint : ProverHint F) :
     ComponentState F × List (Interaction F) :=
   match state.component.generation with
-  | .preallocated _ => (state, [])
+  | .preallocated _ | .standalone _ => (state, [])
   | .demand mode =>
       let row := completeRow state (toElements mode.padding).toArray data hint
       let rows := List.replicate (state.targetHeight - state.rows.size) row
@@ -225,7 +227,7 @@ def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
 
 /-! ### Generating a witness -/
 
-/-- The prover data of the preallocated rows' inputs, under their components' names. -/
+/-- The prover data of the preallocated and standalone rows' inputs, under their components' names. -/
 def initialData (states : Array (ComponentState F)) (inputs : Array (List (Array F))) :
     List (String × PreparedRows F) :=
   (states.zip inputs).toList.map fun (state, inputs) =>

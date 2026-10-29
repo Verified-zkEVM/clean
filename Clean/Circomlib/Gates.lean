@@ -54,8 +54,12 @@ def circuit : FormalCircuit (F p) fieldPair field where
     rcases h_env.symm with ⟨ _, _ ⟩
     simp_all only
     constructor
-    · convert xor_eq_val_xor h_a h_b using 1
+    · convert xor_eq_val_xor h_a h_b using 2
+      simp only [bitXor]
+      ring
     · convert xor_is_bool h_a h_b using 1
+      simp only [bitXor]
+      ring
 
   completeness := by
     simp_all only [circuit_norm, main]

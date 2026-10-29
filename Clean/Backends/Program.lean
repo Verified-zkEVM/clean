@@ -172,6 +172,8 @@ inductive ModeProgram (F : Type) [FiniteField F] where
   `multiplicity`. `rowOf` reads the message cells. -/
   | preallocated (channel : String) (trigger : Direction) (rows : UInt64) (input : InputProgram F)
       (rowOf : Witgen.U64Expr F) (multiplicity : ℕ)
+  /-- `rows` rows, whose inputs are `input` at the row index, which answer no demand. -/
+  | standalone (rows : UInt64) (input : InputProgram F)
 
 /-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
@@ -402,6 +404,7 @@ def lowerGeneration (index : ℕ) (component : Component F) (multiplicity : Opti
         multiplicity
   | .preallocated _, none =>
       throw (.validation (.multiplicityCells component.circuit.name 0))
+  | .standalone mode, _ => return .standalone mode.height input
 
 /-- Validate the generation of an ensemble, and lower it to an extraction program. `fuel` bounds the
 number of witness generation steps. -/

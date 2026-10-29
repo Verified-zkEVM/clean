@@ -75,12 +75,13 @@ def ComponentState.setRow (state : ComponentState F) (index : ℕ) (row : Genera
     ComponentState F :=
   { state with rows := state.rows.set! index row }
 
-/-- The inputs of a preallocated component's rows, from its input program, with multiplicity 0. -/
+/-- The inputs of a preallocated or standalone component's rows, from its input program, with
+multiplicity 0. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=
   match state.component.generation with
-  | .preallocated mode =>
-      (List.range mode.height.toNat).map fun row =>
-        evalInput (mode.input .idx) (rowEnvironment hint) row 0
+  | .preallocated { height, input, .. } | .standalone { height, input } =>
+      (List.range height.toNat).map fun row =>
+        evalInput (input .idx) (rowEnvironment hint) row 0
   | .demand _ => []
 
 /-! ### Errors -/

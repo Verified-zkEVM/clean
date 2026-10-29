@@ -93,7 +93,7 @@ pub enum WitnessGenerationError {
         expected: usize,
         actual: usize,
     },
-    /// A preallocated component has fewer rows than the minimum trace height.
+    /// A preallocated or standalone component has fewer rows than the minimum trace height.
     PreallocatedHeight {
         component: &'static str,
         height: usize,
@@ -180,6 +180,10 @@ pub enum Mode<F> {
         row_of: RowOf<F>,
         /// The input column of the multiplicity cell.
         multiplicity: usize,
+    },
+    /// A fixed number of rows, which answer no demand.
+    Standalone {
+        rows: usize,
     },
 }
 
@@ -584,6 +588,7 @@ fn accepts<'a, F: WitnessField, P: Program<F>>(
                 },
             )
         }
+        Mode::Standalone { .. } => None,
     }
 }
 
@@ -730,7 +735,7 @@ fn balance<F: WitnessField, P: Program<F>>(
 fn target_height<F>(row_count: usize, mode: &Mode<F>, minimum_height: usize) -> usize {
     match mode {
         Mode::Demand(_) => row_count.max(minimum_height).next_power_of_two(),
-        Mode::Preallocated { .. } => row_count,
+        Mode::Preallocated { .. } | Mode::Standalone { .. } => row_count,
     }
 }
 
@@ -838,14 +843,14 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         .enumerate()
         .map(|(component, mode)| match mode {
             Mode::Demand(_) => Vec::new(),
-            Mode::Preallocated { rows, .. } => (0..*rows as u64)
+            Mode::Preallocated { rows, .. } | Mode::Standalone { rows } => (0..*rows as u64)
                 .map(|row| P::initial_row(component, row, hint))
                 .collect(),
         })
         .collect();
 
     for (component, mode) in modes.iter().enumerate() {
-        if let Mode::Preallocated { rows, .. } = mode {
+        if let Mode::Preallocated { rows, .. } | Mode::Standalone { rows } = mode {
             if *rows < minimum_height {
                 return Err(WitnessGenerationError::PreallocatedHeight {
                     component: P::COMPONENT_NAMES[component],

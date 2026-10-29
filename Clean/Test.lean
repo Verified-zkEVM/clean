@@ -15,4 +15,5 @@ public import Clean.Examples.FibonacciVm.WitnessGenerationTest
 public import Clean.Examples.FemtoCairo.FlatAirTest
 public import Clean.Examples.OpcodeVm.WitnessGenerationTest
 public import Clean.Examples.SquaresTable.WitnessGenerationTest
+public import Clean.Examples.KeccakAir.Test
 public import Clean.Examples.BinaryFibonacci.WitnessGenerationTest

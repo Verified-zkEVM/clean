@@ -217,11 +217,11 @@ def dataReaders (component : Component F) : List (DataReader × List DataRead) :
         let (cells, steps) := component.generation.cells
         [(.guard, bexprDataReads mode.guardCondition),
           (.input, steps.flatMap stepDataReads ++ cells.toList.flatMap cellDataReads)]
-    | .preallocated _ => []
+    | .preallocated _ | .standalone _ => []
   witnesses ++ demand
 
-/-- Whether the input program of a preallocated row is computed from the row index, except for its
-witness cells, which may also read the hint. -/
+/-- Whether the input program of a preallocated or standalone row is computed from the row index,
+except for its witness cells, which may also read the hint. -/
 def rowProgramValid (steps : List (Witgen.Step F)) (cells : List (Cell F)) : Bool :=
   steps.all (·.validForRow .fixed) && cells.all fun
     | .fixed value => value.validForRow .fixed
@@ -229,14 +229,15 @@ def rowProgramValid (steps : List (Witgen.Step F)) (cells : List (Cell F)) : Boo
     | .multiplicity => true
 
 /-- Check a component's generation against the component, and return the input column of its
-multiplicity cell: exactly one in a preallocated component, at most one in a demand component. -/
+multiplicity cell: exactly one in a preallocated component, at most one in a demand component, and
+none in a standalone component. -/
 def validateComponent (component : Component F) : Except ValidationError (Option ℕ) := do
   let name := component.circuit.name
   let (cells, steps) := component.generation.cells
   let multiplicity ← match (cells.toList.zipIdx.filter (·.1.isMultiplicity)).map (·.2),
       component.generation with
     | [column], _ => pure (some column)
-    | [], .demand _ => pure none
+    | [], .demand _ | [], .standalone _ => pure none
     | columns, _ => throw (.multiplicityCells name columns.length)
   match component.generation with
   | .demand _ =>
@@ -249,6 +250,12 @@ def validateComponent (component : Component F) : Except ValidationError (Option
         throw (.rowProgram name)
       unless (u64exprDataReads mode.rowIndex).isEmpty do
         throw (.rowOfDataRead name)
+  | .standalone mode =>
+      let height := mode.height.toNat
+      unless nextPowerOfTwo height = height do
+        throw (.preallocatedHeight name height)
+      unless rowProgramValid steps cells.toList do
+        throw (.rowProgram name)
   return multiplicity
 
 /-- Check that every prover-data read targets a cell of a preallocated component that generation
@@ -267,7 +274,7 @@ def validateDataReads (components : List (Component F)) (multiplicities : List (
           throw (.dataReadWidth name reader read.key target.rowOffset read.width)
         match target.generation with
         | .demand _ => throw (.unstableDataRead name reader read.key read.column)
-        | .preallocated _ =>
+        | .preallocated _ | .standalone _ =>
             if targetMultiplicity = some read.column || target.isWindowCell read.column then
               throw (.unstableDataRead name reader read.key read.column)
 

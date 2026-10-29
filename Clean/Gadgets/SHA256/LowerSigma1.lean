@@ -45,20 +45,13 @@ private lemma spec_of_constraint
     (input z : fields 32 (F p))
     (hx : Normalized input)
     (h_z : ∀ i : Fin 32, z[i] =
-      (input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val])
-      + (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0)
-      - 2 * (input[(i + 17).val] + input[(i + 19).val] -
-              2 * input[(i + 17).val] * input[(i + 19).val])
-            * (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0)) :
+      bitXor (bitXor input[(i + 17).val] input[(i + 19).val]) (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0)) :
     valueBits z = Specs.SHA256.lowerSigma1 (valueBits input) ∧ Normalized z := by
   have ha_val : ∀ i : Fin 32, (input[i] : F p).val = 0 ∨ (input[i] : F p).val = 1 :=
     fun i => by rcases hx i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   have h_r19_isbool : ∀ i : Fin 32,
-      input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val] = 0 ∨
-      input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val] = 1 :=
+      bitXor input[(i + 17).val] input[(i + 19).val] = 0 ∨
+      bitXor input[(i + 17).val] input[(i + 19).val] = 1 :=
     fun i => IsBool.xor_is_bool (hx _) (hx _)
   have h_s10_isbool : ∀ i : Fin 32,
       (if h : i.val + 10 < 32 then input[i.val + 10]'h else (0 : F p)) = 0 ∨
@@ -67,38 +60,32 @@ private lemma spec_of_constraint
   have h_z_isbool : ∀ i : Fin 32, z[i] = 0 ∨ z[i] = 1 := fun i => by
     rw [h_z i]; exact IsBool.xor_is_bool (h_r19_isbool i) (h_s10_isbool i)
   have h_r19_val : ∀ i : Fin 32,
-      ((input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val] : F p)).val = 0 ∨
-      ((input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val] : F p)).val = 1 :=
+      ((bitXor input[(i + 17).val] input[(i + 19).val] : F p)).val = 0 ∨
+      ((bitXor input[(i + 17).val] input[(i + 19).val] : F p)).val = 1 :=
     fun i => by rcases h_r19_isbool i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   have h_s10_val : ∀ i : Fin 32,
       ((if h : i.val + 10 < 32 then (input[i.val + 10]'h : F p) else 0) : F p).val = 0 ∨
       ((if h : i.val + 10 < 32 then (input[i.val + 10]'h : F p) else 0) : F p).val = 1 :=
     fun i => by rcases h_s10_isbool i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   have h_z_xor_val : ∀ i : Fin 32, (z[i] : F p).val =
-      (input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val] : F p).val ^^^
+      (bitXor input[(i + 17).val] input[(i + 19).val] : F p).val ^^^
       ((if h : i.val + 10 < 32 then (input[i.val + 10]'h : F p) else 0) : F p).val :=
     fun i => by rw [h_z i]; exact IsBool.xor_eq_val_xor (h_r19_isbool i) (h_s10_isbool i)
   have h_r19_xor_val : ∀ i : Fin 32,
-      (input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val] : F p).val =
+      (bitXor input[(i + 17).val] input[(i + 19).val] : F p).val =
       (input[(i + 17).val] : F p).val ^^^ (input[(i + 19).val] : F p).val :=
     fun i => IsBool.xor_eq_val_xor (hx _) (hx _)
   have key : ∑ i : Fin 32, (z[i] : F p).val * 2^i.val =
       ((rotRight32 (valueBits input) 17) ^^^ (rotRight32 (valueBits input) 19))
       ^^^ (valueBits input / 2^10) := by
     have step1 : ∑ i : Fin 32, (z[i] : F p).val * 2^i.val =
-        ∑ i : Fin 32, ((input[(i + 17).val] + input[(i + 19).val] -
-            2 * input[(i + 17).val] * input[(i + 19).val] : F p).val ^^^
+        ∑ i : Fin 32, ((bitXor input[(i + 17).val] input[(i + 19).val] : F p).val ^^^
           ((if h : i.val + 10 < 32 then (input[i.val + 10]'h : F p) else 0) : F p).val) * 2^i.val := by
       apply Finset.sum_congr rfl
       intro i _; rw [h_z_xor_val i]
     rw [step1, bool_finsum_xor_eq 32 _ _ h_r19_val h_s10_val]
     have step2 : ∑ i : Fin 32,
-        (input[(i + 17).val] + input[(i + 19).val] -
-          2 * input[(i + 17).val] * input[(i + 19).val] : F p).val * 2^i.val =
+        (bitXor input[(i + 17).val] input[(i + 19).val] : F p).val * 2^i.val =
         ∑ i : Fin 32,
           ((input[(i + 17).val] : F p).val ^^^ (input[(i + 19).val] : F p).val) * 2^i.val := by
       apply Finset.sum_congr rfl
@@ -136,23 +123,19 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       if h : i.val + 10 < 32 then input[i.val + 10]'h else 0 :=
     fun i => eval_shr32 env input_var input h_input 10 i
   have h_r1 : ∀ i : Fin 32, env.get (i₀ + i.val) =
-      input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val] := by
+      bitXor input[(i + 17).val] input[(i + 19).val] := by
     intro i
     have h := h_holds1 i; rw [h_r17 i, h_r19 i] at h
     have key : env.get (i₀ + i.val) -
-        (input[(i + 17).val] + input[(i + 19).val] -
-          2 * input[(i + 17).val] * input[(i + 19).val]) = 0 := by
+        (bitXor input[(i + 17).val] input[(i + 19).val]) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
   have h_z_raw : ∀ i : Fin 32, env.get (i₀ + (32 + 32 * 0) + i.val) =
-      env.get (i₀ + i.val) + Expression.eval env (shr32 10 input_var)[i.val] -
-      2 * env.get (i₀ + i.val) * Expression.eval env (shr32 10 input_var)[i.val] := by
+      bitXor (env.get (i₀ + i.val)) (Expression.eval env (shr32 10 input_var)[i.val]) := by
     intro i
     have h := h_holds2 i
     have key : env.get (i₀ + (32 + 32 * 0) + i.val) -
-        (env.get (i₀ + i.val) + Expression.eval env (shr32 10 input_var)[i.val] -
-         2 * env.get (i₀ + i.val) * Expression.eval env (shr32 10 input_var)[i.val]) = 0 := by
+        (bitXor (env.get (i₀ + i.val)) (Expression.eval env (shr32 10 input_var)[i.val])) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
   set z : fields 32 (F p) :=
@@ -161,12 +144,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
     intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
   have h_z : ∀ i : Fin 32, z[i] =
-      (input[(i + 17).val] + input[(i + 19).val] -
-        2 * input[(i + 17).val] * input[(i + 19).val])
-      + (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0)
-      - 2 * (input[(i + 17).val] + input[(i + 19).val] -
-              2 * input[(i + 17).val] * input[(i + 19).val])
-            * (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0) := by
+      bitXor (bitXor input[(i + 17).val] input[(i + 19).val]) (if h : i.val + 10 < 32 then input[i.val + 10]'h else 0) := by
     intro i
     rw [h_z_get i, h_z_raw i, h_r1 i, h_s10 i]
   exact spec_of_constraint input z ha h_z
@@ -186,8 +164,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have b19v : ZMod.val input[(i + 19).val] < 2 := IsBool.val_lt_two b19
     simp only [circuit_norm]
     have hc : ((input[(i + 17).val].val ^^^ input[(i + 19).val].val : ℕ) : F p) =
-        input[(i + 17).val] + input[(i + 19).val] -
-          2 * input[(i + 17).val] * input[(i + 19).val] := by
+        bitXor input[(i + 17).val] input[(i + 19).val] := by
       rw [← IsBool.xor_eq_val_xor b17 b19, ZMod.natCast_val]
       exact ZMod.cast_id p _
     rw [hc]; ring
@@ -209,14 +186,13 @@ theorem completeness : Completeness (F p) main Assumptions := by
     set r19 : F p := input[(i + 19).val]
     set s10 : F p := if h : i.val + (10 : Fin 32).val < 32
       then input[i.val + (10 : Fin 32).val]'h else 0
-    have hxor1 : ((r17.val ^^^ r19.val : ℕ) : F p) = r17 + r19 - 2 * r17 * r19 := by
+    have hxor1 : ((r17.val ^^^ r19.val : ℕ) : F p) = bitXor r17 r19 := by
       rw [← IsBool.xor_eq_val_xor b17 b19, ZMod.natCast_val]
       exact ZMod.cast_id p _
     have hxor1_bool : IsBool (((r17.val ^^^ r19.val : ℕ) : F p)) := by
       rw [hxor1]; exact IsBool.xor_is_bool b17 b19
     have hxor3 : (((((r17.val ^^^ r19.val : ℕ) : F p).val ^^^ s10.val) : ℕ) : F p) =
-        ((r17.val ^^^ r19.val : ℕ) : F p) + s10 -
-          2 * ((r17.val ^^^ r19.val : ℕ) : F p) * s10 := by
+        bitXor ((r17.val ^^^ r19.val : ℕ) : F p) s10 := by
       rw [← IsBool.xor_eq_val_xor hxor1_bool bs10, ZMod.natCast_val]
       exact ZMod.cast_id p _
     -- the witness IR computes the xors on `u64`s; all operands are bits, so nothing wraps
