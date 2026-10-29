@@ -1,6 +1,7 @@
 module
 
 public import CleanCompStark.Soundness
+public import CleanCompStark.KeccakAir.Bridgeable
 public import CleanCompStark.Fields
 public import Clean.Examples.KeccakAir.Ensemble
 public import CompStark.KoalaBear.Challenge
@@ -8,12 +9,12 @@ public import CompStark.KoalaBear.Challenge
 /-!
 # Plonky3's Keccak-f AIR as a CompStark STARK
 
-The knowledge soundness of a STARK proving Clean's Keccak-f component (Plonky3's `keccak-air`)
-over KoalaBear: unless the rows read off some trace close to the prover's committed trace compute
-Keccak-f on every 24-row block that starts at round 0, the verifier accepts with probability at
-most the knowledge error.
+Clean's Keccak-f component (Plonky3's `keccak-air`) over KoalaBear, with what the backend's
+knowledge soundness theorems (`knowledgeSoundness_of_secure`, `knowledgeSoundness_ro_of_secureRo`)
+ask of it: it is bridgeable (`bridgeable_component`), it fits every trace domain of KoalaBear
+(`fits`), and its circuit proves of its tables that every 24-row block starting at round 0
+computes Keccak-f (`tableSound`, `BlocksCorrect`).
 -/
-
 @[expose] public section
 
 namespace CleanCompStark.KeccakAir
@@ -47,20 +48,5 @@ theorem fits {logN : ℕ} (h : logN ≤ 24) :
     rintro _ ⟨⟩
     exact UInt64.toNat_ofNat_of_lt' (Nat.lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) h)
       (by decide))
-
-/-- **Knowledge soundness of a Keccak-f STARK.** If a STARK over KoalaBear proves the Keccak-f
-AIR, the verifier accepts a prover with probability at most the knowledge error unless the rows
-read off some trace within `δ'` of the prover's committed trace compute Keccak-f on every 24-row
-block that starts at round 0. -/
-theorem knowledgeSoundness (S : Iop.Setup KoalaBear.Fast.Ext4)
-    (hair : S.air = toAir koalaBear (component S.logN) S.logN)
-    (hb : bridgeable (component S.logN) = true) (prover : Prover S) (δ δ' : NNReal)
-    (hδ' : (δ' : ℝ) < 1 - S.rate) :
-    (∀ trace ∈ closeTraces S δ' prover.trace,
-      ¬ BlocksCorrect (toRows koalaBear (component S.logN) S.logN trace)) →
-      acceptance [] prover ≤ knowledgeError S δ δ' :=
-  knowledgeSoundness_of_tableSound koalaBear S hair hb
-    (fits (by have := S.valid.twoAdic; rw [KoalaBear.twoAdicity_eq] at this; omega))
-    (tableSound _) [] prover δ δ' hδ'
 
 end CleanCompStark.KeccakAir

@@ -8,3 +8,4 @@ public import CleanCompStark.Soundness
 public import CleanCompStark.Buses
 public import CleanCompStark.Batch
 public import CleanCompStark.KeccakAir
+public import CleanCompStark.KeccakShowcase

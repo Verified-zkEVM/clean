@@ -1,0 +1,28 @@
+[package]
+name = "keccak-showcase"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Plonky3 at the revision whose `keccak-air` Clean defines, the example `prove_prime_field_31` and
+# its configuration.
+[dependencies]
+p3-challenger = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-commit = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-dft = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-field = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-fri = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-keccak-air = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-koala-bear = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-matrix = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-poseidon2 = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-symmetric = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-uni-stark = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec" }
+p3-maybe-rayon = { git = "https://github.com/Plonky3/Plonky3", rev = "a4982ec", features = ["parallel"] }
+rand = { version = "0.10", default-features = false }
+serde_json = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1
