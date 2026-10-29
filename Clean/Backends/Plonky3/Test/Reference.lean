@@ -39,10 +39,12 @@ def hint : ProverHint Fb := fun key n =>
 def memoryRows : List (List Fb) := [[5, 15], [7, 17]]
 
 /-- Like data derived from committed rows, `memory` rows are cut off or zero-padded at width `n`. -/
-def data : ProverData Fb := fun key n =>
-  if key = "memory" then
-    (memoryRows.map fun row => Vector.ofFn fun i : Fin n => row[i.val]?.getD 0).toArray
-  else #[]
+def data : ProverData Fb where
+  tables key n :=
+    if key = "memory" then
+      (memoryRows.map fun row => Vector.ofFn fun i : Fin n => row[i.val]?.getD 0).toArray
+    else #[]
+  publicInput := #[]
 
 def rowIndices : List ℕ := [0, 1, 2, 3, 4, 63, 64, 65, 255, 256, 1000, pBabybear + 3, 2^32 + 5]
 

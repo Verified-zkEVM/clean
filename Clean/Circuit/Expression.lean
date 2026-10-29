@@ -21,11 +21,18 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-/-- Arbitrary data a prover can witness and refer to in a circuit spec -/
-def ProverData (F : Type) :=
-  String → (n : ℕ) → Array (Vector F n)
+/-- Data fixed for a whole proof, which circuit specs may refer to: the rows of the proof's tables,
+keyed by name, and the public input. -/
+structure ProverData (F : Type) where
+  tables : String → (n : ℕ) → Array (Vector F n)
+  publicInput : Array F
 
-/-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
+/-- Proof data without tables or public input. -/
+def ProverData.empty (F : Type) : ProverData F where
+  tables _ _ := #[]
+  publicInput := #[]
+
+/-- Runtime-only hashmap of prover hints. Same shape as `ProverData.tables`, but
 distinct to emphasize that hints are *not* committed: they feed only the
 witness-generation step and never appear in the proof. -/
 def ProverHint (F : Type) :=
@@ -75,6 +82,10 @@ instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := �
 @[circuit_norm] abbrev Environment.fromArray [Field F] (row : Array F) (data : ProverData F) : Environment F where
   get j := row[j]?.getD 0
   data
+
+/-- The verifier's environment: its variables are the public input of the prover data. -/
+abbrev ProverData.publicEnvironment [Field F] (data : ProverData F) : Environment F :=
+  .fromArray data.publicInput data
 
 namespace Expression
 variable [Field F]

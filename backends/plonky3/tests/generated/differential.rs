@@ -1192,9 +1192,9 @@ pub const FEMTOCAIRO: ExpectedEnsemble = ExpectedEnsemble {
         },
     ],
     public_rows: &[
-        &[478983649, 1349402382],
-        &[750232478, 458497746],
-        &[1862579065, 408690868],
+        &[478983649, 1349402382, 737496322, 1902147457, 976128456],
+        &[750232478, 458497746, 1855558906, 1708727895, 1640145427],
+        &[1862579065, 408690868, 960355569, 674210575, 1463064640],
     ],
     verifier_interactions: &[
         &[
@@ -1202,13 +1202,13 @@ pub const FEMTOCAIRO: ExpectedEnsemble = ExpectedEnsemble {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: 1,
-                message: &[32, 478983649, 1349402382],
+                message: &[32, 1902147457, 976128456],
             },
             ExpectedInteraction {
                 channel: "state",
                 direction: Direction::Push,
                 multiplicity: 1,
-                message: &[0, 0, 0],
+                message: &[478983649, 1349402382, 737496322],
             },
         ],
         &[
@@ -1216,13 +1216,13 @@ pub const FEMTOCAIRO: ExpectedEnsemble = ExpectedEnsemble {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: 1,
-                message: &[32, 750232478, 458497746],
+                message: &[32, 1708727895, 1640145427],
             },
             ExpectedInteraction {
                 channel: "state",
                 direction: Direction::Push,
                 multiplicity: 1,
-                message: &[0, 0, 0],
+                message: &[750232478, 458497746, 1855558906],
             },
         ],
         &[
@@ -1230,17 +1230,17 @@ pub const FEMTOCAIRO: ExpectedEnsemble = ExpectedEnsemble {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: 1,
-                message: &[32, 1862579065, 408690868],
+                message: &[32, 674210575, 1463064640],
             },
             ExpectedInteraction {
                 channel: "state",
                 direction: Direction::Push,
                 multiplicity: 1,
-                message: &[0, 0, 0],
+                message: &[1862579065, 408690868, 960355569],
             },
         ],
     ],
-    public_input: &[0, 0],
+    public_input: &[0, 0, 0, 0, 0],
     prover_input: &[0, 5, 3, 7, 2, 10, 0, 0],
     tables: &[
         &[
@@ -1514,20 +1514,24 @@ pub const OPCODE_VM: ExpectedEnsemble = ExpectedEnsemble {
             ],
         },
     ],
-    public_rows: &[&[478983649], &[750232478], &[1862579065]],
+    public_rows: &[
+        &[478983649, 1349402382],
+        &[750232478, 458497746],
+        &[1862579065, 408690868],
+    ],
     verifier_interactions: &[
         &[
             ExpectedInteraction {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: 1,
-                message: &[10, 478983649],
+                message: &[10, 1349402382],
             },
             ExpectedInteraction {
                 channel: "state",
                 direction: Direction::Push,
                 multiplicity: 1,
-                message: &[0, 2],
+                message: &[0, 478983649],
             },
         ],
         &[
@@ -1535,13 +1539,13 @@ pub const OPCODE_VM: ExpectedEnsemble = ExpectedEnsemble {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: 1,
-                message: &[10, 750232478],
+                message: &[10, 458497746],
             },
             ExpectedInteraction {
                 channel: "state",
                 direction: Direction::Push,
                 multiplicity: 1,
-                message: &[0, 2],
+                message: &[0, 750232478],
             },
         ],
         &[
@@ -1549,17 +1553,17 @@ pub const OPCODE_VM: ExpectedEnsemble = ExpectedEnsemble {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: 1,
-                message: &[10, 1862579065],
+                message: &[10, 408690868],
             },
             ExpectedInteraction {
                 channel: "state",
                 direction: Direction::Push,
                 multiplicity: 1,
-                message: &[0, 2],
+                message: &[0, 1862579065],
             },
         ],
     ],
-    public_input: &[438],
+    public_input: &[2, 438],
     prover_input: &[],
     tables: &[
         &[

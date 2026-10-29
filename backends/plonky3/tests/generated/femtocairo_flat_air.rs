@@ -1017,13 +1017,13 @@ pub mod verifier {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: E::from_u64(1u64),
-                message: vec![E::from_u64(32u64), row[0].clone(), row[1].clone()],
+                message: vec![E::from_u64(32u64), row[3].clone(), row[4].clone()],
             },
             Interaction {
                 channel: "state",
                 direction: Direction::Push,
                 multiplicity: E::from_u64(1u64),
-                message: vec![E::from_u64(0u64), E::from_u64(0u64), E::from_u64(0u64)],
+                message: vec![row[0].clone(), row[1].clone(), row[2].clone()],
             },
         ]
     }
@@ -1032,7 +1032,7 @@ pub mod verifier {
 clean_backend::ensemble! {
     field_order: 2013265921,
     fuel: 1000,
-    public_inputs: 2,
+    public_inputs: 5,
     prover_inputs: 8,
     hint_tables: [HintTable { key: "memoryValues", width: 1, offset: 0, rows: 8 }],
     components: [component_0, component_1, component_2],
