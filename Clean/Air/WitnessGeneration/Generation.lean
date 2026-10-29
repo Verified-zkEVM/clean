@@ -11,14 +11,18 @@ public import Clean.Circuit.Channel
 How the prover builds the rows of a component: its `generation` field. The generator itself, and
 the "chain reaction" that drives it, is described in `Clean.Air.WitnessGeneration`.
 
-A component's generation is one of three modes:
+A component's generation is one of four modes:
 - `demand`: the component starts without rows and gets a new row whenever its channel has an
   unanswered message. Examples are a VM, which gets one row per state, and an addition chip.
 - `preallocated`: the component has a fixed number of rows from the start. Demand on its channel
   only changes the multiplicities of existing rows. Examples are a memory, which has one row per
   address, and a lookup table.
 - `standalone`: the component has a fixed number of rows from the start, and answers no demand. An
-  example is an AIR without channels, like Plonky3's Keccak-f AIR.
+  example is an AIR without channels.
+- `segments`: the component has a fixed number of rows from the start, computed by a segment
+  program, in segments of consecutive rows where each row continues from the previous one, and
+  answers no demand. An example is Plonky3's Keccak-f AIR, whose 24 rows per permutation each
+  compute a round from the previous round's output.
 
 In the first two modes, the component answers demand on one channel, in one direction, its
 `trigger`.
@@ -172,6 +176,13 @@ structure StandaloneMode (F : Type) (Input : TypeMap) [ProvableType Input] where
   cells may also read the hint. -/
   input (i : Witgen.U64Expr F) : Witgen.M F (Input (Cell F))
 
+/-- A fixed number of rows, computed by a segment program, which answer no demand. The program
+computes the row's own input; the window cells of a two-row component are left to generation. -/
+structure SegmentMode (F : Type) where
+  /-- The number of rows, a power of two. -/
+  height : UInt64
+  program : Witgen.SegmentProgram F
+
 variable [FiniteField F]
 
 instance {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
@@ -197,6 +208,7 @@ inductive Generation (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType 
   | demand (mode : DemandMode F Input)
   | preallocated (mode : PreallocatedMode F Input)
   | standalone (mode : StandaloneMode F Input)
+  | segments (mode : SegmentMode F)
 
 namespace Generation
 variable {Input : TypeMap} [ProvableType Input]
@@ -205,21 +217,23 @@ variable {Input : TypeMap} [ProvableType Input]
 def channelName? : Generation F Input → Option String
   | .demand mode => some mode.channel.name
   | .preallocated mode => some mode.channel.name
-  | .standalone _ => none
+  | .standalone _ | .segments _ => none
 
 /-- The input cells of a row, with the program's `let`-steps: those of a demand row, whose message
 is in the first cells of the environment, or those of a preallocated or standalone row, whose index
-is `.idx`. -/
+is `.idx`. The cells of a segment row are witness cells, computed by its segment program. -/
 def cells : Generation F Input → Vector (Cell F) (size Input) × List (Witgen.Step F)
   | .demand mode => inputCells (mode.input (varFromOffset mode.Message 0))
   | .preallocated mode => inputCells (mode.input .idx)
   | .standalone mode => inputCells (mode.input .idx)
+  | .segments _ => (.replicate _ (.witness (.const 0)), [])
 
-/-- The number of rows of a preallocated or standalone component. -/
+/-- The number of rows of a preallocated, standalone or segment-generated component. -/
 def height? : Generation F Input → Option UInt64
   | .demand _ => none
   | .preallocated mode => some mode.height
   | .standalone mode => some mode.height
+  | .segments mode => some mode.height
 
 end Generation
 
@@ -257,14 +271,16 @@ instance (mode : StandaloneMode F Input) (i : UInt64) (input : Input F) :
 
 end StandaloneMode
 
-/-- The fixed-column fact about the input of row `i`: in a preallocated or standalone component, the
-row lies within the height, and the input agrees with the row's fixed cells. -/
+/-- The fixed-column fact about the input of row `i`: in a preallocated, standalone or
+segment-generated component, the row lies within the height, and the input agrees with the row's
+fixed cells. -/
 @[circuit_norm]
 def Generation.FixedInputAt {Input : TypeMap} [ProvableType Input] :
     Generation F Input → UInt64 → Input F → Prop
   | .demand _, _, _ => True
   | .preallocated mode, i, input => i < mode.height ∧ mode.FixedAt i input
   | .standalone mode, i, input => i < mode.height ∧ mode.FixedAt i input
+  | .segments mode, i, _ => i < mode.height
 
 /-! ### Padding -/
 

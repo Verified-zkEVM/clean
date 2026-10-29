@@ -46,6 +46,8 @@ inductive ValidationError where
   | windowInputCell (component : String) (column : ℕ)
   | windowWitnessRead (component : String) (operation : ℕ)
   | windowInteractionRead (component : String) (interaction : ℕ)
+  | segmentWidth (component : String) (expected actual : ℕ)
+  | invalidSegmentProgram (component : String)
 deriving Repr, DecidableEq
 
 instance : ToString ValidationError where
@@ -75,6 +77,12 @@ instance : ToString ValidationError where
         s!"component '{component}' witness operation {operation} reads a window cell"
     | .windowInteractionRead component interaction =>
         s!"component '{component}' interaction {interaction} reads a window cell"
+    | .segmentWidth component expected actual =>
+        s!"segment program of component '{component}' computes {actual} cells, expected the \
+          row's own input, {expected} cells"
+    | .invalidSegmentProgram component =>
+        s!"segment program of component '{component}' reads prover data, or cells other than \
+          the previous row's"
 
 /-! ### Prover-data reads
 
@@ -217,7 +225,7 @@ def dataReaders (component : Component F) : List (DataReader × List DataRead) :
         let (cells, steps) := component.generation.cells
         [(.guard, bexprDataReads mode.guardCondition),
           (.input, steps.flatMap stepDataReads ++ cells.toList.flatMap cellDataReads)]
-    | .preallocated _ | .standalone _ => []
+    | .preallocated _ | .standalone _ | .segments _ => []
   witnesses ++ demand
 
 /-- Whether the input program of a preallocated or standalone row is computed from the row index,
@@ -237,7 +245,7 @@ def validateComponent (component : Component F) : Except ValidationError (Option
   let multiplicity ← match (cells.toList.zipIdx.filter (·.1.isMultiplicity)).map (·.2),
       component.generation with
     | [column], _ => pure (some column)
-    | [], .demand _ | [], .standalone _ => pure none
+    | [], .demand _ | [], .standalone _ | [], .segments _ => pure none
     | columns, _ => throw (.multiplicityCells name columns.length)
   match component.generation with
   | .demand _ =>
@@ -256,6 +264,14 @@ def validateComponent (component : Component F) : Except ValidationError (Option
         throw (.preallocatedHeight name height)
       unless rowProgramValid steps cells.toList do
         throw (.rowProgram name)
+  | .segments { height, program } =>
+      let height := height.toNat
+      unless nextPowerOfTwo height = height do
+        throw (.preallocatedHeight name height)
+      unless program.width = component.ownInputWidth do
+        throw (.segmentWidth name component.ownInputWidth program.width)
+      unless decide program.Valid do
+        throw (.invalidSegmentProgram name)
   return multiplicity
 
 /-- Check that every prover-data read targets a cell of a preallocated component that generation
@@ -274,7 +290,7 @@ def validateDataReads (components : List (Component F)) (multiplicities : List (
           throw (.dataReadWidth name reader read.key target.rowOffset read.width)
         match target.generation with
         | .demand _ => throw (.unstableDataRead name reader read.key read.column)
-        | .preallocated _ | .standalone _ =>
+        | .preallocated _ | .standalone _ | .segments _ =>
             if targetMultiplicity = some read.column || target.isWindowCell read.column then
               throw (.unstableDataRead name reader read.key read.column)
 

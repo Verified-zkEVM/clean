@@ -484,6 +484,10 @@ theorem fixedRowsMatch_toRows (hc : bridgeable component = true)
     simp only [hgen, WitnessGeneration.Generation.cells, WitnessGeneration.inputCells] at this
     simpa [WitnessGeneration.PreallocatedMode.FixedAt, WitnessGeneration.StandaloneMode.FixedAt,
       getElem_toRows, hindex i hi', Component.inputOf] using this
+  | segments mode =>
+    have hh := hheight mode.height (by simp [WitnessGeneration.Generation.height?, hgen])
+    show (toRows e component logN trace).length = mode.height.toNat
+    rw [length_toRows, hh]
 
 theorem cell_inputOf {layout : WindowLayout component.Input} (row : Array F) (j : ℕ)
     (h : j < 2 * layout.rowWidth + 3) :

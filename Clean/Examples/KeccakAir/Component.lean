@@ -8,6 +8,7 @@ and the state after `r` rounds of the row's preimage.
 module
 
 public import Clean.Examples.KeccakAir.Soundness
+public import Clean.Examples.KeccakAir.Witness
 public import Clean.Air.FlatEnsemble
 
 @[expose] public section
@@ -73,8 +74,9 @@ def circuit : GeneralFormalCircuit (F p) (Window Row) unit where
     obtain ⟨h_control, h_theta, h_chi, h_flags, h_iota⟩ := h_assumptions
     exact ⟨h_control, h_theta, ⟨⟨_, h_theta.2.2.2⟩, h_chi⟩, h_flags, h_iota⟩
 
-/-- The Keccak-f AIR with `height` rows, which answer no demand. Each row is copied from the
-prover's hint table `keccak`, which holds the trace. -/
+/-- The Keccak-f AIR with `height` rows, which answer no demand. The rows are computed by
+`Witness.program`, 24 per permutation, whose inputs are the rows of the prover's hint table
+`keccak`. -/
 def component (height : UInt64) : Component (F p) where
   circuit := circuit
   window := Window.layout Row
@@ -90,9 +92,6 @@ def component (height : UInt64) : Component (F p) where
         simpa only [ProvableType.fromElements_toElements] using congrArg fromElements h_next
       rw [← h_next]
       exact carried_of_windowSpec h_spec h_transition
-  generation := .standalone {
-    height
-    input i := pure (Window.cells
-      (fromElements (Vector.ofFn fun j => .witness (.hintGet "keccak" (size Row) i j)))) }
+  generation := .segments { height, program := Witness.program }
 
 end KeccakAir

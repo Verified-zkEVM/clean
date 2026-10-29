@@ -57,7 +57,7 @@ def componentToRust (component : Component Fb) (index : ℕ) : String :=
   let fixedRows := match component.generation with
     | .preallocated { height, .. } | .standalone { height, .. } =>
         (List.range height.toNat).map (fixedRow component)
-    | .demand _ => []
+    | .demand _ | .segments _ => []
   s!"ExpectedComponent \{
         rows: &[{Print.commaSep (rows.map (u64List ·.toList))}],
         constraints: &[{Print.commaSep (environments.map fun env =>

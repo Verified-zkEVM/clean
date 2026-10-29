@@ -152,7 +152,7 @@ def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data 
           (mode.findRow state demand data hint).map
             (incrementMultiplicity state column demand data hint)
       else none
-  | .standalone _ => none
+  | .standalone _ | .segments _ => none
 
 /-- The answers of all components that accept the demand, with their indices and names. -/
 def answers (states : Array (ComponentState F)) (demand : Demand F) (data : ProverData F)
@@ -196,19 +196,19 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
           let (states, tally) := applyAnswer states tally index change data
           generateLoop data hint fuel states tally
 
-/-- The padded height of a demand-generated table. Preallocated and standalone tables are never
-padded. -/
+/-- The padded height of a demand-generated table. Preallocated, standalone and segment-generated
+tables are never padded. -/
 def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
   match state.component.generation with
   | .demand _ => nextPowerOfTwo state.rows.size
-  | .preallocated _ | .standalone _ => state.rows.size
+  | .preallocated _ | .standalone _ | .segments _ => state.rows.size
 
 /-- Pad a demand-generated table to its target height; returns the padded state and the
 interactions of the padding rows. -/
 def ComponentState.pad (state : ComponentState F) (data : ProverData F) (hint : ProverHint F) :
     ComponentState F × List (Interaction F) :=
   match state.component.generation with
-  | .preallocated _ | .standalone _ => (state, [])
+  | .preallocated _ | .standalone _ | .segments _ => (state, [])
   | .demand mode =>
       let row := completeRow state (toElements mode.padding).toArray data hint
       let rows := List.replicate (state.targetHeight - state.rows.size) row

@@ -66,8 +66,8 @@ def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
 
 namespace Component
 
-/-- The rows of a preallocated or standalone component: one per row index, agreeing with its fixed
-cells. -/
+/-- The rows of a preallocated, standalone or segment-generated component: one per row index,
+agreeing with its fixed cells. -/
 def FixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
   match component.generation with
   | .demand _ => True
@@ -75,6 +75,7 @@ def FixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
       mode.FixedAt (UInt64.ofNat i) (fromElements (rowPrefix (size component.Input) rows[i]))
   | .standalone mode => rows.length = mode.height.toNat ∧ ∀ i (hi : i < rows.length),
       mode.FixedAt (UInt64.ofNat i) (fromElements (rowPrefix (size component.Input) rows[i]))
+  | .segments mode => rows.length = mode.height.toNat
 
 instance (component : Component F) (rows : List (Array F)) :
     Decidable (component.FixedRowsMatch rows) := by
@@ -403,6 +404,11 @@ lemma circuitAssumptions_at (table : Table F) (assumptions : table.Assumptions) 
       obtain ⟨hlength, hfixed⟩ := hmatch
       refine ⟨by simp [UInt64.lt_iff_toNat_lt, hindex]; omega, ?_⟩
       simpa [hi'] using hfixed i hi
+    | segments mode =>
+      simp only [Component.FixedRowsMatch, hgeneration] at hmatch
+      show UInt64.ofNat i < mode.height
+      simp only [UInt64.lt_iff_toNat_lt, hindex]
+      omega
   · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray,
       hindex]
     rw [table.data_consistent]

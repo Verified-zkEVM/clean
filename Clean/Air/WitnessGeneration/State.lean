@@ -76,12 +76,16 @@ def ComponentState.setRow (state : ComponentState F) (index : ℕ) (row : Genera
   { state with rows := state.rows.set! index row }
 
 /-- The inputs of a preallocated or standalone component's rows, from its input program, with
-multiplicity 0. -/
+multiplicity 0, or of a segment-generated component's rows, from its segment program, with zero
+window cells. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=
   match state.component.generation with
   | .preallocated { height, input, .. } | .standalone { height, input } =>
       (List.range height.toNat).map fun row =>
         evalInput (input .idx) (rowEnvironment hint) row 0
+  | .segments { height, program } =>
+      (program.rows height.toNat hint).map fun values =>
+        (toElements values).toArray ++ Array.replicate state.component.windowWidth 0
   | .demand _ => []
 
 /-! ### Errors -/
