@@ -65,7 +65,7 @@ def exprToRust : Expression F → String
   | .add left right => s!"({exprToRust left} + {exprToRust right})"
   | .mul left right => s!"({exprToRust left} * {exprToRust right})"
 
-def directionToRust : Direction → String
+def directionToRust : Channel.Direction → String
   | .pull => "Direction::Pull"
   | .push => "Direction::Push"
 

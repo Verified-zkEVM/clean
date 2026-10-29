@@ -40,7 +40,7 @@ namespace Demand
 def key (demand : Demand F) : String × Array F := (demand.channel, demand.message)
 
 /-- Whether the message was pushed or pulled more often. -/
-def direction (demand : Demand F) : Direction :=
+def direction (demand : Demand F) : Channel.Direction :=
   if 0 < demand.multiplicity then .push else .pull
 
 /-- How many more times the message was pushed than pulled, or the opposite. -/
