@@ -1,6 +1,6 @@
 module
 
-public import Clean.Air.WitnessGeneration.Multiplicity
+public import Clean.Air.FlatEnsemble
 
 @[expose] public section
 
@@ -8,9 +8,8 @@ public import Clean.Air.WitnessGeneration.Multiplicity
 # Validating the generation of an ensemble
 
 TODO. Generation starts with `validateGeneration`, which rejects component generations
-that don't fit their components, for example a multiplicity cell that isn't the multiplicity of an
-interaction. Most of these checks should become types or proof obligations of the generation
-instead.
+that don't fit their components, for example a preallocated component without a multiplicity cell.
+Most of these checks should become types or proof obligations of the generation instead.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -38,8 +37,9 @@ instance : ToString DataReader where
 inductive ValidationError where
   | preallocatedHeight (component : String) (height : ℕ)
   | rowProgram (component : String)
+  | rowOfDataRead (component : String)
   | demandFixedCell (component : String)
-  | multiplicity (component : String) (error : MultiplicityError)
+  | multiplicityCells (component : String) (count : ℕ)
   | unknownDataRead (component : String) (reader : DataReader) (key : String)
   | dataReadWidth (component : String) (reader : DataReader) (key : String) (expected actual : ℕ)
   | unstableDataRead (component : String) (reader : DataReader) (key : String) (column : ℕ)
@@ -57,9 +57,12 @@ instance : ToString ValidationError where
     | .rowProgram component =>
         s!"input program of preallocated component '{component}' reads prover data, or reads the \
           hint outside of witness cells"
+    | .rowOfDataRead component =>
+        s!"row index program of preallocated component '{component}' reads prover data"
     | .demandFixedCell component =>
         s!"demand input of component '{component}' has a fixed cell"
-    | .multiplicity component error => s!"component '{component}' {error}"
+    | .multiplicityCells component count =>
+        s!"component '{component}' has {count} multiplicity cells"
     | .unknownDataRead component reader key =>
         s!"component '{component}' {reader} reads unknown prover-data component '{key}'"
     | .dataReadWidth component reader key expected actual =>
@@ -147,6 +150,12 @@ def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
 
 /-! ### Cell reads -/
 
+/-- The cells an expression reads. -/
+def expressionCells : Expression F → List ℕ
+  | .var cell => [cell.index]
+  | .const _ => []
+  | .add left right | .mul left right => expressionCells left ++ expressionCells right
+
 mutual
 
 def fexprCells : Witgen.FExpr F → List ℕ
@@ -227,17 +236,30 @@ def rowProgramValid (steps : List (Witgen.Step F)) (cells : List (Cell F)) : Boo
     | .witness value => value.validForRow .prover
     | .multiplicity => true
 
-/-- Check a component's generation against the component, and resolve its multiplicity cell. -/
-def validateComponent (component : Component F) :
-    Except ValidationError (Option MultiplicityColumn) := do
+/-- Check a component's generation against the component, and return the input column of its
+multiplicity cell: exactly one in a preallocated component, at most one in a demand component, and
+none in a standalone component. -/
+def validateComponent (component : Component F) : Except ValidationError (Option ℕ) := do
   let name := component.circuit.name
-  let multiplicity ← (resolveMultiplicity component).mapError (.multiplicity name)
   let (cells, steps) := component.generation.cells
+  let multiplicity ← match (cells.toList.zipIdx.filter (·.1.isMultiplicity)).map (·.2),
+      component.generation with
+    | [column], _ => pure (some column)
+    | [], .demand _ | [], .standalone _ | [], .segments _ => pure none
+    | columns, _ => throw (.multiplicityCells name columns.length)
   match component.generation with
   | .demand _ =>
       if cells.toList.any (·.isFixed) then throw (.demandFixedCell name)
-  | .preallocated { height, .. } | .standalone { height, .. } =>
-      let height := height.toNat
+  | .preallocated mode =>
+      let height := mode.height.toNat
+      unless nextPowerOfTwo height = height do
+        throw (.preallocatedHeight name height)
+      unless rowProgramValid steps cells.toList do
+        throw (.rowProgram name)
+      unless (u64exprDataReads mode.rowIndex).isEmpty do
+        throw (.rowOfDataRead name)
+  | .standalone mode =>
+      let height := mode.height.toNat
       unless nextPowerOfTwo height = height do
         throw (.preallocatedHeight name height)
       unless rowProgramValid steps cells.toList do
@@ -254,8 +276,8 @@ def validateComponent (component : Component F) :
 
 /-- Check that every prover-data read targets a cell of a preallocated component that generation
 doesn't change. -/
-def validateDataReads (components : List (Component F))
-    (multiplicities : List (Option MultiplicityColumn)) : Except ValidationError Unit := do
+def validateDataReads (components : List (Component F)) (multiplicities : List (Option ℕ)) :
+    Except ValidationError Unit := do
   let targets := components.zip multiplicities
   for component in components do
     let name := component.circuit.name
@@ -269,8 +291,7 @@ def validateDataReads (components : List (Component F))
         match target.generation with
         | .demand _ => throw (.unstableDataRead name reader read.key read.column)
         | .preallocated _ | .standalone _ | .segments _ =>
-            if targetMultiplicity.any (·.column = read.column) ||
-                target.isWindowCell read.column then
+            if targetMultiplicity = some read.column || target.isWindowCell read.column then
               throw (.unstableDataRead name reader read.key read.column)
 
 /-- Check that the window cells of a two-row component are only filled in by generation: its input
@@ -294,19 +315,19 @@ def validateWindowCells (component : Component F) : Except ValidationError Unit 
 
 /-- All checks of the components' generations; returns the multiplicity cell of every component. -/
 def validateComponents (components : List (Component F)) :
-    Except ValidationError (List (Option MultiplicityColumn)) := do
+    Except ValidationError (List (Option ℕ)) := do
   let multiplicities ← components.mapM validateComponent
   components.forM validateWindowCells
   validateDataReads components multiplicities
   return multiplicities
 
-/-- An ensemble whose generation passed `validateGeneration`, with the multiplicity cell of every
-component, in ensemble order. -/
+/-- An ensemble whose generation passed `validateGeneration`, with the input column of the
+multiplicity cell of every component, in ensemble order. -/
 structure ValidGeneration (ens : Ensemble F PublicIO) where
-  multiplicities : List (Option MultiplicityColumn)
+  multiplicities : List (Option ℕ)
   valid : validateComponents ens.tables = .ok multiplicities
 
-/-- Check the generation of every component of an ensemble, and resolve its multiplicity cell. -/
+/-- Check the generation of every component of an ensemble, and find its multiplicity cell. -/
 def validateGeneration (ens : Ensemble F PublicIO) :
     Except ValidationError (ValidGeneration ens) :=
   match hvalid : validateComponents ens.tables with

@@ -150,6 +150,9 @@ pub type Guard<F> = fn(&[F], &WitnessData<F>, &WitnessData<F>) -> bool;
 /// the given value in its multiplicity cell.
 pub type DemandInput<F> = fn(&[F], &WitnessData<F>, &WitnessData<F>, F) -> Vec<F>;
 
+/// The index of the row that answers a demanded message, which can read the hint.
+pub type RowOf<F> = fn(&[F], &WitnessData<F>) -> u64;
+
 #[derive(Clone, Debug)]
 pub struct DemandMode<F> {
     pub channel: &'static str,
@@ -158,33 +161,11 @@ pub struct DemandMode<F> {
     /// Which of these messages the component answers.
     pub guard: Guard<F>,
     pub input: DemandInput<F>,
-    /// The multiplicity cell, which counts repeated demand for a message in one row. Without one,
-    /// every occurrence gets its own row.
-    pub multiplicity: Option<MultiplicityColumn>,
+    /// The input column of the multiplicity cell, which counts repeated demand for a message in
+    /// one row. Without one, every occurrence gets its own row.
+    pub multiplicity: Option<usize>,
     /// The input of the rows that pad the component's table to a power-of-two height.
     pub padding: Vec<F>,
-}
-
-/// A multiplicity cell: the multiplicity of a component's interaction on its channel, which cancels
-/// demand for the interaction's message on that channel.
-#[derive(Clone, Copy, Debug)]
-pub struct MultiplicityColumn {
-    /// The position of the counted interaction among the component's interactions.
-    pub interaction: usize,
-    /// The input column of the cell.
-    pub column: usize,
-    /// The direction of the counted interaction.
-    pub direction: Direction,
-}
-
-impl MultiplicityColumn {
-    /// The multiplicity cell that cancels a net multiplicity `demand` on top of the value `cell`.
-    fn cancel<F: Field>(&self, cell: F, demand: i128) -> F {
-        match self.direction {
-            Direction::Push => cell - F::from_i128(demand),
-            Direction::Pull => cell + F::from_i128(demand),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -195,7 +176,10 @@ pub enum Mode<F> {
         /// Which unanswered messages the rows answer, like `DemandMode::trigger`.
         trigger: Direction,
         rows: usize,
-        multiplicity: MultiplicityColumn,
+        /// The row that answers a demanded message, if it is below `rows` and carries the message.
+        row_of: RowOf<F>,
+        /// The input column of the multiplicity cell.
+        multiplicity: usize,
     },
     /// A fixed number of rows, which answer no demand.
     Standalone {
@@ -429,6 +413,11 @@ impl<F: WitnessField> Demand<F> {
             Direction::Pull
         }
     }
+
+    /// How many more times the message was pushed than pulled, or the opposite, as a field element.
+    fn count(&self) -> F {
+        F::from_u128(self.multiplicity.unsigned_abs())
+    }
 }
 
 type MessageKey<F> = (&'static str, Vec<F>);
@@ -504,50 +493,38 @@ struct Row<F> {
     values: Vec<F>,
 }
 
-/// The rows of a component, indexed by the message of their counted interaction.
+/// The rows of a component.
 struct Table<F> {
     rows: Vec<Row<F>>,
-    /// The position of the counted interaction, if the component has a multiplicity cell.
-    counted_interaction: Option<usize>,
-    /// The first row whose counted interaction carries each message. Counting does not change the
-    /// message, since Clean's validation rejects counted messages that read the multiplicity cell.
-    counted_rows: BTreeMap<Vec<F>, usize>,
+    /// The row created for each demanded message, in a demand component with a multiplicity cell.
+    message_rows: BTreeMap<Vec<F>, usize>,
 }
 
 impl<F: WitnessField> Table<F> {
-    fn new(mode: &Mode<F>) -> Self {
-        let counted_interaction = match mode {
-            Mode::Demand(mode) => mode
-                .multiplicity
-                .map(|multiplicity| multiplicity.interaction),
-            Mode::Preallocated { multiplicity, .. } => Some(multiplicity.interaction),
-            Mode::Standalone { .. } => None,
-        };
+    fn new() -> Self {
         Self {
             rows: Vec::new(),
-            counted_interaction,
-            counted_rows: BTreeMap::new(),
+            message_rows: BTreeMap::new(),
         }
     }
 
     /// Append a row, and return its interactions.
     fn push<P: Program<F>>(&mut self, component: usize, row: Row<F>) -> Vec<Interaction<F>> {
         let interactions = P::interactions(component, &row.values);
-        if let Some(counted) = self
-            .counted_interaction
-            .and_then(|position| interactions.get(position))
-        {
-            self.counted_rows
-                .entry(counted.message.clone())
-                .or_insert(self.rows.len());
-        }
         self.rows.push(row);
         interactions
     }
 
-    /// The first row whose counted interaction carries the demanded message.
-    fn counted_row(&self, demand: &Demand<F>) -> Option<usize> {
-        self.counted_rows.get(&demand.message).copied()
+    /// Append a row created for the demanded `message`, which counts it, and return its
+    /// interactions.
+    fn push_for_message<P: Program<F>>(
+        &mut self,
+        component: usize,
+        message: Vec<F>,
+        row: Row<F>,
+    ) -> Vec<Interaction<F>> {
+        self.message_rows.insert(message, self.rows.len());
+        self.push::<P>(component, row)
     }
 }
 
@@ -555,17 +532,32 @@ impl<F: WitnessField> Table<F> {
 enum Answer<'a, F> {
     /// With the component's demand mode.
     Demand(&'a DemandMode<F>),
-    /// By incrementing the multiplicity cell of the row at `row_index`.
-    Multiplicity {
-        multiplicity: &'a MultiplicityColumn,
-        row_index: usize,
-    },
+    /// By incrementing the multiplicity cell in input column `column` of the row at `row_index`.
+    Multiplicity { column: usize, row_index: usize },
+}
+
+/// Whether a row has an interaction on `channel`, opposite to `trigger`, with the message.
+fn carries<F: WitnessField, P: Program<F>>(
+    component: usize,
+    row: &Row<F>,
+    channel: &str,
+    trigger: Direction,
+    message: &[F],
+) -> bool {
+    P::interactions(component, &row.values)
+        .iter()
+        .any(|interaction| {
+            interaction.channel == channel
+                && interaction.direction != trigger
+                && interaction.message == message
+        })
 }
 
 /// How the component answers the demand, if it accepts it: a component accepts the messages on its
-/// channel that trigger it, and that a demand component's guard holds for, or that a preallocated
-/// component has a row for.
-fn accepts<'a, F: WitnessField>(
+/// channel that trigger it, and that a demand component's guard holds for, or that the `row_of` row
+/// of a preallocated component carries.
+fn accepts<'a, F: WitnessField, P: Program<F>>(
+    component: usize,
     mode: &'a Mode<F>,
     demand: &Demand<F>,
     table: &Table<F>,
@@ -580,20 +572,28 @@ fn accepts<'a, F: WitnessField>(
         Mode::Preallocated {
             channel,
             trigger,
+            row_of,
             multiplicity,
             ..
-        } => (demand.channel == *channel && demand.direction() == *trigger)
-            .then(|| table.counted_row(demand))
-            .flatten()
-            .map(|row_index| Answer::Multiplicity {
-                multiplicity,
-                row_index,
-            }),
+        } => {
+            if demand.channel != *channel || demand.direction() != *trigger {
+                return None;
+            }
+            let row_index = usize::try_from(row_of(&demand.message, hint)).ok()?;
+            let row = table.rows.get(row_index)?;
+            carries::<F, P>(component, row, channel, *trigger, &demand.message).then_some(
+                Answer::Multiplicity {
+                    column: *multiplicity,
+                    row_index,
+                },
+            )
+        }
         Mode::Standalone { .. } => None,
     }
 }
 
-/// A new row answering the demanded message, whose multiplicity cell, if any, cancels the demand.
+/// A new row answering the demanded message, whose multiplicity cell, if any, starts at the
+/// demanded count.
 fn make_demand_row<F: WitnessField, P: Program<F>>(
     component: usize,
     mode: &DemandMode<F>,
@@ -601,19 +601,17 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<Row<F>, String> {
-    let count = mode.multiplicity.map_or(F::ZERO, |multiplicity| {
-        multiplicity.cancel(F::ZERO, demand.multiplicity)
-    });
-    let input = (mode.input)(&demand.message, data, hint, count);
+    let input = (mode.input)(&demand.message, data, hint, demand.count());
     let values = P::complete_row(component, &input, data, hint)?;
     Ok(Row { input, values })
 }
 
-/// Cancel the demand in the multiplicity cell of a row, and complete the row again.
+/// Count the demand in the multiplicity cell in input column `column` of a row, and complete the
+/// row again.
 #[allow(clippy::too_many_arguments)]
 fn increment_multiplicity<F: WitnessField, P: Program<F>>(
     component: usize,
-    multiplicity: &MultiplicityColumn,
+    column: usize,
     row_index: usize,
     demand: &Demand<F>,
     table: &mut Table<F>,
@@ -622,14 +620,13 @@ fn increment_multiplicity<F: WitnessField, P: Program<F>>(
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
     let row = &mut table.rows[row_index];
-    let current = row.input.get(multiplicity.column).copied().ok_or_else(|| {
-        format!(
-            "multiplicity column {} is out of bounds",
-            multiplicity.column
-        )
-    })?;
+    let current = row
+        .input
+        .get(column)
+        .copied()
+        .ok_or_else(|| format!("multiplicity column {column} is out of bounds"))?;
     let old_interactions = P::interactions(component, &row.values);
-    row.input[multiplicity.column] = multiplicity.cancel(current, demand.multiplicity);
+    row.input[column] = current + demand.count();
     row.values = P::complete_row(component, &row.input, data, hint)?;
     demands.remove_interactions(old_interactions);
     demands.add_interactions(P::interactions(component, &row.values));
@@ -645,22 +642,19 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
-    if let Some(multiplicity) = &mode.multiplicity {
-        if let Some(row_index) = table.counted_row(demand) {
+    if let Some(column) = mode.multiplicity {
+        if let Some(row_index) = table.message_rows.get(&demand.message).copied() {
             return increment_multiplicity::<F, P>(
-                component,
-                multiplicity,
-                row_index,
-                demand,
-                table,
-                demands,
-                data,
-                hint,
+                component, column, row_index, demand, table, demands, data, hint,
             );
         }
     }
     let row = make_demand_row::<F, P>(component, mode, demand, data, hint)?;
-    demands.add_interactions(table.push::<P>(component, row));
+    let interactions = match mode.multiplicity {
+        None => table.push::<P>(component, row),
+        Some(_) => table.push_for_message::<P>(component, demand.message.clone(), row),
+    };
+    demands.add_interactions(interactions);
     Ok(())
 }
 
@@ -680,7 +674,7 @@ fn balance<F: WitnessField, P: Program<F>>(
         for demand in demands.iter() {
             let mut answers = Vec::new();
             for (component, (mode, table)) in modes.iter().zip(tables.iter()).enumerate() {
-                if let Some(answer) = accepts(mode, &demand, table, data, hint) {
+                if let Some(answer) = accepts::<F, P>(component, mode, &demand, table, data, hint) {
                     answers.push((component, answer));
                 }
             }
@@ -720,12 +714,9 @@ fn balance<F: WitnessField, P: Program<F>>(
                 data,
                 hint,
             )?,
-            Answer::Multiplicity {
-                multiplicity,
-                row_index,
-            } => increment_multiplicity::<F, P>(
+            Answer::Multiplicity { column, row_index } => increment_multiplicity::<F, P>(
                 component,
-                multiplicity,
+                column,
                 row_index,
                 &demand,
                 &mut tables[component],
@@ -874,8 +865,8 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     let mut demands = Demands::new();
     demands.add_interactions(P::verifier_interactions(public_input));
     let mut tables = Vec::with_capacity(modes.len());
-    for (component, (mode, inputs)) in modes.iter().zip(inputs).enumerate() {
-        let mut table = Table::new(mode);
+    for (component, inputs) in inputs.into_iter().enumerate() {
+        let mut table = Table::new();
         for input in inputs {
             let values = P::complete_row(component, &input, &data, hint)?;
             demands.add_interactions(table.push::<P>(component, Row { input, values }));
