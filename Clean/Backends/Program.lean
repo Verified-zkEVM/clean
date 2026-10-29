@@ -156,7 +156,7 @@ structure ComponentProgram (F : Type) [FiniteField F] where
 /-- A `DemandMode`. -/
 structure DemandProgram (F : Type) [FiniteField F] where
   channel : String
-  trigger : Direction
+  trigger : Interaction.Direction
   /-- The guard, as a condition on the message cells. -/
   guard : Witgen.BExpr F
   /-- The input of a new row, reading the message cells. -/
@@ -170,7 +170,7 @@ inductive ModeProgram (F : Type) [FiniteField F] where
   | demand (mode : DemandProgram F)
   /-- `rows` rows, whose inputs are `input` at the row index, with multiplicity 0 in input column
   `multiplicity`. `rowOf` reads the message cells. -/
-  | preallocated (channel : String) (trigger : Direction) (rows : UInt64) (input : InputProgram F)
+  | preallocated (channel : String) (trigger : Interaction.Direction) (rows : UInt64) (input : InputProgram F)
       (rowOf : Witgen.U64Expr F) (multiplicity : ℕ)
   /-- `rows` rows, whose inputs are `input` at the row index, which answer no demand. -/
   | standalone (rows : UInt64) (input : InputProgram F)

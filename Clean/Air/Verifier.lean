@@ -122,22 +122,22 @@ An append-only verifier program. Like `Circuit`, its monad instance accumulates 
 appending the continuation's operations to those already emitted.
 -/
 @[implicit_reducible]
-def Verifier (F : Type) [FiniteField F] (α : Type) := α × Verifier.Operations F
+def Verifier.M (F : Type) [FiniteField F] (α : Type) := α × Verifier.Operations F
 
 namespace Verifier
 
-def bind {α β : Type} (program : Verifier F α) (next : α → Verifier F β) : Verifier F β :=
+def bind {α β : Type} (program : M F α) (next : α → M F β) : M F β :=
   let (value, operations) := program
   let (result, moreOperations) := next value
   (result, operations ++ moreOperations)
 
-instance : Monad (Verifier F) where
+instance : Monad (M F) where
   pure value := (value, [])
   bind := bind
   map f program := (f program.1, program.2)
 
 @[circuit_norm]
-lemma bind_def {α β : Type} (program : Verifier F α) (next : α → Verifier F β) :
+lemma bind_def {α β : Type} (program : M F α) (next : α → M F β) :
     program >>= next =
       let (value, operations) := program
       let (result, moreOperations) := next value
@@ -145,35 +145,35 @@ lemma bind_def {α β : Type} (program : Verifier F α) (next : α → Verifier 
 
 @[circuit_norm]
 lemma pure_def {α : Type} (value : α) :
-    (pure value : Verifier F α) = (value, []) := rfl
+    (pure value : M F α) = (value, []) := rfl
 
 @[reducible, circuit_norm]
-def operations {α : Type} (program : Verifier F α) : Operations F := program.2
+def M.operations {α : Type} (program : M F α) : Operations F := program.2
 
 @[reducible, circuit_norm]
-def circuitOperations {α : Type} (program : Verifier F α) : _root_.Operations F :=
+def M.circuitOperations {α : Type} (program : M F α) : _root_.Operations F :=
   program.operations.circuitOperations
 
 @[circuit_norm]
-def addOperation (operation : Operation F) : Verifier F Unit :=
+def addOperation (operation : Operation F) : M F Unit :=
   ((), [operation])
 
 @[circuit_norm]
 def pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (message : Message (Expression F)) : Verifier F Unit :=
+    (message : Message (Expression F)) : M F Unit :=
   addOperation (.interact (channel.pulled message).toRaw (fun _ env => by
     rw [ChannelInteraction.toRaw_requirements]
     simp [ChannelInteraction.Requirements, Channel.pulled, pulled, Expression.eval]))
 
 @[circuit_norm]
 def push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
-    (message : Message (Expression F)) : Verifier F Unit :=
-  addOperation (.interact (channel.pushed message).toRaw (Direction.noConfusion ·))
+    (message : Message (Expression F)) : M F Unit :=
+  addOperation (.interact (channel.pushed message).toRaw (Interaction.Direction.noConfusion ·))
 
 /-- A verifier program parameterized by the proof's public input variables. -/
 structure Program (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
-  main : Var PublicIO F → Verifier F Unit
+  main : Var PublicIO F → M F Unit
   Spec : PublicIO F → ProverData F → Prop
   soundness : ∀ env,
     ((main (varFromOffset PublicIO 0)).operations.circuitOperations).FullGuarantees env →

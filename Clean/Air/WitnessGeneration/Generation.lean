@@ -131,7 +131,7 @@ structure DemandMode (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType 
   channel : Channel F Message
   /-- Which unanswered messages create rows: `.push` means messages pushed more often than pulled,
   so the new row pulls them; `.pull` means the opposite. -/
-  trigger : Direction
+  trigger : Interaction.Direction
   /-- Which of these messages the component answers, by default all of them. Components sharing a
   channel, like the opcode tables of a VM, are told apart by guards. A guard is a witness program
   over the message, so it can read prover data and hints, like the opcode at the message's `pc`. -/
@@ -153,7 +153,7 @@ structure PreallocatedMode (F : Type) (Input : TypeMap) [ProvableType Input] whe
   /-- Which unanswered messages the rows answer: `.pull` means messages pulled more often than
   pushed, like the reads of a lookup table, which a row pushing its message counts; `.push` means
   the opposite. -/
-  trigger : Direction
+  trigger : Interaction.Direction
   /-- The number of rows, a power of two. -/
   height : UInt64
   /-- The input of row `i`. Its `let`-steps and fixed cells are computed from `i` alone; its witness

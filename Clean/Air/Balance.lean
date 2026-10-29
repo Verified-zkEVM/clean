@@ -38,15 +38,15 @@ lemma not_push_iff {i : Interaction F} : ¬i.Push ↔ i.mult = 0 ∨ i.Pull := b
 end Interaction
 
 /-- The number of active interactions in a direction that carry a message. -/
-def activeCount (interactions : List (Interaction F)) (direction : Direction) (msg : Array F) : ℕ :=
+def activeCount (interactions : List (Interaction F)) (direction : Interaction.Direction) (msg : Array F) : ℕ :=
   interactions.countP fun i => i.direction = direction ∧ i.msg = msg ∧ i.mult ≠ 0
 
 /-- The messages of the active interactions in a direction. -/
-def activeMessages (interactions : List (Interaction F)) (direction : Direction) :
+def activeMessages (interactions : List (Interaction F)) (direction : Interaction.Direction) :
     List (Array F) :=
   (interactions.filter fun i => i.direction = direction ∧ i.mult ≠ 0).map (·.msg)
 
-lemma count_activeMessages (interactions : List (Interaction F)) (direction : Direction)
+lemma count_activeMessages (interactions : List (Interaction F)) (direction : Interaction.Direction)
     (msg : Array F) :
     (activeMessages interactions direction).count msg = activeCount interactions direction msg := by
   simp only [activeMessages, activeCount, List.count_eq_countP, List.countP_map,
@@ -144,7 +144,7 @@ theorem LogUpBalanced.activeCount_push_eq_activeCount_pull_of_isBool
     (isBool : ∀ i ∈ interactions, i.msg = msg → IsBool i.mult) :
     activeCount interactions .push msg = activeCount interactions .pull msg := by
   obtain ⟨ length_lt, sums ⟩ := balanced
-  have activeCount_lt (direction : Direction) :
+  have activeCount_lt (direction : Interaction.Direction) :
       activeCount interactions direction msg < ringChar F :=
     lt_of_le_of_lt (List.countP_le_length) length_lt
   have sum := sums msg
@@ -409,12 +409,12 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees
     rw [List.countP_eraseIdx (by simp_all), List.countP_set (len_pushes ▸ hj), push_j_msg]
     simp [h_ij, count_eq msg']
 
-lemma activeCount_append (as bs : List (Interaction F)) (direction : Direction) (msg : Array F) :
+lemma activeCount_append (as bs : List (Interaction F)) (direction : Interaction.Direction) (msg : Array F) :
     activeCount (as ++ bs) direction msg = activeCount as direction msg + activeCount bs direction msg :=
   List.countP_append ..
 
 lemma activeCount_eq_zero_of_direction_ne {interactions : List (Interaction F)}
-    {direction : Direction} (h_direction : ∀ i ∈ interactions, i.direction ≠ direction)
+    {direction : Interaction.Direction} (h_direction : ∀ i ∈ interactions, i.direction ≠ direction)
     (msg : Array F) : activeCount interactions direction msg = 0 := by
   simp only [activeCount, List.countP_eq_zero, decide_eq_true_eq, not_and]
   exact fun i hi h => absurd h (h_direction i hi)

@@ -11,33 +11,33 @@ variable {F : Type} [FiniteField F]
 variable {Message : TypeMap} [ProvableType Message]
 
 /-- Whether an interaction adds messages to a channel or takes them from it. -/
-inductive Direction where
+inductive Interaction.Direction where
   | push
   | pull
 deriving Repr, DecidableEq, Inhabited
 
-def Direction.name : Direction → String
+def Interaction.Direction.name : Interaction.Direction → String
   | .push => "push"
   | .pull => "pull"
 
-@[simp, circuit_norm] lemma Direction.push_eq_pull_iff : Direction.push = .pull ↔ False := by
+@[simp, circuit_norm] lemma Interaction.Direction.push_eq_pull_iff : Interaction.Direction.push = .pull ↔ False := by
   simp
-@[simp, circuit_norm] lemma Direction.pull_eq_push_iff : Direction.pull = .push ↔ False := by
+@[simp, circuit_norm] lemma Interaction.Direction.pull_eq_push_iff : Interaction.Direction.pull = .push ↔ False := by
   simp
 
 /-- What an interaction of multiplicity `mult` owes, given the guarantee of its message: an active
 push owes the guarantee, and a pull has multiplicity `0` or `1`. -/
-def Direction.Requirements {F : Type} [Zero F] [One F] (direction : Direction) (mult : F)
+def Interaction.Direction.Requirements {F : Type} [Zero F] [One F] (direction : Interaction.Direction) (mult : F)
     (guarantee : Prop) : Prop :=
   match direction with
   | .push => mult ≠ 0 → guarantee
   | .pull => mult = 0 ∨ mult = 1
 
-@[simp, circuit_norm] lemma Direction.push_requirements {F : Type} [Zero F] [One F] (mult : F)
-    (guarantee : Prop) : Direction.push.Requirements mult guarantee = (mult ≠ 0 → guarantee) :=
+@[simp, circuit_norm] lemma Interaction.Direction.push_requirements {F : Type} [Zero F] [One F] (mult : F)
+    (guarantee : Prop) : Interaction.Direction.push.Requirements mult guarantee = (mult ≠ 0 → guarantee) :=
   rfl
-@[simp, circuit_norm] lemma Direction.pull_requirements {F : Type} [Zero F] [One F] (mult : F)
-    (guarantee : Prop) : Direction.pull.Requirements mult guarantee = (mult = 0 ∨ mult = 1) :=
+@[simp, circuit_norm] lemma Interaction.Direction.pull_requirements {F : Type} [Zero F] [One F] (mult : F)
+    (guarantee : Prop) : Interaction.Direction.pull.Requirements mult guarantee = (mult = 0 ∨ mult = 1) :=
   rfl
 
 structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
@@ -57,7 +57,7 @@ structure RawChannel (F : Type) where
   so that pulling from the channel gives you a guarantee that is satisfied on the other side by the requirement for pushing
   the same element.
   -/
-  Requirements (direction : Direction) (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
+  Requirements (direction : Interaction.Direction) (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
 
 namespace Channel
 /--
@@ -103,9 +103,9 @@ lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
         channel1.Guarantees (fromElements message) data) ≍
       fun (mult : F) message data ↦ mult = 1 →
         channel2.Guarantees (fromElements message) data) ∧
-    (fun (direction : Direction) (mult : F) message data ↦
+    (fun (direction : Interaction.Direction) (mult : F) message data ↦
         direction.Requirements mult (channel1.Guarantees (fromElements message) data)) ≍
-      fun (direction : Direction) (mult : F) message data ↦
+      fun (direction : Interaction.Direction) (mult : F) message data ↦
         direction.Requirements mult (channel2.Guarantees (fromElements message) data) := by
   simp only [toRaw, RawChannel.mk.injEq]
 end Channel
@@ -115,13 +115,13 @@ A _channel interaction_ is a channel message along with a direction and a multip
 of times the message is pushed or pulled.
 -/
 structure ChannelInteraction (channel : Channel F Message) where
-  direction : Direction
+  direction : Interaction.Direction
   mult : Expression F
   msg : Message (Expression F)
 
 structure AbstractInteraction (F : Type) where
   channel : RawChannel F
-  direction : Direction
+  direction : Interaction.Direction
   mult : Expression F
   msg : Vector (Expression F) channel.arity
 
@@ -323,7 +323,7 @@ when building interactions, while this raw representation carries the channel ar
 -/
 structure Interaction (F : Type) where
   channel : RawChannel F
-  direction : Direction
+  direction : Interaction.Direction
   mult : F
   msg : Array F
   same_size : msg.size = channel.arity
@@ -407,7 +407,7 @@ lemma pulledIfValue_requirements_of_isBool_enabled {channel : Channel F Message}
     enabled = 0 ∨ enabled = 1 →
     (channel.pulledIfValue enabled msg).Requirements data := by
   simp only [Interaction.Requirements, Channel.pulledIfValue, Channel.toRaw,
-    Direction.pull_requirements]
+    Interaction.Direction.pull_requirements]
   exact id
 
 lemma pushedIfValue_guarantees {channel : Channel F Message}

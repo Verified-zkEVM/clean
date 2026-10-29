@@ -94,7 +94,7 @@ def PreallocatedMode.accepts {Input : TypeMap} [ProvableType Input]
 
 /-- Whether a row has an interaction on `channel`, opposite to `trigger`, with the message. -/
 def ComponentState.carries (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F)
-    (channel : String) (trigger : Direction) (message : Array F) : Bool :=
+    (channel : String) (trigger : Interaction.Direction) (message : Array F) : Bool :=
   let environment := Environment.fromArray row.values data
   state.interactions.any fun interaction =>
     interaction.channel.name == channel && interaction.direction != trigger &&
