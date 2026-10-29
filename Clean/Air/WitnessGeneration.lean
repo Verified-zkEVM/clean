@@ -28,10 +28,11 @@ table. The reaction stops when a row pushes the final state, which the verifier 
 How a component answers is its generation mode, see `Clean.Air.WitnessGeneration.Generation`:
 - a `demand` component gets a new row for the message, or changes the multiplicity cell of an
   existing row,
-- a `preallocated` component changes the multiplicity cell of the row that carries the message.
+- a `preallocated` component changes the multiplicity cell of the row that its `rowOf` maps the
+  message to, if that row carries the message.
 
 Exactly one component may accept each message: the demand components on its channel whose guard
-holds, and the preallocated components that have a row for it.
+holds, and the preallocated components whose `rowOf` row carries it.
 
 Finally, demand-generated tables are padded to a power-of-two height. Padding rows can interact,
 so the generator balances and pads again until no table grows.
@@ -40,8 +41,6 @@ so the generator balances and pads again until no table grows.
 
 TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
 rather than from the idea. None of them is fundamental:
-- A multiplicity cell is the whole multiplicity of exactly one interaction, on the component's
-  channel.
 - Witness programs only read prover data from cells of preallocated components that aren't
   multiplicity cells, see `Clean.Air.WitnessGeneration.Validation`.
 - All padding rows of a component have the same input.
@@ -61,21 +60,23 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 /-- The row a component adds or replaces to answer a demand. -/
 inductive Change (F : Type) where
   | add (row : GeneratedRow F)
+  /-- A new row created for the demanded `message`, which counts it. -/
+  | addForMessage (message : Array F) (row : GeneratedRow F)
   /-- The row at `index` is updated from `old` to `new`. -/
   | update (index : ℕ) (old new : GeneratedRow F)
 
 /-- The rows that leave the tally with their interactions. -/
 def Change.removedRows : Change F → List (GeneratedRow F)
-  | .add _ => []
+  | .add _ | .addForMessage _ _ => []
   | .update _ old _ => [old]
 
 /-- The rows that enter the tally with their interactions. -/
 def Change.addedRows : Change F → List (GeneratedRow F)
-  | .add row | .update _ _ row => [row]
+  | .add row | .addForMessage _ row | .update _ _ row => [row]
 
-def ComponentState.applyChange (state : ComponentState F) (data : ProverData F) :
-    Change F → ComponentState F
-  | .add row => state.pushRow data row
+def ComponentState.applyChange (state : ComponentState F) : Change F → ComponentState F
+  | .add row => state.pushRow row
+  | .addForMessage message row => state.pushMessageRow message row
   | .update index _ new => state.setRow index new
 
 /-- Whether a demand component answers the demand: it is on the mode's channel and triggers it, and
@@ -86,47 +87,60 @@ def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode
     mode.guardCondition.eval { env := .fromArray demand.message data hint }
 
 /-- Whether a preallocated component answers the demand: it is on the mode's channel and triggers
-it. Answering also needs a row for the message. -/
+it. Answering also needs a row for the message, see `PreallocatedMode.findRow`. -/
 def PreallocatedMode.accepts {Input : TypeMap} [ProvableType Input]
     (mode : PreallocatedMode F Input) (demand : Demand F) : Bool :=
   mode.channel.name == demand.channel && mode.trigger == demand.direction
 
-/-- The row that counts the demanded message, with the multiplicity cell and the row's index. -/
-def findCountedRow (state : ComponentState F) (demand : Demand F) :
-    Option (MultiplicityColumn × ℕ × GeneratedRow F) :=
-  state.multiplicity.bind fun multiplicity =>
-    state.countedRows[demand.message]?.bind fun index =>
-      state.rows[index]?.map fun row => (multiplicity, index, row)
+/-- Whether a row has an interaction on `channel`, opposite to `trigger`, with the message. -/
+def ComponentState.carries (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F)
+    (channel : String) (trigger : Direction) (message : Array F) : Bool :=
+  let environment := Environment.fromArray row.values data
+  state.interactions.any fun interaction =>
+    interaction.channel.name == channel && interaction.direction != trigger &&
+      (interaction.eval environment).msg == message
 
-/-- Cancel the demand in the multiplicity cell of a row, and complete the row again. -/
-def incrementMultiplicity (state : ComponentState F) (demand : Demand F) (data : ProverData F)
-    (hint : ProverHint F) : MultiplicityColumn × ℕ × GeneratedRow F → Change F
-  | (multiplicity, index, row) =>
-      let count := multiplicity.cancel (row.input[multiplicity.column]?.getD 0) demand.multiplicity
-      .update index row (completeRow state (row.input.set! multiplicity.column count) data hint)
+/-- The row of a preallocated component that answers the demanded message, with its index: the row
+at `rowOf` of the message, if it carries the message. -/
+def PreallocatedMode.findRow (state : ComponentState F)
+    (mode : PreallocatedMode F state.component.Input) (demand : Demand F) (data : ProverData F)
+    (hint : ProverHint F) : Option (ℕ × GeneratedRow F) :=
+  let index := mode.rowIndex.eval { env := .fromArray demand.message (fun _ _ => #[]) hint }
+  state.rows[index.toNat]?.bind fun row =>
+    if state.carries row data mode.channel.name mode.trigger demand.message then
+      some (index.toNat, row)
+    else none
 
-/-- A new row answering the demanded message, whose multiplicity cell, if any, cancels the
-demand. -/
+/-- Count the demand in the multiplicity cell in input column `column` of a row, and complete the
+row again. -/
+def incrementMultiplicity (state : ComponentState F) (column : ℕ) (demand : Demand F)
+    (data : ProverData F) (hint : ProverHint F) : ℕ × GeneratedRow F → Change F
+  | (index, row) =>
+      let count := (row.input[column]?.getD 0) + demand.count
+      .update index row (completeRow state (row.input.set! column count) data hint)
+
+/-- A new row answering the demanded message, whose multiplicity cell, if any, starts at the
+demanded count. -/
 def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
   let env := ProverEnvironment.fromArray demand.message data hint
-  let count := (state.multiplicity.map (·.cancel 0 demand.multiplicity)).getD 0
-  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 count
+  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 demand.count
   completeRow state input data hint
 
 /-- Answer demand with a new row for one occurrence, or, with a multiplicity cell, by counting it
-in the row for the message, which is created if there is none yet. -/
+in the row created for the message, which the first demand for the message creates. -/
 def DemandMode.answer (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Change F :=
   match state.multiplicity with
   | none => .add (mode.newRow state demand data hint)
-  | some _ =>
-      match findCountedRow state demand with
-      | some found => incrementMultiplicity state demand data hint found
-      | none => .add (mode.newRow state demand data hint)
+  | some column =>
+      match state.messageRows[demand.message]?.bind fun index =>
+          state.rows[index]?.map (index, ·) with
+      | some found => incrementMultiplicity state column demand data hint found
+      | none => .addForMessage demand.message (mode.newRow state demand data hint)
 
 /-- The component's answer to the demand, if it accepts it. A preallocated component accepts the
-messages it has a row for. -/
+messages that its `rowOf` row carries. -/
 def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data : ProverData F)
     (hint : ProverHint F) : Option (Change F) :=
   match state.component.generation with
@@ -134,7 +148,9 @@ def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data 
       if mode.accepts demand data hint then some (mode.answer state demand data hint) else none
   | .preallocated mode =>
       if mode.accepts demand then
-        (findCountedRow state demand).map (incrementMultiplicity state demand data hint)
+        state.multiplicity.bind fun column =>
+          (mode.findRow state demand data hint).map
+            (incrementMultiplicity state column demand data hint)
       else none
 
 /-- The answers of all components that accept the demand, with their indices and names. -/
@@ -162,7 +178,7 @@ def applyAnswer (states : Array (ComponentState F)) (tally : Tally F) (index : �
         (change.removedRows.flatMap (rowInteractions state · data),
           change.addedRows.flatMap (rowInteractions state · data))
     | none => ([], [])
-  (states.modify index (·.applyChange data change),
+  (states.modify index (·.applyChange change),
     (tally.removeInteractions removed).addInteractions added)
 
 /-! ### The loop -/
@@ -194,7 +210,7 @@ def ComponentState.pad (state : ComponentState F) (data : ProverData F) (hint : 
   | .demand mode =>
       let row := completeRow state (toElements mode.padding).toArray data hint
       let rows := List.replicate (state.targetHeight - state.rows.size) row
-      (rows.foldl (·.pushRow data) state, rows.flatMap (rowInteractions state · data))
+      (rows.foldl (·.pushRow) state, rows.flatMap (rowInteractions state · data))
 
 /-- Pad, then answer the demand of the padding rows, until no table grows. -/
 def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
@@ -228,7 +244,7 @@ def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fue
   let inputs := states.map (initialInputs · hint)
   let data : ProverData F := readNamedRows (initialData states inputs)
   let states := (states.zip inputs).map fun (state, inputs) =>
-    inputs.foldl (fun state input => state.pushRow data (completeRow state input data hint)) state
+    inputs.foldl (fun state input => state.pushRow (completeRow state input data hint)) state
   -- start the chain reaction from the verifier's and the preallocated rows' interactions
   let verifier := ens.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := states.toList.flatMap fun state =>
