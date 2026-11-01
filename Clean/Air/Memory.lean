@@ -98,11 +98,11 @@ theorem good_of_pull {g : F} (h_order : orderOf g = FiniteField.size F - 1)
   by_contra bad
   set key := a.msg.pop
   -- the counters of the active pushes and pulls of the bad entry
-  let counters (direction : Direction) (l : List (Interaction F)) : List F :=
+  let counters (direction : Channel.Direction) (l : List (Interaction F)) : List F :=
     (l.filter fun i => i.direction = direction ∧ i.mult ≠ 0 ∧ i.msg.pop = key).map (·.msg.back!)
   let reads := blocks.flatMap fun block => if IsRead g block then counters .pull block else []
   let others := blocks.flatMap fun block => if IsRead g block then [] else counters .pull block
-  have counters_flatten (direction : Direction) :
+  have counters_flatten (direction : Channel.Direction) :
       counters direction blocks.flatten = blocks.flatMap (counters direction) := by
     simp [counters, List.filter_flatten, List.map_flatten, List.flatMap]
     rfl
@@ -140,7 +140,7 @@ theorem good_of_pull {g : F} (h_order : orderOf g = FiniteField.size F - 1)
     rw [this]
     exact perm_flatMap_append _ _ _
   -- counters count the active interactions with the bad entry
-  have count_counters (direction : Direction) (x : F) :
+  have count_counters (direction : Channel.Direction) (x : F) :
       (counters direction blocks.flatten).count x =
         activeCount blocks.flatten direction (key.push x) := by
     simp only [counters, activeCount, List.count_eq_countP, List.countP_map, List.countP_filter]
@@ -220,6 +220,8 @@ structure Memory (F : Type) [FiniteField F] (Entry : TypeMap) [ProvableType Entr
   height : UInt64
   /-- The entry at index `i`. Fixed rows can't read prover data or hints. -/
   entry (i : Witgen.U64Expr F) : Witgen.M F (Entry (Witgen.FExpr F))
+  /-- The index of the entry that equals `value`, at or above `height` if there is none. -/
+  rowOf (value : Var Entry F) : Witgen.U64Expr F
   /-- What it means to be in the memory. Reading an entry from the memory's channel guarantees it. -/
   Contains : Entry F → Prop
   /-- `Contains` holds exactly for the entries of the memory. -/
@@ -386,6 +388,7 @@ def table : Component F where
     channel := memory.counterChannel
     trigger := .push
     height := memory.height
+    rowOf | (entry, _) => memory.rowOf entry
     input i := do
       let entry ← memory.entry i
       return (fromElements ((toElements entry).map .fixed), .witness (.const 1))

@@ -38,6 +38,10 @@ def programMemory (h_length : program.length < 2 ^ 63) : Memory BF64 fieldPair w
   entry i :=
     let addresses := ((List.range program.length).map (g ^ ·)).toArray
     pure (addresses[i], program.toArray[i])
+  rowOf entry :=
+    (List.range program.length).foldr
+      (fun k index => .ite (.feq (.expr entry.1) (.const (g ^ k))) (.const k.toUInt64) index)
+      (Witgen.U64Expr.const program.length.toUInt64)
   Contains
   | (address, coefficient) => ∃ k < program.length, address = g ^ k ∧ program[k]? = some coefficient
   contains_iff value := by

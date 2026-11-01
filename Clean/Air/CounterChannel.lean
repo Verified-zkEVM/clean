@@ -75,7 +75,7 @@ theorem not_bad {α : Type} (step : F → F) (Valid : F → Prop)
   have card_messages : messages.card = n := by
     rw [Finset.card_image_of_injOn injOn, Finset.card_range]
   -- each message is pulled and pushed
-  have card_le (direction : Direction)
+  have card_le (direction : Channel.Direction)
       (h : ∀ message ∈ messages, ∃ i ∈ interactions, i.direction = direction ∧ key i = message) :
       n ≤ (interactions.filter (·.direction = direction)).length := by
     rw [← card_messages]
