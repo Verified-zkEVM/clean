@@ -84,6 +84,7 @@ def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) (balance : Balance F) : 
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →
+    witness.InteractionsFit balance →
     witness.Balanced balance →
       ens.VerifierGuarantees witness.data
 
@@ -124,13 +125,14 @@ def toFormal (ens : SoundVmEnsemble F PublicIO balance)
   Spec
   ProverAssumptions
   soundness := by
-    intro publicInput heights assumptions ⟨witness, input_eq, heights_eq, constraints, balanced⟩
+    intro publicInput heights assumptions
+      ⟨fit, witness, input_eq, heights_eq, constraints, balanced⟩
     subst input_eq heights_eq
     apply spec_of_verifierSpec witness assumptions
     apply ens.ensemble.verifierSpec_of_verifierGuarantees
     exact ens.soundVmChannel witness
       (Ensemble.assumptions_of_assumptionsConsistency assumptionsConsistency witness assumptions)
-      constraints balanced
+      constraints (EnsembleWitness.interactionsFit_of_heights fit) balanced
 end SoundVmEnsemble
 end Air.Flat
 
@@ -811,8 +813,8 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
     -- the ensemble with the VM tables satisfies SoundVmChannel
     (ens.addVm vm fits).SoundVmChannel balance := by
   intro not_mem_vm_channel grts_subset reqs_disjoint (witness : VmWitness ens vm fits) assumptions
-    constraints balanced
-  have balance := witness.balancedChannels_of_balanced balanced
+    constraints fit balanced
+  have balance := witness.balancedChannels_of_balanced fit balanced
   /-
   the high level plan is to apply
   `verifier_guarantees_of_requirements_of_requirements_of_guarantees`.

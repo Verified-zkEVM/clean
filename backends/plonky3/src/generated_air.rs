@@ -84,7 +84,9 @@ pub enum EnsembleShapeError {
         widths: (usize, usize),
     },
     InteractionCountOverflow,
+    /// A channel has at least as many interactions as the field order.
     InteractionCountBound {
+        channel: &'static str,
         interactions: u128,
         field_order: u64,
     },
@@ -178,13 +180,13 @@ impl<P> GeneratedAir<P> {
 /// A complete generated Clean statement with its AIR components in canonical order.
 ///
 /// The component AIRs are private so callers cannot omit, duplicate, or reorder them. They are
-/// followed by the verifier AIR. Construction also establishes the interaction-count side condition
-/// required by Clean's channel semantics, and that every channel has one message width.
+/// followed by the verifier AIR. Construction also checks that every channel has fewer interactions
+/// than the field order, the bound of Clean's LogUp balance check, and one message width.
 #[derive(Clone, Debug)]
 pub struct GeneratedEnsemble<F, P> {
     airs: Vec<GeneratedAir<P>>,
     trace_heights: Vec<usize>,
-    interaction_count: u128,
+    interaction_counts: BTreeMap<&'static str, u128>,
     _field: PhantomData<F>,
 }
 
@@ -276,28 +278,34 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
                 });
             }
         }
-        let interactions = trace_heights.iter().zip(&component_interactions).try_fold(
-            verifier_interactions.len() as u128,
-            |total, (&height, interactions)| {
-                let component = (height as u128)
-                    .checked_mul(interactions.len() as u128)
+        // Each channel has the verifier's interactions with it, and those of every row of every
+        // component, which the balance check is sound for while fewer than the field order.
+        let mut interaction_counts = BTreeMap::<&'static str, u128>::new();
+        let rows = core::iter::once(1)
+            .chain(trace_heights.iter().copied())
+            .zip(core::iter::once(&verifier_interactions).chain(&component_interactions));
+        for (height, interactions) in rows {
+            for interaction in interactions {
+                let count = interaction_counts.entry(interaction.channel).or_insert(0);
+                *count = count
+                    .checked_add(height as u128)
                     .ok_or(EnsembleShapeError::InteractionCountOverflow)?;
-                total
-                    .checked_add(component)
-                    .ok_or(EnsembleShapeError::InteractionCountOverflow)
-            },
-        )?;
-        if interactions >= F::ORDER_U64 as u128 {
-            return Err(EnsembleShapeError::InteractionCountBound {
-                interactions,
-                field_order: F::ORDER_U64,
-            });
+            }
+        }
+        for (&channel, &interactions) in &interaction_counts {
+            if interactions >= F::ORDER_U64 as u128 {
+                return Err(EnsembleShapeError::InteractionCountBound {
+                    channel,
+                    interactions,
+                    field_order: F::ORDER_U64,
+                });
+            }
         }
 
         Ok(Self {
             airs,
             trace_heights: trace_heights.to_vec(),
-            interaction_count: interactions,
+            interaction_counts,
             _field: PhantomData,
         })
     }
@@ -310,8 +318,9 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
         self.trace_heights.len()
     }
 
-    pub fn interaction_count(&self) -> u128 {
-        self.interaction_count
+    /// The number of interactions with each channel, by name.
+    pub fn interaction_counts(&self) -> &BTreeMap<&'static str, u128> {
+        &self.interaction_counts
     }
 
     /// The component AIRs followed by the verifier AIR.

@@ -353,11 +353,48 @@ def Balanced {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) (balanc
     Prop :=
   ∀ channel ∈ ens.channels, balance.Balanced (witness.interactionsWith channel)
 
+/-- The balance check is sound for the number of interactions with every ensemble channel. -/
+def InteractionsFit {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
+    (balance : Balance F) : Prop :=
+  ∀ channel ∈ ens.channels, balance.Fits (witness.interactionsWith channel).length
+
 lemma balancedChannels_of_balanced {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
-    {balance : Balance F} (balanced : witness.Balanced balance) : witness.BalancedChannels :=
+    {balance : Balance F} (fit : witness.InteractionsFit balance)
+    (balanced : witness.Balanced balance) : witness.BalancedChannels :=
   fun channel h_channel =>
-    balance.balancedInteractions_of_balanced _ (balanced channel h_channel)
+    balance.balancedInteractions_of_balanced _ (fit channel h_channel) (balanced channel h_channel)
 end EnsembleWitness
+
+/--
+The number of interactions with a channel, for tables of the given heights: the verifier's
+interactions with it, and those of every row of every table. Each row of a component interacts with
+a channel equally often, so the count only depends on the heights.
+-/
+noncomputable def Ensemble.interactionCount (ens : Ensemble F PublicIO) (channel : RawChannel F)
+    (heights : List ℕ) : ℕ :=
+  (ens.verifierOperations.interactionsWith channel).length +
+    (List.zipWith (fun component height =>
+      height * (component.operations.interactionsWith channel).length) ens.tables heights).sum
+
+/-- The balance check is sound for the number of interactions with every ensemble channel, for
+tables of the given heights. -/
+def Ensemble.InteractionsFit (ens : Ensemble F PublicIO) (balance : Balance F)
+    (heights : List ℕ) : Prop :=
+  ∀ channel ∈ ens.channels, balance.Fits (ens.interactionCount channel heights)
+
+lemma EnsembleWitness.length_interactionsWith {ens : Ensemble F PublicIO}
+    (witness : EnsembleWitness ens) (channel : RawChannel F) :
+    (witness.interactionsWith channel).length = ens.interactionCount channel witness.heights := by
+  simp only [interactionsWith, verifierInteractionsWith, Tables.interactionsWith, toTables,
+    Ensemble.interactionCount, heights, List.length_append, Operations.interactionValuesWith_eq_map,
+    List.length_map, List.length_flatMap, Table.interactionsWith]
+  rw [← witness.tables_map_component, List.zipWith_map, List.zipWith_self]
+  simp [List.map_const', List.sum_replicate]
+
+lemma EnsembleWitness.interactionsFit_of_heights {ens : Ensemble F PublicIO}
+    {witness : EnsembleWitness ens} {balance : Balance F}
+    (fit : ens.InteractionsFit balance witness.heights) : witness.InteractionsFit balance :=
+  fun channel h_channel => witness.length_interactionsWith channel ▸ fit channel h_channel
 
 /- ## Soundness, Completeness and related definitions -/
 
@@ -366,13 +403,12 @@ namespace Ensemble
 /--
 The raw "statement" that a proof about an ensemble makes, for a balance check that the proof system
 performs on every channel. Could also be called "relation". Like the public input, the table heights
-are part of a proof.
-
-TODO: the balance checks bound the number of interactions with a channel directly, like LogUp's
-bound by the characteristic. Instead, that bound should follow from the table heights.
+are part of a proof, so the verifier checks that the balance check is sound for the number of
+interactions they give every channel.
 -/
 def Statement (ens : Ensemble F PublicIO) (balance : Balance F) (publicInput : PublicIO F)
     (heights : List ℕ) : Prop :=
+  ens.InteractionsFit balance heights ∧
   ∃ witness : EnsembleWitness ens,
     witness.publicInput = publicInput ∧ witness.heights = heights ∧
     witness.Constraints ∧ witness.Balanced balance
@@ -415,6 +451,7 @@ def TableSoundness (ens : Ensemble F PublicIO) (balance : Balance F) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →
+    witness.InteractionsFit balance →
     witness.Balanced balance →
     witness.Spec
 
@@ -451,10 +488,11 @@ theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F Public
   simp only [Soundness, TableSoundness, AssumptionsConsistency, SpecConsistency, Statement,
     forall_exists_index, and_imp]
   intro table_soundness assumptions_consistency spec_consistency
-    publicInput heights assumptions witness publicInput_eq heights_eq constraints balanced
+    publicInput heights assumptions fit witness publicInput_eq heights_eq constraints balanced
   simp only [← publicInput_eq, ← heights_eq] at *
   apply spec_consistency witness
-  apply table_soundness witness ?assumptions constraints balanced
+  apply table_soundness witness ?assumptions constraints
+    (EnsembleWitness.interactionsFit_of_heights fit) balanced
   exact assumptions_of_assumptionsConsistency assumptions_consistency witness assumptions
 end Ensemble
 
