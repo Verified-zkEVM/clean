@@ -179,11 +179,12 @@ data's `publicEnvironment`, whose variables are the public input. -/
 structure Program (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   main : Var PublicIO F → VerifierM F Unit
-  Spec : PublicIO F → ProverData F → Prop
+  Spec : PublicIO F → ProverData F → Prop := fun _ _ => True
   soundness : ∀ data : ProverData F,
     ((main (varFromOffset PublicIO 0)).operations.circuitOperations).FullGuarantees
       data.publicEnvironment →
-    Spec (eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0)) data
+    Spec (eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0)) data := by
+    intros; trivial
 
 namespace Program
 

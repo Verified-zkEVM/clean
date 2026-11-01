@@ -36,10 +36,14 @@ structure State (F : Type) where
   y : F
 deriving ProvableStruct
 
-/-- A state reached after `k` steps. -/
+/-- The state reached after `k` steps. -/
+def Reached (k : ℕ) (state : State BF64) : Prop :=
+  state.counter = g ^ k ∧ (state.x, state.y) = fibonacci k
+
+/-- The states of the VM, which `Reached` describes. -/
 def stateChannel : Channel BF64 State where
   name := "state"
-  Guarantees state _ := ∃ k : ℕ, state.counter = g ^ k ∧ (state.x, state.y) = fibonacci k
+  Guarantees _ _ := True
 
 structure StepInput (F : Type) where
   enabled : F
@@ -66,24 +70,25 @@ def step : GeneralFormalCircuit BF64 StepInput unit where
     simp only [circuit_norm, stateChannel]
 
   ProverAssumptions
-  | { enabled, counter, x, y }, data, _ =>
-    enabled = 0 ∨ enabled = 1 ∧ stateChannel.Guarantees { counter, x, y } data
-  Spec _ _ _ := True
+  | { enabled, counter, x, y }, _, _ =>
+    enabled = 0 ∨ enabled = 1 ∧ ∃ k, Reached k { counter, x, y }
+  -- an enabled step takes the state after `k` steps to the state after `k + 1` steps
+  Spec
+  | { enabled, counter, x, y }, _, _ => enabled = 1 → ∀ k, Reached k { counter, x, y } →
+    Reached (k + 1) { counter := counter * g, x := y, y := x + y }
 
-  channelsWithRequirements := [ stateChannel.toRaw ]
   requirementsChannelsLawful input_var _ := by
     obtain ⟨enabled, counter, x, y⟩ := input_var
     simp only [circuit_norm, stateChannel]
+    intro env h_bool
+    rcases mul_eq_zero.mp h_bool with h | h <;> simp_all [sub_eq_zero]
 
   soundness := by
-    circuit_proof_start [stateChannel]
-    obtain ⟨ h_bool, h_state ⟩ := h_holds
-    rcases mul_eq_zero.mp h_bool with rfl | h_one
-    · simp
-    rw [sub_eq_zero] at h_one
-    subst h_one
-    obtain ⟨ k, h_counter, h_fib ⟩ := h_state rfl
-    refine ⟨ .inr rfl, fun _ => ⟨ k + 1, by rw [h_counter, pow_succ], ?_ ⟩ ⟩
+    circuit_proof_start [stateChannel, Reached]
+    rw [mul_eq_zero, sub_eq_zero] at h_holds
+    refine ⟨ ?_, h_holds ⟩
+    rintro rfl k ⟨ h_counter, h_fib ⟩
+    refine ⟨ by rw [h_counter, pow_succ], ?_ ⟩
     simp only [fibonacci, ← h_fib]
   completeness := by
     circuit_proof_start [stateChannel]
@@ -93,8 +98,8 @@ def step : GeneralFormalCircuit BF64 StepInput unit where
 abbrev stepComponent : Component BF64 where
   circuit := step
   generation := .demand {
-    trigger := .push
     channel := stateChannel
+    trigger := .push
     input | { counter, x, y } => pure { enabled := 1, counter, x, y }
   }
 
@@ -103,23 +108,22 @@ def verifier : Verifier.Program BF64 State where
   main final := do
     Verifier.pull stateChannel final
     Verifier.push stateChannel { counter := 1, x := 0, y := 1 }
-  Spec final data := stateChannel.Guarantees final data
-  soundness := by simp [circuit_norm]
 
 def vm : VmTables BF64 State where
   channel := stateChannel
+  Reached k state _ := Reached k state
+  guarantees_of_reached := by simp [stateChannel]
   tables := [stepComponent]
   unique_names := by simp
   verifier := verifier
+  final := id
   tables_channel := by simp [circuit_norm, step, sub_eq_zero]
-  verifier_channel := by simp [circuit_norm, verifier]
-  verifier_requirements _ := by
-    simp only [circuit_norm, verifier, stateChannel]
-    exact ⟨ 0, by simp, rfl ⟩
+  verifier_channel := by
+    simp [circuit_norm, verifier, Reached, fibonacci, ProverData.getPublicInput_eq_eval]
 
 /-- The public statement: the final state is reached after some number of steps. -/
 def Spec (final : State BF64) : Prop :=
-  ∃ k : ℕ, final.counter = g ^ k ∧ (final.x, final.y) = fibonacci k
+  ∃ k : ℕ, Reached k final
 
 /-- The ensemble, sound under multiset balance. -/
 def formalEnsemble : FormalEnsemble BF64 State .multiset :=
@@ -131,7 +135,7 @@ def formalEnsemble : FormalEnsemble BF64 State .multiset :=
     (by simp [circuit_norm, vm, step])
   |>.toFormal (fun _ _ => True) Spec
     (by simp [circuit_norm, vm])
-    (by simp [circuit_norm, vm, verifier, stateChannel, Spec])
+    (by rintro witness - - ⟨ k, -, -, -, reached ⟩; exact ⟨ k, reached ⟩)
 
 /-- End-to-end soundness: a valid proof for the public input `final` shows that it is the state
 after some number of steps. -/
