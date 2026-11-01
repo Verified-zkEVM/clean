@@ -313,7 +313,6 @@ abbrev falseComponent : Component (F p) where
     channel := falseChannel
     trigger := .push
     input _ := pure ()
-    padding := ()
   }
 
 def falseEnsemble := SoundEnsemble.empty (F p) unit .logUp

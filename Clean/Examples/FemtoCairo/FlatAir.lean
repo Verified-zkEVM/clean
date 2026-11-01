@@ -482,7 +482,6 @@ abbrev executionComponent (program : Array (F p)) (h_program : ValidProgram prog
     channel := stateChannel program
     trigger := .push
     input state := pure { enabled := 1, state }
-    padding := { enabled := 0, state := { pc := 0, ap := 0, fp := 0 } }
   }
 
 /-- The state in which a program has run to completion: `pc` points just past the program, where no
@@ -509,7 +508,7 @@ def vm (program : Array (F p)) (h_program : ValidProgram program) : VmTables (F 
   tables_channel := by simp [circuit_norm, executeStep, sub_eq_zero]
   verifier_channel := by simp [circuit_norm, verifier]
   verifier_requirements data := by
-    simp only [verifier, stateChannel, ProverData.getPublicInput, circuit_norm]
+    simp only [verifier, stateChannel, ProverData.getPublicInput_eq_eval, circuit_norm]
     exact ⟨0, rfl⟩
 
 def soundEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
