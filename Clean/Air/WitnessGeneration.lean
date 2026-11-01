@@ -105,7 +105,7 @@ at `rowOf` of the message, if it carries the message. -/
 def PreallocatedMode.findRow (state : ComponentState F)
     (mode : PreallocatedMode F state.component.Input) (demand : Demand F) (data : ProverData F)
     (hint : ProverHint F) : Option (ℕ × GeneratedRow F) :=
-  let index := mode.rowIndex.eval { env := .fromArray demand.message (fun _ _ => #[]) hint }
+  let index := mode.rowIndex.eval { env := .fromArray demand.message (.empty F) hint }
   state.rows[index.toNat]?.bind fun row =>
     if state.carries row data mode.channel.name mode.trigger demand.message then
       some (index.toNat, row)
