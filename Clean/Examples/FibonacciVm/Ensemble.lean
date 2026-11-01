@@ -29,6 +29,7 @@ def bytes : Lookup (F p) field where
   name := "bytes"
   height := 256
   row i := pure i
+  rowOf value := value.val
   Contains value := value.val < 256
   contains_iff value := by
     simp only [circuit_norm, Nat.mod_eq_of_lt (UInt64.toNat_lt _)]

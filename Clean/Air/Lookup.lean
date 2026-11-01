@@ -23,6 +23,8 @@ structure Lookup (F : Type) [FiniteField F] (Row : TypeMap) [ProvableType Row] w
   height : UInt64
   /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
   row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
+  /-- The index of the row that equals `value`, at or above `height` if there is none. -/
+  rowOf (value : Var Row F) : Witgen.U64Expr F
   /-- What it means to be in the table. Pulling a row from the lookup's channel guarantees it. -/
   Contains : Row F → Prop
   /-- `Contains` holds exactly for the rows of the table. -/
@@ -65,6 +67,7 @@ def component : Component F where
     input i := do
       let row ← lookup.row i
       return (fromElements ((toElements row).map .fixed), .multiplicity)
+    rowOf := lookup.rowOf
   }
   circuit_assumptions_of_assumptions := by
     rintro i ⟨value, multiplicity⟩ data ⟨hi, hfixed⟩ - -

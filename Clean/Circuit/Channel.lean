@@ -10,6 +10,8 @@ public import Mathlib.Data.Finsupp.Defs
 variable {F : Type} [FiniteField F]
 variable {Message : TypeMap} [ProvableType Message]
 
+namespace Channel
+
 /-- Whether an interaction adds messages to a channel or takes them from it. -/
 inductive Direction where
   | push
@@ -40,6 +42,8 @@ def Direction.Requirements {F : Type} [Zero F] [One F] (direction : Direction) (
     (guarantee : Prop) : Direction.pull.Requirements mult guarantee = (mult = 0 ∨ mult = 1) :=
   rfl
 
+end Channel
+
 structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
   name : String
   /-- the guarantees you get from adding an interaction to the channel, to be used locally in your soundness proof -/
@@ -57,7 +61,8 @@ structure RawChannel (F : Type) where
   so that pulling from the channel gives you a guarantee that is satisfied on the other side by the requirement for pushing
   the same element.
   -/
-  Requirements (direction : Direction) (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
+  Requirements (direction : Channel.Direction) (mult : F) (message : Vector F arity)
+    (data : ProverData F) : Prop
 
 namespace Channel
 /--
@@ -103,9 +108,9 @@ lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
         channel1.Guarantees (fromElements message) data) ≍
       fun (mult : F) message data ↦ mult = 1 →
         channel2.Guarantees (fromElements message) data) ∧
-    (fun (direction : Direction) (mult : F) message data ↦
+    (fun (direction : Channel.Direction) (mult : F) message data ↦
         direction.Requirements mult (channel1.Guarantees (fromElements message) data)) ≍
-      fun (direction : Direction) (mult : F) message data ↦
+      fun (direction : Channel.Direction) (mult : F) message data ↦
         direction.Requirements mult (channel2.Guarantees (fromElements message) data) := by
   simp only [toRaw, RawChannel.mk.injEq]
 end Channel
@@ -115,13 +120,13 @@ A _channel interaction_ is a channel message along with a direction and a multip
 of times the message is pushed or pulled.
 -/
 structure ChannelInteraction (channel : Channel F Message) where
-  direction : Direction
+  direction : Channel.Direction
   mult : Expression F
   msg : Message (Expression F)
 
 structure AbstractInteraction (F : Type) where
   channel : RawChannel F
-  direction : Direction
+  direction : Channel.Direction
   mult : Expression F
   msg : Vector (Expression F) channel.arity
 
@@ -323,7 +328,7 @@ when building interactions, while this raw representation carries the channel ar
 -/
 structure Interaction (F : Type) where
   channel : RawChannel F
-  direction : Direction
+  direction : Channel.Direction
   mult : F
   msg : Array F
   same_size : msg.size = channel.arity
@@ -407,7 +412,7 @@ lemma pulledIfValue_requirements_of_isBool_enabled {channel : Channel F Message}
     enabled = 0 ∨ enabled = 1 →
     (channel.pulledIfValue enabled msg).Requirements data := by
   simp only [Interaction.Requirements, Channel.pulledIfValue, Channel.toRaw,
-    Direction.pull_requirements]
+    Channel.Direction.pull_requirements]
   exact id
 
 lemma pushedIfValue_guarantees {channel : Channel F Message}

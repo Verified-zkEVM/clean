@@ -98,6 +98,7 @@ def programLookup (program : Program) : Lookup (F p) Instruction where
   name := "program"
   height := programHeight program
   row i := pure (programRow program i)
+  rowOf instruction := instruction.pc.val
   Contains
   | { pc, opcode, operand } => ∃ i < programHeight program, pc = i.toNat ∧
       match program[i.toNat]? with
