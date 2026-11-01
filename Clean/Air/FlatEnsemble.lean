@@ -85,8 +85,9 @@ def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness 
 /-- The prover data of a witness holds its public input. -/
 @[circuit_norm]
 lemma EnsembleWitness.data_getPublicInput {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
-    witness.data.getPublicInput PublicIO = witness.publicInput :=
-  ProvableType.eval_fromInput_varFromOffset_zero witness.publicInput _
+    witness.data.getPublicInput PublicIO = witness.publicInput := by
+  rw [ProverData.getPublicInput_eq_eval]
+  exact ProvableType.eval_fromInput_varFromOffset_zero witness.publicInput _
 
 @[circuit_norm]
 lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
@@ -123,8 +124,9 @@ def VerifierSpec (ens : Ensemble F PublicIO) (data : ProverData F) : Prop :=
   ens.verifier.Spec (data.getPublicInput PublicIO) data
 
 lemma verifierSpec_of_verifierGuarantees (ens : Ensemble F PublicIO) (data : ProverData F) :
-    ens.VerifierGuarantees data → ens.VerifierSpec data :=
-  ens.verifier.soundness data
+    ens.VerifierGuarantees data → ens.VerifierSpec data := by
+  rw [VerifierSpec, ProverData.getPublicInput_eq_eval]
+  exact ens.verifier.soundness data
 
 def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (data : ProverData F)
     (channel : RawChannel F) : Prop :=

@@ -246,7 +246,7 @@ def vm (program : Program) (h_program : program.length < p) : VmTables (F p) Pub
   tables_channel := by simp [circuit_norm, step, sub_eq_zero]
   verifier_channel := by simp [circuit_norm, verifier]
   verifier_requirements data := by
-    simp [circuit_norm, verifier, stateChannel, run, ProverData.getPublicInput]
+    simp [circuit_norm, verifier, stateChannel, run, ProverData.getPublicInput_eq_eval]
 
 def soundEnsemble (program : Program) (h_program : program.length < p) :=
   SoundEnsemble.empty (F p) PublicInput .logUp
