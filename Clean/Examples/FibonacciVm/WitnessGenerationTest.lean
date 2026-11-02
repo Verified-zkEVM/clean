@@ -40,4 +40,15 @@ the byte range checks are counted in the 256 fixed byte rows.
 -/
 example : result = .ok ([32, 32, 256], 32, 2, true, true) := by native_decide
 
+/--
+For these heights, the verifier computes the interaction counts of every channel, the same as the
+Rust statement's, and checks the LogUp bound for them.
+-/
+example :
+    let ens := (fibonacciEnsemble (p := pBabybear)).ensemble
+    ens.channels.map (fun channel => (channel.name, ens.interactionCount channel.name [32, 32, 256]))
+      = [("fibonacci", 66), ("add8", 64), ("bytes", 288)] ∧
+    ens.interactionsFit .logUp [32, 32, 256] := by
+  native_decide
+
 end Air.Flat.WitnessGenerationTest

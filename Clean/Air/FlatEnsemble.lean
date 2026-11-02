@@ -285,14 +285,14 @@ lemma channel_mem_of_mem_interactions {witness : EnsembleWitness ens} {i : Inter
     rw [Table.interactionsWith_eq_filter, List.filter_eq_nil_iff] at h_nil
     exact h_nil i h_i (by simp)
 
-open Classical in
 /-- The interactions with a channel of the ensemble are the interactions with its name, since
 channel names are unique. So a proof system that balances the interactions with each channel name
 balances every channel. -/
 lemma interactionsWith_eq_filter_name {witness : EnsembleWitness ens} {channel : RawChannel F}
     (h_channel : channel ∈ ens.channels) :
     witness.interactionsWith channel =
-      witness.interactions.filter (·.channel.name = channel.name) := by
+      witness.interactions.filter (·.channel.name == channel.name) := by
+  classical
   have h_eq : witness.interactionsWith channel =
       witness.interactions.filter (·.channel = channel) := by
     simp only [interactionsWith, verifierInteractionsWith, Tables.interactionsWith, toTables,
@@ -302,7 +302,7 @@ lemma interactionsWith_eq_filter_name {witness : EnsembleWitness ens} {channel :
   apply List.filter_congr
   intro i h_i
   have h_mem := channel_mem_of_mem_interactions h_i
-  simp only [decide_eq_decide]
+  rw [Bool.eq_iff_iff, decide_eq_true_iff, beq_iff_eq]
   constructor
   · rintro rfl; rfl
   · intro h_name
@@ -356,7 +356,7 @@ def Balanced {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) (balanc
 /-- The balance check is sound for the number of interactions with every ensemble channel. -/
 def InteractionsFit {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
     (balance : Balance F) : Prop :=
-  ∀ channel ∈ ens.channels, balance.Fits (witness.interactionsWith channel).length
+  ∀ channel ∈ ens.channels, balance.fits (witness.interactionsWith channel).length
 
 lemma balancedChannels_of_balanced {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
     {balance : Balance F} (fit : witness.InteractionsFit balance)
@@ -366,35 +366,45 @@ lemma balancedChannels_of_balanced {ens : Ensemble F PublicIO} {witness : Ensemb
 end EnsembleWitness
 
 /--
-The number of interactions with a channel, for tables of the given heights: the verifier's
-interactions with it, and those of every row of every table. Each row of a component interacts with
-a channel equally often, so the count only depends on the heights.
+The number of interactions with the channel of a name, for tables of the given heights: the
+verifier's interactions with it, and those of every row of every table. Each row of a component
+interacts with a channel equally often, so the count only depends on the heights. Channels are
+counted by name, which identifies an ensemble channel.
 -/
-noncomputable def Ensemble.interactionCount (ens : Ensemble F PublicIO) (channel : RawChannel F)
-    (heights : List ℕ) : ℕ :=
-  (ens.verifierOperations.interactionsWith channel).length +
+def Ensemble.interactionCount (ens : Ensemble F PublicIO) (name : String) (heights : List ℕ) : ℕ :=
+  ens.verifierOperations.interactions.countP (·.channel.name == name) +
     (List.zipWith (fun component height =>
-      height * (component.operations.interactionsWith channel).length) ens.tables heights).sum
+      height * component.operations.interactions.countP (·.channel.name == name))
+      ens.tables heights).sum
 
 /-- The balance check is sound for the number of interactions with every ensemble channel, for
 tables of the given heights. -/
-def Ensemble.InteractionsFit (ens : Ensemble F PublicIO) (balance : Balance F)
-    (heights : List ℕ) : Prop :=
-  ∀ channel ∈ ens.channels, balance.Fits (ens.interactionCount channel heights)
+def Ensemble.interactionsFit (ens : Ensemble F PublicIO) (balance : Balance F)
+    (heights : List ℕ) : Bool :=
+  ens.channels.all fun channel => balance.fits (ens.interactionCount channel.name heights)
+
+lemma EnsembleWitness.countP_interactions {ens : Ensemble F PublicIO}
+    (witness : EnsembleWitness ens) (name : String) :
+    witness.interactions.countP (·.channel.name == name) =
+      ens.interactionCount name witness.heights := by
+  simp only [interactions, Ensemble.interactionCount, heights, List.countP_append,
+    Operations.interactionValues, List.countP_map, List.countP_flatMap, Table.interactions]
+  rw [← witness.tables_map_component, List.zipWith_map, List.zipWith_self]
+  simp [Function.comp_def, AbstractInteraction.eval_channel, List.countP_flatMap, List.countP_map,
+    List.map_const', List.sum_replicate]
 
 lemma EnsembleWitness.length_interactionsWith {ens : Ensemble F PublicIO}
-    (witness : EnsembleWitness ens) (channel : RawChannel F) :
-    (witness.interactionsWith channel).length = ens.interactionCount channel witness.heights := by
-  simp only [interactionsWith, verifierInteractionsWith, Tables.interactionsWith, toTables,
-    Ensemble.interactionCount, heights, List.length_append, Operations.interactionValuesWith_eq_map,
-    List.length_map, List.length_flatMap, Table.interactionsWith]
-  rw [← witness.tables_map_component, List.zipWith_map, List.zipWith_self]
-  simp [List.map_const', List.sum_replicate]
+    (witness : EnsembleWitness ens) {channel : RawChannel F} (h_channel : channel ∈ ens.channels) :
+    (witness.interactionsWith channel).length =
+      ens.interactionCount channel.name witness.heights := by
+  rw [interactionsWith_eq_filter_name h_channel, ← witness.countP_interactions,
+    List.countP_eq_length_filter]
 
 lemma EnsembleWitness.interactionsFit_of_heights {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} {balance : Balance F}
-    (fit : ens.InteractionsFit balance witness.heights) : witness.InteractionsFit balance :=
-  fun channel h_channel => witness.length_interactionsWith channel ▸ fit channel h_channel
+    (fit : ens.interactionsFit balance witness.heights) : witness.InteractionsFit balance :=
+  fun channel h_channel =>
+    witness.length_interactionsWith h_channel ▸ List.all_eq_true.mp fit channel h_channel
 
 /- ## Soundness, Completeness and related definitions -/
 
@@ -408,7 +418,7 @@ interactions they give every channel.
 -/
 def Statement (ens : Ensemble F PublicIO) (balance : Balance F) (publicInput : PublicIO F)
     (heights : List ℕ) : Prop :=
-  ens.InteractionsFit balance heights ∧
+  ens.interactionsFit balance heights ∧
   ∃ witness : EnsembleWitness ens,
     witness.publicInput = publicInput ∧ witness.heights = heights ∧
     witness.Constraints ∧ witness.Balanced balance
