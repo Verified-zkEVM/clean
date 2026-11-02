@@ -196,14 +196,15 @@ def Balance.logUp [ComputableRingChar F] : Balance F where
 
 /--
 Multiset balance: every multiplicity is `0` or `1`, and the messages of the active pushes are a
-permutation of the messages of the active pulls. A product argument checks it for fewer interactions
-than field elements.
+permutation of the messages of the active pulls. The permutation gives equal counts for any number
+of interactions; the soundness error of a randomized check of it, like a product argument, is up to
+the proof system.
 -/
 def Balance.multiset : Balance F where
   Balanced interactions :=
     (∀ i ∈ interactions, IsBool i.mult) ∧
       (activeMessages interactions .push).Perm (activeMessages interactions .pull)
-  fits count := count < FiniteField.size F
+  fits _ := true
   balancedInteractions_of_balanced interactions _ h_check := by
     have counts (msg : Array F) :
         activeCount interactions .push msg = activeCount interactions .pull msg := by
