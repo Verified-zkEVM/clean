@@ -108,11 +108,12 @@ end Examples.WasmDemo
 # The real user flow: a packaged `FormalCircuit`
 
 `mulAdd` above was deliberately small. A production circuit — like the
-`Poseidon1` hash gadget bundled in `Clean.Circomlib.Poseidon` — is packaged as
+generic Poseidon hash gadget in `Clean.Circomlib.Poseidon` — is packaged as
 a `FormalCircuit` with proofs. Compiling it is still just glue:
 
-1. Get its operations: `(Poseidon1.circuit.main (varFromOffset field 0)).operations 1`
-   — the circuit's `main` takes its own input variable (1 public input); no
+1. Get its operations from `Circomlib.Poseidon.circuit params_t2`, passing
+   `#v[varFromOffset field 0]`, and elaborate them at offset 1.
+   The circuit's `main` takes a length-one vector (1 public input); no
    hand-written witness IR anywhere.
 2. Compile: `compileModule BN254_PRIME 1 ["in"] [401] ops 4` — one call
    produces the whole witness-generation module (Montgomery multi-word
@@ -124,8 +125,8 @@ a `FormalCircuit` with proofs. Compiling it is still just glue:
    with `input.json` = `{"in": "0"}`.
 
 The `#eval!` below writes the module and prints the Lean ground truth
-(`Specs.PoseidonOptimized.poseidon1Opt`) so the snarkjs witness can be checked
-against it. Because the output is declared via `outputVarIdx`, the Poseidon1
+(`Specs.PoseidonOptimized.poseidon params_t2 #v[0]`) so the snarkjs witness can be checked
+against it. Because the output is declared via `outputVarIdx`, the Poseidon
 output is signal 1, and the groth16 `public.json` correctly contains
 `[output, input]`.
 
@@ -145,9 +146,10 @@ snarkjs groth16 verify vkey.json public.json proof.json
 
 namespace Examples.WasmDemo.Poseidon
 
-/-- Operations of the full `Poseidon1` hash gadget (BN254, 1 public input). -/
+/-- Operations of the generic Poseidon gadget at state width 2 (BN254, 1 public input). -/
 def poseidonOps : List (Operation Specs.Poseidon.F) :=
-  (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
+  ((Circomlib.Poseidon.circuit Specs.PoseidonOptimized.params_t2).main
+    #v[varFromOffset field 0]).operations 1
 
 /-- Compile the whole gadget: 4 limbs of Montgomery arithmetic, all ABI
     functions; input name `"in"`, output witness at variable 401. -/
@@ -165,7 +167,8 @@ def poseidonR1CSBin : Except String ByteArray := compileR1CSBin Specs.Poseidon.B
     | .ok b => pure b
     | .error e => throw <| IO.userError s!"compileR1CSBin: {e}"
   IO.FS.writeBinFile (System.FilePath.mk "/tmp/poseidon_demo.r1cs") r1cs
-  let expected := Specs.PoseidonOptimized.poseidon1Opt (0 : Specs.Poseidon.F)
+  let expected := Specs.PoseidonOptimized.poseidon Specs.PoseidonOptimized.params_t2
+    #v[(0 : Specs.Poseidon.F)]
   IO.println s!"wrote /tmp/poseidon_demo.wasm ({binary.size} bytes) and /tmp/poseidon_demo.r1cs ({r1cs.size} bytes)"
   IO.println s!"Lean ground truth: poseidon1(0) = {ZMod.val expected}"
 
