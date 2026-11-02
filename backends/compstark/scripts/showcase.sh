@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The keccak-air showcase: Clean's keccak-air proved by CompStark, against Plonky3.
 #
-#   scripts/showcase.sh check L        CompStark's known answers from Plonky3, then the evidence on
+#   scripts/showcase.sh check L        known answers from Plonky3, then the evidence on
 #                                      2^L rows against Plonky3 (`lake exe keccak_showcase check`)
 #   scripts/showcase.sh bench L REPS   trace generation, proof and verification on 2^L rows, Lean
 #                                      and Plonky3 interleaved, both configurations, medians of

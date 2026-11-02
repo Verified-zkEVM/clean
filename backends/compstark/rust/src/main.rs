@@ -18,6 +18,10 @@
 //!
 //! * `inputs L FILE`: the inputs, one permutation's 25 lanes per line;
 //! * `trace L`: the FNV-1a hash of every row of `generate_trace_rows`, one per line in hex;
+//! * `kat-trace COUNT`: the trace known answers `data/keccak_trace_COUNT.txt`, the digest of every
+//!   row of `generate_trace_rows` on `COUNT` fixed inputs (lane `i` of input `k` is
+//!   `(25 k + i + 1) · 0x9e3779b97f4a7c15`, wrapping) by Plonky3's default Poseidon2 sponge
+//!   (`PaddingFreeSponge<_, 24, 16, 8>`), one row's digest per line;
 //! * `prove CONFIG L FILE`: the proof as JSON, after Plonky3 verified it (run with
 //!   `RAYON_NUM_THREADS=1` for the smallest grinding witnesses, as CompStark grinds);
 //! * `verify CONFIG L FILE`: Plonky3's verdict on the JSON proof in `FILE`;
@@ -29,9 +33,9 @@ use p3_field::extension::BinomialExtensionField;
 use p3_field::{Field, PrimeField32};
 use p3_fri::{FriParameters, TwoAdicFriPcs};
 use p3_keccak_air::{generate_trace_rows, KeccakAir};
-use p3_koala_bear::{KoalaBear, Poseidon2KoalaBear};
+use p3_koala_bear::{default_koalabear_poseidon2_24, KoalaBear, Poseidon2KoalaBear};
 use p3_merkle_tree::MerkleTreeMmcs;
-use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
+use p3_symmetric::{CryptographicHasher, PaddingFreeSponge, TruncatedPermutation};
 use p3_uni_stark::{prove, verify, ConjecturedSecurity, Proof, StarkConfig};
 use rand::rngs::SmallRng;
 use rand::{RngExt, SeedableRng};
@@ -101,6 +105,20 @@ fn main() {
                 println!("{hash:016x}");
             }
         }
+        ["kat-trace", count] => {
+            let inputs: Vec<[u64; 25]> = (0..count.parse().unwrap())
+                .map(|k: usize| core::array::from_fn(|i| {
+                    ((25 * k + i + 1) as u64).wrapping_mul(0x9e3779b97f4a7c15)
+                }))
+                .collect();
+            let trace = generate_trace_rows::<F>(inputs, 0);
+            let sponge = PaddingFreeSponge::<_, 24, 16, 8>::new(default_koalabear_poseidon2_24());
+            for row in trace.row_slices() {
+                let d: [F; 8] = sponge.hash_iter(row.iter().copied());
+                let d: Vec<String> = d.iter().map(|x| x.as_canonical_u32().to_string()).collect();
+                println!("{}", d.join(" "));
+            }
+        }
         ["prove", name, log_n, file] => {
             let config = config(name);
             let trace = generate_trace_rows::<F>(inputs(log_n.parse().unwrap()), 1);
@@ -146,7 +164,7 @@ fn main() {
                 "plonky3 {name} 2^{log_n} tracegen {:.1} prove {:.1} total {:.1} verify {:.1} ms",
                 med(&mut tg), med(&mut tp), med(&mut tt), med(&mut tv));
         }
-        _ => panic!("usage: inputs L FILE | trace L | prove CONFIG L FILE | verify CONFIG L FILE \
-            | bench CONFIG L REPS"),
+        _ => panic!("usage: inputs L FILE | trace L | kat-trace COUNT | prove CONFIG L FILE \
+            | verify CONFIG L FILE | bench CONFIG L REPS"),
     }
 }

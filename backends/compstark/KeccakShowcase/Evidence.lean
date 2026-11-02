@@ -17,8 +17,9 @@ public import CompPoly.Univariate.NTTFast.Packed.Instances
 The commands of `lake exe keccak_showcase`, on the Poseidon2 instances `I` of Plonky3's example
 (`KeccakShowcase.Main`).
 
-`lake exe keccak_showcase kat` checks the known answers CompStark's tests keep from Plonky3: the
-fingerprint, the trace of five permutations, and the proof of Plonky3's example on `2 ^ 6` rows.
+`lake exe keccak_showcase kat` checks known answers from Plonky3: the fingerprint and the proof of
+Plonky3's example on `2 ^ 6` rows that CompStark's tests keep, and the trace of five permutations
+(`data/keccak_trace_5.txt`, from `rust/`'s `kat-trace 5`).
 
 `lake exe keccak_showcase check L RUST` checks, on `2 ^ L` rows, that the CompStark AIR of Clean's
 keccak-air component (`toAir`) is Plonky3's `KeccakAir`, against Plonky3's side `RUST` (the binary
@@ -142,13 +143,14 @@ def fingerprint : IO Unit := do
   IO.println s!"fingerprint: the {(air 4).constraints.length} constraints of the Clean AIR are \
     Plonky3's KeccakAir's (digest {digest.toList.map (·.1)})"
 
-/-- The known answers of CompStark's tests, without Plonky3 at hand: the fingerprint, Plonky3's
-trace of five permutations and a truncated padding one (each row's Poseidon2 digest), and the
-proof of Plonky3's example on `2 ^ 6` rows. -/
+/-- Known answers from Plonky3, without Plonky3 at hand: the fingerprint, Plonky3's trace of five
+permutations and a truncated padding one (`data/keccak_trace_5.txt`, each row's Poseidon2 digest),
+and the proof of Plonky3's example on `2 ^ 6` rows (the fingerprint and the proof from CompStark's
+`tests/data`). -/
 def kat : IO Unit := do
   fingerprint
   kernelApplies 6
-  let expected := (← IO.FS.readFile s!"{data}/keccak_trace_5.txt").splitOn "\n" |>.filter (· ≠ "")
+  let expected := (← IO.FS.readFile "data/keccak_trace_5.txt").splitOn "\n" |>.filter (· ≠ "")
   let inputs : Array KeccakAir.State := (Array.range 5).map fun k =>
     Vector.ofFn fun i => (25 * k + i.val + 1).toUInt64 * 0x9e3779b97f4a7c15
   let chunks ← IO.ofExcept (trace 7 inputs)

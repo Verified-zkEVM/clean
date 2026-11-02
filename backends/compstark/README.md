@@ -73,7 +73,7 @@ Run, in this directory:
 scripts/showcase.sh check 16
 ```
 
-It builds `rust/` and the executable, runs `lake exe keccak_showcase kat` (CompStark's known answers from Plonky3: the fingerprint, the trace of five permutations and the example's proof on `2 ^ 6` rows, no Rust needed), then `lake exe keccak_showcase check 16 rust/target/release/keccak-showcase` on `2 ^ 16` rows, and prints one line per check.
+It builds `rust/` and the executable, runs `lake exe keccak_showcase kat` (known answers from Plonky3, no Rust needed: CompStark's fingerprint and example proof on `2 ^ 6` rows, and the trace of five permutations, `data/keccak_trace_5.txt` from `rust/`'s `kat-trace 5`), then `lake exe keccak_showcase check 16 rust/target/release/keccak-showcase` on `2 ^ 16` rows, and prints one line per check.
 
 ### Benchmark
 
@@ -103,7 +103,7 @@ On one thread, medians of 3 interleaved rounds of one proof each:
 
 On 16 threads, the Lean side is within 3% of Plonky3 end to end at the example configuration on $2^{15}$ and $2^{16}$ rows and faster from $2^{17}$ rows, by 40% at $2^{18}$; on one thread it takes about 1.5 times as long at every size. Clean's trace generation takes about the time of Plonky3's `generate_trace_rows` on 16 threads and 0.6 times it on one. The Lean prover's peak memory is 1.5 to 2 times Plonky3's. The proven configuration (`keccak_soundness_ro`) is the example's with 116 more queries and no other change: on $2^{16}$ rows its proofs take the example's time within the noise, and the Lean verifier takes about 90 ms against Plonky3's 16 ms (45 and 11 ms at the example).
 
-The prover is CompStark's on its Keccak fixture (`CompStarkBench keccak`, Plonky3's `KeccakAir` written directly in CompStark, measured at CompStark `29aaf95` interleaved with the showcase): its proofs from the trace take 1.05 s, 1.74 s, 3.55 s and 6.79 s on $2^{15}$ to $2^{18}$ rows on 16 threads and 6.0 s, 12.3 s, 23.8 s and 48.9 s on one thread, the same as the showcase's within the noise, and its trace generation takes about twice Clean's. The Clean AIR's quotient is the fixture's: Clean writes `x - y` as `x + (-1) * y`, which the lowering turns back into a subtraction (`addExpr`), so that its program has the fixture's instruction mix (36212 instructions, 8941 multiplications, against 36069 and 8742) rather than 43048 instructions with 15777 multiplications; the showcase runs this program as the generated kernel `KeccakShowcase/Kernel.lean`, whose constraints `check` and `kat` verify are the AIR's.
+The Clean AIR's quotient is that of CompStark's Keccak fixture, Plonky3's `KeccakAir` written directly in CompStark: Clean writes `x - y` as `x + (-1) * y`, which the lowering turns back into a subtraction (`addExpr`), so that its program has the fixture's instruction mix (36212 instructions, 8941 multiplications, against 36069 and 8742) rather than 43048 instructions with 15777 multiplications; the showcase runs this program as the generated kernel `KeccakShowcase/Kernel.lean`, whose constraints `check` and `kat` verify are the AIR's.
 
 ## Tests
 
