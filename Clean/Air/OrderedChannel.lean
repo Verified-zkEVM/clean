@@ -187,7 +187,7 @@ lemma orderedChannelLt_of_no_guarantees {channel : RawChannel F} {ts : List β} 
   intro no_grts
   simp_all [OrderedChannelLt]
 
-variable [FiniteField F]
+variable [FiniteField F] {N : ℕ}
 
 /--
 Relaxed version of BalancedChannel that works with ensembles that aren't fully specified yet,
@@ -195,11 +195,11 @@ where we assume our interactions are a subset of some larger list which is balan
 
 designed to be used for proving soundness by adding one table after another.
 -/
-def PartialBalancedChannel (tables : Tables F) (channel : RawChannel F) : Prop :=
+def PartialBalancedChannel (N : ℕ) (tables : Tables F) (channel : RawChannel F) : Prop :=
   -- `extraInteractions` represents the unknown interactions from tables added later
   ∃ extraInteractions : List (Interaction F),
     -- the total of known + unknown interactions is balanced
-    BalancedInteractions (tables.interactionsWith channel ++ extraInteractions) ∧
+    BalancedUpTo N (tables.interactionsWith channel ++ extraInteractions) ∧
     -- the extra interactions are with the same channel.
     (∀ i ∈ extraInteractions, i.channel = channel) ∧
     -- additionally, we _assume_ that either the requirements on future interactions hold unconditionally,
@@ -211,7 +211,7 @@ def PartialBalancedChannel (tables : Tables F) (channel : RawChannel F) : Prop :
 
 /-- Partial balance is trivially weaker than balance -/
 lemma partialBalancedChannel_of_balancedInteractions {tables : Tables F} {channel : RawChannel F} :
-    BalancedInteractions (tables.interactionsWith channel) → PartialBalancedChannel tables channel := by
+    BalancedUpTo N (tables.interactionsWith channel) → PartialBalancedChannel N tables channel := by
   intro balanced
   use []
   simp [balanced]
@@ -223,16 +223,16 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt
   {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
   {channel : RawChannel F} :
   table.Constraints →
-  PartialBalancedChannel (.cons table tables same_data) channel →
+  PartialBalancedChannel N (.cons table tables same_data) channel →
   OrderedChannelLt channel tables.components [table.component] →
-    PartialBalancedChannel tables channel := by
+    PartialBalancedChannel N tables channel := by
   rintro table_constraints ⟨ extraInteractions, balanced, same_channel, extra_reqs_or_no_grts ⟩
     not_in_reqs_or
   use table.interactionsWith channel ++ extraInteractions
   simp only [circuit_norm] at *
   simp [or_imp] at ⊢ not_in_reqs_or extra_reqs_or_no_grts
   constructor
-  · apply BalancedInteractions.of_perm balanced
+  · apply BalancedUpTo.of_perm balanced
     grw [List.perm_append_comm_assoc]
   constructor
   · intro a
@@ -255,9 +255,9 @@ lemma partialBalancedChannel_of_cons_of_orderedChannel
   {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
   {channel : RawChannel F} :
   table.Constraints →
-  PartialBalancedChannel (tables.cons table same_data) channel →
+  PartialBalancedChannel N (tables.cons table same_data) channel →
   OrderedChannel channel (table.component :: tables.components) →
-    PartialBalancedChannel tables channel := by
+    PartialBalancedChannel N tables channel := by
   intro table_constraints partial_balance ordered_channel
   apply partialBalancedChannel_of_cons_of_orderedChannelLt same_data table_constraints partial_balance
   simp_all [circuit_norm]
@@ -270,10 +270,10 @@ lemma guarantees_of_requirements_cons
   -- given a list of tables, and one additional table
   {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
   -- and a channel that is consistent, ordered on the new table, and partially balanced on the combined tables
-  {channel : RawChannel F} [channel.Consistent] :
+  {channel : RawChannel F} [channel.ConsistentUpTo N] :
   table.Constraints →
   OrderedChannelRefl channel table.component →
-  PartialBalancedChannel (tables.cons table same_data) channel →
+  PartialBalancedChannel N (tables.cons table same_data) channel →
   -- the channel requirements on the old tables imply guarantees on the new table
   (∀ table ∈ tables.tables, table.ChannelRequirements channel) →
     table.ChannelGuarantees channel := by
@@ -319,24 +319,24 @@ lemma guarantees_of_requirements_cons
     · exact ⟨ same_channel i h_mem_extra, extra_reqs i h_mem_extra ⟩
   -- consistent channels goes from requirements to guarantees
   -- uses `consistent_channels` and `partial_balance`
-  apply ‹channel.Consistent›.consistent channelInteractions tables.data balanced all_reqs
+  apply ‹channel.ConsistentUpTo N›.consistent channelInteractions tables.data balanced all_reqs
 
 /--
 Partial balance can be specialized to a sublist (= part of a permutation),
 as long as none of the extra tables add requirements.
 -/
 lemma partialBalancedChannel_of_sublist {subtables tables : Tables F} {channel : RawChannel F} :
-  PartialBalancedChannel tables channel →
+  PartialBalancedChannel N tables channel →
   (∃ otherTables, tables.tables.Perm (subtables.tables ++ otherTables) ∧
     (∀ table ∈ otherTables, table.Constraints) ∧
     ∀ table ∈ otherTables, channel ∉ table.channelsWithRequirements) →
-    PartialBalancedChannel subtables channel := by
+    PartialBalancedChannel N subtables channel := by
   rintro ⟨ extraInteractions, balanced, same_channel, no_grts_or_extra_reqs ⟩ subset_tables
   obtain ⟨ otherTables, perm, otherConstraints, otherReqs ⟩ := subset_tables
   by_cases subtables_empty : subtables.tables = []
   · simp [subtables_empty, circuit_norm, PartialBalancedChannel, Tables.interactionsWith]
     use []
-    simp [BalancedInteractions.nil]
+    simp [BalancedUpTo.nil]
   have subtables_subset : subtables.tables ⊆ tables.tables := by
     have p := perm.symm.subset
     simp_all
@@ -374,7 +374,7 @@ lemma partialBalancedChannel_of_sublist {subtables tables : Tables F} {channel :
     exact otherConstraints _ ht
     exact otherReqs _ ht
   -- balance
-  apply BalancedInteractions.of_perm balanced
+  apply BalancedUpTo.of_perm balanced
   simp only [Tables.interactionsWith]
   grw [← List.append_assoc, List.perm_append_right_iff, ← List.flatMap_append, perm.flatMap]
   exact fun _ _ => List.Perm.refl _
@@ -391,10 +391,10 @@ lemma guarantees_of_requirements_append
   {ts ss : Tables F} (same_data : ts.data = ss.data)
   -- and a channel that is consistent, _doesn't add requirements_ on the new tables,
   -- and is partially balanced on the combined tables
-  {channel : RawChannel F} [channel.Consistent] :
+  {channel : RawChannel F} [channel.ConsistentUpTo N] :
   (∀ table ∈ ts.tables, table.Constraints) →
   (∀ table ∈ ts.tables, channel ∉ table.component.circuit.channelsWithRequirements) →
-  PartialBalancedChannel (ts.append ss same_data) channel →
+  PartialBalancedChannel N (ts.append ss same_data) channel →
   -- the channel requirements on the old tables imply guarantees on the new tables
   (∀ table ∈ ss.tables, table.ChannelRequirements channel) →
     ∀ table ∈ ts.tables, table.ChannelGuarantees channel := by
@@ -402,7 +402,7 @@ lemma guarantees_of_requirements_append
   rintro constraints reqs partial_balance ih table h_table
   have same_data' : table.data = ss.data := by
     rw [ts.same_data _ h_table, same_data]
-  apply guarantees_of_requirements_cons (tables := ss) same_data' (constraints _ h_table) ?_ ?_ ih
+  apply guarantees_of_requirements_cons (N := N) (tables := ss) same_data' (constraints _ h_table) ?_ ?_ ih
   · right; exact reqs _ h_table
   -- get partial balance by sublist/permutation argument
   apply partialBalancedChannel_of_sublist partial_balance
@@ -460,18 +460,18 @@ Note: In the presence of "VM-like" channels, where a circuit both pushes and pul
 However, in that scenario, it is still useful to establish `SoundChannels` on the subset of non-VM tables.
 -/
 @[circuit_norm]
-def SoundChannels (tables : List α) (finished : List (RawChannel F)) : Prop :=
+def SoundChannels (N : ℕ) (tables : List α) (finished : List (RawChannel F)) : Prop :=
   (∀ table ∈ tables, channelsWithGuarantees table ⊆ finished) ∧
   (∀ channel ∈ finished, OrderedChannel channel tables) ∧
-  ∀ channel ∈ finished, channel.Consistent
+  ∀ channel ∈ finished, channel.ConsistentUpTo N
 
 /-- `SoundChannels` lets us prove a soundness theorem. -/
 theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : List (RawChannel F)} :
-  SoundChannels (witness.tables.map (·.component)) finished →
+  SoundChannels N (witness.tables.map (·.component)) finished →
   -- constraints + partial balance
   witness.Assumptions →
   witness.Constraints →
-  (∀ channel ∈ finished, PartialBalancedChannel witness channel) →
+  (∀ channel ∈ finished, PartialBalancedChannel N witness channel) →
     -- implies the spec, and the guarantees and requirements on all finished channels
     ∀ table ∈ witness.tables, table.Spec ∧ ∀ channel ∈ finished,
     table.ChannelGuarantees channel ∧ table.ChannelRequirements channel := by
@@ -506,7 +506,7 @@ theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : Li
   rw [iff_guarantees_of_constraints assumptions.left constraints.left subset_finished.left]
   -- the rest is just applying `guarantees_of_requirements_cons`
   intro channel h_channel
-  have : channel.Consistent := consistent_channels _ h_channel
+  have : channel.ConsistentUpTo N := consistent_channels _ h_channel
   have orderedChannelRefl : OrderedChannelRefl channel table.component := by
     simp only [circuit_norm, ordered_channels channel h_channel]
   apply guarantees_of_requirements_cons same_data
@@ -517,10 +517,10 @@ theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : Li
 /-- `SoundChannels` is strictly increasing: you can make the finished list bigger by any consistent channels -/
 lemma soundChannels_of_soundChannels_subset {tables : List α}
     {finished finished' : List (RawChannel F)} :
-  SoundChannels tables finished →
+  SoundChannels N tables finished →
   finished ⊆ finished' →
-  (∀ channel ∈ finished', channel.Consistent) →
-    SoundChannels tables finished' := by
+  (∀ channel ∈ finished', channel.ConsistentUpTo N) →
+    SoundChannels N tables finished' := by
   rintro ⟨ subset_finished, ordered_channels, consistent_channels ⟩ finished'_subset finished'_consistent
   constructor
   · intro table h_table
@@ -538,9 +538,9 @@ lemma soundChannels_of_soundChannels_subset {tables : List α}
 
 /-- You can add one channel to the finished list and preserve `SoundChannels` -/
 lemma soundChannels_cons_of_soundChannels {tables : List α}
-  {finished : List (RawChannel F)} {channel : RawChannel F} [channel.Consistent] :
-  SoundChannels tables finished →
-    SoundChannels tables (channel :: finished) := by
+  {finished : List (RawChannel F)} {channel : RawChannel F} [channel.ConsistentUpTo N] :
+  SoundChannels N tables finished →
+    SoundChannels N tables (channel :: finished) := by
   intro sound_channels
   apply soundChannels_of_soundChannels_subset sound_channels
   · simp
@@ -561,20 +561,20 @@ abbrev OrderedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel 
   ∀ channel ∈ finished, ens.OrderedChannel channel
 
 @[circuit_norm]
-def SoundChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
+def SoundChannels (ens : Ensemble F PublicIO) (N : ℕ) (finished : List (RawChannel F)) : Prop :=
   ens.channelsWithGuarantees ⊆ finished ∧
   ens.OrderedChannels finished ∧
-  ∀ channel ∈ finished, channel.Consistent
+  ∀ channel ∈ finished, channel.ConsistentUpTo N
 
 lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} {channel : RawChannel F} :
     ens.OrderedChannel channel →
-    witness.BalancedChannel channel →
-      PartialBalancedChannel witness.toTables channel := by
+    BalancedUpTo N (witness.interactionsWith channel) →
+      PartialBalancedChannel N witness.toTables channel := by
   intro ordered balanced
   use witness.verifierInteractionsWith channel
   constructor
-  · apply BalancedInteractions.of_perm balanced
+  · apply BalancedUpTo.of_perm balanced
     apply List.perm_append_comm
   constructor
   · intro interaction h_interaction
@@ -591,9 +591,9 @@ lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
     simp_all [circuit_norm]
 
 lemma verifierChannelGuarantees_of_tableRequirements {ens : Ensemble F PublicIO}
-    {witness : EnsembleWitness ens} {channel : RawChannel F} [channel.Consistent] :
+    {witness : EnsembleWitness ens} {channel : RawChannel F} [channel.ConsistentUpTo N] :
     OrderedChannelRefl channel ens.verifier →
-    witness.BalancedChannel channel →
+    BalancedUpTo N (witness.interactionsWith channel) →
     (∀ table ∈ witness.tables, table.ChannelRequirements channel) →
       ens.VerifierChannelGuarantees witness.data channel := by
   intro ordered balanced table_requirements
@@ -605,7 +605,7 @@ lemma verifierChannelGuarantees_of_tableRequirements {ens : Ensemble F PublicIO}
   rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
   -- all interactions satisfy their requirements, so by consistency they satisfy their guarantees
   have all_guarantees :=
-    ‹channel.Consistent›.consistent (witness.interactionsWith channel) witness.data balanced (by
+    ‹channel.ConsistentUpTo N›.consistent (witness.interactionsWith channel) witness.data balanced (by
     intro interaction h_interaction
     refine ⟨witness.channel_eq_of_mem_interactionsWith h_interaction, ?_⟩
     rw [witness.mem_interactionsWith] at h_interaction
@@ -624,11 +624,12 @@ Main result of this section:
 `TableSoundness`, a complex ensemble-level soundness statement.
 -/
 theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} {balance : Balance F} :
-  (∃ finished, finished ⊆ ens.channels ∧ ens.SoundChannels finished) →
+  (∃ finished, finished ⊆ ens.channels ∧ ens.SoundChannels balance.pullBound finished) →
     ens.TableSoundness balance := by
   intro ⟨ finished, finished_subset, subset_finished, ordered, consistent ⟩
     witness assumptions constraints fit balanced
-  have balance := witness.balancedChannels_of_balanced fit balanced
+  have balance := fun channel h_channel =>
+    balance.balancedUpTo_of_balanced (fit channel h_channel) (balanced channel h_channel)
   rw [channelsWithGuarantees_subset_iff] at subset_finished
   -- the tables are sound by themselves, given partial balance
   have table_results := spec_and_guarantees_of_soundChannels (witness := witness.toTables)
@@ -649,7 +650,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} {balance : B
   exact fun table h_table => ((table_results table h_table).right channel h_finished).right
 
 /-- Empty ensemble satisfies SoundChannels -/
-theorem empty_soundChannels : (empty F PublicIO).SoundChannels [] := by
+theorem empty_soundChannels : (empty F PublicIO).SoundChannels N [] := by
   simp only [circuit_norm]
 
 /-- Empty ensemble satisfies TableSoundness -/
@@ -662,7 +663,7 @@ theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO)
   (table : Component F) (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name))
   (table_channels : table.circuit.channels ⊆ ens.channels) {finished : List (RawChannel F)} :
     -- given a sound channels ensemble with empty verifier,
-    ens.SoundChannels finished →
+    ens.SoundChannels N finished →
     ens.verifier = .empty F PublicIO →
     -- assuming that the new table's channelsWithGuarantees are all finished
     table.circuit.channelsWithGuarantees ⊆ finished →
@@ -682,7 +683,7 @@ theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
   (unique_channel_names : ((ens2.channels ++ ens1.channels).map (·.name)).Nodup)
   {finished : List (RawChannel F)} :
     -- given a sound channels ensemble with empty verifier,
-    ens1.SoundChannels finished →
+    ens1.SoundChannels N finished →
     ens1.verifier = .empty F PublicIO →
     -- assuming that the new tables' channelsWithRequirements contain none of the finished channels
     (∀ channel ∈ finished, channel ∉ ens2.channelsWithRequirements) →
@@ -700,11 +701,11 @@ theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
 
 theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
     -- given a sound channels ensemble with a list of finished channels
-    {finished : List (RawChannel F)} (h_sound : ens.SoundChannels finished)
+    {finished : List (RawChannel F)} (h_sound : ens.SoundChannels N finished)
     -- and given a new consistent channel to mark as finished
-    (channel : RawChannel F) [channel.Consistent] :
+    (channel : RawChannel F) [channel.ConsistentUpTo N] :
     -- the ensemble also satisfies SoundChannels including the new channel in the finished list
-    ens.SoundChannels (channel :: finished) := by
+    ens.SoundChannels N (channel :: finished) := by
   rcases h_sound with ⟨subset_finished, ordered_channels, consistent_channels⟩
   refine ⟨List.subset_cons_of_subset _ subset_finished, ?_, by simp_all⟩
   by_cases h_finished : channel ∈ finished
@@ -720,7 +721,7 @@ end Ensemble
 structure SoundEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]
     (balance : Balance F) extends ensemble : Ensemble F PublicIO where
   finished : List (RawChannel F)
-  finished_consistent : ∀ channel ∈ finished, channel.Consistent
+  finished_consistent : ∀ channel ∈ finished, channel.ConsistentUpTo balance.pullBound
   finished_subset : finished ⊆ channels
   subset_finished : ensemble.channelsWithGuarantees ⊆ finished
   ordered_channels : ensemble.OrderedChannels finished
@@ -734,7 +735,7 @@ attribute [circuit_norm] SoundEnsemble.finished_consistent SoundEnsemble.finishe
 namespace SoundEnsemble
 variable {balance : Balance F}
 
-lemma soundChannels (ens : SoundEnsemble F PublicIO balance) : ens.SoundChannels ens.finished := by
+lemma soundChannels (ens : SoundEnsemble F PublicIO balance) : ens.SoundChannels balance.pullBound ens.finished := by
   exact ⟨ens.subset_finished, ens.ordered_channels, ens.finished_consistent⟩
 
 def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]
@@ -834,7 +835,7 @@ variable {channel : RawChannel F} {fresh : channel.name ∉ soundEns.channels.ma
   (soundEns.addChannel channel fresh).verifier = soundEns.verifier := rfl
 end
 
-def markFinished (soundEns : SoundEnsemble F PublicIO balance) (channel : RawChannel F) [channel.Consistent]
+def markFinished (soundEns : SoundEnsemble F PublicIO balance) (channel : RawChannel F) [channel.ConsistentUpTo balance.pullBound]
   (h_mem : channel ∈ soundEns.channels := by simp [circuit_norm]) :
     SoundEnsemble F PublicIO balance where
   ensemble := soundEns.ensemble
@@ -849,7 +850,7 @@ def markFinished (soundEns : SoundEnsemble F PublicIO balance) (channel : RawCha
   subset_finished := by simp [soundEns.subset_finished]
   ordered_channels := by
     intro channel' hc
-    have : channel'.Consistent := by
+    have : channel'.ConsistentUpTo balance.pullBound := by
       simp at hc
       rcases hc with rfl | hc_tail
       · assumption
@@ -858,7 +859,7 @@ def markFinished (soundEns : SoundEnsemble F PublicIO balance) (channel : RawCha
     exact this.right.left channel' (by simp)
   verifier_empty := soundEns.verifier_empty
 
-variable {channel : RawChannel F} [channel.Consistent] {h_mem : channel ∈ soundEns.channels}
+variable {channel : RawChannel F} [channel.ConsistentUpTo balance.pullBound] {h_mem : channel ∈ soundEns.channels}
 
 @[circuit_norm] lemma markFinished_channels :
   (soundEns.markFinished channel h_mem).channels = soundEns.channels := rfl
@@ -869,7 +870,7 @@ variable {channel : RawChannel F} [channel.Consistent] {h_mem : channel ∈ soun
 
 /-- Add a channel that no table pushes to, as finished. Its name must be new. -/
 def addFinishedChannel (soundEns : SoundEnsemble F PublicIO balance) (channel : RawChannel F)
-    [channel.Consistent]
+    [channel.ConsistentUpTo balance.pullBound]
     (fresh : channel.name ∉ soundEns.channels.map (·.name) := by simp [circuit_norm]) :
     SoundEnsemble F PublicIO balance :=
   soundEns
@@ -877,7 +878,7 @@ def addFinishedChannel (soundEns : SoundEnsemble F PublicIO balance) (channel : 
     |>.markFinished channel (List.mem_cons_self ..)
 
 section
-variable {channel : RawChannel F} [channel.Consistent]
+variable {channel : RawChannel F} [channel.ConsistentUpTo balance.pullBound]
   {fresh : channel.name ∉ soundEns.channels.map (·.name)}
 
 @[circuit_norm] lemma addFinishedChannel_channels :
