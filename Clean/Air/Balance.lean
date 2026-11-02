@@ -196,6 +196,46 @@ lemma balancedUpTo_one_iff {interactions : List (Interaction F)} :
   ⟨ fun balanced => balanced.toBalancedInteractions,
     fun balanced => ⟨ balanced, balanced.matchedUpTo_one ⟩ ⟩
 
+/-- Balance is message by message, so it restricts to any class of messages. -/
+lemma activeCount_filter_msg (interactions : List (Interaction F)) (cls : Array F → Bool)
+    (direction : Channel.Direction) (msg : Array F) :
+    activeCount (interactions.filter fun i => cls i.msg) direction msg =
+      if cls msg then activeCount interactions direction msg else 0 := by
+  simp only [activeCount, List.countP_filter]
+  split_ifs with h_cls
+  · apply List.countP_congr
+    intro i _
+    simp only [Bool.and_eq_true, decide_eq_true_eq]
+    constructor
+    · exact fun h => h.1
+    · exact fun h => ⟨ h, h.2.1 ▸ h_cls ⟩
+  · rw [List.countP_eq_zero]
+    intro i _
+    simp only [Bool.and_eq_true, decide_eq_true_eq, not_and]
+    rintro ⟨ -, rfl, - ⟩ h
+    exact h_cls h
+
+/-- Restricting a balanced list to a class of messages keeps it balanced: every interaction
+carrying a message is kept or dropped together. -/
+lemma BalancedUpTo.filter_msg {N : ℕ} {interactions : List (Interaction F)}
+    (cls : Array F → Bool) (balanced : BalancedUpTo N interactions) :
+    BalancedUpTo N (interactions.filter fun i => cls i.msg) := by
+  refine ⟨ ⟨ ?_, ?_ ⟩, ?_ ⟩
+  · intro a a_mem a_pull
+    obtain ⟨ a_mem, a_cls ⟩ := List.mem_filter.mp a_mem
+    obtain ⟨ b, b_mem, b_msg, b_push ⟩ := balanced.exists_push_of_pull a a_mem a_pull
+    exact ⟨ b, List.mem_filter.mpr ⟨ b_mem, b_msg ▸ a_cls ⟩, b_msg, b_push ⟩
+  · intro msg is_bool
+    rw [activeCount_filter_msg, activeCount_filter_msg]
+    split_ifs with h_cls
+    · exact balanced.activeCount_push_eq_activeCount_pull_of_isBool msg fun i i_mem i_msg =>
+        is_bool i (List.mem_filter.mpr ⟨ i_mem, i_msg ▸ h_cls ⟩) i_msg
+    · rfl
+  · intro a a_mem a_pull
+    obtain ⟨ a_mem, a_cls ⟩ := List.mem_filter.mp a_mem
+    obtain ⟨ b, b_mem, b_msg, b_push ⟩ := balanced.matchedUpTo a a_mem a_pull
+    exact ⟨ b, List.mem_filter.mpr ⟨ b_mem, b_msg ▸ a_cls ⟩, b_msg, b_push ⟩
+
 /--
 A balance check: the condition that a verifier checks on the interactions with each channel, the
 numbers of interactions with a channel that the check is sound for, and its proof that the condition
