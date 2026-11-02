@@ -82,7 +82,7 @@ def Step.validForRow (source : RowProgram.Source) : Step F → Bool
 @[circuit_norm]
 def M.evalRow [FiniteField F] {Row : TypeMap} [ProvableType Row]
     (program : M F (Row (FExpr F))) (row : UInt64) : Row F :=
-  let env : ProverEnvironment F := { get _ := 0, data _ _ := #[], hint := .empty F }
+  let env : ProverEnvironment F := { get _ := 0, data := .empty F, hint := .empty F }
   Witgen.eval {
     env
     locals := evalSteps env (program #[]).2.toList #[] row.toNat

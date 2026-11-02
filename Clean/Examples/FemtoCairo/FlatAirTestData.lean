@@ -1,6 +1,6 @@
 module
 
-public import Clean.Examples.FemtoCairo.Spec
+public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Utils.Primes
 
 @[expose] public section
@@ -35,6 +35,9 @@ theorem testProgram_valid : Spec.ValidProgram testProgram where
 
 theorem memorySize_lt : (8 : UInt64).toNat < pBabybear := by decide
 
-def initialState : State (F pBabybear) := { pc := 0, ap := 0, fp := 0 }
+/-- The program starts at `pc = ap = fp = 0`, and halts after eight steps at `pc = 32` with
+`ap = fp = 0`. -/
+def publicInput : FlatAir.PublicInput (F pBabybear) :=
+  { initialState := { pc := 0, ap := 0, fp := 0 }, finalAp := 0, finalFp := 0 }
 
 end Examples.FemtoCairo.FlatAirTestData

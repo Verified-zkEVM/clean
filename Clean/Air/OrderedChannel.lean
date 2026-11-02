@@ -595,12 +595,12 @@ lemma verifierChannelGuarantees_of_tableRequirements {ens : Ensemble F PublicIO}
     OrderedChannelRefl channel ens.verifier →
     witness.BalancedChannel channel →
     (∀ table ∈ witness.tables, table.ChannelRequirements channel) →
-      ens.VerifierChannelGuarantees witness.publicInput witness.data channel := by
+      ens.VerifierChannelGuarantees witness.data channel := by
   intro ordered balanced table_requirements
   rcases ordered with no_verifier_guarantees | no_verifier_requirements
-  · exact ens.verifierChannelGuarantees_of_not_mem _ _ no_verifier_guarantees
+  · exact ens.verifierChannelGuarantees_of_not_mem _ no_verifier_guarantees
   have verifier_requirements :=
-    ens.verifierChannelRequirements_of_not_mem witness.publicInput witness.data
+    ens.verifierChannelRequirements_of_not_mem witness.data
       no_verifier_requirements
   rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
   -- all interactions satisfy their requirements, so by consistency they satisfy their guarantees
@@ -627,8 +627,8 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} {balance : B
   (∃ finished, finished ⊆ ens.channels ∧ ens.SoundChannels finished) →
     ens.TableSoundness balance := by
   intro ⟨ finished, finished_subset, subset_finished, ordered, consistent ⟩
-    witness assumptions constraints balanced
-  have balance := witness.balancedChannels_of_balanced balanced
+    witness assumptions constraints fit balanced
+  have balance := witness.balancedChannels_of_balanced fit balanced
   rw [channelsWithGuarantees_subset_iff] at subset_finished
   -- the tables are sound by themselves, given partial balance
   have table_results := spec_and_guarantees_of_soundChannels (witness := witness.toTables)
@@ -638,7 +638,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} {balance : B
       partialBalancedChannel_of_balancedChannel
         (ordered channel h_channel) (balance _ (finished_subset h_channel))
   -- their requirements imply the verifier guarantees
-  refine ⟨ens.verifierSpec_of_verifierGuarantees _ _ ?_,
+  refine ⟨ens.verifierSpec_of_verifierGuarantees _ ?_,
     fun table h_table => (table_results table h_table).left⟩
   rw [verifierGuarantees_iff]
   intro channel h_channel
@@ -891,7 +891,7 @@ end
 /-- The formal ensemble, from the ensemble-level assumptions and spec, and the prover assumptions
 that witness generation needs. -/
 def toFormal (soundEns : SoundEnsemble F PublicIO balance)
-    (Assumptions Spec : PublicIO F → Prop)
+    (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop)
     (assumptionsConsistency : soundEns.AssumptionsConsistency Assumptions)
     (specConsistency : soundEns.SpecConsistency Spec)
     (ProverAssumptions : PublicIO F → soundEns.ProverInput F → Prop := fun _ _ => True) :

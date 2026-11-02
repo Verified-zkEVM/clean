@@ -129,15 +129,15 @@ def formalEnsemble : FormalEnsemble BF64 State .multiset :=
     (by simp +instances [circuit_norm, vm, step, verifier])
     (by simp +instances [circuit_norm, vm, step, verifier, stateChannel])
     (by simp [circuit_norm, vm, step])
-  |>.toFormal (fun _ => True) Spec
+  |>.toFormal (fun _ _ => True) Spec
     (by simp [circuit_norm, vm])
-    (fun _ _ h => h)
+    (by simp [circuit_norm, vm, verifier, stateChannel, Spec])
 
 /-- End-to-end soundness: a valid proof for the public input `final` shows that it is the state
 after some number of steps. -/
-theorem soundness (final : State BF64) :
-    formalEnsemble.ensemble.Statement .multiset final → Spec final :=
-  formalEnsemble.soundness final trivial
+theorem soundness (final : State BF64) (heights : List ℕ) :
+    formalEnsemble.ensemble.Statement .multiset final heights → Spec final :=
+  formalEnsemble.soundness final heights trivial
 
 /-- Generate a complete ensemble witness from the claimed final state. -/
 def generate (final : State BF64) (fuel : ℕ) :

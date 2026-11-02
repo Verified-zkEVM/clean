@@ -45,8 +45,10 @@ def assembleTables :
             component
             table := rows
             -- the table's own rows, replaced by the ensemble's derived data in `generateValid`
-            data name n :=
-              if name = component.circuit.name then (rows.map (rowPrefix n)).toArray else #[]
+            data := {
+              tables name n :=
+                if name = component.circuit.name then (rows.map (rowPrefix n)).toArray else #[]
+              publicInput := #[] }
             uniform_width := h
             length_le := Nat.le_of_not_lt hlength
             fixed_rows_match := hfixed

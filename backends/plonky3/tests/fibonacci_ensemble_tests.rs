@@ -129,7 +129,14 @@ fn ensemble_api_reports_shape_errors() {
             .expect("invalid generated AIR shape");
     assert_eq!(statement.component_count(), 3);
     assert_eq!(statement.trace_heights(), trace_heights);
-    assert_eq!(statement.interaction_count(), 418);
+    assert_eq!(
+        statement
+            .interaction_counts()
+            .clone()
+            .into_iter()
+            .collect::<Vec<_>>(),
+        [("add8", 64), ("bytes", 288), ("fibonacci", 66)]
+    );
     let different_dynamic_shape =
         generated::Statement::<BabyBear>::new(&[64, 32, 256], setup::MINIMUM_TRACE_HEIGHT)
             .expect("valid alternative dynamic shape");
@@ -213,6 +220,7 @@ fn ensemble_api_reports_shape_errors() {
         Err(EnsembleShapeError::InteractionCountBound {
             interactions,
             field_order,
+            ..
         }) if interactions >= field_order as u128
     ));
 }

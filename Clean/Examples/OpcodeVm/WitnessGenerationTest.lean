@@ -14,7 +14,8 @@ namespace OpcodeVm.WitnessGenerationTest
 open Air.Flat.WitnessGeneration
 
 def result (final : F pBabybear) : Except String (List ℕ × Bool × Bool) :=
-  match generate (formalEnsemble exampleProgram exampleProgram_length 2).ensemble 1000 final ()
+  match generate (formalEnsemble exampleProgram exampleProgram_length).ensemble 1000
+      { initial := 2, final } ()
     with
   | .error error => .error (toString error)
   | .ok witness =>

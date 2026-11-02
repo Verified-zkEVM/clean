@@ -19,10 +19,9 @@ open FlatAir
 open FlatAirTestData
 open Air.Flat.WitnessGeneration
 
-/-- The program halts after eight steps at `pc = 32` with `ap = fp = 0`. -/
 def result : Except String (List ℕ × Bool × Bool) :=
   match femtoCairoGenerate (p := pBabybear) (memorySize := 8) testProgram testProgram_valid
-      memorySize_lt #v[0, 5, 3, 7, 2, 10, 0, 0] initialState (0, 0) 1000 with
+      memorySize_lt #v[0, 5, 3, 7, 2, 10, 0, 0] publicInput 1000 with
   | .error error => .error (toString error)
   | .ok witness =>
     .ok (witness.tables.map (·.table.length), constraintsHold witness, channelsBalanced witness)

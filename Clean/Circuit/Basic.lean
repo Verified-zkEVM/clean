@@ -411,7 +411,7 @@ theorem Witnessable.witnessIR_provableVector {m : ℕ} (α : TypeMap) [NonEmptyP
 /-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/
 def ProverEnvironment.fromList (witnesses : List F) (hint : ProverHint F) : ProverEnvironment F where
   get i := witnesses[i]?.getD 0
-  data _ _ := #[]
+  data := .empty F
   hint
 
 def FlatOperation.dynamicWitness (hint : ProverHint F) (op : FlatOperation F) (acc : List F) : List F := match op with

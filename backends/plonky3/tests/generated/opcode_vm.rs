@@ -358,13 +358,13 @@ pub mod verifier {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: E::from_u64(1u64),
-                message: vec![E::from_u64(10u64), row[0].clone()],
+                message: vec![E::from_u64(10u64), row[1].clone()],
             },
             Interaction {
                 channel: "state",
                 direction: Direction::Push,
                 multiplicity: E::from_u64(1u64),
-                message: vec![E::from_u64(0u64), E::from_u64(2u64)],
+                message: vec![E::from_u64(0u64), row[0].clone()],
             },
         ]
     }
@@ -373,7 +373,7 @@ pub mod verifier {
 clean_backend::ensemble! {
     field_order: 2013265921,
     fuel: 1000,
-    public_inputs: 1,
+    public_inputs: 2,
     prover_inputs: 0,
     hint_tables: [],
     components: [component_0, component_1, component_2],
