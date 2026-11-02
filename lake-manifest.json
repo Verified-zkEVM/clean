@@ -1,14 +1,14 @@
 {"version": "1.3.0",
  "packagesDir": ".lake/packages",
  "packages":
- [{"url": "https://github.com/mitschabaude-bot/CompPoly.git",
+ [{"url": "https://github.com/Verified-zkEVM/CompPoly.git",
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "6de4e90026a12ea10a2a24f53f332aed3e877961",
+   "rev": "06686e4c70939af82203af21516f8ab8a21a8051",
    "name": "CompPoly",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "6de4e90026a12ea10a2a24f53f332aed3e877961",
+   "inputRev": "v4.35.0",
    "inherited": false,
    "configFile": "lakefile.lean"},
   {"url": "https://github.com/leanprover-community/mathlib4",
@@ -103,4 +103,4 @@
    "configFile": "lakefile.toml"}],
  "name": "Clean",
  "lakeDir": ".lake",
- "fixedToolchain": false}
+ "fixedToolchain": true}

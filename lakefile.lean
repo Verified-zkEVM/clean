@@ -6,11 +6,22 @@ package Clean where
     ⟨`pp.unicode.fun, true⟩, -- pretty-prints `fun a ↦ b`
     ⟨`autoImplicit, false⟩,
     ⟨`relaxedAutoImplicit, false⟩]
+  -- consumers that pin a release tag download the prebuilt `Clean` library attached to that
+  -- release (see `.github/workflows/release-tag.yml`) instead of compiling it
+  preferReleaseBuild := true
+  releaseRepo := "https://github.com/Verified-zkEVM/clean"
+  -- one archive for all platforms, see `platformIndependent` below
+  buildArchive := "Clean-oleans.tar.gz"
+  -- a release archive only works with the toolchain it was built with
+  fixedToolchain := true
 
 @[default_target]
 lean_lib Clean where
   -- every file under `Clean/` that Lake builds uses the module system; warn if a new one does not
   requiresModuleSystem := true
+  -- leave platform-dependent elements out of module traces, so oleans built on Linux CI
+  -- validate on every platform
+  platformIndependent := true
 
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
@@ -31,7 +42,4 @@ lean_exe export_differential_rust where
   root := `Clean.Backends.Plonky3.Test.Differential
 
 require "leanprover-community" / "mathlib" @ git "v4.35.0"
--- The CompPoly commit CompStark pins (fork branch `koalabear-fast-ext5`), so that a package can
--- require both Clean and CompStark.
-require CompPoly from git "https://github.com/mitschabaude-bot/CompPoly.git" @
-    "6de4e90026a12ea10a2a24f53f332aed3e877961"
+require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git" @ "v4.35.0"
