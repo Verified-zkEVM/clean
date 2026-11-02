@@ -126,7 +126,7 @@ def remove (tally : Tally F) (position : ℕ) (demand : Demand F)
     rw [Std.HashMap.getElem?_erase, Std.TreeMap.getElem?_erase]
     by_cases hkey : demand.key = key
     · subst hkey
-      simp only [beq_self_eq_true, if_true, reduceCtorEq, false_iff, not_exists, not_and]
+      simp only [beq_self_eq_true, ite_true, reduceCtorEq, false_iff, not_exists, not_and]
       intro demand' hdemand' hkey'
       split at hdemand'
       · contradiction
@@ -134,10 +134,10 @@ def remove (tally : Tally F) (position : ℕ) (demand : Demand F)
         have := (tally.positions_spec demand.key position').mpr ⟨demand', hdemand', hkey'⟩
         have := (tally.positions_spec demand.key position).mpr ⟨demand, hdemand, rfl⟩
         simp_all
-    · simp only [beq_iff_eq, hkey, if_false, tally.positions_spec]
+    · simp only [beq_iff_eq, hkey, ite_false, tally.positions_spec]
       by_cases hposition : position = position'
       · subst hposition
-        simp only [Nat.compare_eq_eq, if_true, reduceCtorEq, false_and, exists_false,
+        simp only [Nat.compare_eq_eq, ite_true, reduceCtorEq, false_and, exists_false,
           iff_false, not_exists, not_and]
         intro demand' hdemand' hkey'
         simp_all
@@ -159,7 +159,7 @@ def append (tally : Tally F) (demand : Demand F) (hkey : tally.positions[demand.
     rw [Std.HashMap.getElem?_insert, Std.TreeMap.getElem?_insert]
     by_cases hdemand : demand.key = key
     · subst hdemand
-      simp only [beq_self_eq_true, if_true, Option.some.injEq]
+      simp only [beq_self_eq_true, ite_true, Option.some.injEq]
       constructor
       · rintro rfl
         simp
@@ -168,7 +168,7 @@ def append (tally : Tally F) (demand : Demand F) (hkey : tally.positions[demand.
         · simp_all
         · have := (tally.positions_spec demand.key position).mpr ⟨demand', hdemand', hkey'⟩
           simp_all
-    · simp only [beq_iff_eq, hdemand, if_false, tally.positions_spec]
+    · simp only [beq_iff_eq, hdemand, ite_false, tally.positions_spec]
       by_cases hposition : tally.next = position
       · subst hposition
         have hnone : tally.byPosition[tally.next]? = none :=
@@ -299,9 +299,9 @@ theorem net_add (tally : Tally F) (channel : String) (message : Array F) (multip
       have hnet := net_eq_of_getElem? hdemand
       dsimp only
       by_cases htotal : demand.multiplicity + multiplicity = 0
-      · rw [dif_pos htotal, net_remove]
+      · rw [dite_eq_left htotal, net_remove]
         split <;> simp_all [eq_comm]
-      · rw [dif_neg htotal, net_update]
+      · rw [dite_eq_right htotal, net_update]
         split <;> simp_all
     · rename_i hdemand
       exact absurd (getElem?_byPosition_of_positions hposition) (by simp [hdemand])
