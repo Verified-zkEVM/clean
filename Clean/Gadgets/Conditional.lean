@@ -78,12 +78,12 @@ theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumpt
   | inl h_zero =>
     simp only [h_zero]
     have : (0 : F) = 1 ↔ False := by simp
-    simp only [this, if_false]
+    simp only [this, ite_false]
     ring_nf
   | inr h_one =>
     simp only [h_one]
     have : (1 : F) = 1 ↔ True := by simp
-    simp only [if_true]
+    simp only [ite_true]
     ring_nf
 
 theorem completeness [DecidableEq F] : Completeness F (Input := Inputs M) main Assumptions := by

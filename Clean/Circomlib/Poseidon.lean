@@ -331,7 +331,7 @@ theorem soundness (round : Fin 56) :
     Soundness F (Input := fields 2) (Output := fields 2) (main round) (fun _ => True) (Spec round) := by
   circuit_proof_start [Sigma.circuit]
   simp only [Specs.PoseidonOptimized.partialRoundOpt_t2, Specs.Poseidon.sigma,
-    dif_pos (show 10 + round.val < 72 by omega), Specs.PoseidonOptimized.mixS_t2]
+    dite_eq_left (show 10 + round.val < 72 by omega), Specs.PoseidonOptimized.mixS_t2]
   obtain ⟨h0, h1, h2, h3⟩ := h_holds
   have h_in0 : Expression.eval env input_var[0] = input[0] := by
     simpa using congrArg (fun v => v[0]) h_input
