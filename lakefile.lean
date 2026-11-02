@@ -6,11 +6,22 @@ package Clean where
     ⟨`pp.unicode.fun, true⟩, -- pretty-prints `fun a ↦ b`
     ⟨`autoImplicit, false⟩,
     ⟨`relaxedAutoImplicit, false⟩]
+  -- consumers that pin a release tag download the prebuilt `Clean` library attached to that
+  -- release (see `.github/workflows/release-tag.yml`) instead of compiling it
+  preferReleaseBuild := true
+  releaseRepo := "https://github.com/Verified-zkEVM/clean"
+  -- one archive for all platforms, see `platformIndependent` below
+  buildArchive := "Clean-oleans.tar.gz"
+  -- a release archive only works with the toolchain it was built with
+  fixedToolchain := true
 
 @[default_target]
 lean_lib Clean where
   -- every file under `Clean/` that Lake builds uses the module system; warn if a new one does not
   requiresModuleSystem := true
+  -- leave platform-dependent elements out of module traces, so oleans built on Linux CI
+  -- validate on every platform
+  platformIndependent := true
 
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
