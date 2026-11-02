@@ -52,7 +52,7 @@ import Clean.Backends.Circom.R1CS
 import Clean.Utils.Field          -- the field type `F p`
 import Clean.Utils.Primes         -- small test primes, e.g. `p1009`
 import Clean.Specs.Poseidon       -- `BN254_PRIME`
-import Clean.Circomlib.Poseidon   -- `Poseidon1`, a full gadget to compile
+import Clean.Circomlib.Poseidon   -- generic verified Poseidon gadget
 open Backends.Circom
 
 -- Witness IR: one input `x`, one witness `w = x + 5`.
@@ -64,7 +64,8 @@ def wasm : Except String ByteArray := compileModule p1009 1 ["x"] [1] addOps 1
 
 -- The operations of a larger circuit, offset by its public inputs (here: 1).
 def ops : List (Operation Specs.Poseidon.F) :=
-  (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
+  ((Circomlib.Poseidon.circuit Specs.PoseidonOptimized.params_t2).main
+    #v[varFromOffset field 0]).operations 1
 
 -- Multi-word: BN254 needs 4 64-bit limbs; input "in", output circuit variable 401.
 def wasmBN254 : Except String ByteArray := compileModule BN254_PRIME 1 ["in"] [401] ops 4

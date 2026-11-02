@@ -9,7 +9,8 @@ Poseidon Hash Circuit Implementation
 
 The generic implementation lives in `Clean.Circomlib.Poseidon.Generic` and
 follows circomlib's optimized six-phase schedule. This module provides the
-stable arity-specific public wrappers.
+arity-specific aliases for input arities 2 through 16. For one input, use
+`Circomlib.Poseidon.circuit params_t2` with a length-one vector directly.
 
 Original circomlib source:
 https://github.com/iden3/circomlib/blob/master/circuits/poseidon.circom
@@ -18,60 +19,7 @@ https://github.com/iden3/circomlib/blob/master/circuits/poseidon.circom
 namespace Circomlib.Poseidon
 
 open Specs.Poseidon (F)
-open Specs.PoseidonOptimized (params_t2 params_t3 params_t4)
-
-namespace Poseidon1
-
-/-- Scalar-input compatibility wrapper for the generic state-width-two
-Poseidon circuit. -/
-def main (input : Expression F) : Circuit F (Expression F) :=
-  Circomlib.Poseidon.circuit params_t2 #v[input]
-
-def Spec (input output : F) : Prop :=
-  output = Specs.PoseidonOptimized.poseidon1Opt input
-
-instance elaborated : ElaboratedCircuit F field field main := by
-  elaborate_circuit
-
-/-- The generic `MixLast` layout removes the legacy circuit's unused second
-final-state witness while leaving the returned output at local offset 400. -/
-theorem localLength_eq (input : Expression F) :
-    ElaboratedCircuit.localLength (F := F) (Input := field) (Output := field)
-      main input = 401 := by
-  dsimp +instances only [elaborated]
-  norm_num [params_t2]
-
-theorem output_eq (input : Expression F) :
-    ElaboratedCircuit.output (F := F) (Input := field) (Output := field)
-      main input 0 = var { index := 400 } := by
-  dsimp +instances only [elaborated]
-  norm_num [params_t2]
-  rfl
-
-theorem soundness :
-    Soundness F (Input := field) (Output := field)
-      main (fun _ => True) Spec := by
-  circuit_proof_start [Circomlib.Poseidon.circuit, Circomlib.Poseidon.Spec]
-  simp only [Specs.PoseidonOptimized.poseidon_params_t2_eq_poseidon1Opt] at h_holds
-  simp [circuit_norm] at h_holds
-  exact h_holds
-
-theorem completeness :
-    Completeness F (Input := field) (Output := field)
-      main (fun _ => True) := by
-  circuit_proof_start [Circomlib.Poseidon.circuit]
-
-/-- The verified one-input Poseidon circuit, retained under its original
-public name. Soundness and completeness are inherited from the generic
-parameterized circuit. -/
-def circuit : FormalCircuit F field field where
-  main
-  elaborated
-  Spec
-  soundness
-  completeness
-
-end Poseidon1
+open Specs.PoseidonOptimized (params_t3 params_t4)
 
 namespace Poseidon2
 

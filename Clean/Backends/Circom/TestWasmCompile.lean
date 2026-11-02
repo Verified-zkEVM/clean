@@ -218,11 +218,12 @@ def envRangeOps : List (Operation (F p1009)) :=
     if v.exitCode ≠ 0 then throw <| IO.userError s!"FAIL addOps validate: {v.stderr}"
     IO.println s!"OK: addOps circuit binary validates ({binary.size} bytes)"
 
-/-! ## End-to-end: Poseidon1 → binary WASM → wasm-validate → snarkjs witness -/
+/-! ## End-to-end: generic Poseidon (1 input) → binary WASM → wasm-validate → snarkjs witness -/
 
 #eval! withTools ["wasm-validate", "snarkjs"] do
   let ops : List (Operation Specs.Poseidon.F) :=
-    (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
+    ((Circomlib.Poseidon.circuit Specs.PoseidonOptimized.params_t2).main
+      #v[varFromOffset field 0]).operations 1
   let result := compileModule Specs.Poseidon.BN254_PRIME 1 [] [] ops 4
   match result with
   | .error e => throw <| IO.userError s!"FAIL: Poseidon1: {e}"
