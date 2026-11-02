@@ -70,7 +70,7 @@ def component : Component F where
     rowOf := lookup.rowOf
   }
   circuit_assumptions_of_assumptions := by
-    rintro i ⟨value, multiplicity⟩ data ⟨hi, hfixed⟩ - -
+    rintro i ⟨value, multiplicity⟩ data ⟨hi, hfixed⟩ - - -
     refine (lookup.contains_iff value).mpr ⟨i, hi, ?_⟩
     simp only [WitnessGeneration.PreallocatedMode.FixedAt, Witgen.M.bind_def, Witgen.M.pure_def,
       toElements, Vector.toList_append, Vector.toList_map, ProvableType.toElements_fromElements,

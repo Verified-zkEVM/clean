@@ -73,6 +73,9 @@ structure VmTables (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
     ∀ env,
       Operations.ChannelRequirements channel env verifier.circuitOperations
 
+  /-- VM tables are single-row: a row's requirements follow from its own guarantees. -/
+  single_row : tables.Forall (·.window = none) := by simp
+
 instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
 
 /--
@@ -895,6 +898,8 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
   -- and use it in `verifier_guarantees`
   have reqs_of_grts (table) (h_table : table ∈ witness.vmTables) :=
     table.requirements_of_partial_guarantees_of_constraints (unfinished := vmChannel)
+    (List.forall_iff_forall_mem.mp vm.single_row _
+      (witness.component_mem_tables_of_mem_vmTables h_table))
     (witness.vmContext_assumptions_of_assumptions assumptions table h_table)
     (vm_constraints table h_table)
     (grts_subset_all table h_table) (finished_grts table h_table)

@@ -366,6 +366,10 @@ namespace Ensemble
 The raw "statement" that a proof about an ensemble makes, for a balance check that the proof system
 performs on every channel. Could also be called "relation".
 
+Beyond constraints and balance, the tables of the witness have the facts every `Table` has: their
+rows start with the fixed columns, and the window cells of a two-row component's rows hold the next
+row's input and the row's selectors.
+
 TODO: the balance checks bound the number of interactions with a channel directly, like LogUp's
 bound by the characteristic. In practice, however, it's not the number of interactions that is part
 of a proof, but rather the length of each individual table. It should be our verifier's job to

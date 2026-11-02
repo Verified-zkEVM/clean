@@ -403,7 +403,7 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
     rowOf message := message.address.val
   }
   circuit_assumptions_of_assumptions := by
-    rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
+    rintro i ⟨address, value, multiplicity⟩ data hfixed hdata - -
     simp [circuit_norm, provideMemory, memoryChannel] at hfixed hdata ⊢
     obtain ⟨hi, rfl⟩ := hfixed
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)

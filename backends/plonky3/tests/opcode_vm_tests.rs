@@ -72,6 +72,7 @@ impl<F: WitnessField> Program<F> for UnguardedProgram {
     const HINT_TABLES: &'static [HintTable] = <generated::Ensemble as Program<F>>::HINT_TABLES;
     const FIXED_COLUMNS: &'static [&'static [usize]] =
         <generated::Ensemble as Program<F>>::FIXED_COLUMNS;
+    const WINDOWS: &'static [Option<usize>] = <generated::Ensemble as Program<F>>::WINDOWS;
     const COMPONENT_NAMES: &'static [&'static str] =
         <generated::Ensemble as Program<F>>::COMPONENT_NAMES;
 

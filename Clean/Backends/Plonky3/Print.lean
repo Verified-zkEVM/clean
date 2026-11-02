@@ -14,7 +14,8 @@ invocation lists the modules; the macro implements the crate's traits on top of 
 width checks, and Plonky3 plumbing are written once in Rust.
 
 Constraints and interactions are printed as functions generic over a Rust ring type `E`, reading a
-complete row, with the fixed columns at their input cells. The crate instantiates them with field
+complete row, with the fixed columns at their input cells, and whose window cells, for a two-row
+component, hold the next row's input and the selectors. The crate instantiates them with field
 elements for witness generation and with symbolic Plonky3 expressions for the AIR. Witness programs
 are printed over field elements, reading the partially built row.
 -/
@@ -75,10 +76,19 @@ def interactionToRust (interaction : AbstractInteraction F) : String :=
       direction: {directionToRust interaction.direction}, \
       multiplicity: {exprToRust interaction.mult}, message: vec![{message}] }"
 
-/-- `fn constraints<E>(row: &[E]) -> Vec<E>` -/
-def constraintsToRust (constraints : List (Expression F)) : String :=
-  s!"pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> \{
-    vec![{commaSep (constraints.map exprToRust)}]
+def gateToRust : Gate → String
+  | .everyRow => "Gate::EveryRow"
+  | .firstRow => "Gate::FirstRow"
+  | .lastRow => "Gate::LastRow"
+  | .transition => "Gate::Transition"
+
+def constraintToRust (constraint : GatedConstraint F) : String :=
+  s!"Constraint \{ gate: {gateToRust constraint.gate}, value: {exprToRust constraint.body} }"
+
+/-- `fn constraints<E>(row: &[E]) -> Vec<Constraint<E>>` -/
+def constraintsToRust (constraints : List (GatedConstraint F)) : String :=
+  s!"pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Constraint<E>> \{
+    vec![{commaSep (constraints.map constraintToRust)}]
 }"
 
 /-- `fn interactions<E>(row: &[E]) -> Vec<Interaction<E>>` -/
@@ -290,6 +300,10 @@ pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Ve
     output
 }"
 
+def windowToRust : Option ℕ → String
+  | none => "None"
+  | some width => s!"Some({width})"
+
 def componentToRust (index : ℕ) (component : ComponentProgram F) (mode : ModeProgram F) :
     String :=
   s!"#[allow(unused_variables, unused_mut, unused_parens)]
@@ -298,6 +312,7 @@ use super::*;
 
 pub const NAME: &str = {quoted component.name};
 pub const INPUT_WIDTH: usize = {component.inputWidth};
+pub const WINDOW: Option<usize> = {windowToRust component.window};
 pub const WIDTH: usize = {component.width};
 
 {fixedRowToRust mode}

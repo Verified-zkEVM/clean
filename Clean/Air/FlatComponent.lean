@@ -1,6 +1,7 @@
 module
 
 public import Clean.Air.Circuit
+public import Clean.Air.Window
 public import Clean.Air.WitnessGeneration.Generation
 
 @[expose] public section
@@ -17,10 +18,24 @@ entry. -/
 def DataInputAt (name : String) (i : UInt64) (input : Input F) (data : ProverData F) : Prop :=
   (data.getRows name Input)[i.toNat]? = some input
 
+/-- The fact about the previous row available to a row of a two-row component: unless the row is
+the first row, the previous row is a transition into it, and satisfies the circuit's spec. A row of
+a single-row component knows nothing about other rows. -/
+@[circuit_norm]
+def PreviousRowAt (window : Option (WindowLayout Input))
+    (circuit : GeneralFormalCircuit F Input Output) (input : Input F) (data : ProverData F) :
+    Prop :=
+  ∀ layout ∈ window, layout.isFirstRow input = 1 ∨
+    ∃ previous output, layout.next previous = layout.current input ∧
+      layout.isTransition previous = 1 ∧ circuit.Spec previous output data
+
 /--
-A flat AIR component: one circuit whose constraints are checked independently on each row.
-There are no direct adjacent-row constraints; communication with other rows/components is
-expressed by channel interactions.
+An AIR component: one circuit whose constraints are checked on each row. Communication with other
+components is expressed by channel interactions.
+
+The circuit of a single-row component reads only its row. The circuit of a two-row component reads a
+`Window` of the trace, which adds the next row's input and the row's selectors to the row's own
+input, see `Clean.Air.Window`.
 -/
 structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
@@ -29,11 +44,16 @@ structure Component (F : Type) [FiniteField F] where
   /-- How the prover builds the component's rows, see `Clean.Air.WitnessGeneration.Generation`. The
   fixed cells of a preallocated component are its fixed columns. -/
   generation : WitnessGeneration.Generation F Input
-  /-- Assumptions the ensemble has to provide, beyond the fixed-row and data facts. -/
+  /-- For a two-row component, where the circuit input keeps the window cells: the next row's input
+  and the row's selectors. -/
+  window : Option (WindowLayout Input) := none
+  /-- Assumptions the ensemble has to provide, beyond the fixed-row, data and previous-row facts. -/
   Assumptions : Input F → ProverData F → Prop := fun _ _ => True
-  /-- Fixed-row and data facts, together with `Assumptions`, imply the circuit's assumptions. -/
+  /-- Fixed-row, data and previous-row facts, together with `Assumptions`, imply the circuit's
+  assumptions. -/
   circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       generation.FixedInputAt i input → DataInputAt circuit.name i input data →
+        PreviousRowAt window circuit input data →
         Assumptions input data → circuit.Assumptions input data := by intros; trivial
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput
@@ -56,6 +76,41 @@ def FixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
 instance (component : Component F) (rows : List (Array F)) :
     Decidable (component.FixedRowsMatch rows) := by
   unfold FixedRowsMatch
+  split <;> infer_instance
+
+/-- The number of input cells that a row stores itself: all of them, except the window cells of a
+two-row component. -/
+def ownInputWidth (component : Component F) : ℕ :=
+  (component.window.map (·.rowWidth)).getD (size component.Input)
+
+/-- The number of input cells that only a two-row component has: the next row's input and the
+selectors. -/
+def windowWidth (component : Component F) : ℕ :=
+  (component.window.map (·.windowWidth)).getD 0
+
+/-- Whether a cell of a row is a window cell of a two-row component. -/
+def isWindowCell (component : Component F) (cell : ℕ) : Bool :=
+  match component.window with
+  | none => false
+  | some layout => layout.rowWidth ≤ cell && cell < 2 * layout.rowWidth + 3
+
+/-- The input of a row. -/
+def inputOf (component : Component F) (row : Array F) : component.Input F :=
+  fromElements (rowPrefix (size component.Input) row)
+
+/-- The window cells of every row of a two-row component hold the next row's own input, where the
+next row of the last row is the first row, and the row's selectors. -/
+def WindowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
+  match component.window with
+  | none => True
+  | some layout => ∀ i (hi : i < rows.length),
+      layout.next (component.inputOf rows[i]) =
+        layout.current (component.inputOf (rows[(i + 1) % rows.length]'(Nat.mod_lt _ (by omega))))
+        ∧ layout.SelectorsAt (component.inputOf rows[i]) i rows.length
+
+instance (component : Component F) (rows : List (Array F)) :
+    Decidable (component.WindowsMatch rows) := by
+  unfold WindowsMatch WindowLayout.SelectorsAt
   split <;> infer_instance
 
 def operations (component : Component F) : Operations F :=
@@ -192,6 +247,8 @@ structure Table (F : Type) [FiniteField F] where
   length_le : table.length ≤ UInt64.size
   /-- The rows of a preallocated component agree with its fixed cells. -/
   fixed_rows_match : component.FixedRowsMatch table
+  /-- The window cells of a two-row component's rows match the next rows and the selectors. -/
+  windows_match : component.WindowsMatch table
   /-- The prover data contains the table's inputs: its rows under the component's name, cut off at
   the input width. -/
   data_consistent : data component.circuit.name (size component.Input) =
@@ -278,6 +335,11 @@ lemma valueFromOffset_fromArray (row : Array F) (data : ProverData F) :
   ext j hj
   simp [rowPrefix, Vector.getElem_mapRange]
 
+lemma Component.rowInput_fromArray (component : Component F) (row : Array F)
+    (data : ProverData F) :
+    component.rowInput (Environment.fromArray row data) = component.inputOf row :=
+  valueFromOffset_fromArray row data
+
 namespace Table
 variable {table : Table F} {channel : RawChannel F}
 
@@ -311,15 +373,19 @@ def Assumptions (table : Table F) : Prop :=
   ∀ row ∈ table.table,
     table.component.RowAssumptions (table.environment row)
 
-lemma circuitAssumptions_of_assumptions (table : Table F) (assumptions : table.Assumptions)
-    (row : Array F) (hrow : row ∈ table.table) :
-    table.component.CircuitAssumptions (table.environment row) := by
+/-- The circuit's assumptions on row `i`, from the facts about its input and the previous row. -/
+lemma circuitAssumptions_at (table : Table F) (assumptions : table.Assumptions) (i : ℕ)
+    (hi : i < table.length)
+    (previous : PreviousRowAt table.component.window table.component.circuit
+      (table.component.inputOf table.table[i]) table.data) :
+    table.component.CircuitAssumptions (table.environment table.table[i]) := by
   unfold environment
-  obtain ⟨i, hi⟩ := List.get_of_mem hrow
-  have hi' : table.table[i.val] = row := hi
-  have hindex : (UInt64.ofNat i.val).toNat = i.val :=
-    UInt64.toNat_ofNat_of_lt' (Nat.lt_of_lt_of_le i.isLt table.length_le)
-  apply table.component.circuit_assumptions_of_assumptions (UInt64.ofNat i.val)
+  replace hi : i < table.table.length := hi
+  obtain ⟨row, hi'⟩ : ∃ row, table.table[i] = row := ⟨_, rfl⟩
+  rw [hi'] at previous ⊢
+  have hindex : (UInt64.ofNat i).toNat = i :=
+    UInt64.toNat_ofNat_of_lt' (Nat.lt_of_lt_of_le hi table.length_le)
+  apply table.component.circuit_assumptions_of_assumptions (UInt64.ofNat i)
   · have hmatch := table.fixed_rows_match
     rw [Component.rowInput, valueFromOffset_fromArray]
     cases hgeneration : table.component.generation with
@@ -328,12 +394,50 @@ lemma circuitAssumptions_of_assumptions (table : Table F) (assumptions : table.A
       simp only [Component.FixedRowsMatch, hgeneration] at hmatch
       obtain ⟨hlength, hfixed⟩ := hmatch
       refine ⟨by simp [UInt64.lt_iff_toNat_lt, hindex]; omega, ?_⟩
-      simpa [hi'] using hfixed i.val i.isLt
+      simpa [hi'] using hfixed i hi
   · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray,
       hindex]
     rw [table.data_consistent]
-    simp [i.isLt, hi']
-  · exact assumptions row hrow
+    simp [hi, hi']
+  · rw [Component.rowInput_fromArray]
+    exact previous
+  · exact assumptions row (hi' ▸ List.getElem_mem hi)
+
+/-- The circuit's assumptions on a row of a single-row component. -/
+lemma circuitAssumptions_of_assumptions (table : Table F) (assumptions : table.Assumptions)
+    (single_row : table.component.window = none) (row : Array F) (hrow : row ∈ table.table) :
+    table.component.CircuitAssumptions (table.environment row) := by
+  obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hrow
+  exact table.circuitAssumptions_at assumptions i hi (by simp [PreviousRowAt, single_row])
+
+/-- Along a two-row table, every row's spec gives the next row's previous-row fact. -/
+lemma previousRowAt_succ (table : Table F) (i : ℕ) (hi : i + 1 < table.table.length)
+    (spec : table.component.Spec (table.environment table.table[i])) :
+    PreviousRowAt table.component.window table.component.circuit
+      (table.component.inputOf table.table[i + 1]) table.data := by
+  intro layout hlayout
+  have hmatch := table.windows_match
+  rw [Option.mem_def] at hlayout
+  simp only [Component.WindowsMatch, hlayout] at hmatch
+  obtain ⟨hnext, -, -, htransition⟩ := hmatch i (by omega)
+  right
+  refine ⟨table.component.inputOf table.table[i],
+    table.component.rowOutput (table.environment table.table[i]), ?_, ?_, ?_⟩
+  · rw [hnext]
+    simp only [Nat.mod_eq_of_lt hi]
+  · simp [htransition, show i + 1 ≠ table.table.length by omega]
+  · simpa only [Component.Spec, environment, Component.rowInput_fromArray] using spec
+
+/-- The first row of a two-row table is the first row. -/
+lemma previousRowAt_zero (table : Table F) (hi : 0 < table.table.length) :
+    PreviousRowAt table.component.window table.component.circuit
+      (table.component.inputOf table.table[0]) table.data := by
+  intro layout hlayout
+  have hmatch := table.windows_match
+  rw [Option.mem_def] at hlayout
+  simp only [Component.WindowsMatch, hlayout] at hmatch
+  left
+  simp [(hmatch 0 hi).2.1]
 
 def Guarantees (table : Table F) : Prop :=
   ∀ row ∈ table.table,
@@ -530,20 +634,35 @@ lemma guarantees_of_not_mem (table : Table F) {channel : RawChannel F} :
   assumption
   assumption
 
-/-- Circuit soundness, lifted to full table level. -/
+/-- Circuit soundness, lifted to full table level. Along a two-row table, this is an induction:
+each row's spec gives the next row's circuit assumptions. -/
 theorem weakSoundness {table : Table F} :
     table.Assumptions → table.Constraints → table.Guarantees →
     table.Spec ∧ table.Requirements := by
   intro assumptions constraints guarantees
+  have rows : ∀ i (hi : i < table.length),
+      table.component.Spec (table.environment table.table[i]) ∧
+        table.component.operations.FullRequirements (table.environment table.table[i]) := by
+    intro i
+    induction i with
+    | zero =>
+      intro hi
+      exact table.component.weakSoundness
+        (table.circuitAssumptions_at assumptions 0 hi (table.previousRowAt_zero hi))
+        (constraints _ (List.getElem_mem hi)) (guarantees _ (List.getElem_mem hi))
+    | succ i ih =>
+      intro hi
+      exact table.component.weakSoundness
+        (table.circuitAssumptions_at assumptions (i + 1) hi
+          (table.previousRowAt_succ i hi (ih (by omega)).left))
+        (constraints _ (List.getElem_mem hi)) (guarantees _ (List.getElem_mem hi))
   constructor
   · intro row hrow
-    exact (table.component.weakSoundness
-      (table.circuitAssumptions_of_assumptions assumptions row hrow)
-      (constraints row hrow) (guarantees row hrow)).left
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hrow
+    exact (rows i hi).left
   · intro row hrow
-    exact (table.component.weakSoundness
-      (table.circuitAssumptions_of_assumptions assumptions row hrow)
-      (constraints row hrow) (guarantees row hrow)).right
+    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hrow
+    exact (rows i hi).right
 
 /--
 If we know constraints and _some_ of the guarantees unconditionally, we can remove them from the per-row assumptions.
@@ -553,6 +672,7 @@ prove guarantees for.
 -/
 lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
   {finished : List (RawChannel F)} {unfinished : RawChannel F} :
+  table.component.window = none →
   table.Assumptions →
   table.Constraints →
   table.channelsWithGuarantees ⊆ unfinished :: finished →
@@ -560,7 +680,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     ∀ row ∈ table.table,
       table.component.operations.ChannelGuarantees unfinished (table.environment row) →
       table.component.operations.ChannelRequirements unfinished (table.environment row) := by
-  intro assumptions constraints subset finished_grts row h_row channel_grts
+  intro single_row assumptions constraints subset finished_grts row h_row channel_grts
   replace finished_grts channel hc := finished_grts channel hc row h_row
   set env := table.environment row
   suffices table.component.operations.FullRequirements env by
@@ -569,7 +689,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     exact this i hi
   suffices table.component.operations.FullGuarantees env from
     table.component.weakSoundness
-      (table.circuitAssumptions_of_assumptions assumptions row h_row)
+      (table.circuitAssumptions_of_assumptions assumptions single_row row h_row)
       (constraints row h_row) this |>.right
   simp only [Component.guarantees_iff, Component.rowOperations]
   rw [GeneralFormalCircuit.guarantees_iff]

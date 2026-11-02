@@ -6,7 +6,9 @@ mod generated {
     include!("generated/fibonacci_ensemble.rs");
 }
 
-use clean_backend::witness_generation::{Interaction, WitnessField, WitnessGenerationError};
+use clean_backend::witness_generation::{
+    Constraint, Interaction, WitnessField, WitnessGenerationError,
+};
 use clean_backend::StarkConfig;
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleProvingError, EnsembleShapeError,
@@ -372,12 +374,16 @@ impl GeneratedAirSpec for WideVerifierMessages {
     const WIDTHS: &'static [usize] = Spec::WIDTHS;
     const FIXED_COLUMNS: &'static [&'static [usize]] = Spec::FIXED_COLUMNS;
     const FIXED_HEIGHTS: &'static [usize] = Spec::FIXED_HEIGHTS;
+    const WINDOWS: &'static [Option<usize>] = Spec::WINDOWS;
 
     fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F> {
         Spec::fixed_row(component, row)
     }
 
-    fn constraints<E: PrimeCharacteristicRing + Clone>(component: usize, row: &[E]) -> Vec<E> {
+    fn constraints<E: PrimeCharacteristicRing + Clone>(
+        component: usize,
+        row: &[E],
+    ) -> Vec<Constraint<E>> {
         Spec::constraints(component, row)
     }
 

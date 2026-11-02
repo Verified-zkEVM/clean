@@ -9,6 +9,7 @@ pub mod component_0 {
 
     pub const NAME: &str = "add";
     pub const INPUT_WIDTH: usize = 3;
+    pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 4;
 
     pub const FIXED_COLUMNS: &[usize] = &[];
@@ -39,8 +40,11 @@ pub mod component_0 {
         }
     }
 
-    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
-        vec![(row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64))))]
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Constraint<E>> {
+        vec![Constraint {
+            gate: Gate::EveryRow,
+            value: (row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+        }]
     }
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
@@ -116,6 +120,7 @@ pub mod component_1 {
 
     pub const NAME: &str = "mul";
     pub const INPUT_WIDTH: usize = 3;
+    pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 4;
 
     pub const FIXED_COLUMNS: &[usize] = &[];
@@ -146,8 +151,11 @@ pub mod component_1 {
         }
     }
 
-    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
-        vec![(row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64))))]
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Constraint<E>> {
+        vec![Constraint {
+            gate: Gate::EveryRow,
+            value: (row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+        }]
     }
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
@@ -223,6 +231,7 @@ pub mod component_2 {
 
     pub const NAME: &str = "program";
     pub const INPUT_WIDTH: usize = 4;
+    pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 4;
 
     pub const FIXED_COLUMNS: &[usize] = &[0, 1, 2];
@@ -277,7 +286,7 @@ pub mod component_2 {
         let row_index = 0u64;
     }
 
-    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Constraint<E>> {
         vec![]
     }
 

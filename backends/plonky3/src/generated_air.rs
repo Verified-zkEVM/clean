@@ -14,7 +14,7 @@ use p3_field::PrimeCharacteristicRing;
 use p3_lookup::{Count, InteractionBuilder};
 use p3_matrix::dense::RowMajorMatrix;
 
-use crate::witness_generation::{Interaction, WitnessField};
+use crate::witness_generation::{Constraint, Gate, Interaction, WitnessField};
 
 /// Shape errors detected before proving or verification.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,10 +92,12 @@ pub enum EnsembleShapeError {
 
 /// Direct expressions emitted for one Clean ensemble.
 ///
-/// Constraints and interactions read a complete row: the fixed columns at their input columns, and
-/// the committed columns in the others. They are generic over the ring of values, so the same
-/// generated functions run on field elements during witness generation and on symbolic expressions
-/// here.
+/// Constraints and interactions read a complete row: the fixed columns at their input columns, the
+/// window cells of a two-row component, the next row's own input and three selector cells, after
+/// the row's own input, and the committed columns in the others. They are generic over the ring of
+/// values, so the same generated functions run on field elements during witness generation and on
+/// symbolic expressions here. Constraint bodies and interactions never read the selector cells: a
+/// constraint that reads a selector is gated by it instead.
 pub trait GeneratedAirSpec: Clone + Sync {
     /// Order of the field whose constants and arithmetic the generated code was printed for.
     const FIELD_ORDER: u64;
@@ -105,11 +107,16 @@ pub trait GeneratedAirSpec: Clone + Sync {
     /// The input columns that are fixed columns, per component, in increasing order.
     const FIXED_COLUMNS: &'static [&'static [usize]];
     const FIXED_HEIGHTS: &'static [usize];
+    /// The own-input width of each two-row component.
+    const WINDOWS: &'static [Option<usize>];
 
     /// The fixed-column values of one row of a component with fixed columns.
     fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F>;
 
-    fn constraints<E: PrimeCharacteristicRing + Clone>(component: usize, row: &[E]) -> Vec<E>;
+    fn constraints<E: PrimeCharacteristicRing + Clone>(
+        component: usize,
+        row: &[E],
+    ) -> Vec<Constraint<E>>;
 
     fn interactions<E: PrimeCharacteristicRing + Clone>(
         component: usize,
@@ -146,6 +153,25 @@ fn semantic_row<E>(
         };
         row.push(value);
     }
+}
+
+/// The complete row of a two-row component whose own input has width `width`, from the row without
+/// its window cells: the next row's own input and three zero selector cells are inserted after the
+/// row's own input.
+fn window_row<E: PrimeCharacteristicRing + Clone>(
+    window: Option<usize>,
+    mut row: Vec<E>,
+    next: impl FnOnce() -> Vec<E>,
+) -> Vec<E> {
+    let Some(width) = window else {
+        return row;
+    };
+    let next = next();
+    let rest = row.split_off(width);
+    row.extend_from_slice(&next[..width]);
+    row.extend([E::ZERO, E::ZERO, E::ZERO]);
+    row.extend(rest);
+    row
 }
 
 /// The AIR of one extracted component, or of the verifier's public interactions.
@@ -206,6 +232,7 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
         for (metadata, actual) in [
             ("fixed columns", P::FIXED_COLUMNS.len()),
             ("fixed heights", P::FIXED_HEIGHTS.len()),
+            ("windows", P::WINDOWS.len()),
         ] {
             if actual != expected {
                 return Err(EnsembleShapeError::MetadataCount {
@@ -374,11 +401,21 @@ impl<F: WitnessField, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
     }
 
     fn main_next_row_columns(&self) -> Vec<usize> {
-        Vec::new()
+        match self.kind {
+            AirKind::Component(component) if P::WINDOWS[component].is_some() => {
+                (0..P::WIDTHS[component]).collect()
+            }
+            _ => Vec::new(),
+        }
     }
 
     fn preprocessed_next_row_columns(&self) -> Vec<usize> {
-        Vec::new()
+        match self.kind {
+            AirKind::Component(component) if P::WINDOWS[component].is_some() => {
+                (0..P::FIXED_COLUMNS[component].len()).collect()
+            }
+            _ => Vec::new(),
+        }
     }
 }
 
@@ -394,13 +431,33 @@ where
         // `GeneratedEnsemble::new` replaces LogUp's height check.
         let interactions = match self.kind {
             AirKind::Component(component) => {
-                let preprocessed = builder.preprocessed().current_slice().to_vec();
-                let fixed = preprocessed.into_iter().map(Into::into);
-                let main = builder.main();
-                let committed = main.current_slice().iter().map(|&value| value.into());
-                let row = semantic_row(P::FIXED_COLUMNS[component], fixed, committed);
+                let fixed_columns = P::FIXED_COLUMNS[component];
+                let window = P::WINDOWS[component];
+                let semantic = |fixed: &[AB::Var], committed: &[AB::Var]| -> Vec<AB::Expr> {
+                    semantic_row(
+                        fixed_columns,
+                        fixed.iter().map(|&value| value.into()),
+                        committed.iter().map(|&value| value.into()),
+                    )
+                };
+                let row = semantic(
+                    builder.preprocessed().current_slice(),
+                    builder.main().current_slice(),
+                );
+                // only two-row components open the next row
+                let row = window_row(window, row, || {
+                    semantic(
+                        builder.preprocessed().next_slice(),
+                        builder.main().next_slice(),
+                    )
+                });
                 for constraint in P::constraints(component, &row) {
-                    builder.assert_zero(constraint);
+                    match constraint.gate {
+                        Gate::EveryRow => builder.assert_zero(constraint.value),
+                        Gate::FirstRow => builder.when_first_row().assert_zero(constraint.value),
+                        Gate::LastRow => builder.when_last_row().assert_zero(constraint.value),
+                        Gate::Transition => builder.when_transition().assert_zero(constraint.value),
+                    }
                 }
                 P::interactions(component, &row)
             }
