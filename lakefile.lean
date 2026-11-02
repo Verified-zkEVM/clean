@@ -30,5 +30,5 @@ lean_exe export_witness_ir_reference_rust where
 lean_exe export_differential_rust where
   root := `Clean.Backends.Plonky3.Test.Differential
 
-require "leanprover-community" / "mathlib" @ git "v4.33.1"
-require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git"@"0804bcc83cd98f5f3e933adc6783aa99dacdedc1"
+require "leanprover-community" / "mathlib" @ git "v4.34.1"
+require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git"@"572f997390aa4fc131ef30b1186fa1dcf292ca10"
