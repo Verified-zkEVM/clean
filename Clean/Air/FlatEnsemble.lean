@@ -406,6 +406,73 @@ lemma EnsembleWitness.interactionsFit_of_heights {ens : Ensemble F PublicIO}
   fun channel h_channel =>
     witness.length_interactionsWith h_channel ▸ List.all_eq_true.mp fit channel h_channel
 
+/-- Fewer interactions with each of the channels than the field has elements, which closed channels
+rely on. Assumptions on the table heights provide this bound. -/
+def EnsembleWitness.FitField {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
+    (channels : List (RawChannel F)) : Prop :=
+  ∀ channel ∈ channels, (witness.interactionsWith channel).length < FiniteField.size F
+
+/-- Fewer interactions with each of the channels than the field has elements, for tables of the
+given heights. -/
+@[circuit_norm]
+def Ensemble.FitField (ens : Ensemble F PublicIO) (channels : List (RawChannel F))
+    (heights : List ℕ) : Prop :=
+  ∀ channel ∈ channels, ens.interactionCount channel.name heights < FiniteField.size F
+
+/-- A component's interactions with a channel of the ensemble are those with its name, since channel
+names are unique. -/
+lemma Ensemble.countP_name_eq_length_interactionsWith (ens : Ensemble F PublicIO)
+    {component : Component F} (h_component : component ∈ ens.tables) {channel : RawChannel F}
+    (h_channel : channel ∈ ens.channels) :
+    component.operations.interactions.countP (·.channel.name == channel.name) =
+      (component.operations.interactionsWith channel).length := by
+  classical
+  rw [Operations.interactionsWith, List.countP_eq_length_filter]
+  congr 1
+  apply List.filter_congr
+  intro i h_i
+  have h_mem := ens.tables_channels component h_component
+    (component.channel_mem_of_mem_interactions h_i)
+  rw [Bool.eq_iff_iff, decide_eq_true_iff, beq_iff_eq]
+  constructor
+  · exact List.inj_on_of_nodup_map ens.unique_channel_names h_mem h_channel
+  · rintro rfl; rfl
+
+/-- The interaction count with a channel of the ensemble is at most the verifier's count plus
+`width` times the total height, if every row interacts with the channel at most `width` times. -/
+lemma Ensemble.interactionCount_le (ens : Ensemble F PublicIO) {channel : RawChannel F}
+    (h_channel : channel ∈ ens.channels) (heights : List ℕ) (width : ℕ)
+    (h_width : ∀ component ∈ ens.tables,
+      (component.operations.interactionsWith channel).length ≤ width) :
+    ens.interactionCount channel.name heights ≤
+      ens.verifierOperations.interactions.countP (·.channel.name == channel.name) +
+        width * heights.sum := by
+  rw [interactionCount, Nat.add_le_add_iff_left]
+  replace h_width : ∀ component ∈ ens.tables,
+      component.operations.interactions.countP (·.channel.name == channel.name) ≤ width :=
+    fun component h_component =>
+      ens.countP_name_eq_length_interactionsWith h_component h_channel ▸
+        h_width component h_component
+  generalize ens.tables = tables at h_width
+  induction tables generalizing heights with
+  | nil => simp
+  | cons component tables ih =>
+    cases heights with
+    | nil => simp
+    | cons height heights =>
+      simp only [List.mem_cons, forall_eq_or_imp] at h_width
+      simp only [List.zipWith_cons_cons, List.sum_cons]
+      have := Nat.mul_le_mul_left height h_width.1
+      have := ih heights h_width.2
+      linarith
+
+lemma EnsembleWitness.fitField_of_heights {ens : Ensemble F PublicIO}
+    {witness : EnsembleWitness ens} {channels : List (RawChannel F)}
+    (h_channels : channels ⊆ ens.channels) (fit : ens.FitField channels witness.heights) :
+    witness.FitField channels :=
+  fun channel h_channel =>
+    witness.length_interactionsWith (h_channels h_channel) ▸ fit channel h_channel
+
 /- ## Soundness, Completeness and related definitions -/
 
 namespace Ensemble
@@ -457,11 +524,13 @@ assuming constraints and channel balance.
 This is just Soundness, except for per-table soundness implying global soundness.
 -/
 @[circuit_norm]
-def TableSoundness (ens : Ensemble F PublicIO) (balance : Balance F) : Prop :=
+def TableSoundness (ens : Ensemble F PublicIO) (balance : Balance F)
+    (closed : List (RawChannel F)) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →
     witness.InteractionsFit balance →
+    witness.FitField closed →
     witness.Balanced balance →
     witness.Spec
 
@@ -490,19 +559,22 @@ lemma assumptions_of_assumptionsConsistency {ens : Ensemble F PublicIO}
   exact consistency _ _ assumptions _ (EnsembleWitness.component_mem_tables_of_mem htable) _ _
 
 theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F PublicIO)
-  (balance : Balance F) (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop) :
-  ens.TableSoundness balance →
+  (balance : Balance F) (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop)
+  {closed : List (RawChannel F)} (closed_subset : closed ⊆ ens.channels) :
+  ens.TableSoundness balance closed →
   ens.AssumptionsConsistency Assumptions →
   ens.SpecConsistency Spec →
+  (∀ publicInput heights, Assumptions publicInput heights → ens.FitField closed heights) →
     ens.Soundness balance Assumptions Spec := by
   simp only [Soundness, TableSoundness, AssumptionsConsistency, SpecConsistency, Statement,
     forall_exists_index, and_imp]
-  intro table_soundness assumptions_consistency spec_consistency
+  intro table_soundness assumptions_consistency spec_consistency closed_fit
     publicInput heights assumptions fit witness publicInput_eq heights_eq constraints balanced
   simp only [← publicInput_eq, ← heights_eq] at *
   apply spec_consistency witness
   apply table_soundness witness ?assumptions constraints
-    (EnsembleWitness.interactionsFit_of_heights fit) balanced
+    (EnsembleWitness.interactionsFit_of_heights fit)
+    (EnsembleWitness.fitField_of_heights closed_subset (closed_fit _ _ assumptions)) balanced
   exact assumptions_of_assumptionsConsistency assumptions_consistency witness assumptions
 end Ensemble
 

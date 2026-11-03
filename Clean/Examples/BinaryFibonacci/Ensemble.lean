@@ -1,6 +1,6 @@
 module
 
-public import Clean.Air.Vm
+public import Clean.Air.CounterChannel
 public import Clean.Air.WitnessGeneration
 public import Clean.Utils.BinaryField
 
@@ -13,16 +13,19 @@ A Fibonacci VM over the binary field `BF64`, proven sound under multiset balance
 of binary-field proof systems. Addition is `xor`, so the sequence starts `0, 1, 1, 0, 1, 1, ...`; the
 point is the machinery, not the numbers.
 
-A state `(counter, x, y)` counts its steps with a power of the field element `g`, since there is no
-integer counter in characteristic 2: the state after `k` steps is `(g ^ k, fibonacci k)`.
+A state `(counter, x, y)` counts its steps with a power of the primitive element `g`, since there is
+no integer counter in characteristic 2: the state after `k` steps is `(g ^ k, fibonacci k)`. The
+counter makes the state channel a closed counter channel, on which all guarantees hold: there are no
+cycles of steps that fail them. The counter must be nonzero: at counter `0`, the states
+`(0, 0, 1) → (0, 1, 1) → (0, 1, 0) → (0, 0, 1)` would form such a cycle.
 -/
 
 namespace BinaryFibonacci
 
 open Air.Flat
 
-/-- The field element whose powers count the steps. -/
-def g : BF64 := BF64.ofBitVec 2#64
+/-- The primitive element whose powers count the steps. -/
+abbrev g : BF64 := BF64.X
 
 def fibonacci : ℕ → BF64 × BF64
   | 0 => (0, 1)
@@ -36,14 +39,10 @@ structure State (F : Type) where
   y : F
 deriving ProvableStruct
 
-/-- The state reached after `k` steps. -/
-def Reached (k : ℕ) (state : State BF64) : Prop :=
-  state.counter = g ^ k ∧ (state.x, state.y) = fibonacci k
-
-/-- The states of the VM, which `Reached` describes. -/
+/-- A state reached after `k` steps. -/
 def stateChannel : Channel BF64 State where
   name := "state"
-  Guarantees _ _ := True
+  Guarantees state _ := ∃ k : ℕ, state.counter = g ^ k ∧ (state.x, state.y) = fibonacci k
 
 structure StepInput (F : Type) where
   enabled : F
@@ -57,6 +56,9 @@ def step : GeneralFormalCircuit BF64 StepInput unit where
   name := "fibonacci"
   main input := do
     assertZero (input.enabled * (input.enabled - 1))
+    -- the counter is nonzero
+    let inverse ← witness input.counter⁻¹
+    assertZero (input.enabled * (input.counter * inverse - 1))
     stateChannel.pullIf input.enabled { counter := input.counter, x := input.x, y := input.y }
     stateChannel.pushIf input.enabled
       { counter := input.counter * .const g, x := input.y, y := input.x + input.y }
@@ -70,36 +72,39 @@ def step : GeneralFormalCircuit BF64 StepInput unit where
     simp only [circuit_norm, stateChannel]
 
   ProverAssumptions
-  | { enabled, counter, x, y }, _, _ =>
-    enabled = 0 ∨ enabled = 1 ∧ ∃ k, Reached k { counter, x, y }
-  -- an enabled step takes the state after `k` steps to the state after `k + 1` steps
-  Spec
-  | { enabled, counter, x, y }, _, _ => enabled = 1 → ∀ k, Reached k { counter, x, y } →
-    Reached (k + 1) { counter := counter * g, x := y, y := x + y }
+  | { enabled, counter, x, y }, data, _ =>
+    enabled = 0 ∨ enabled = 1 ∧ stateChannel.Guarantees { counter, x, y } data
+  Spec _ _ _ := True
 
+  channelsWithRequirements := [ stateChannel.toRaw ]
   requirementsChannelsLawful input_var _ := by
     obtain ⟨enabled, counter, x, y⟩ := input_var
     simp only [circuit_norm, stateChannel]
-    intro env h_bool
-    rcases mul_eq_zero.mp h_bool with h | h <;> simp_all [sub_eq_zero]
 
   soundness := by
-    circuit_proof_start [stateChannel, Reached]
-    rw [mul_eq_zero, sub_eq_zero] at h_holds
-    refine ⟨ ?_, h_holds ⟩
-    rintro rfl k ⟨ h_counter, h_fib ⟩
-    refine ⟨ by rw [h_counter, pow_succ], ?_ ⟩
+    circuit_proof_start [stateChannel]
+    obtain ⟨ h_bool, -, h_state ⟩ := h_holds
+    rcases mul_eq_zero.mp h_bool with rfl | h_one
+    · simp
+    rw [sub_eq_zero] at h_one
+    subst h_one
+    obtain ⟨ k, h_counter, h_fib ⟩ := h_state rfl
+    refine ⟨ .inr rfl, fun _ => ⟨ k + 1, by rw [h_counter, pow_succ], ?_ ⟩ ⟩
     simp only [fibonacci, ← h_fib]
   completeness := by
     circuit_proof_start [stateChannel]
-    rcases h_assumptions with rfl | ⟨ rfl, h_state ⟩ <;> simp_all
+    rcases h_assumptions with rfl | ⟨ rfl, k, h_counter, h_fib ⟩
+    · simp_all
+    have h_ne : (g ^ k : BF64) ≠ 0 := pow_ne_zero _ (by decide)
+    simp_all
+    exact ⟨k, rfl, rfl⟩
 
 /-- One row per state pushed to the state channel. Padding rows are disabled. -/
 abbrev stepComponent : Component BF64 where
   circuit := step
   generation := .demand {
-    channel := stateChannel
     trigger := .push
+    channel := stateChannel
     input | { counter, x, y } => pure { enabled := 1, counter, x, y }
   }
 
@@ -108,40 +113,87 @@ def verifier : Verifier.Program BF64 State where
   main final := do
     Verifier.pull stateChannel final
     Verifier.push stateChannel { counter := 1, x := 0, y := 1 }
+  Spec final data := stateChannel.Guarantees final data
+  soundness := by simp [circuit_norm]
 
-def vm : VmTables BF64 State where
+/-- The state channel is closed by its counter: every step multiplies the nonzero counter by the
+primitive element `g`, which has no short cycles, so the states that fail their guarantee can't
+form a cycle. -/
+def stateCounterChannel : CounterChannel BF64 State where
   channel := stateChannel
-  Reached k state _ := Reached k state
-  guarantees_of_reached := by simp [stateChannel]
-  tables := [stepComponent]
-  unique_names := by simp
-  verifier := verifier
-  final := id
-  tables_channel := by simp [circuit_norm, step, sub_eq_zero]
-  verifier_channel := by
-    simp [circuit_norm, verifier, Reached, fibonacci, ProverData.getPublicInput_eq_eval]
+  owners := [stepComponent]
+  counter state := state.counter
+  step := (· * g)
+  Valid := (· ≠ 0)
+  iterate_ne_self _ h_ne _ hk hk_lt := CounterChannel.iterate_mul_ne_self BF64.orderOf_X h_ne hk hk_lt
+  exists_step_of_constraintsHold := by
+    simp only [List.mem_singleton, forall_eq]
+    intro env h_constraints
+    rw [Component.constraintsHold_iff] at h_constraints
+    rw [Operations.interactionValuesWith_eq_map,
+      Component.interactionsWith_of_exposedChannels (table := stepComponent)
+        (List.mem_singleton_self _)]
+    simp only [List.map_cons, List.map_nil, Channel.eval_toRaw_pulledIf,
+      Channel.eval_toRaw_pushedIf]
+    refine ⟨_, _, _, rfl, ?_⟩
+    simp only [circuit_norm, stepComponent, step] at h_constraints
+    simp [explicit_provable_type, circuit_norm, Vector.mapRange, Vector.cast, Vector.take,
+      Vector.drop]
+    obtain ⟨h_bool, h_inverse⟩ := h_constraints
+    refine ⟨?_, fun h_one => ⟨?_, ?_⟩⟩
+    · rcases mul_eq_zero.mp h_bool with h | h
+      · exact .inl h
+      · exact .inr (sub_eq_zero.mp h)
+    · rw [h_one, one_mul, sub_eq_zero] at h_inverse
+      exact left_ne_zero_of_mul_eq_one h_inverse
+    · rintro ⟨k, h_counter, h_fib⟩
+      simp only at h_counter h_fib ⊢
+      refine ⟨k + 1, by rw [h_counter, pow_succ], ?_⟩
+      simp only [fibonacci, ← h_fib]
 
 /-- The public statement: the final state is reached after some number of steps. -/
 def Spec (final : State BF64) : Prop :=
-  ∃ k : ℕ, Reached k final
+  ∃ k : ℕ, final.counter = g ^ k ∧ (final.x, final.y) = fibonacci k
 
 /-- The ensemble, sound under multiset balance. -/
 def formalEnsemble : FormalEnsemble BF64 State .multiset :=
   SoundEnsemble.empty BF64 State .multiset
-  |>.addVm vm
-    (by simp +instances [circuit_norm, vm, stateChannel])
-    (by simp +instances [circuit_norm, vm, step, verifier])
-    (by simp +instances [circuit_norm, vm, step, verifier, stateChannel])
-    (by simp [circuit_norm, vm, step])
-  |>.toFormal (fun _ _ => True) Spec
-    (by simp [circuit_norm, vm])
-    (by rintro witness - - ⟨ k, -, -, -, reached ⟩; exact ⟨ k, reached ⟩)
+  |>.addClosedChannel (stateCounterChannel.closedChannel .multiset)
+    (by simp [circuit_norm, stateCounterChannel])
+    (by simp [circuit_norm, stateCounterChannel, step])
+    (by simp [circuit_norm, stateCounterChannel, step])
+    (by simp [circuit_norm, stateCounterChannel, step])
+  |>.setVerifier verifier
+    (by simp [circuit_norm, verifier, stateCounterChannel])
+    (by simp [circuit_norm, verifier, stateCounterChannel])
+    (fun _ channel => by
+      simp only [circuit_norm, verifier, stateChannel]
+      exact fun _ => ⟨0, by simp, rfl⟩)
+  |>.toFormal (fun _ heights => heights.sum < 2 ^ 62) Spec
+    (by simp [circuit_norm, stateCounterChannel])
+    (fun witness h => by
+      have h : verifier.Spec (witness.data.getPublicInput State) witness.data := h.1
+      rw [witness.data_getPublicInput] at h
+      exact h)
+    (closedFit := by
+      intro _ heights h_heights channel h_channel
+      simp only [circuit_norm, stateCounterChannel, List.mem_singleton] at h_channel
+      subst h_channel
+      refine lt_of_le_of_lt (Ensemble.interactionCount_le _
+        (by simp [circuit_norm, stateCounterChannel]) heights 2 ?_) ?_
+      · simp only [circuit_norm, stateCounterChannel, List.mem_singleton, forall_eq]
+        rw [Component.interactionsWith_of_exposedChannels (table := stepComponent)
+          (List.mem_singleton_self _)]
+        simp
+      · simp [circuit_norm, verifier]
+        rw [show FiniteField.size BF64 = 2 ^ 64 from rfl]
+        omega)
 
-/-- End-to-end soundness: a valid proof for the public input `final` shows that it is the state
-after some number of steps. -/
-theorem soundness (final : State BF64) (heights : List ℕ) :
+/-- End-to-end soundness: a valid proof for the public input `final`, with fewer than `2 ^ 62` rows,
+shows that it is the state after some number of steps. -/
+theorem soundness (final : State BF64) (heights : List ℕ) (h_heights : heights.sum < 2 ^ 62) :
     formalEnsemble.ensemble.Statement .multiset final heights → Spec final :=
-  formalEnsemble.soundness final heights trivial
+  formalEnsemble.soundness final heights h_heights
 
 /-- Generate a complete ensemble witness from the claimed final state. -/
 def generate (final : State BF64) (fuel : ℕ) :
