@@ -358,6 +358,13 @@ lemma List.length_flattenPairs {α : Type} (pairs : List (α × α)) :
   | nil => simp [List.flattenPairs]
   | cons pair pairs ih => simp [List.flattenPairs] at ih ⊢; omega
 
+/-- Concatenation of pairs commutes with `flatMap`. -/
+lemma List.flattenPairs_flatMap {α β : Type} (l : List α) (f : α → List (β × β)) :
+    (l.flatMap f).flattenPairs = l.flatMap fun a => (f a).flattenPairs := by
+  induction l with
+  | nil => simp [List.flattenPairs]
+  | cons a l ih => simp_all [List.flattenPairs]
+
 /-- A pull and a push, which are active with multiplicity `1` or disabled together. -/
 def Interaction.Transition (t : Interaction F × Interaction F) : Prop :=
   t.1.direction = .pull ∧ t.2.direction = .push ∧ t.1.mult = t.2.mult ∧ IsBool t.1.mult
@@ -385,6 +392,45 @@ lemma activeCount_flattenPairs {transitions : List (Interaction F × Interaction
     · simp [h_zero, ← h_mult]
     · simp [h_one, ← h_mult, h_pull, h_push, List.count_cons]
 
+/-- The active pairs of a list of elements, each of which exposes pairs that share its enabled
+flag, are the pairs of the enabled elements. -/
+lemma List.filter_flatMap_mult {α : Type} (l : List α) (enabled : α → F)
+    (pairs : α → List (Interaction F × Interaction F))
+    (h_pairs : ∀ a, ∀ t ∈ pairs a, t.1.mult = enabled a) :
+    (l.flatMap pairs).filter (·.1.mult = 1) = (l.filter (enabled · = 1)).flatMap pairs := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    rw [List.flatMap_cons, List.filter_append, ih, List.filter_cons]
+    by_cases h : enabled a = 1
+    · rw [List.filter_eq_self.mpr (fun t ht => by simp [h_pairs a t ht, h])]
+      simp [h]
+    · rw [List.filter_eq_nil_iff.mpr (fun t ht => by simp [h_pairs a t ht, h])]
+      simp [h]
+
+/--
+Balanced transitions, each a pull and a push that are both active with multiplicity `1` or both
+disabled: the messages that the active transitions pull are a permutation of those they push.
+-/
+theorem perm_of_balancedInteractions (transitions : List (Interaction F × Interaction F))
+    (balance : BalancedInteractions transitions.flattenPairs)
+    (h_transitions : ∀ t ∈ transitions, Interaction.Transition t) :
+    ((transitions.filter (·.1.mult = 1)).map (·.1.msg)).Perm
+      ((transitions.filter (·.1.mult = 1)).map (·.2.msg)) := by
+  rw [List.perm_iff_count]
+  intro msg
+  obtain ⟨count_pull, count_push⟩ := activeCount_flattenPairs h_transitions msg
+  rw [← count_pull, ← count_push]
+  refine (balance.activeCount_push_eq_activeCount_pull_of_isBool msg fun i hi _ => ?_).symm
+  obtain ⟨t, t_mem, hi⟩ : ∃ t ∈ transitions, i = t.1 ∨ i = t.2 := by
+    simp only [List.flattenPairs, List.mem_flatten, List.mem_map] at hi
+    obtain ⟨_, ⟨t, t_mem, rfl⟩, hi⟩ := hi
+    exact ⟨t, t_mem, by simp_all⟩
+  obtain ⟨-, -, h_mult, h_bool⟩ := h_transitions t t_mem
+  rcases hi with rfl | rfl
+  · exact h_bool
+  · exact h_mult ▸ h_bool
+
 /--
 `exists_reached_of_perm` for balanced interactions: a unit pull and a unit push, and transitions,
 each a pull and a push that are both active with multiplicity `1` or both disabled. Disabled
@@ -400,28 +446,12 @@ theorem exists_reached_of_balancedInteractions (Reached : ℕ → Array F → Pr
     ∃ k' ≤ k + transitions.length, Reached k' pull.msg := by
   let active := transitions.filter (·.1.mult = 1)
   have perm : (pull.msg :: active.map (·.1.msg)).Perm (push.msg :: active.map (·.2.msg)) := by
-    rw [List.perm_iff_count]
-    intro msg
-    obtain ⟨count_pull, count_push⟩ := activeCount_flattenPairs h_transitions msg
-    have counts := balance.activeCount_push_eq_activeCount_pull_of_isBool msg (by
-      intro i hi _
-      simp only [List.flattenPairs_cons, List.mem_cons] at hi
-      rcases hi with rfl | rfl | hi
-      · exact .inr pull_unit.2
-      · exact .inr push_unit.2
-      obtain ⟨t, t_mem, hi⟩ : ∃ t ∈ transitions, i = t.1 ∨ i = t.2 := by
-        simp only [List.flattenPairs, List.mem_flatten, List.mem_map] at hi
-        obtain ⟨_, ⟨t, t_mem, rfl⟩, hi⟩ := hi
-        exact ⟨t, t_mem, by simp_all⟩
-      obtain ⟨-, -, h_mult, h_bool⟩ := h_transitions t t_mem
-      rcases hi with rfl | rfl
-      · exact h_bool
-      · exact h_mult ▸ h_bool)
-    simp only [List.flattenPairs_cons, activeCount, List.countP_cons, pull_unit.1, push_unit.1,
-      pull_unit.2, push_unit.2] at counts
-    simp only [activeCount] at count_pull count_push
-    simp only [List.count_cons, active, ← count_pull, ← count_push]
-    simp_all
+    have perm := perm_of_balancedInteractions _ balance (by
+      intro t t_mem
+      rcases List.mem_cons.mp t_mem with rfl | t_mem
+      · exact ⟨pull_unit.1, push_unit.1, pull_unit.2.trans push_unit.2.symm, .inr pull_unit.2⟩
+      · exact h_transitions t t_mem)
+    simpa [List.filter_cons, pull_unit.2] using perm
   obtain ⟨k', hk', reached'⟩ := exists_reached_of_perm Reached
     (active.map fun t => (t.1.msg, t.2.msg))
     (by simp only [List.mem_map, List.mem_filter, active]
