@@ -426,14 +426,44 @@ def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : Prover
 def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) :=
   ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
 
+/--
+Two prover environments are indistinguishable to a witness generator running at offset `n`.
+
+A `ProverEnvironment` has three channels a witness generator can read: cells (`get`, via
+`Expression.eval`), prover hints (`hint`, via `FExpr.hintGet`) and committed prover data (`data`,
+via `FExpr.dataGet`). All three appear here, but not in the same way: cells are determined
+incrementally by witness generation, so only those *below* the current offset are constrained,
+whereas `hint` and `data` are ambient inputs fixed before generation begins, so they are
+constrained in full.
+-/
 def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
-  ∀ i < n, env.get i = env'.get i
+  (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
+
+namespace ProverEnvironment.AgreesBelow
+variable {env env' : ProverEnvironment F}
+
+omit [FiniteField F] in
+theorem get_eq (h : env.AgreesBelow n env') {i : ℕ} (hi : i < n) : env.get i = env'.get i := h.1 i hi
+
+omit [FiniteField F] in
+theorem hint_eq (h : env.AgreesBelow n env') : env.hint = env'.hint := h.2.1
+
+omit [FiniteField F] in
+theorem data_eq (h : env.AgreesBelow n env') : env.data = env'.data := h.2.2
+
+end ProverEnvironment.AgreesBelow
+
+omit [FiniteField F] in
+theorem ProverEnvironment.agreesBelow_rfl (n : ℕ) (env : ProverEnvironment F) :
+    env.AgreesBelow n env :=
+  ⟨fun _ _ => rfl, rfl, rfl⟩
 
 def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) :=
   ∀ env env', env.AgreesBelow n env' → f env = f env'
 
 /--
-A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
+A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset,
+plus the shared `hint` and `data` (which witnesses can be computed from as well).
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
