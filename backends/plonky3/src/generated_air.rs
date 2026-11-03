@@ -189,8 +189,9 @@ impl<P> GeneratedAir<P> {
 /// A complete generated Clean statement with its AIR components in canonical order.
 ///
 /// The component AIRs are private so callers cannot omit, duplicate, or reorder them. Only
-/// non-empty components have an AIR, and they are followed by the verifier AIR. Construction also checks that every channel has fewer interactions
-/// than the field order, the bound of Clean's LogUp balance check, and one message width.
+/// non-empty components have an AIR, and they are followed by the verifier AIR. Construction also
+/// checks that every channel has fewer interactions than the field order, the bound of Clean's
+/// LogUp balance check, and one message width.
 #[derive(Clone, Debug)]
 pub struct GeneratedEnsemble<F, P> {
     airs: Vec<GeneratedAir<P>>,
