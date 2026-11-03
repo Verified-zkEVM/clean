@@ -31,6 +31,7 @@ public import Clean.Examples.FemtoCairo.FemtoCairo
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Air.WitnessGeneration
 public import Clean.Air.Lookup
+public import Clean.Air.MemoryVm
 public import Clean.Backends.Plonky3.Print
 public import Clean.Tables.Fibonacci8
 public import Clean.Tables.Fibonacci32
