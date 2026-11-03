@@ -59,6 +59,18 @@ Observation equality justifies a refresh's ledger rewrite. The adapter must sepa
 
 `EventRefinement.localStep` is a semantic proof boundary. Given authentic control and current resource records, it proves the machine step and representation of the resulting state. Its specification must include the full intended effects and frames. A precompile can own many physical rows; its adapter must establish exact ownership and the complete access footprint.
 
+## Read-write memory for VMs
+
+`Clean.Air.MemoryVm` applies these layers to VMs whose steps read and write a memory, see `Clean.Air.ReadWriteMemory`. Memory records are `(address, value, time)`. A memory table provides the verifier-known initial record of every address it enables, at time `0`, and consumes its final record. Each access pulls the current record of its address, pushes its successor, and checks with a range lookup that the access time and the gap to the previous time are less than a bound `B`, where `2 * B ≤ p`.
+
+Neither the VM channel nor the memory channel guarantees anything. The proof works on the occurrence list of all enabled VM rows:
+
+- Every enabled row increases a clock that the VM declares. `acyclic_of_strict` and `exhaustive_of_acyclic` turn balance of the VM channel into one walk from the initial to the final state that uses every enabled row, and `targets_ordered_of_walk` orders the rows by their clocks.
+- Every access happens at the clock of its row. A pulled record matches a pushed one, whose time is `0` or an access time, so it is less than `B`, and the range check shows that the access comes later. With these orders, `replay_of_balance` replays the accesses in the order of the walk, from the initial to the final records of the memory table. Distinct rows of the memory table hold distinct addresses, so the initial and final frontiers have at most one record per address.
+- `ground` follows the walk. Each step reads the current value of its address from the replay, so its row-local spec takes the state reached after `k` steps, with the memory of the replay, to the state reached after `k + 1` steps.
+
+The specs of the VM tables stay row-local: a step increases the clock, its access happens at the step's clock and after the record it pulls, and it takes a state reached with a memory to the next state, with the memory updated by the access, provided that the access reads the memory's value at its address.
+
 ## Tests
 
 The regression modules are included in `CleanTests`:

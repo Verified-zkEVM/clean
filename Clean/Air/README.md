@@ -41,6 +41,8 @@ The library provides several arguments for ensemble soundness, suited to differe
 
 `Clean/Utils/ResourceHistory` proves when a balanced channel's interactions form one exhaustive history, ordered by a clock or a version, and replays mutable resources along it, so that every read sees the latest write. See [`doc/resource-histories.md`](../../doc/resource-histories.md).
 
+`ReadWriteMemory.lean` and `MemoryVm.lean` use these histories for VMs whose steps read and write a memory. A memory is a channel of records `(address, value, time)` together with a memory table, which provides the verifier-known initial record of every address it enables and consumes its last record. Every access pulls the current record of its address, pushes the next one, and checks with a range lookup that it happens later. Neither the memory channel nor the VM channel guarantees anything. Instead, the VM declares a clock that every step increases, and accesses happen at the clock of their step. Balance of the VM channel then orders all enabled steps into one execution from the initial to the final state, leaving no cycles of steps whose accesses could change the memory, and balance of the memory channel replays the accesses in the same order, so that every read sees the latest write. The VM describes the states it reaches after `k` steps together with the memory, and the spec of each VM table only states what one step does to a state and to the memory value it reads. The global argument is proved once, in the library. `Clean/Examples/OpcodeVm` has `load` and `store` opcodes built this way.
+
 `WitnessGeneration.lean` constructs ensemble witnesses from the public input and the prover's private input, see the next section.
 
 ## Witness generation
