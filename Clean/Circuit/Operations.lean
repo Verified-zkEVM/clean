@@ -1191,6 +1191,13 @@ lemma exposedChannelsLawful_expose {Message : TypeMap} [ProvableType Message]
       ops.interactionsWith channel.toRaw = interactions.map (·.toRaw) := by
   simp only [ExposedChannelsLawful, expose, List.mem_singleton, forall_eq]
 
+@[circuit_norm ↓]
+lemma exposedChannelsLawful_append (ops : Operations F)
+    (exposed exposed' : List (ExposedChannel F)) :
+    ops.ExposedChannelsLawful (exposed ++ exposed') ↔
+      ops.ExposedChannelsLawful exposed ∧ ops.ExposedChannelsLawful exposed' := by
+  simp only [ExposedChannelsLawful, List.mem_append, or_imp, forall_and]
+
 theorem channelsLawful_nil : ChannelsLawful ([] : Operations F) [] := by
   simp [ChannelsLawful, InChannelsOrGuarantees, SubcircuitChannelsLawful,
     subcircuitChannelsWithGuarantees, subcircuits, forAllNoOffset]

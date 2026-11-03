@@ -223,6 +223,504 @@ pub mod component_2 {
     use clean_backend::witness_generation::*;
     use p3_field::PrimeCharacteristicRing;
 
+    pub const NAME: &str = "load";
+    pub const INPUT_WIDTH: usize = 3;
+    pub const WIDTH: usize = 6;
+
+    pub const FIXED_COLUMNS: &[usize] = &[];
+    pub const FIXED_HEIGHT: usize = 0;
+
+    pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
+        Vec::new()
+    }
+
+    pub fn complete<F: WitnessField>(
+        row: &mut Vec<F>,
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+    ) {
+        let row_index = 0u64;
+        {
+            let mut output: Vec<F> = Vec::with_capacity(1);
+            output.push(
+                data.get(
+                    "program",
+                    4,
+                    usize::try_from((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    2,
+                ),
+            );
+            row.extend(output);
+        }
+        {
+            let mut output: Vec<F> = Vec::with_capacity(1);
+            output.push(
+                hint.get(
+                    "memory previous",
+                    2,
+                    usize::try_from(
+                        (row.get(1).copied().unwrap_or(F::ZERO) + F::from_u64(1u64))
+                            .canonical_u64(),
+                    )
+                    .unwrap_or(usize::MAX),
+                    0,
+                ),
+            );
+            row.extend(output);
+        }
+        {
+            let mut output: Vec<F> = Vec::with_capacity(1);
+            output.push(
+                hint.get(
+                    "memory previous",
+                    2,
+                    usize::try_from(
+                        (row.get(1).copied().unwrap_or(F::ZERO) + F::from_u64(1u64))
+                            .canonical_u64(),
+                    )
+                    .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
+            row.extend(output);
+        }
+    }
+
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
+        vec![
+            (row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            (row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+        ]
+    }
+
+    pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
+        vec![
+            Interaction {
+                channel: "state",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![row[1].clone(), row[2].clone()],
+            },
+            Interaction {
+                channel: "program",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![row[1].clone(), E::from_u64(3u64), row[3].clone()],
+            },
+            Interaction {
+                channel: "memory times",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![(row[1].clone() + E::from_u64(1u64))],
+            },
+            Interaction {
+                channel: "memory times",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![
+                    (((row[1].clone() + E::from_u64(1u64))
+                        + (-E::from_u64(1u64) * row[5].clone()))
+                        + (-E::from_u64(1u64) * E::from_u64(1u64))),
+                ],
+            },
+            Interaction {
+                channel: "memory",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![row[3].clone(), row[4].clone(), row[5].clone()],
+            },
+            Interaction {
+                channel: "memory",
+                direction: Direction::Push,
+                multiplicity: row[0].clone(),
+                message: vec![
+                    row[3].clone(),
+                    row[4].clone(),
+                    (row[1].clone() + E::from_u64(1u64)),
+                ],
+            },
+            Interaction {
+                channel: "state",
+                direction: Direction::Push,
+                multiplicity: row[0].clone(),
+                message: vec![(row[1].clone() + E::from_u64(1u64)), row[4].clone()],
+            },
+        ]
+    }
+
+    pub fn guard<F: WitnessField>(row: &[F], data: &WitnessData<F>, hint: &WitnessData<F>) -> bool {
+        let row_index = 0u64;
+        (data.get(
+            "program",
+            4,
+            usize::try_from((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64())
+                .unwrap_or(usize::MAX),
+            1,
+        ) == F::from_u64(3u64))
+    }
+
+    pub fn input<F: WitnessField>(
+        row: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        multiplicity: F,
+    ) -> Vec<F> {
+        let row_index = 0u64;
+        let mut output: Vec<F> = Vec::with_capacity(3);
+        output.push(F::from_u64(1u64));
+        output.push(row.get(0).copied().unwrap_or(F::ZERO));
+        output.push(row.get(1).copied().unwrap_or(F::ZERO));
+        output
+    }
+
+    pub fn mode<F: WitnessField>() -> Mode<F> {
+        Mode::Demand(DemandMode {
+            channel: "state",
+            trigger: Direction::Push,
+            guard: guard::<F>,
+            input: input::<F>,
+            multiplicity: None,
+            padding: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
+        })
+    }
+
+    pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> {
+        Vec::new()
+    }
+}
+
+pub mod component_3 {
+    #![allow(unused_variables, unused_mut, unused_parens)]
+    use alloc::{vec, vec::Vec};
+    use clean_backend::witness_generation::*;
+    use p3_field::PrimeCharacteristicRing;
+
+    pub const NAME: &str = "store";
+    pub const INPUT_WIDTH: usize = 3;
+    pub const WIDTH: usize = 6;
+
+    pub const FIXED_COLUMNS: &[usize] = &[];
+    pub const FIXED_HEIGHT: usize = 0;
+
+    pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
+        Vec::new()
+    }
+
+    pub fn complete<F: WitnessField>(
+        row: &mut Vec<F>,
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+    ) {
+        let row_index = 0u64;
+        {
+            let mut output: Vec<F> = Vec::with_capacity(1);
+            output.push(
+                data.get(
+                    "program",
+                    4,
+                    usize::try_from((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    2,
+                ),
+            );
+            row.extend(output);
+        }
+        {
+            let mut output: Vec<F> = Vec::with_capacity(1);
+            output.push(
+                hint.get(
+                    "memory previous",
+                    2,
+                    usize::try_from(
+                        (row.get(1).copied().unwrap_or(F::ZERO) + F::from_u64(1u64))
+                            .canonical_u64(),
+                    )
+                    .unwrap_or(usize::MAX),
+                    0,
+                ),
+            );
+            row.extend(output);
+        }
+        {
+            let mut output: Vec<F> = Vec::with_capacity(1);
+            output.push(
+                hint.get(
+                    "memory previous",
+                    2,
+                    usize::try_from(
+                        (row.get(1).copied().unwrap_or(F::ZERO) + F::from_u64(1u64))
+                            .canonical_u64(),
+                    )
+                    .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
+            row.extend(output);
+        }
+    }
+
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
+        vec![
+            (row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            (row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+        ]
+    }
+
+    pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
+        vec![
+            Interaction {
+                channel: "state",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![row[1].clone(), row[2].clone()],
+            },
+            Interaction {
+                channel: "program",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![row[1].clone(), E::from_u64(4u64), row[3].clone()],
+            },
+            Interaction {
+                channel: "memory times",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![(row[1].clone() + E::from_u64(1u64))],
+            },
+            Interaction {
+                channel: "memory times",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![
+                    (((row[1].clone() + E::from_u64(1u64))
+                        + (-E::from_u64(1u64) * row[5].clone()))
+                        + (-E::from_u64(1u64) * E::from_u64(1u64))),
+                ],
+            },
+            Interaction {
+                channel: "memory",
+                direction: Direction::Pull,
+                multiplicity: row[0].clone(),
+                message: vec![row[3].clone(), row[4].clone(), row[5].clone()],
+            },
+            Interaction {
+                channel: "memory",
+                direction: Direction::Push,
+                multiplicity: row[0].clone(),
+                message: vec![
+                    row[3].clone(),
+                    row[2].clone(),
+                    (row[1].clone() + E::from_u64(1u64)),
+                ],
+            },
+            Interaction {
+                channel: "state",
+                direction: Direction::Push,
+                multiplicity: row[0].clone(),
+                message: vec![(row[1].clone() + E::from_u64(1u64)), row[2].clone()],
+            },
+        ]
+    }
+
+    pub fn guard<F: WitnessField>(row: &[F], data: &WitnessData<F>, hint: &WitnessData<F>) -> bool {
+        let row_index = 0u64;
+        (data.get(
+            "program",
+            4,
+            usize::try_from((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64())
+                .unwrap_or(usize::MAX),
+            1,
+        ) == F::from_u64(4u64))
+    }
+
+    pub fn input<F: WitnessField>(
+        row: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        multiplicity: F,
+    ) -> Vec<F> {
+        let row_index = 0u64;
+        let mut output: Vec<F> = Vec::with_capacity(3);
+        output.push(F::from_u64(1u64));
+        output.push(row.get(0).copied().unwrap_or(F::ZERO));
+        output.push(row.get(1).copied().unwrap_or(F::ZERO));
+        output
+    }
+
+    pub fn mode<F: WitnessField>() -> Mode<F> {
+        Mode::Demand(DemandMode {
+            channel: "state",
+            trigger: Direction::Push,
+            guard: guard::<F>,
+            input: input::<F>,
+            multiplicity: None,
+            padding: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
+        })
+    }
+
+    pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> {
+        Vec::new()
+    }
+}
+
+pub mod component_4 {
+    #![allow(unused_variables, unused_mut, unused_parens)]
+    use alloc::{vec, vec::Vec};
+    use clean_backend::witness_generation::*;
+    use p3_field::PrimeCharacteristicRing;
+
+    pub const NAME: &str = "memory";
+    pub const INPUT_WIDTH: usize = 5;
+    pub const WIDTH: usize = 5;
+
+    pub const FIXED_COLUMNS: &[usize] = &[0, 1];
+    pub const FIXED_HEIGHT: usize = 8;
+
+    pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> {
+        let row: &[F] = &[];
+        let mut output: Vec<F> = Vec::with_capacity(2);
+        output.push(F::from_u64(row_index));
+        output.push(F::from_u64(0u64));
+        output
+    }
+
+    pub fn complete<F: WitnessField>(
+        row: &mut Vec<F>,
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+    ) {
+        let row_index = 0u64;
+    }
+
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
+        vec![(row[4].clone() * (row[4].clone() + (-E::from_u64(1u64) * E::from_u64(1u64))))]
+    }
+
+    pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
+        vec![
+            Interaction {
+                channel: "memory",
+                direction: Direction::Pull,
+                multiplicity: row[4].clone(),
+                message: vec![row[0].clone(), row[2].clone(), row[3].clone()],
+            },
+            Interaction {
+                channel: "memory",
+                direction: Direction::Push,
+                multiplicity: row[4].clone(),
+                message: vec![row[0].clone(), row[1].clone(), E::from_u64(0u64)],
+            },
+        ]
+    }
+
+    pub fn row_of<F: WitnessField>(row: &[F], hint: &WitnessData<F>) -> u64 {
+        let row_index = 0u64;
+        (row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()
+    }
+
+    pub fn mode<F: WitnessField>() -> Mode<F> {
+        Mode::Preallocated {
+            channel: "memory",
+            trigger: Direction::Pull,
+            rows: 8,
+            row_of: row_of::<F>,
+            multiplicity: 4,
+        }
+    }
+
+    pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> {
+        let row: &[F] = &[];
+        let mut output: Vec<F> = Vec::with_capacity(5);
+        output.push(F::from_u64(row_index));
+        output.push(F::from_u64(0u64));
+        output.push(hint.get(
+            "memory final",
+            2,
+            usize::try_from(row_index).unwrap_or(usize::MAX),
+            0,
+        ));
+        output.push(hint.get(
+            "memory final",
+            2,
+            usize::try_from(row_index).unwrap_or(usize::MAX),
+            1,
+        ));
+        output.push(F::ZERO);
+        output
+    }
+}
+
+pub mod component_5 {
+    #![allow(unused_variables, unused_mut, unused_parens)]
+    use alloc::{vec, vec::Vec};
+    use clean_backend::witness_generation::*;
+    use p3_field::PrimeCharacteristicRing;
+
+    pub const NAME: &str = "memory times";
+    pub const INPUT_WIDTH: usize = 2;
+    pub const WIDTH: usize = 2;
+
+    pub const FIXED_COLUMNS: &[usize] = &[0];
+    pub const FIXED_HEIGHT: usize = 32;
+
+    pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> {
+        let row: &[F] = &[];
+        let mut output: Vec<F> = Vec::with_capacity(1);
+        output.push(F::from_u64(row_index));
+        output
+    }
+
+    pub fn complete<F: WitnessField>(
+        row: &mut Vec<F>,
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+    ) {
+        let row_index = 0u64;
+    }
+
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
+        vec![]
+    }
+
+    pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
+        vec![Interaction {
+            channel: "memory times",
+            direction: Direction::Push,
+            multiplicity: row[1].clone(),
+            message: vec![row[0].clone()],
+        }]
+    }
+
+    pub fn row_of<F: WitnessField>(row: &[F], hint: &WitnessData<F>) -> u64 {
+        let row_index = 0u64;
+        (row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()
+    }
+
+    pub fn mode<F: WitnessField>() -> Mode<F> {
+        Mode::Preallocated {
+            channel: "memory times",
+            trigger: Direction::Pull,
+            rows: 32,
+            row_of: row_of::<F>,
+            multiplicity: 1,
+        }
+    }
+
+    pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> {
+        let row: &[F] = &[];
+        let mut output: Vec<F> = Vec::with_capacity(2);
+        output.push(F::from_u64(row_index));
+        output.push(F::ZERO);
+        output
+    }
+}
+
+pub mod component_6 {
+    #![allow(unused_variables, unused_mut, unused_parens)]
+    use alloc::{vec, vec::Vec};
+    use clean_backend::witness_generation::*;
+    use p3_field::PrimeCharacteristicRing;
+
     pub const NAME: &str = "program";
     pub const INPUT_WIDTH: usize = 4;
     pub const WIDTH: usize = 4;
@@ -238,12 +736,16 @@ pub mod component_2 {
             [
                 F::from_u64(1u64),
                 F::from_u64(2u64),
+                F::from_u64(4u64),
                 F::from_u64(1u64),
                 F::from_u64(2u64),
+                F::from_u64(4u64),
+                F::from_u64(3u64),
                 F::from_u64(1u64),
+                F::from_u64(4u64),
+                F::from_u64(3u64),
                 F::from_u64(1u64),
-                F::from_u64(2u64),
-                F::from_u64(1u64),
+                F::from_u64(3u64),
                 F::from_u64(2u64),
                 F::from_u64(1u64),
             ]
@@ -255,12 +757,16 @@ pub mod component_2 {
             [
                 F::from_u64(3u64),
                 F::from_u64(5u64),
+                F::from_u64(1u64),
                 F::from_u64(7u64),
                 F::from_u64(2u64),
+                F::from_u64(4u64),
+                F::from_u64(1u64),
+                F::from_u64(1u64),
                 F::from_u64(1u64),
                 F::from_u64(4u64),
-                F::from_u64(3u64),
                 F::from_u64(9u64),
+                F::from_u64(1u64),
                 F::from_u64(2u64),
                 F::from_u64(6u64),
             ]
@@ -315,12 +821,16 @@ pub mod component_2 {
             [
                 F::from_u64(1u64),
                 F::from_u64(2u64),
+                F::from_u64(4u64),
                 F::from_u64(1u64),
                 F::from_u64(2u64),
+                F::from_u64(4u64),
+                F::from_u64(3u64),
                 F::from_u64(1u64),
+                F::from_u64(4u64),
+                F::from_u64(3u64),
                 F::from_u64(1u64),
-                F::from_u64(2u64),
-                F::from_u64(1u64),
+                F::from_u64(3u64),
                 F::from_u64(2u64),
                 F::from_u64(1u64),
             ]
@@ -332,12 +842,16 @@ pub mod component_2 {
             [
                 F::from_u64(3u64),
                 F::from_u64(5u64),
+                F::from_u64(1u64),
                 F::from_u64(7u64),
                 F::from_u64(2u64),
+                F::from_u64(4u64),
+                F::from_u64(1u64),
+                F::from_u64(1u64),
                 F::from_u64(1u64),
                 F::from_u64(4u64),
-                F::from_u64(3u64),
                 F::from_u64(9u64),
+                F::from_u64(1u64),
                 F::from_u64(2u64),
                 F::from_u64(6u64),
             ]
@@ -362,7 +876,7 @@ pub mod verifier {
                 channel: "state",
                 direction: Direction::Pull,
                 multiplicity: E::from_u64(1u64),
-                message: vec![E::from_u64(10u64), row[1].clone()],
+                message: vec![E::from_u64(14u64), row[1].clone()],
             },
             Interaction {
                 channel: "state",
@@ -378,7 +892,7 @@ clean_backend::ensemble! {
     field_order: 2013265921,
     fuel: 1000,
     public_inputs: 2,
-    prover_inputs: 0,
-    hint_tables: [],
-    components: [component_0, component_1, component_2],
+    prover_inputs: 80,
+    hint_tables: [clean_backend::witness_generation::HintTable { key: "memory previous", width: 2, offset: 0, rows: 32 }, clean_backend::witness_generation::HintTable { key: "memory final", width: 2, offset: 64, rows: 8 }],
+    components: [component_0, component_1, component_2, component_3, component_4, component_5, component_6],
 }

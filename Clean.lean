@@ -4,8 +4,12 @@ public import Clean.Circuit
 public import Clean.Examples.WitnessExport
 public import Clean.Utils.FiniteField
 public import Clean.Utils.BinaryField
-public import Clean.Utils.SourceSinkPath
 public import Clean.Utils.OfflineMemory
+public import Clean.Utils.ResourceHistory.Grounding
+public import Clean.Utils.ResourceHistory.Inventory
+public import Clean.Utils.ResourceHistory.OfflineMemory
+public import Clean.Utils.ResourceHistory.Prefix
+public import Clean.Utils.ResourceHistory.Refresh
 public import Clean.Circomlib.AliasCheck
 public import Clean.Circomlib.BinSum
 public import Clean.Circomlib.BinSub
@@ -27,6 +31,7 @@ public import Clean.Examples.FemtoCairo.FemtoCairo
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Air.WitnessGeneration
 public import Clean.Air.Lookup
+public import Clean.Air.MemoryVm
 public import Clean.Backends.Plonky3.Print
 public import Clean.Tables.Fibonacci8
 public import Clean.Tables.Fibonacci32

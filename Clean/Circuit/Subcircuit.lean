@@ -893,4 +893,14 @@ theorem FormalAssertion.toSubcircuit_interactions (circuit : FormalAssertion F I
   simp only [FormalAssertion.toSubcircuit]
   rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 
+open Classical in
+/-- A subcircuit interacts with a channel that its circuit exposes as the circuit exposes it. -/
+theorem GeneralFormalCircuit.toSubcircuit_interactions_filter_of_mem_exposedChannels
+    (circuit : GeneralFormalCircuit F Input Output) {exposed : ExposedChannel F}
+    (h_exposed : exposed ∈ circuit.exposedChannels input_var n) :
+  (FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat).filter
+      (fun i => i.channel = exposed.channel) = exposed.interactions := by
+  rw [circuit.toSubcircuit_interactions]
+  exact circuit.exposedChannels_eq input_var n exposed h_exposed
+
 end

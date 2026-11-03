@@ -255,6 +255,29 @@ lemma interactionsWith_eq {vm : VmTables F PublicIO} {table} (h : table ∈ vm.t
     (vm.channel.pushedIf (vm.step h).enabled (vm.step h).push).toRaw ] := by
   apply Component.interactionsWith_of_exposedChannels
   apply vm.tables_channel'
+
+/-- The step of a VM table is the one that it exposes on the VM channel. -/
+lemma step_eq_of_exposed {vm : VmTables F PublicIO} {table} (h : table ∈ vm.tables)
+    {enabled : Expression F} {pull push : Var vm.Message F}
+    (h_exposed : ⟨ vm.channel, [(vm.channel.pulledIf enabled pull).toRaw,
+      (vm.channel.pushedIf enabled push).toRaw] ⟩ ∈ table.exposedChannels) :
+    vm.step h = ⟨ enabled, pull, push ⟩ := by
+  have h_eq := (vm.interactionsWith_eq h).symm.trans
+    (Component.interactionsWith_of_exposedChannels h_exposed)
+  simp only [List.cons.injEq, channelInteraction_toRaw_inj, Channel.pulledIf, Channel.pushedIf,
+    pulledIf, pushedIf, ChannelInteraction.mk.injEq, and_true, true_and] at h_eq
+  obtain ⟨⟨h_enabled, h_pull⟩, -, h_push⟩ := h_eq
+  rw [← h_enabled, ← h_pull, ← h_push]
+
+/-- The verifier's pull and push are the ones that it makes on the VM channel. -/
+lemma verifierPull_eq {vm : VmTables F PublicIO} {pull push : Var vm.Message F}
+    (h : vm.verifier.circuitOperations.interactionsWith vm.channel.toRaw =
+      [(vm.channel.pulled pull).toRaw, (vm.channel.pushed push).toRaw]) :
+    vm.verifierPull = pull ∧ vm.verifierPush = push := by
+  have h_eq := vm.verifier_channel'.symm.trans h
+  simp only [List.cons.injEq, channelInteraction_toRaw_inj, Channel.pulled, Channel.pushed,
+    pulled_inj, pushed_inj, and_true] at h_eq
+  exact h_eq
 end VmTables
 
 /-- What adding the tables, channel and verifier of a VM to an ensemble requires: the components
@@ -594,38 +617,45 @@ end VmWitness
 
 namespace Ensemble
 
-theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balance : Balance F}
+/--
+What constraints and balance show about the rows of a VM added on top of a sound ensemble: the
+interactions with the VM channel, which all come from the VM, are balanced, every VM row whose
+interactions with the VM channel have their guarantees satisfies its spec, and the verifier's
+interactions with finished channels have their guarantees.
+-/
+theorem addVm_vmRows_of_soundChannels (ens : Ensemble F PublicIO) {balance : Balance F}
       -- given a sound channels ensemble with a list of finished, consistent channels
     {finished : List (RawChannel F)} (soundChannels : ens.SoundChannels finished)
     (consistent : ∀ channel ∈ finished, channel.Consistent)
     (finished_subset : finished ⊆ ens.channels)
     -- and given a VM channel + tables + verifier
     (vm : VmTables F PublicIO)
-    (fits : vm.FitsInto ens) :
+    (fits : vm.FitsInto ens)
     -- assuming that none of the existing tables interacted with the VM channel
-    (∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels) →
-    -- assuming that the VM tables' and verifier's channelsWithGuarantees are either finished or the VM channel
-    (vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished ∧
-      ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished) →
+    (not_mem_vm_channel : ∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels)
+    -- assuming that the VM tables' and verifier's channelsWithGuarantees are either finished or the
+    -- VM channel
+    (grts_subset : vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished ∧
+      ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished)
     -- and assuming the VM tables' channelsWithRequirements contain none of the finished ones
-    (∀ channel ∈ finished, channel ∉ vm.verifier.channelsWithRequirements ∧
-      ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements) →
-    -- the ensemble with the VM tables satisfies SoundVmChannel
-    (ens.addVm vm fits).SoundVmChannel balance (vm.FinalReached balance) := by
-  intro not_mem_vm_channel grts_subset reqs_disjoint (witness : VmWitness ens vm fits) assumptions
-    constraints fit balanced
+    (reqs_disjoint : ∀ channel ∈ finished, channel ∉ vm.verifier.channelsWithRequirements ∧
+      ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements)
+    (witness : VmWitness ens vm fits) (assumptions : witness.Assumptions)
+    (constraints : witness.Constraints) (fit : witness.InteractionsFit balance)
+    (balanced : witness.Balanced balance) :
+    BalancedInteractions (witness.vmInteractionsWith vm.channel.toRaw) ∧
+    (∀ table ∈ witness.vmTables, ∀ row ∈ table.table,
+      table.component.operations.ChannelGuarantees vm.channel.toRaw (table.environment row) →
+      table.component.Spec (table.environment row)) ∧
+    ∀ channel ∈ finished, (ens.addVm vm fits).VerifierChannelGuarantees witness.data channel := by
   have balance := witness.balancedChannels_of_balanced fit balanced
   /-
-  the high level plan is to apply `exists_reached_final`.
-
   1) we need to narrow vm channel balance to just the vm tables
   2) guarantees for finished channels follows from soundChannels + constraints, using
      `spec_and_guarantees_of_soundChannels` and `guarantees_of_requirements_append`
      as the key lemmas.
   3) the combination of guarantees for finished channels + vm constraints gives us the main condition:
      "vm guarantees → vm spec", by invoking `spec_of_partial_guarantees_of_constraints`.
-  4) finally, the final state is reached, which gives the verifier its guarantees, and the number of
-     interactions with the vm channel bounds the number of steps.
   -/
   -- the vm channel interactions are constrained to vm tables, which lets us supply the balance
   -- condition
@@ -634,7 +664,6 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
   rw [witness.interactionsWith_eq_vmInteractionsWith not_mem_vm_channel] at vm_balance
   set vmChannel := vm.channel.toRaw
   -- next, we work on instantiating `spec_of_partial_guarantees_of_constraints`
-  -- which will give us exactly the last hypothesis of `exists_reached_final`
   -- first, unify channel subset assumptions to all tables
   have grts_subset_all : ∀ table ∈ witness.vmTables,
       table.channelsWithGuarantees ⊆ vmChannel :: finished := by
@@ -690,14 +719,53 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
       (witness.vmContext_append_oldContext ▸ partial_balance _ channel_mem)
       (finished_reqs _ channel_mem)
       _ table_mem
+  refine ⟨vm_balance, ?_, ?_⟩
   -- invoke `spec_of_partial_guarantees_of_constraints` to get the spec of every vm row from the
-  -- guarantees of the vm channel, and use it in `exists_reached_final`
-  have spec (table) (h_table : table ∈ witness.vmTables) :=
-    table.spec_of_partial_guarantees_of_constraints (unfinished := vmChannel)
-    (witness.vmContext_assumptions_of_assumptions assumptions table h_table)
-    (vm_constraints table h_table)
-    (grts_subset_all table h_table) (finished_grts table h_table)
-  obtain ⟨k, hk, reached⟩ := witness.exists_reached_final vm_balance vm_constraints spec
+  -- guarantees of the vm channel
+  · intro table h_table
+    exact table.spec_of_partial_guarantees_of_constraints (unfinished := vmChannel)
+      (witness.vmContext_assumptions_of_assumptions assumptions table h_table)
+      (vm_constraints table h_table)
+      (grts_subset_all table h_table) (finished_grts table h_table)
+  · intro channel channel_mem
+    let : channel.Consistent := consistent channel channel_mem
+    apply Ensemble.verifierChannelGuarantees_of_tableRequirements
+    · exact .inr (reqs_disjoint channel channel_mem).1
+    · exact balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])
+    intro table h_table
+    by_cases h_vm : table ∈ witness.vmTables
+    · exact table.requirements_of_not_mem_of_constraints (vm_constraints table h_vm)
+        (vm_reqs_disjoint channel channel_mem table h_vm)
+    · exact finished_reqs channel channel_mem table
+        (witness.mem_oldTables_of_not_mem_vmTables h_table h_vm)
+
+theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balance : Balance F}
+      -- given a sound channels ensemble with a list of finished, consistent channels
+    {finished : List (RawChannel F)} (soundChannels : ens.SoundChannels finished)
+    (consistent : ∀ channel ∈ finished, channel.Consistent)
+    (finished_subset : finished ⊆ ens.channels)
+    -- and given a VM channel + tables + verifier
+    (vm : VmTables F PublicIO)
+    (fits : vm.FitsInto ens) :
+    -- assuming that none of the existing tables interacted with the VM channel
+    (∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels) →
+    -- assuming that the VM tables' and verifier's channelsWithGuarantees are either finished or the VM channel
+    (vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished ∧
+      ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: finished) →
+    -- and assuming the VM tables' channelsWithRequirements contain none of the finished ones
+    (∀ channel ∈ finished, channel ∉ vm.verifier.channelsWithRequirements ∧
+      ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements) →
+    -- the ensemble with the VM tables satisfies SoundVmChannel
+    (ens.addVm vm fits).SoundVmChannel balance (vm.FinalReached balance) := by
+  intro not_mem_vm_channel grts_subset reqs_disjoint (witness : VmWitness ens vm fits) assumptions
+    constraints fit balanced
+  -- the plan is to apply `exists_reached_final` to the facts about the VM rows
+  obtain ⟨vm_balance, spec, finished_verifier_guarantees⟩ :=
+    ens.addVm_vmRows_of_soundChannels soundChannels consistent finished_subset vm fits
+      not_mem_vm_channel grts_subset reqs_disjoint witness assumptions constraints fit balanced
+  obtain ⟨k, hk, reached⟩ := witness.exists_reached_final vm_balance
+    (witness.vmConstraints_of_constraints constraints) spec
+  set vmChannel := vm.channel.toRaw
   -- the final state gets the guarantees of the vm channel, since it is reached
   have vm_verifier_guarantees :
       (ens.addVm vm fits).VerifierChannelGuarantees witness.data vmChannel := by
@@ -710,19 +778,6 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
         VmWitness.verifierPull, vm.eval_verifierPull, witness.data_getPublicInput]
       exact vm.guarantees_of_reached _ _ _ reached
     · simp [VmWitness.verifierPair, Interaction.Guarantees, Channel.pushedValue]
-  have finished_verifier_guarantees : ∀ channel ∈ finished,
-      (ens.addVm vm fits).VerifierChannelGuarantees witness.data channel := by
-    intro channel channel_mem
-    let : channel.Consistent := consistent channel channel_mem
-    apply Ensemble.verifierChannelGuarantees_of_tableRequirements
-    · exact .inr (reqs_disjoint channel channel_mem).1
-    · exact balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])
-    intro table h_table
-    by_cases h_vm : table ∈ witness.vmTables
-    · exact table.requirements_of_not_mem_of_constraints (vm_constraints table h_vm)
-        (vm_reqs_disjoint channel channel_mem table h_vm)
-    · exact finished_reqs channel channel_mem table
-        (witness.mem_oldTables_of_not_mem_vmTables h_table h_vm)
   refine ⟨?_, k, (witness.interactionsWith vmChannel).length,
     fit vmChannel (by simp [Ensemble.addVm, vmChannel]), ?_, reached⟩
   · rw [Ensemble.verifierGuarantees_iff]
