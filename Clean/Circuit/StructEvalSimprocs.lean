@@ -276,9 +276,10 @@ private def vectorMapEvalCore (e : Expr) : SimpM Simp.Step := do
 simproc vectorMapEval (Vector.map _ _) := vectorMapEvalCore
 attribute [circuit_norm] vectorMapEval
 
-/-- Outward side of the vector normal form: scalar evals whose subject chains down to an
-input variable fold toward the whole-atom eval (`Expression.eval env x[i] ~~> (eval env x)[i]`,
-`Expression.eval env (c[i]).1 ~~> ((eval env c)[i]).1`). -/
+/-- Outward side of the vector normal form: scalar evals whose subject chains down to a free
+variable fold toward the whole-atom eval (`Expression.eval env x[i] ~~> (eval env x)[i]`,
+`Expression.eval env (c[i]).1 ~~> ((eval env c)[i]).1`). Chains rooted in an application stay
+element-wise, so per-element lemmas about that function keep applying. -/
 private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Expression.eval && args.size ≥ 2 do
