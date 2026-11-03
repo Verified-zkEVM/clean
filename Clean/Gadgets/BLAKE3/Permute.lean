@@ -1,5 +1,9 @@
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Circuit
+module
+
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Circuit
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.Permute
 variable {p : ℕ} [Fact p.Prime]
@@ -26,11 +30,9 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   · ext i hi
     · simp only [Array.size_map, Array.size_ofFn]
     simp only [Array.getElem_map, Array.getElem_ofFn]
-    rw [Function.comp_apply]; try rw [getElem_eval_vector]
-    rw [h_input]
+    rw [Function.comp_apply, getElem_eval_vector, h_input]
   · simp [BLAKE3State.Normalized]
     intro i
-    try rw [getElem_eval_vector]
     rw [h_input]
     simp only [BLAKE3State.Normalized] at h_assumptions
     fin_cases i <;> simp only [msgPermutation, h_assumptions]

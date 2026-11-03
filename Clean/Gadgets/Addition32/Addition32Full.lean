@@ -1,9 +1,13 @@
-import Clean.Gadgets.Addition8.Addition8FullCarry
-import Clean.Types.U32
-import Clean.Gadgets.Addition32.Theorems
-import Clean.Utils.Primes
-import Clean.Gadgets.Boolean
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.Addition8.Addition8FullCarry
+public import Clean.Types.U32
+public import Clean.Gadgets.Addition32.Theorems
+public import Clean.Utils.Primes
+public import Clean.Gadgets.Boolean
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -23,12 +27,11 @@ structure Outputs (F : Type) where
 deriving Repr, ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨x, y, carryIn⟩ := input
-  let { z := z0, carryOut := c0 } ← Addition8FullCarry.main ⟨ x.x0, y.x0, carryIn ⟩
-  let { z := z1, carryOut := c1 } ← Addition8FullCarry.main ⟨ x.x1, y.x1, c0 ⟩
-  let { z := z2, carryOut := c2 } ← Addition8FullCarry.main ⟨ x.x2, y.x2, c1 ⟩
-  let { z := z3, carryOut := c3 } ← Addition8FullCarry.main ⟨ x.x3, y.x3, c2 ⟩
-  return { z := U32.mk z0 z1 z2 z3, carryOut := c3 }
+  let out0 ← Addition8FullCarry.main ⟨ input.x.x0, input.y.x0, input.carryIn ⟩
+  let out1 ← Addition8FullCarry.main ⟨ input.x.x1, input.y.x1, out0.carryOut ⟩
+  let out2 ← Addition8FullCarry.main ⟨ input.x.x2, input.y.x2, out1.carryOut ⟩
+  let out3 ← Addition8FullCarry.main ⟨ input.x.x3, input.y.x3, out2.carryOut ⟩
+  return { z := U32.mk out0.z out1.z out2.z out3.z, carryOut := out3.carryOut }
 
 def Assumptions (input : Inputs (F p)) :=
   let ⟨x, y, carryIn⟩ := input

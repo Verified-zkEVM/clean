@@ -1,7 +1,11 @@
-import Mathlib.Algebra.Field.ZMod
-import Mathlib.Algebra.Order.Star.Basic
-import Mathlib.Analysis.Normed.Ring.Lemmas
-import Clean.Circuit.SimpGadget
+module
+
+public import Mathlib.Algebra.Field.ZMod
+public import Mathlib.Algebra.Order.Star.Basic
+public import Mathlib.Analysis.Normed.Ring.Lemmas
+public import Clean.Circuit.SimpGadget
+
+@[expose] public section
 
 -- main field definition
 abbrev F p := ZMod p
@@ -11,6 +15,10 @@ instance (p : ℕ) [Fact p.Prime] : Inhabited (F p) := ⟨0⟩
 instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
 
 instance {p : ℕ} : DecidableEq (F p) := ZMod.decidableEq p
+
+instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <| by
+  simp [F, ZMod.ringChar_zmod_n]
+  linarith [pGt.out]
 
 @[circuit_norm]
 lemma zero_ne_neg_one {F : Type} [Field F] : (0 : F) ≠ -1 := by

@@ -1,7 +1,11 @@
-import Clean.Gadgets.SHA256.SHA256Round
-import Clean.Gadgets.SHA256.SHA256Schedule
-import Clean.Gadgets.SHA256.Add32
-import Clean.Specs.SHA256
+module
+
+public import Clean.Gadgets.SHA256.SHA256Round
+public import Clean.Gadgets.SHA256.SHA256Schedule
+public import Clean.Gadgets.SHA256.Add32
+public import Clean.Specs.SHA256
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^33)]
@@ -124,7 +128,8 @@ private lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
 
 /-- valueBits of `constWord32 n` equals `n` modulo `2^32`. -/
 private lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
-    valueBits (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) = n % 2^32 := by
+    valueBits (eval env (constWord32 (p:=p) n)) = n % 2^32 := by
+  rw [CircuitType.eval_var_fields]
   simp only [valueBits, constWord32]
   have h2 : ∀ i : Fin 32, ((n / 2^i.val % 2 : ℕ) : F p).val = n / 2^i.val % 2 := by
     intro i
@@ -159,7 +164,7 @@ private lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
 
 /-- For `n < 2^32`, valueBits of `constWord32 n` is `n`. -/
 private lemma valueBits_constWord32_of_lt (env : Environment (F p)) {n : ℕ} (h : n < 2^32) :
-    valueBits (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) = n := by
+    valueBits (eval env (constWord32 (p:=p) n)) = n := by
   rw [valueBits_constWord32, Nat.mod_eq_of_lt h]
 
 /-- The value-level state at the end of round `k`. -/
@@ -192,7 +197,7 @@ private lemma sha256Compress_eq_valStateAfterRound
   | zero => simp [valStateAfterRound, Fin.foldl_zero]
   | succ k ih =>
     rw [Fin.foldl_succ_last, valStateAfterRound]
-    rw [dif_pos (by omega : k < 64)]
+    rw [dite_eq_left (by omega : k < 64)]
     have hk' : k ≤ 64 := by omega
     specialize ih hk'
     rw [show Fin.foldl k
@@ -258,23 +263,17 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
         rw [getElem_eval_vector] at h
         exact h, h2, h3⟩
       obtain ⟨h_value, h_norm⟩ := h_spec
-      rw [stateVar, valStateAfterRound, dif_pos hk'']
+      rw [stateVar, valStateAfterRound, dite_eq_left hk'']
       refine ⟨?_, ?_⟩
       · -- Value equality: h_value gives the LHS = sha256Round (...)
-        try simp only [ProvableStruct.vectorEvalLiteral, ProvableType.eval_fields,
-          Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
-        simp only [ProvableType.eval_fields,
-          add_assoc, Nat.reduceAdd] at h_value ⊢
-        simp only [h_value, ih_val,
-          valueBits_constWord32_of_lt env Specs.SHA256.K[k].toNat_lt,
-          show (Vector.map valueBits input_schedule)[k]'hk''
-            = valueBits (input_schedule[k]'hk'') from Vector.getElem_map _ _]
+        simp only [circuit_norm, add_assoc, Nat.reduceAdd] at h_value ⊢
+        rw [h_value, ih_val, valueBits_constWord32_of_lt env Specs.SHA256.K[k].toNat_lt]
       · -- Normalization for round k+1.
         intro j hj
         -- h_norm gives Normalized (eval env <new state>)[↑i_1] for i_1 : Fin 8.
         -- We need Normalized (eval env <new state>[j]'hj).
         rw [getElem_eval_vector]
-        simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
+        simp only [circuit_norm, Vector.map_mk, List.map_toArray,
           List.map_cons, List.map_nil, Vector.getElem_mk,
           List.getElem_toArray] at h_norm ⊢
         exact h_norm ⟨j, hj⟩
@@ -322,7 +321,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
       intro j hj
       rw [stateVar]
       rw [getElem_eval_vector]
-      simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
+      simp only [circuit_norm, Vector.map_mk, List.map_toArray,
         List.map_cons, List.map_nil, Vector.getElem_mk, List.getElem_toArray]
       exact h_norm ⟨j, hj⟩
   intro i
@@ -337,7 +336,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact normalized_constWord32 _ _
   · exact h_sched_norm i
 
-set_option maxRecDepth 2048 in
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
@@ -348,6 +346,10 @@ end SHA256Rounds
 /-!
 ## FormalCircuit for full block compression (messageSchedule + 64 rounds + Davies-Meyer)
 -/
+
+-- Lean 4.33 exposes `Fin.foldl` during reduction. Keep the concrete 48-step fold in
+-- the value-level schedule specification opaque to the generic circuit simp pass.
+attribute [local irreducible] Specs.SHA256.messageSchedule
 
 namespace CompressBlock
 
@@ -479,7 +481,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rw [← getElem_eval_vector] at h
     exact h
 
-set_option maxRecDepth 2048 in
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]

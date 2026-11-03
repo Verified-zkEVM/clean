@@ -1,8 +1,12 @@
-import Clean.Gadgets.Keccak.Theta
-import Clean.Gadgets.Keccak.RhoPi
-import Clean.Gadgets.Keccak.Chi
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Gadgets.Keccak.Theta
+public import Clean.Gadgets.Keccak.RhoPi
+public import Clean.Gadgets.Keccak.Chi
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]

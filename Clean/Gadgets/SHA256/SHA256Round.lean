@@ -1,9 +1,13 @@
-import Clean.Gadgets.SHA256.Add32
-import Clean.Gadgets.SHA256.Ch32
-import Clean.Gadgets.SHA256.Maj32
-import Clean.Gadgets.SHA256.UpperSigma0
-import Clean.Gadgets.SHA256.UpperSigma1
-import Clean.Specs.SHA256
+module
+
+public import Clean.Gadgets.SHA256.Add32
+public import Clean.Gadgets.SHA256.Ch32
+public import Clean.Gadgets.SHA256.Maj32
+public import Clean.Gadgets.SHA256.UpperSigma0
+public import Clean.Gadgets.SHA256.UpperSigma1
+public import Clean.Specs.SHA256
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -131,8 +135,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     simp only [show ∀ a b : ℕ, (a + b) % 2 ^ 32 = _root_.add32 a b from fun _ _ => rfl] at v_newa v_newe
     -- Push the outer `Vector.map valueBits ∘ eval env` inside the literal #v[...] and unfold the
     -- spec, so both sides become explicit 8-element vectors with matching slot shapes.
-    try simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-      circuit_norm]
     simp only [Specs.SHA256.sha256Round, Vector.getElem_map]
     rw [v_newa, v_newe]
   · -- Normalized for each position

@@ -1,12 +1,16 @@
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Gadgets.BLAKE3.ApplyRounds
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Gadgets.Or.Or32
-import Clean.Gadgets.IsZero
-import Clean.Specs.BLAKE3
-import Clean.Tables.BLAKE3.ProcessBlocksInductive
-import Clean.Circuit.Provable
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Gadgets.BLAKE3.ApplyRounds
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Gadgets.Or.Or32
+public import Clean.Gadgets.IsZero
+public import Clean.Specs.BLAKE3
+public import Clean.Tables.BLAKE3.ProcessBlocksInductive
+public import Clean.Circuit.Provable
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.FinalizeChunk
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 2^16 + 2^8)]
@@ -174,11 +178,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   apply And.intro
   · simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
     List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
-    simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
-      List.map_cons, List.map_nil]
+    simp only [circuit_norm, Vector.map_mk, List.map_toArray,
+      List.map_cons, List.map_nil] at h_compress' ⊢
     refine h_compress'.trans ?_
     simp only [finalizeChunk]
-    apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
+    apply congrArg (fun (v : Vector ℕ 16) => (v.take 8).toArray)
     have : Vector.map U32.value (eval env (bytesToWords input_var_buffer_data)) =
         (Specs.BLAKE3.bytesToWords
         (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
@@ -210,7 +214,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
     refine eval_take_normalized env _ ?_ i h_i
     intro j
-    simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
+    simp only [circuit_norm, Vector.map_mk, List.map_toArray,
       List.map_cons, List.map_nil]
     exact h_Compress_Normalized j
 

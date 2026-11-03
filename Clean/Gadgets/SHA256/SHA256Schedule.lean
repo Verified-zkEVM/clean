@@ -1,7 +1,11 @@
-import Clean.Gadgets.SHA256.LowerSigma0
-import Clean.Gadgets.SHA256.LowerSigma1
-import Clean.Gadgets.SHA256.Add32
-import Clean.Specs.SHA256
+module
+
+public import Clean.Gadgets.SHA256.LowerSigma0
+public import Clean.Gadgets.SHA256.LowerSigma1
+public import Clean.Gadgets.SHA256.Add32
+public import Clean.Specs.SHA256
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^33)]
@@ -24,7 +28,7 @@ Per step, `scheduleStep` creates:
 -/
 
 /-- One step of the message schedule: compute w[j] for j = i.val + 16. -/
-private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
+def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
   let j := i.val + 16
   let s1   ← LowerSigma1.circuit (w.get ⟨j - 2,  by omega⟩)
@@ -35,7 +39,7 @@ private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
 @[implicit_reducible]
-private def constantLength :
+def constantLength :
     Circuit.ConstantLength (fun (x : SHA256Schedule (Expression (F p)) × Fin 48) => scheduleStep x.1 x.2) where
   localLength := 227
   localLength_eq _ _ := by
@@ -118,7 +122,7 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
       Fin.foldl 48 (fun w (i : Fin 48) => body w i.val) init := by
     congr 1; funext w i
     have hi : i.val < 48 := i.isLt
-    simp only [hbody_def, dif_pos hi]
+    simp only [hbody_def, dite_eq_left hi]
   rw [hspec]
   suffices h : ∀ k (hk : k ≤ 48),
       Fin.foldl k (fun w (i : Fin k) => body w i.val) init =
@@ -134,7 +138,7 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
     specialize ih hk'
     rw [show (fun w (i : Fin k) => body w i.castSucc.val) =
            (fun w (i : Fin k) => body w i.val) from rfl, ih]
-    simp only [Fin.val_last, hbody_def, dif_pos (show k < 48 from by omega)]
+    simp only [Fin.val_last, hbody_def, dite_eq_left (show k < 48 from by omega)]
 
 /-- The output of `scheduleStep w i` at offset `n` is `w.set (i.val + 16) (varFromOffset ...)`. -/
 private lemma scheduleStep_output (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
@@ -161,7 +165,7 @@ private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Bloc
   | succ k ih =>
     have hk : k < 48 := by omega
     specialize ih hk
-    rw [Fin.foldl_succ_last, varSchedule, dif_pos hk]
+    rw [Fin.foldl_succ_last, varSchedule, dite_eq_left hk]
     rw [show Fin.foldl k
           (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin k) =>
             (scheduleStep acc ⟨i.castSucc.val, by have := i.isLt; omega⟩).output
@@ -213,7 +217,7 @@ private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256B
             (scheduleStep acc ⟨i.val, by have := i.isLt; omega⟩ (i₀ + i.val * 227)).1)
             _ from rfl, ih]
     simp only [Fin.val_last]
-    rw [varSchedule, dif_pos hk'']
+    rw [varSchedule, dite_eq_left hk'']
     -- (scheduleStep w i).output n = (scheduleStep w i n).1
     change (scheduleStep _ ⟨k, hk''⟩).output (i₀ + k * 227) = _
     rw [scheduleStep_output]
@@ -251,7 +255,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
         change valueBits (eval env (input_var ++
           Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))[j]) = _
         rw [Vector.getElem_append_left hj16]
-        simp only [Vector.getElem_mapFinRange, hj16, dif_pos]
+        simp only [Vector.getElem_mapFinRange, hj16, dite_eq_left]
         rw [show (Vector.map valueBits input).get ⟨j, hj16⟩ =
               (Vector.map valueBits input)[j]'hj16 from rfl]
         rw [Vector.getElem_map]
@@ -266,7 +270,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
             (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))[j - 16]'(by omega)
             from Vector.getElem_append_right hj' (by omega : (16 : ℕ) ≤ j)]
         rw [Vector.getElem_replicate]
-        simp only [Vector.getElem_mapFinRange, hj16, dif_neg, not_false_eq_true]
+        simp only [Vector.getElem_mapFinRange, hj16, dite_eq_right, not_false_eq_true]
         -- LHS: valueBits (eval env (Vector.replicate 32 0)) = 0
         have h_eval_repl :
             eval env (Vector.replicate 32 (0 : Expression (F p))) =
@@ -342,7 +346,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
     -- Now compose values: wj's value should equal valSchedule's k+16 slot.
     refine ⟨?_, ?_⟩
     · intro j hj
-      simp only [varSchedule, valSchedule, dif_pos hk'']
+      simp only [varSchedule, valSchedule, dite_eq_left hk'']
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]
@@ -368,7 +372,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
         rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih_val j hj
     · intro j hj
-      simp only [varSchedule, dif_pos hk'']
+      simp only [varSchedule, dite_eq_left hk'']
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]
@@ -486,7 +490,7 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
       rw [h_eval_get] at c_wj
       obtain ⟨_, n_wj⟩ := c_wj n_sum1 h_norm_m16
       intro j hj
-      simp only [varSchedule, dif_pos hk'']
+      simp only [varSchedule, dite_eq_left hk'']
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]

@@ -1,10 +1,14 @@
-import Clean.Circuit
-import Clean.Gadgets.Xor.ByteXorTable
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Xor.ByteXorTable
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Or.Or8
-open Xor (ByteXorTable)
+open Gadgets.Xor (ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -21,11 +25,10 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   z.val = x.val ||| y.val ∧ z.val < 256
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
-  let ⟨x, y⟩ := input
-  let or ← witness (x.val ||| y.val).toField
+  let or ← witness (input.x.val ||| input.y.val).toField
   -- we prove OR correct using an XOR lookup
-  let xor := 2*or - x - y
-  lookup ByteXorTable (x, y, xor)
+  let xor := 2*or - input.x - input.y
+  lookup ByteXorTable (input.x, input.y, xor)
   return or
 
 -- OR / XOR identity that justifies the circuit
@@ -50,13 +53,9 @@ private theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
     simp only [x16, y16] at h_u16
     simp only [← UInt16.toNat_or]
     norm_num at h_u16 ⊢
-    repeat rw [Nat.mod_eq_of_lt] <;> try omega
-    · repeat rw [Nat.mod_eq_of_lt] at h_u16 <;> try omega
-      · simpa
-      · repeat rw [Nat.mod_eq_of_lt] <;> try omega
-        simp only [UInt16.toNat, UInt16.toBitVec_ofNat, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
-        omega
-    · repeat rw [Nat.mod_eq_of_lt] <;> try omega
+    rw [Nat.mod_eq_of_lt (show x < 65536 by omega), Nat.mod_eq_of_lt (show y < 65536 by omega)]
+      at h_u16 ⊢
+    exact h_u16
 
   have h_lhs : 2 * (x ||| y) < 2^16 := by linarith
   have h_rhs : x + y + (x ^^^ y) < 2^16 := by linarith
@@ -82,6 +81,7 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
+@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
   elaborate_circuit
 
@@ -121,8 +121,7 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
   constructor
   · assumption
   simp only [value_goal]
-  show Nat.bitwise _ _ _ < 2 ^ 8
-  exact Nat.bitwise_lt_two_pow hx_byte hy_byte
+  exact Nat.or_lt_two_pow (n := 8) hx_byte hy_byte
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   circuit_proof_start [ByteXorTable]

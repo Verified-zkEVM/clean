@@ -1,6 +1,10 @@
-import Lean
-import Clean.Circuit.Formal
-import Clean.Utils.Tactics.ProvableStructSimp
+module
+
+public meta import Lean
+public meta import Clean.Circuit.Formal
+public meta import Clean.Utils.Tactics.ProvableStructSimp
+
+public meta section
 
 open Lean Elab Tactic Meta
 open Circuit
@@ -152,7 +156,8 @@ elab_rules : tactic
 
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_input):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm,
+    $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()

@@ -1,4 +1,6 @@
-import Clean.Examples.FemtoCairo.Types
+module
+
+public import Clean.Examples.FemtoCairo.Types
 
 /-!
 # Helper lemmas for FemtoCairo types
@@ -6,6 +8,8 @@ import Clean.Examples.FemtoCairo.Types
 This file contains lemmas about the FemtoCairo types that are used
 in circuit proofs.
 -/
+
+@[expose] public section
 
 namespace Examples.FemtoCairo.Types
 

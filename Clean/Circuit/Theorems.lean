@@ -4,8 +4,12 @@ This file contains theorems that immediately follow from the definitions in `Cir
 For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
-import Clean.Circuit.Formal
-import Clean.Circuit.Provable
+module
+
+public import Clean.Circuit.Formal
+public import Clean.Circuit.Provable
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {α β : Type}
 
@@ -494,6 +498,8 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
+      -- `data` and `hint` are literally shared: every environment here is `.fromList _ hint`.
+      refine ⟨?_, rfl, rfl⟩
       intro j hj
       simp [ProverEnvironment.fromList, hj,
         getElem?_dynamicWitnesses_of_lt]
@@ -513,7 +519,8 @@ theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (h
 
 lemma ProverEnvironment.agreesBelow_of_le {F} {n m : ℕ} {env env' : ProverEnvironment F} :
     env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
-  fun h_same hi i hi' => h_same i (Nat.lt_of_lt_of_le hi' hi)
+  fun h_same hi =>
+    ⟨fun i hi' => h_same.1 i (Nat.lt_of_lt_of_le hi' hi), h_same.2.1, h_same.2.2⟩
 
 namespace FlatOperation
 /--
@@ -545,8 +552,7 @@ theorem onlyAccessedBelow_all {ops : List (FlatOperation F)} (n : ℕ) :
         ProverEnvironment.OnlyAccessedBelow, ProverEnvironment.AgreesBelow]
       congr 1
       apply h_comp env env'
-      intro i hi
-      exact h_env i (by linarith)
+      exact ⟨fun i hi => h_env.1 i (by linarith), h_env.2.1, h_env.2.2⟩
 end FlatOperation
 
 section

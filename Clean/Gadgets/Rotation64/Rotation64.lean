@@ -1,10 +1,14 @@
-import Clean.Types.U64
-import Clean.Circuit.Subcircuit
-import Clean.Utils.Rotation
-import Clean.Gadgets.Rotation64.Theorems
-import Clean.Gadgets.Rotation64.Rotation64Bytes
-import Clean.Gadgets.Rotation64.Rotation64Bits
-import Clean.Circuit.Provable
+module
+
+public import Clean.Types.U64
+public import Clean.Circuit.Subcircuit
+public import Clean.Utils.Rotation
+public import Clean.Gadgets.Rotation64.Theorems
+public import Clean.Gadgets.Rotation64.Rotation64Bytes
+public import Clean.Gadgets.Rotation64.Rotation64Bits
+public import Clean.Circuit.Provable
+
+@[expose] public section
 
 namespace Gadgets.Rotation64
 variable {p : ℕ} [Fact p.Prime]
