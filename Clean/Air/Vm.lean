@@ -93,7 +93,7 @@ than a number of interactions that the balance check is sound for.
 -/
 def VmTables.FinalReached (vm : VmTables F PublicIO) (balance : Balance F)
     (publicInput : PublicIO F) (data : ProverData F) : Prop :=
-  ∃ k count, balance.Fits count ∧ k < count ∧ vm.Reached k (vm.final publicInput) data
+  ∃ k count, balance.fits count ∧ k < count ∧ vm.Reached k (vm.final publicInput) data
 
 /--
 Soundness for a VM ensemble: table constraints and channel balance imply the verifier guarantees,

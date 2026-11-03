@@ -254,7 +254,8 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple .logUp
       generalize witness.publicInput = publicInput at reached ⊢
       obtain ⟨ n, x, y ⟩ := publicInput
       obtain ⟨ fib, rfl ⟩ := reached
-      simp only [Balance.logUp, ZMod.ringChar_zmod_n] at count_lt
+      simp only [Balance.logUp, decide_eq_true_eq, ComputableRingChar.char_eq, ZMod.ringChar_zmod_n]
+        at count_lt
       simp only [ZMod.val_cast_of_lt (show k < p by omega), fib])
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
