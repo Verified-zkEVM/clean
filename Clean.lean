@@ -23,7 +23,6 @@ public import Clean.Examples.AddOperations
 public import Clean.Examples.Add32Explicit
 public import Clean.Examples.ToJson
 public import Clean.Examples.HintExample
-public import Clean.Examples.DataWitness
 public import Clean.Examples.FemtoCairo.FemtoCairo
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Air.WitnessGeneration
