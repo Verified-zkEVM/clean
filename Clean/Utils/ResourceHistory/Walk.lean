@@ -83,7 +83,7 @@ theorem exists_trail (edge : α → V × V) (E : Multiset α) :
     by_cases hss : src = snk
     · exact ⟨[], hss, by simp [Multiset.zero_le]⟩
     · have hsrc := h src
-      rw [if_pos rfl, if_neg hss] at hsrc
+      simp only [↓reduceIte, hss] at hsrc
       have hpos : 0 < outdeg E edge src := by omega
       simp only [outdeg] at hpos
       obtain ⟨e, he_filter⟩ := Multiset.exists_mem_of_ne_zero (Multiset.card_pos.mp hpos)
