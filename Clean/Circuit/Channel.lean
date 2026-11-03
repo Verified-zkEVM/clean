@@ -305,6 +305,15 @@ lemma channelInteraction_toRaw_inj {i j : ChannelInteraction channel} :
   rw [← ProvableType.fromElements_toElements msg,
     ← ProvableType.fromElements_toElements msg', h_msg_eq]
 
+/-- An interaction list exposed on one channel is not one exposed on another channel. -/
+@[circuit_norm]
+lemma not_mem_expose_of_channel_ne {interactions : List (ChannelInteraction channel)}
+    {exposed : ExposedChannel F} (h : exposed.channel ≠ channel.toRaw) :
+    exposed ∉ expose channel interactions := by
+  simp only [expose, List.mem_singleton]
+  rintro rfl
+  exact h rfl
+
 @[circuit_norm]
 lemma mem_expose_pullIf_pushIf (enabled enabled' : Expression F)
     (pull pull' push push' : Message (Expression F)) :
