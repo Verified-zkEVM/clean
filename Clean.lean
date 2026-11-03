@@ -1,11 +1,15 @@
 module
 
 public import Clean.Circuit
-public import Clean.Air.ResourceHistory
 public import Clean.Examples.WitnessExport
 public import Clean.Utils.FiniteField
 public import Clean.Utils.BinaryField
 public import Clean.Utils.OfflineMemory
+public import Clean.Utils.ResourceHistory.Grounding
+public import Clean.Utils.ResourceHistory.Inventory
+public import Clean.Utils.ResourceHistory.OfflineMemory
+public import Clean.Utils.ResourceHistory.Prefix
+public import Clean.Utils.ResourceHistory.Refresh
 public import Clean.Circomlib.AliasCheck
 public import Clean.Circomlib.BinSum
 public import Clean.Circomlib.BinSub

@@ -39,6 +39,8 @@ The library provides several arguments for ensemble soundness, suited to differe
 
 `Vm.lean` contains a construction aimed at "VM-like" components that perform one transition per row. Since VM components both pull from and push to one distinguished state channel, they cannot follow the theory of ordered lookup-channel soundness. Instead, a VM describes the states it reaches after `k` steps, and the spec of each VM component says that an enabled row takes a state reached after `k` steps to one reached after `k + 1` steps. We prove a dedicated soundness theorem that applies to a set of VM components added to an existing hierarchical ensemble, a typical modern zkVMs layout: the final state that the verifier pulls is reached from the initial state it pushes, after fewer steps than the number of interactions with the VM channel. The balance check is sound for that number, which bounds the steps: under LogUp, a step counter in the field doesn't wrap around, see `Clean/Examples/FibonacciVm`. `Clean/Examples/BinaryFibonacci` is a VM over the binary field GF(2^64), sound under multiset balance.
 
+`Clean/Utils/ResourceHistory` proves when a balanced channel's interactions form one exhaustive history, ordered by a clock or a version, and replays mutable resources along it, so that every read sees the latest write. See [`doc/resource-histories.md`](../../doc/resource-histories.md).
+
 `WitnessGeneration.lean` constructs ensemble witnesses from the public input and the prover's private input, see the next section.
 
 ## Witness generation
@@ -61,14 +63,6 @@ The fixed cells of a preallocated component are its fixed columns, wherever they
 The prover's private input is declared by the `Ensemble`: its type, and the hint tables through which witness programs read it. The `FormalEnsemble` adds the `ProverAssumptions` on public and private input that witness generation needs. The Plonky3 backend in `backends/plonky3` implements the same algorithm in Rust, and runs it on generation modes and witness programs extracted by `Clean/Backends`.
 
 The generator currently makes assumptions that come from our examples rather than from the idea, listed in the module doc of `WitnessGeneration.lean`. None of them is fundamental.
-
-`ResourceHistory.lean` provides the stronger interface for distributed mutable resources:
-exact physical-ledger views, exhaustive event histories, current-record replay, and semantic
-grounding over the same event occurrences. `Realizes.lean` adds complete realization with
-relational boundary authentication and a data-driven witness compiler. The existing VM theorem
-remains useful for endpoint properties that permit unused cycles. See
-[`doc/resource-histories.md`](../../doc/resource-histories.md) for a worked memory example,
-the proof obligations at each layer, and extension contracts.
 
 ## Relation To Clean/Table
 
