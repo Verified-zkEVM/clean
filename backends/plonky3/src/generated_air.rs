@@ -179,9 +179,10 @@ impl<P> GeneratedAir<P> {
 
 /// A complete generated Clean statement with its AIR components in canonical order.
 ///
-/// The component AIRs are private so callers cannot omit, duplicate, or reorder them. They are
-/// followed by the verifier AIR. Construction also checks that every channel has fewer interactions
-/// than the field order, the bound of Clean's LogUp balance check, and one message width.
+/// The component AIRs are private so callers cannot omit, duplicate, or reorder them. Only
+/// non-empty components have an AIR, and they are followed by the verifier AIR. Construction also
+/// checks that every channel has fewer interactions than the field order, the bound of Clean's
+/// LogUp balance check, and one message width.
 #[derive(Clone, Debug)]
 pub struct GeneratedEnsemble<F, P> {
     airs: Vec<GeneratedAir<P>>,
@@ -192,8 +193,8 @@ pub struct GeneratedEnsemble<F, P> {
 
 impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
     /// The statement with these component trace heights. The verifier AIR has `minimum_height`
-    /// rows, the smallest trace height the proof configuration accepts, which every component trace
-    /// height must reach.
+    /// rows, the smallest trace height the proof configuration accepts, which every non-empty
+    /// component trace height must reach. Only demand-generated components may be empty.
     pub fn new(trace_heights: &[usize], minimum_height: usize) -> Result<Self, EnsembleShapeError> {
         if F::ORDER_U64 != P::FIELD_ORDER {
             return Err(EnsembleShapeError::FieldOrder {
@@ -228,28 +229,28 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
                 trace_heights: trace_heights.len(),
             });
         }
-        let mut airs = trace_heights
-            .iter()
-            .copied()
-            .enumerate()
-            .map(|(component, trace_height)| {
-                if !trace_height.is_power_of_two() || trace_height < minimum_height {
-                    return Err(EnsembleShapeError::TraceHeight {
-                        component,
-                        height: trace_height,
-                    });
-                }
-                let fixed_height = P::FIXED_HEIGHTS[component];
-                if fixed_height != 0 && fixed_height != trace_height {
-                    return Err(EnsembleShapeError::FixedTraceHeight {
-                        component,
-                        expected: fixed_height,
-                        actual: trace_height,
-                    });
-                }
-                Ok(GeneratedAir::new(AirKind::Component(component)))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut airs = Vec::new();
+        for (component, &trace_height) in trace_heights.iter().enumerate() {
+            let fixed_height = P::FIXED_HEIGHTS[component];
+            // a demand-generated table may be empty, and then has no AIR
+            if trace_height == 0 && fixed_height == 0 {
+                continue;
+            }
+            if !trace_height.is_power_of_two() || trace_height < minimum_height {
+                return Err(EnsembleShapeError::TraceHeight {
+                    component,
+                    height: trace_height,
+                });
+            }
+            if fixed_height != 0 && fixed_height != trace_height {
+                return Err(EnsembleShapeError::FixedTraceHeight {
+                    component,
+                    expected: fixed_height,
+                    actual: trace_height,
+                });
+            }
+            airs.push(GeneratedAir::new(AirKind::Component(component)));
+        }
         airs.push(GeneratedAir::new(AirKind::Verifier {
             height: minimum_height,
         }));
@@ -323,9 +324,19 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
         &self.interaction_counts
     }
 
-    /// The component AIRs followed by the verifier AIR.
+    /// The AIRs of the non-empty components followed by the verifier AIR.
     pub(crate) fn airs(&self) -> &[GeneratedAir<P>] {
         &self.airs
+    }
+
+    /// The trace heights of `airs`: those of the non-empty components, then the verifier's.
+    pub(crate) fn air_heights(&self) -> Vec<usize> {
+        self.trace_heights
+            .iter()
+            .copied()
+            .filter(|&height| height != 0)
+            .chain([self.verifier_height()])
+            .collect()
     }
 
     /// The height of the verifier AIR's trace.

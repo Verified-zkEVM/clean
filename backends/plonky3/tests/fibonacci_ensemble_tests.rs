@@ -76,6 +76,28 @@ fn extracted_rust_coalesces_repeated_chip_pulls() {
     );
 }
 
+/// Without steps, the verifier's push and pull cancel, so the Fibonacci and addition tables are
+/// empty and only the byte table has an AIR.
+#[test]
+fn extracted_fibonacci_air_proves_with_empty_tables() {
+    let config = setup::test_config(7);
+    let public_values = vec![field(0), field(0), field(1)];
+    let traces = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
+        .expect("extracted Rust witness generation failed")
+        .into_traces()
+        .expect("invalid extracted traces");
+    let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
+    assert_eq!(trace_heights, vec![0, 0, 256]);
+
+    let statement =
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
+    let proof =
+        prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
+    verify_ensemble(&config, &statement, &proof, &public_values)
+        .expect("Fibonacci proof with empty tables failed verification");
+}
+
 #[test]
 fn extracted_fibonacci_air_proves_and_verifies() {
     let config = setup::test_config(7);
@@ -185,6 +207,14 @@ fn ensemble_api_reports_shape_errors() {
         })
     ));
 
+    // only demand-generated tables may be empty
+    assert!(matches!(
+        generated::Statement::<BabyBear>::new(&[32, 32, 0], setup::MINIMUM_TRACE_HEIGHT),
+        Err(EnsembleShapeError::TraceHeight {
+            component: 2,
+            height: 0,
+        })
+    ));
     assert!(matches!(
         generated::Statement::<BabyBear>::new(&[2, 32, 256], setup::MINIMUM_TRACE_HEIGHT),
         Err(EnsembleShapeError::TraceHeight {

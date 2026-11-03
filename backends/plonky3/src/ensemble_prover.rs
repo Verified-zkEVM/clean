@@ -4,9 +4,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use p3_air::symbolic::SymbolicExpressionExt;
+use p3_air::Air;
 #[cfg(debug_assertions)]
 use p3_air::DebugConstraintBuilder;
-use p3_air::{Air, BaseAir};
 use p3_batch_stark::folder::{
     ProverConstraintFolderWithLookups, VerifierConstraintFolderWithLookups,
 };
@@ -86,7 +86,7 @@ where
 }
 
 /// Check that the configuration isn't zero-knowledge, and that it supports the statement's trace
-/// heights. Returns the degree bits of the traces, the verifier AIR's last.
+/// heights. Returns the degree bits of the AIRs' traces, the verifier AIR's last.
 fn degree_bits<SC, P>(
     config: &SC,
     ensemble: &GeneratedEnsemble<Val<SC>, P>,
@@ -102,10 +102,9 @@ where
     }
     let log_maximum = config.pcs().log_max_trace_height();
     ensemble
-        .trace_heights()
-        .iter()
-        .chain([&ensemble.verifier_height()])
-        .map(|&height| {
+        .air_heights()
+        .into_iter()
+        .map(|height| {
             let log_height = log2_strict_usize(height);
             if log_height > log_maximum {
                 return Err(EnsembleShapeError::MaximumTraceHeight {
@@ -125,7 +124,8 @@ fn per_air_public_values<F: Clone>(airs: usize, public_values: &[F]) -> Vec<Vec<
     values
 }
 
-/// Prove a complete generated ensemble and its canonically ordered padded traces.
+/// Prove a complete generated ensemble and its canonically ordered padded traces, where empty
+/// components have traces of height zero.
 pub fn prove_ensemble<SC, P>(
     config: &SC,
     ensemble: &GeneratedEnsemble<Val<SC>, P>,
@@ -165,8 +165,8 @@ where
             },
         ));
     }
-    for (component, (air, trace)) in airs.iter().zip(&traces).enumerate() {
-        let width = BaseAir::<Val<SC>>::width(air);
+    for (component, trace) in traces.iter().enumerate() {
+        let width = P::WIDTHS[component];
         if width != trace.width() {
             return Err(EnsembleProvingError::Shape(
                 EnsembleShapeError::TraceWidth {
@@ -186,7 +186,11 @@ where
             ));
         }
     }
-    let mut traces = traces;
+    // empty traces have no AIR
+    let mut traces = traces
+        .into_iter()
+        .filter(|trace| trace.height() != 0)
+        .collect::<Vec<_>>();
     traces.push(RowMajorMatrix::new(
         vec![Val::<SC>::ZERO; ensemble.verifier_height()],
         1,

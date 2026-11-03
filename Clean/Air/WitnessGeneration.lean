@@ -195,10 +195,11 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
           let (states, tally) := applyAnswer states tally index change data
           generateLoop data hint fuel states tally
 
-/-- The padded height of a demand-generated table. Preallocated tables are never padded. -/
+/-- The padded height of a demand-generated table: a power of two, or zero for a table without
+rows. Preallocated tables are never padded. -/
 def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
   match state.component.generation with
-  | .demand _ => nextPowerOfTwo state.rows.size
+  | .demand _ => if state.rows.isEmpty then 0 else nextPowerOfTwo state.rows.size
   | .preallocated _ => state.rows.size
 
 /-- Pad a demand-generated table to its target height; returns the padded state and the
