@@ -92,8 +92,8 @@ implies `BalancedInteractions` for those.
 -/
 structure Balance (F : Type) [FiniteField F] where
   Balanced : List (Interaction F) → Prop
-  Fits : ℕ → Prop
-  balancedInteractions_of_balanced : ∀ interactions, Fits interactions.length →
+  fits : ℕ → Bool
+  balancedInteractions_of_balanced : ∀ interactions, fits interactions.length →
     Balanced interactions → BalancedInteractions interactions
 
 /-
@@ -182,10 +182,11 @@ theorem LogUpBalanced.exists_push_of_pull {interactions : List (Interaction F)}
   omega
 
 /-- LogUp: field sums, sound for fewer interactions than the characteristic. -/
-def Balance.logUp : Balance F where
+def Balance.logUp [ComputableRingChar F] : Balance F where
   Balanced := LogUpBalanced
-  Fits count := count < ringChar F
-  balancedInteractions_of_balanced _ length_lt balanced :=
+  fits count := count < ComputableRingChar.char F
+  balancedInteractions_of_balanced _ fits balanced :=
+    have length_lt := ComputableRingChar.char_eq (R := F) ▸ of_decide_eq_true fits
     ⟨ balanced.exists_push_of_pull length_lt,
       balanced.activeCount_push_eq_activeCount_pull_of_isBool length_lt ⟩
 
@@ -195,14 +196,15 @@ def Balance.logUp : Balance F where
 
 /--
 Multiset balance: every multiplicity is `0` or `1`, and the messages of the active pushes are a
-permutation of the messages of the active pulls. A product argument checks it for fewer interactions
-than field elements.
+permutation of the messages of the active pulls. The permutation gives equal counts for any number
+of interactions; the soundness error of a randomized check of it, like a product argument, is up to
+the proof system.
 -/
 def Balance.multiset : Balance F where
   Balanced interactions :=
     (∀ i ∈ interactions, IsBool i.mult) ∧
       (activeMessages interactions .push).Perm (activeMessages interactions .pull)
-  Fits count := count < FiniteField.size F
+  fits _ := true
   balancedInteractions_of_balanced interactions _ h_check := by
     have counts (msg : Array F) :
         activeCount interactions .push msg = activeCount interactions .pull msg := by

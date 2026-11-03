@@ -926,13 +926,11 @@ theorem MemoryAccessList.isConsistentOnline_iff_isConsistentOffline
       apply MemoryAccessList.addressTimestampSort_perm
     · simp only
       have h' := MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted h_nodup
-      rw [←h']
-      assumption
+      rwa [←h']
   · rintro ⟨⟨permuted, h_permuted_sorted⟩, h_perm, h_offline⟩
     simp_all only
     rw [List.perm_comm] at h_perm
     have h_eq := MemoryAccessList.eq_of_perm_of_sorted h_sorted h_permuted_sorted (MemoryAccessList.addressTimestampSort_sorted accesses)
       h_perm (by rw [List.perm_comm]; apply MemoryAccessList.addressTimestampSort_perm)
     simp only [h_eq] at h_offline
-    rw [←MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted h_nodup] at h_offline
-    assumption
+    rwa [←MemoryAccessList.isConsistentOnline_iff_sorted_isConsistentOffline accesses h_sorted h_nodup] at h_offline

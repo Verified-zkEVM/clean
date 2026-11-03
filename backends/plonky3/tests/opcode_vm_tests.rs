@@ -9,7 +9,6 @@ mod generated {
 use clean_backend::witness_generation::{
     self, DemandMode, HintTable, Interaction, Mode, Program, WitnessData, WitnessField,
 };
-use clean_backend::{prove_ensemble, verify_ensemble};
 use common::setup;
 use p3_baby_bear::BabyBear;
 use p3_field::PrimeCharacteristicRing;
@@ -45,7 +44,7 @@ fn extracted_rust_rejects_a_wrong_final_state() {
 
 #[test]
 fn extracted_opcode_vm_proves_and_verifies() {
-    let config = setup::test_config(7);
+    let mut key = setup::test_key(7);
     let public_values = public_values();
     let witness = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect("extracted Rust witness generation failed");
@@ -54,9 +53,10 @@ fn extracted_opcode_vm_proves_and_verifies() {
     let statement =
         generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
             .expect("invalid generated AIR shape");
-    let proof =
-        prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
-    verify_ensemble(&config, &statement, &proof, &public_values)
+    let proof = key
+        .prove(&statement, traces, &public_values)
+        .expect("invalid proving shape");
+    key.verify(&statement, &proof, &public_values)
         .expect("extracted opcode VM proof failed verification");
 }
 
@@ -70,6 +70,7 @@ impl<F: WitnessField> Program<F> for UnguardedProgram {
     const PUBLIC_INPUTS: usize = <generated::Ensemble as Program<F>>::PUBLIC_INPUTS;
     const PROVER_INPUTS: usize = <generated::Ensemble as Program<F>>::PROVER_INPUTS;
     const HINT_TABLES: &'static [HintTable] = <generated::Ensemble as Program<F>>::HINT_TABLES;
+    const ROW_WIDTHS: &'static [usize] = <generated::Ensemble as Program<F>>::ROW_WIDTHS;
     const FIXED_COLUMNS: &'static [&'static [usize]] =
         <generated::Ensemble as Program<F>>::FIXED_COLUMNS;
     const COMPONENT_NAMES: &'static [&'static str] =

@@ -118,3 +118,15 @@ theorem FiniteField.val_inj_F {p : ℕ} [Fact p.Prime] (x y : F p) :
     ZMod.val x = ZMod.val y ↔ x = y := by
   rw [← FiniteField.val_F, ← FiniteField.val_F]
   exact FiniteField.val_inj
+
+/-! ## Computable characteristic -/
+
+/-- The characteristic of a ring as data, for code that runs: Mathlib's `ringChar` is
+noncomputable. -/
+class ComputableRingChar (R : Type) [NonAssocSemiring R] where
+  char : ℕ
+  char_eq : char = ringChar R
+
+instance (p : ℕ) : ComputableRingChar (ZMod p) where
+  char := p
+  char_eq := (ZMod.ringChar_zmod_n p).symm

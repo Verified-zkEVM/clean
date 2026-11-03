@@ -270,25 +270,26 @@ impl<F: Clone + Neg<Output = F>> Interaction<F> {
 /// A generated ensemble witness: the rows of each component.
 #[derive(Clone, Debug)]
 pub struct EnsembleWitness<F> {
+    row_widths: Vec<usize>,
     fixed_columns: Vec<&'static [usize]>,
     pub tables: Vec<Vec<Vec<F>>>,
 }
 
 impl<F: Field> EnsembleWitness<F> {
-    /// Convert the tables to Plonky3 trace matrices, without the fixed columns.
+    /// Convert the tables to Plonky3 trace matrices, without the fixed columns. A table without
+    /// rows becomes a matrix of height zero.
     pub fn into_traces(self) -> Result<Vec<RowMajorMatrix<F>>, String> {
         self.tables
             .into_iter()
-            .zip(self.fixed_columns)
+            .zip(self.row_widths.into_iter().zip(self.fixed_columns))
             .enumerate()
-            .map(|(component, (rows, fixed_columns))| {
-                if rows.is_empty() || !rows.len().is_power_of_two() {
+            .map(|(component, (rows, (semantic_width, fixed_columns)))| {
+                if !rows.is_empty() && !rows.len().is_power_of_two() {
                     return Err(format!(
                         "component {component} has non-power-of-two height {}",
                         rows.len()
                     ));
                 }
-                let semantic_width = rows[0].len();
                 let width = semantic_width
                     .checked_sub(fixed_columns.len())
                     .ok_or_else(|| {
@@ -324,6 +325,8 @@ pub trait Program<F: WitnessField> {
     const PUBLIC_INPUTS: usize;
     const PROVER_INPUTS: usize;
     const HINT_TABLES: &'static [HintTable];
+    /// The width of a row, including its fixed columns, per component.
+    const ROW_WIDTHS: &'static [usize];
     /// The input columns that are fixed columns, per component.
     const FIXED_COLUMNS: &'static [&'static [usize]];
     const COMPONENT_NAMES: &'static [&'static str];
@@ -684,10 +687,11 @@ fn balance<F: WitnessField, P: Program<F>>(
     Err("ensemble witness generation exhausted its fuel".to_string())
 }
 
-/// The padded height of a table: a power of two of at least `minimum_height` rows. Preallocated
-/// tables are never padded.
+/// The padded height of a table: a power of two of at least `minimum_height` rows, or zero for a
+/// demand-generated table without rows. Preallocated tables are never padded.
 fn target_height<F>(row_count: usize, mode: &Mode<F>, minimum_height: usize) -> usize {
     match mode {
+        Mode::Demand(_) if row_count == 0 => 0,
         Mode::Demand(_) => row_count.max(minimum_height).next_power_of_two(),
         Mode::Preallocated { .. } => row_count,
     }
@@ -824,6 +828,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     pad_and_balance::<F, P>(&modes, &mut tables, &data, hint, minimum_height)?;
 
     Ok(EnsembleWitness {
+        row_widths: P::ROW_WIDTHS.to_vec(),
         fixed_columns: P::FIXED_COLUMNS.to_vec(),
         tables: tables
             .into_iter()
