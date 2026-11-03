@@ -145,13 +145,12 @@ private lemma fromBitsExpr_val_eq (env : Environment (F p))
   rw [fromBitsExpr_eval_normalized env bits_var bits h_eval]
   exact ZMod.val_natCast_of_lt (by linarith [valueBits_lt_two_pow bits h_norm])
 
-omit h_large in
+omit [Fact p.Prime] h_large in
 /-- The z output variable vector evaluates to env.get at the witness offsets -/
 private lemma z_var_eval (env : Environment (F p)) (i₀ : ℕ) :
-    Vector.map (Expression.eval env)
-      (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))
+    (Vector.mapRange 32 fun i => env.get (i₀ + i))
     = Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
-  ext i; simp [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+  ext i; simp [Vector.getElem_mapRange]
 
 omit h_large in
 /-- IsBool from boolean constraint x * (x - 1) = 0 -/
@@ -181,7 +180,7 @@ private lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
   unfold evalBitsNat valueBits
   apply Finset.sum_congr rfl
   intro i _
-  simp [Vector.getElem_map]
+  simp
 
 /-- testBit equals div/mod expression -/
 private lemma testBit_ite_eq (n i : ℕ) : (if n.testBit i = true then 1 else 0 : ℕ) = n / 2^i % 2 := by
@@ -263,7 +262,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_z_eval : eval env
       (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))) =
       Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
-    rw [CircuitType.eval_var_fields]; exact z_var_eval env i₀
+    simp only [circuit_norm]; exact z_var_eval env i₀
   have h_fz : (Expression.eval env (fromBitsExpr
       (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))))).val = vz :=
     fromBitsExpr_val_eq env _ _ h_z_eval h_z_norm hp32
@@ -369,13 +368,11 @@ theorem completeness : Completeness (F p) main Assumptions := by
         ((valueBits input_b : ℕ) : F p) :=
       fromBitsExpr_eval_normalized env.toEnvironment input_var_b input_b h_input_b
     -- For FZ, compute via fieldFromBits_eval
-    have h_z_eval : Vector.map (Expression.eval env.toEnvironment)
-        (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))) =
+    have h_z_eval : (Vector.mapRange 32 fun i => env.get (i₀ + i)) =
         Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) :=
       z_var_eval env.toEnvironment i₀
     -- z's evaluated bits equal Vector.ofFn (fun i => ((S%2^32/2^i%2 : ℕ) : F p))
-    have h_z_eval' : Vector.map (Expression.eval env.toEnvironment)
-        (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))) =
+    have h_z_eval' : (Vector.mapRange 32 fun i => env.get (i₀ + i)) =
         Vector.ofFn fun i : Fin 32 => ((S % 2^32 / 2^i.val % 2 : ℕ) : F p) := by
       rw [h_z_eval]
       ext i hi
@@ -386,7 +383,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
         (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) =
         ((S % 2^32 : ℕ) : F p) := by
       show Expression.eval env.toEnvironment (Utils.Bits.fieldFromBitsExpr _) = _
-      simp only [Utils.Bits.fieldFromBits_eval]
+      simp only [Utils.Bits.fieldFromBits_eval, circuit_norm]
       rw [h_z_eval']
       exact fieldFromBits_bit_decomp (S % 2^32) h_S_mod_lt hp32
     -- cout value

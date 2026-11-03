@@ -94,8 +94,6 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     · intro i hi
       simpa [sub_eq_zero] using h_holds.left ⟨i, hi⟩
     · congr 1
-      rw [Vector.ext_iff]
-      simp [circuit_norm]
 
   completeness := by
     circuit_proof_start

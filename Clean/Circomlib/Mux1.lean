@@ -75,7 +75,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     intro i hi
     have h_holds_i := congrArg (fun v => v[i]) h_holds
     simp only [circuit_norm, Vector.getElem_map, Vector.getElem_mapRange] at h_holds_i
-    rw [h_holds_i, h_input.2, h_input.1]
+    rw [h_holds_i, h_input.1]
     rcases h_assumptions with h0 | h1
     · simp [h0]
     · simp only [h1, mul_one, one_ne_zero, ite_false]
@@ -91,9 +91,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [circuit_norm]
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
-    rw [h_env_i, h_input.2]
-    exact congrArg
-      (fun v => ((v[i]'hi).2 - (v[i]'hi).1) * input_s + (v[i]'hi).1) h_input.1.symm
+    rw [h_env_i]
+    simp only [h_input.1]
 
 end MultiMux1
 

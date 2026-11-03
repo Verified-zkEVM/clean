@@ -273,8 +273,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
         -- h_norm gives Normalized (eval env <new state>)[↑i_1] for i_1 : Fin 8.
         -- We need Normalized (eval env <new state>[j]'hj).
         rw [getElem_eval_vector]
-        simp only [circuit_norm, Vector.map_mk, List.map_toArray,
-          List.map_cons, List.map_nil, Vector.getElem_mk,
+        simp only [circuit_norm, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
           List.getElem_toArray] at h_norm ⊢
         exact h_norm ⟨j, hj⟩
   obtain ⟨h_val_64, h_norm_64⟩ := h_inv 64 (le_refl 64)
@@ -321,8 +320,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
       intro j hj
       rw [stateVar]
       rw [getElem_eval_vector]
-      simp only [circuit_norm, Vector.map_mk, List.map_toArray,
-        List.map_cons, List.map_nil, Vector.getElem_mk, List.getElem_toArray]
+      simp only [circuit_norm, List.map_toArray, List.map_cons, List.map_nil, Vector.getElem_mk,
+        List.getElem_toArray]
       exact h_norm ⟨j, hj⟩
   intro i
   refine ⟨?_, ?_, ?_⟩
@@ -384,82 +383,23 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   obtain ⟨h_input_state, h_input_block⟩ := h_input
   obtain ⟨h_sched, h_rounds, h_add⟩ := h_holds
   have h_sched_full := h_sched h_block_norm
-  have h_sched_val := fun i => (h_sched_full i).1
-  have h_sched_norm := fun i => (h_sched_full i).2
-  have h_rounds_full := h_rounds ⟨h_state_norm, h_sched_norm⟩
-  have h_rounds_val := h_rounds_full.1
-  have h_rounds_norm := h_rounds_full.2
-  -- Per-position antecedents for h_add (lifted via getElem_eval_vector / eval_var_fields)
-  have h_state_a : ∀ i : Fin 8,
-      Normalized (Vector.map (Expression.eval env) input_var_state[i.val]) := by
-    intro i
-    rw [← CircuitType.eval_var_fields, getElem_eval_vector, h_input_state]
-    exact h_state_norm i
-  have h_state_b : ∀ i : Fin 8,
-      Normalized (Vector.map (Expression.eval env)
-        (SHA256Rounds.stateVar (i₀ + 48 * 227) input_var_state 64)[i.val]) := by
-    intro i
-    have := h_rounds_norm i
-    rw [← getElem_eval_vector, CircuitType.eval_var_fields] at this
-    exact this
-  -- Bridge: Vector.map valueBits of evaluated message schedule = Specs.SHA256.messageSchedule
-  have h_sched_map :
-      Vector.map valueBits (eval env (MessageSchedule.varSchedule i₀ input_var_block 48))
-        = Specs.SHA256.messageSchedule (Vector.map valueBits input_block) := by
+  have h_sched_map : Vector.map valueBits (eval env (MessageSchedule.varSchedule i₀ input_var_block 48))
+      = Specs.SHA256.messageSchedule (Vector.map valueBits input_block) := by
     ext j hj
     simp only [Vector.getElem_map]
-    exact h_sched_val ⟨j, hj⟩
-  -- Per-position value equation: bridging valueBits of var-output to value-level state.
-  have h_val_eq : ∀ i : Fin 8,
-      valueBits (Vector.map (Expression.eval env) input_var_state[i.val])
-        = valueBits input_state[i.val] := by
-    intro i
-    rw [← CircuitType.eval_var_fields, getElem_eval_vector, h_input_state]
-  have h_rounds_eq : ∀ i : Fin 8,
-      valueBits (Vector.map (Expression.eval env)
-        (SHA256Rounds.stateVar (i₀ + 48 * 227) input_var_state 64)[i.val])
-        = (Specs.SHA256.sha256Compress (input_state.map valueBits)
-            (Specs.SHA256.messageSchedule (input_block.map valueBits)))[i.val]'i.isLt := by
-    intro i
-    rw [← CircuitType.eval_var_fields, getElem_eval_vector]
-    have := congrArg (fun v => v[i.val]'i.isLt) h_rounds_val
-    simp only [Vector.getElem_map] at this
-    rw [this, h_sched_map]
-  -- Helper to convert `eval env <mapFinRange>[i]` to the per-position var form.
-  have h_index : ∀ (i : ℕ) (hi : i < 8),
-      (Vector.map (eval env) ((Vector.mapFinRange 8 fun (j : Fin 8) ↦
-              Vector.mapRange 32 fun i_1 ↦
-                var { index := i₀ + 10896 + 29120 + j.val * 33 + i_1 }) :
-            Var SHA256State (F p)))[i]'hi
-          = Vector.map (Expression.eval env)
-              (Vector.mapRange 32 fun i_1 ↦
-                var (F := F p) { index := i₀ + 10896 + 29120 + i * 33 + i_1 }) := by
-    intro i hi
-    rw [Vector.getElem_map, Vector.getElem_mapFinRange]
-    exact CircuitType.eval_var_fields env _
-  simp_all only [implies_true, and_self]
-  -- Value equality
-  simp only [Specs.SHA256.compressBlock]
-  have h_add' := fun (i : Fin 8) => h_add i ⟨trivial, by
-    have hb := h_state_b i
-    simp only [Nat.reduceMul] at hb
-    rw [← CircuitType.eval_var_fields] at hb
-    exact hb⟩
+    exact (h_sched_full ⟨j, hj⟩).1
+  obtain ⟨h_rounds_val, h_rounds_norm⟩ := h_rounds ⟨h_state_norm, fun i => (h_sched_full i).2⟩
+  rw [h_sched_map] at h_rounds_val
+  have h_add' (i : Fin 8) := h_add i ⟨h_state_norm i, by
+    rw [getElem_eval_vector]
+    exact h_rounds_norm i⟩
   refine ⟨?_, fun i => (h_add' i).2⟩
   ext i hi
-  have ⟨h_val, _⟩ := h_add' ⟨i, hi⟩
-  simp only at h_val
-  rw [Vector.getElem_map, h_index i hi, h_val,
-      Vector.getElem_mapFinRange]
-  simp only [_root_.add32, circuit_norm]
-  have hre : valueBits (eval env ((SHA256Rounds.stateVar (i₀ + 10896) input_var_state 64)[i]'(by omega)))
-      = (Specs.SHA256.sha256Compress (Vector.map valueBits input_state)
-          (Specs.SHA256.messageSchedule (Vector.map valueBits input_block)))[i]'(by omega) := by
-    rw [getElem_eval_vector]
-    have h := congrArg (fun v => v[i]'(by omega)) h_rounds_val
-    simp only [Vector.getElem_map] at h
-    exact h
-  rw [hre]
+  have h_round := congrArg (fun v => v[i]'hi) h_rounds_val
+  simp only [Vector.getElem_map] at h_round
+  simp only [Specs.SHA256.compressBlock, Vector.getElem_map, Vector.getElem_mapFinRange]
+  rw [(h_add' ⟨i, hi⟩).1, getElem_eval_vector, h_round]
+  simp only [_root_.add32, Fin.getElem_fin, Vector.getElem_map]
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [MessageSchedule.circuit, MessageSchedule.Spec, MessageSchedule.Assumptions,

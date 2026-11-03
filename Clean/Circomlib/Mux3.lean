@@ -102,12 +102,9 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     circuit_proof_start
     obtain ⟨h_s10, h_out⟩ := h_holds
     intro i hi
-    have h_s0 := congrArg (fun v => v[0]) h_input.2
-    have h_s1 := congrArg (fun v => v[1]) h_input.2
-    have h_s2 := congrArg (fun v => v[2]) h_input.2
     have h_holds_i := congrArg (fun v => v[i]) h_out
-    simp only [circuit_norm, Vector.getElem_map, Vector.getElem_mapRange] at h_holds_i
-    rw [h_holds_i, h_s10, h_s0, h_s1, h_s2, ← h_input.1]
+    simp only [circuit_norm, h_s10, h_input.1] at h_holds_i
+    rw [h_holds_i]
     rcases h_assumptions with ⟨h0 | h0, h1 | h1, h2 | h2⟩ <;> simp [h0, h1, h2]
     all_goals ring
 
@@ -124,7 +121,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       simp only [circuit_norm]
       -- Right side: eval of the computed expression
       have h_env_i := h_env ⟨i, hi⟩
-      rw [h_env_i]; simp only [h_input.1, h_input.2]
+      rw [h_env_i]; simp only [h_input.1]
 
 end MultiMux3
 

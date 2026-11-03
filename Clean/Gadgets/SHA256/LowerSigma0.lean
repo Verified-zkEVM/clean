@@ -383,11 +383,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
   -- Set z to the output vector
-  set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + (32 + 32 * 0) + i} : Expression (F p))) with hz_def
+  set z : fields 32 (F p) := Vector.mapRange 32 fun i => env.get (i₀ + (32 + 32 * 0) + i)
+    with hz_def
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
-    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    intro i; simp [z, Vector.getElem_mapRange]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 7).val] + input[(i + 18).val] -
         2 * input[(i + 7).val] * input[(i + 18).val])

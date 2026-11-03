@@ -353,16 +353,10 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
         -- RHS: the wj of the spec.
         -- LHS: valueBits (eval env (varFromOffset (fields 32) (i₀ + k * 227 + 194)))
         rw [show (i₀ + k * 227 + 194 : ℕ) = i₀ + k * 227 + 64 + 64 + 33 + 33 from by ring]
-        rw [show (varFromOffset (fields 32)
-              (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
-            (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
-            from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
-        rw [CircuitType.eval_var_fields, v_wj, v_sum1, v_sig0, v_sum0, v_sig1,
+        simp only [circuit_norm]
+        rw [v_wj, v_sum1, v_sig0, v_sum0, v_sig1,
           ih_val (k + 16 - 7) (by omega), ih_val (k + 16 - 16) (by omega),
           ih_val (k + 16 - 2) (by omega), ih_val (k + 16 - 15) (by omega)]
-        -- RHS uses `set ... [k+16]` which is the new wj_spec.
-        rw [Vector.getElem_set_self]
         -- Both sides should be `(sig1 + x-7 + sig0 + x-16) % 2^32` after unfolding add32.
         show _ = (_root_.add32 (_root_.add32 _ _) (_root_.add32 _ _) : ℕ)
         unfold _root_.add32
@@ -377,12 +371,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
       · subst hjk
         rw [Vector.getElem_set_self]
         rw [show (i₀ + k * 227 + 194 : ℕ) = i₀ + k * 227 + 64 + 64 + 33 + 33 from by ring]
-        rw [show (varFromOffset (fields 32)
-              (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
-            (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
-            from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
-        rw [CircuitType.eval_var_fields]
+        simp only [circuit_norm]
         exact n_wj
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih_norm j hj
@@ -495,12 +484,7 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
       · subst hjk
         rw [Vector.getElem_set_self]
         rw [show (i₀ + k * 227 + 194 : ℕ) = i₀ + k * 227 + 64 + 64 + 33 + 33 from by ring]
-        rw [show (varFromOffset (fields 32)
-              (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
-            (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
-            from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
-        rw [CircuitType.eval_var_fields]
+        simp only [circuit_norm]
         exact n_wj
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih j hj

@@ -94,31 +94,29 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumption
   -- See, for example, https://www.ietf.org/archive/id/draft-aumasson-blake3-00.html#name-quarter-round-function-g
   constructor
   · ext i hi
-    simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
+    simp only [BLAKE3State.value, Vector.map_set, ↓Vector.getElem_set,
       Vector.getElem_map, g, Fin.getElem_fin, add32]
     repeat' split
-    · rw [c11.left]
-    · simp only [circuit_norm]
+    · simp only [add_assoc, Nat.reduceAdd] at c11 ⊢
+      rw [c11.left]
+    · simp only [circuit_norm, add_assoc, Nat.reduceAdd] at c12 ⊢
       rw [c12.left]
-    · rw [c14.left]
-    · simp only [circuit_norm]
+    · simp only [add_assoc, Nat.reduceAdd] at c14 ⊢
+      rw [c14.left]
+    · simp only [circuit_norm, add_assoc, Nat.reduceAdd] at c9 ⊢
       rw [c9.left]
-    · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
+    · rfl
 
   · intro i
-    simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set]
+    simp only [add_assoc, Nat.reduceAdd] at c9 c11 c12 c14
     repeat' split
     · exact c11.right
-    · simp only [U32.Normalized, explicit_provable_type, Vector.map_mk, List.map_toArray,
-        List.map_cons, List.map_nil, fromElements] at c12 ⊢
-      simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c12 ⊢
+    · simp only [U32.Normalized]
       exact c12.right
     · exact c14.right
-    · simp only [U32.Normalized, explicit_provable_type, Vector.map_mk, List.map_toArray,
-        List.map_cons, List.map_nil, fromElements] at c9 ⊢
-      simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c9 ⊢
+    · simp only [U32.Normalized]
       exact c9.right
-    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
+    · exact h_assumptions.1 i
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]

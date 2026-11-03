@@ -798,6 +798,10 @@ theorem getElem_eval_fields_prover {n : ℕ} {env : ProverEnvironment F}
     Expression.eval env.toEnvironment x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression_prover]
   simp only [explicit_provable_type, fromElements, Vector.getElem_map]
+
+theorem map_eval_toElements (env : Environment F) (x : α (Expression F)) :
+    (toElements x).map (Expression.eval env) = toElements (Eval.eval env x) :=
+  (toElements_eval env x).symm
 end ProvableType
 
 -- more concrete ProvableType instances
@@ -842,17 +846,16 @@ theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expr
   have h' := congrArg (fun xs : Vector (α F) n => xs[i]) (eval_vector env x)
   simpa only [Vector.getElem_map] using h'.symm
 
+theorem ProvableStruct.eval_getElem_vector {α : TypeMap} [ProvableStruct α] (env : Environment F)
+    (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) :
+    ProvableStruct.eval (α := α) env x[i] = (Eval.eval env x)[i] :=
+  (ProvableStruct.eval_eq_eval (α := α) env x[i]).symm.trans (_root_.getElem_eval_vector env x i h)
+
 lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
     (vars : Vector (M (Expression F)) n) (vals : Vector (M F) n)
     (h : eval env vars = vals) (i : ℕ) (h_i : i < n) :
     (eval env (vars[i] : M (Expression F)) : M F) = vals[i] := by
   rw [getElem_eval_vector, h]
-
-/-- `eval` commutes with `Vector.set`. -/
-theorem eval_vector_set (env : Environment F) (x : ProvableVector α n (Expression F))
-    (i : ℕ) (h : i < n) (a : α (Expression F)) :
-    eval env (x.set i a) = (eval env x).set i (eval env a) := by
-  simp only [eval_vector, Vector.map_set]
 
 /-- Chain fold through a pair-element vector access, straight to the whole-vector atom
 (used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the simproc

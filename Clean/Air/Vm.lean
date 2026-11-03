@@ -403,7 +403,7 @@ lemma interactionValuesWith_eq (witness : VmWitness ens vm fits)
     vm.channel.pulledIfValue (witness.rowEnabled h row) (witness.rowPull h row),
     vm.channel.pushedIfValue (witness.rowEnabled h row) (witness.rowPush h row) ] := by
   simp only [circuit_norm, vm.interactionsWith_eq (witness.component_mem_tables_of_mem_vmTables h),
-    rowEnabled, rowPull, rowPush, AbstractInteraction.eval, ProvableType.toElements_eval]
+    rowEnabled, rowPull, rowPush, AbstractInteraction.eval]
 
 lemma interactionValuesWith_length (witness : VmWitness ens vm fits)
     {table} (h : table ∈ witness.vmTables) (row : Array F) :

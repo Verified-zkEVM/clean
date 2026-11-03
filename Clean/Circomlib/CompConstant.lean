@@ -176,10 +176,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     have h_bits' : bits = fieldToBits 135 sout := by
       show Vector.mapRange 135 (fun i => env.get (i₀ + 127 + 1 + i)) = fieldToBits 135 (env.get (i₀ + 127))
-      have h_bits_valid' := h_bits_valid
-      simp only [Vector.map_mapRange, circuit_norm] at h_bits_valid'
       ext j hj
-      have h_bits_j := congrArg (fun v => v[j]) h_bits_valid'
+      have h_bits_j := congrArg (fun v => v[j]) h_bits_valid
       simp only [Vector.getElem_mapRange] at h_bits_j ⊢
       exact h_bits_j
 
@@ -297,7 +295,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     and_intros
     · ext i hi
       have h_parts_i := h_parts ⟨i, hi⟩
-      simp only [Vector.getElem_map, Vector.getElem_mapRange, circuit_norm]
+      simp only [Vector.getElem_mapRange, circuit_norm]
       exact h_parts_i
     · exact h_sout
     · exact h_sout_lt
