@@ -573,10 +573,10 @@ theorem weakSoundness {table : Table F} :
 /--
 If we know constraints and _some_ of the guarantees unconditionally, we can remove them from the per-row assumptions.
 
-This lemma is tailored to VM-like channels where there remains a single channel that we need to
-prove guarantees for.
+This lemma is tailored to VM-like channels where there remains a single channel whose guarantees
+we only know on some rows.
 -/
-lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
+lemma spec_of_partial_guarantees_of_constraints {table : Table F}
   {finished : List (RawChannel F)} {unfinished : RawChannel F} :
   table.Assumptions →
   table.Constraints →
@@ -584,18 +584,14 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
   (∀ channel ∈ finished, table.ChannelGuarantees channel) →
     ∀ row ∈ table.table,
       table.component.operations.ChannelGuarantees unfinished (table.environment row) →
-      table.component.operations.ChannelRequirements unfinished (table.environment row) := by
+      table.component.Spec (table.environment row) := by
   intro assumptions constraints subset finished_grts row h_row channel_grts
   replace finished_grts channel hc := finished_grts channel hc row h_row
   set env := table.environment row
-  suffices table.component.operations.FullRequirements env by
-    simp only [circuit_norm] at this ⊢
-    intro i hi _
-    exact this i hi
   suffices table.component.operations.FullGuarantees env from
     table.component.weakSoundness
       (table.circuitAssumptions_of_assumptions assumptions row h_row)
-      (constraints row h_row) this |>.right
+      (constraints row h_row) this |>.left
   simp only [Component.guarantees_iff, Component.rowOperations]
   rw [GeneralFormalCircuit.guarantees_iff]
   intro channel channel_mem

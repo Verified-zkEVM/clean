@@ -74,10 +74,13 @@ lemma run_take_succ {k : ℕ} (hk : k < program.length) (initial : BF64) :
 
 /-- The state after `k` steps: the counter `X ^ k`, and the result of running the first `k` steps
 on the initial state. -/
-def stateChannel (initial : BF64) : Channel BF64 fieldPair where
+def Reached (initial : BF64) (k : ℕ) (state : fieldPair BF64) : Prop :=
+  k ≤ program.length ∧ state.1 = g ^ k ∧ state.2 = run (program.take k) initial
+
+/-- The states of the VM, which `Reached` describes. -/
+def stateChannel : Channel BF64 fieldPair where
   name := "state"
-  Guarantees state _ :=
-    ∃ k ≤ program.length, state.1 = g ^ k ∧ state.2 = run (program.take k) initial
+  Guarantees _ _ := True
 
 structure StepInput (F : Type) where
   enabled : F
@@ -98,27 +101,30 @@ def step (h_length : program.length < 2 ^ 63) (initial : BF64) :
   name := "step"
   main input := do
     assertZero (input.enabled * (input.enabled - 1))
-    (stateChannel program initial).pullIf input.enabled (input.counter, input.x)
+    stateChannel.pullIf input.enabled (input.counter, input.x)
     (programMemory program h_length).channel.pullIf input.enabled
       (input.counter, input.coefficient)
-    (stateChannel program initial).pushIf input.enabled
+    stateChannel.pushIf input.enabled
       (input.counter * .const g, input.x * input.x + input.coefficient)
 
   exposedChannels
   | { enabled, counter, x, coefficient }, _ =>
-    expose (stateChannel program initial) [pulledIf enabled (counter, x),
+    expose stateChannel [pulledIf enabled (counter, x),
       pushedIf enabled (counter * .const g, x * x + coefficient)]
   exposedChannels_eq input _ := by
     obtain ⟨enabled, counter, x, coefficient⟩ := input
     simp [circuit_norm, stateChannel, programMemory]
 
   ProverAssumptions
-  | { enabled, counter, x, coefficient }, data, _ =>
-    enabled = 0 ∨ enabled = 1 ∧ (stateChannel program initial).Guarantees (counter, x) data ∧
+  | { enabled, counter, x, coefficient }, _, _ =>
+    enabled = 0 ∨ enabled = 1 ∧ (∃ k, Reached program initial k (counter, x)) ∧
       (programMemory program h_length).Contains (counter, coefficient)
-  Spec _ _ _ := True
+  -- an enabled step takes the state after `k` steps to the state after `k + 1` steps
+  Spec
+  | { enabled, counter, x, coefficient }, _, _ => enabled = 1 → ∀ k,
+    Reached program initial k (counter, x) →
+      Reached program initial (k + 1) (counter * g, x * x + coefficient)
 
-  channelsWithRequirements := [(stateChannel program initial).toRaw]
   requirementsChannelsLawful input_var _ := by
     obtain ⟨enabled, counter, x, coefficient⟩ := input_var
     simp only [circuit_norm, stateChannel, programMemory]
@@ -127,15 +133,15 @@ def step (h_length : program.length < 2 ^ 63) (initial : BF64) :
 
   soundness := by
     circuit_proof_start [stateChannel, programMemory]
-    obtain ⟨h_bool, h_state, h_read⟩ := h_holds
-    rcases mul_eq_zero.mp h_bool with h_zero | h_one
-    · simp [h_zero]
-    rw [sub_eq_zero] at h_one
-    obtain ⟨k, hk, h_counter, h_x⟩ := h_state h_one
-    obtain ⟨i, hi, h_counter', h_coefficient⟩ := h_read h_one
+    obtain ⟨h_bool, h_read⟩ := h_holds
+    rw [mul_eq_zero, sub_eq_zero] at h_bool
+    refine ⟨?_, by simp [h_bool]⟩
+    rintro rfl k ⟨hk, h_counter, h_x⟩
+    obtain ⟨i, hi, h_counter', h_coefficient⟩ := h_read rfl
     obtain rfl : k = i := pow_inj (by omega) (by omega) (h_counter.symm.trans h_counter')
     rw [List.getElem?_eq_getElem hi, Option.some_inj] at h_coefficient
-    refine ⟨by simp [h_one], by simp [h_one], fun _ => ⟨k + 1, hi, by rw [h_counter, pow_succ], ?_⟩⟩
+    simp only at h_x
+    refine ⟨hi, by rw [h_counter', pow_succ], ?_⟩
     rw [run_take_succ program hi, h_x, h_coefficient]
   completeness := by
     circuit_proof_start [stateChannel, programMemory]
@@ -146,7 +152,7 @@ abbrev stepComponent (h_length : program.length < 2 ^ 63) (initial : BF64) : Com
   circuit := step program h_length initial
   generation := .demand {
     trigger := .push
-    channel := stateChannel program initial
+    channel := stateChannel
     input
     | (counter, x) =>
       pure { enabled := 1, counter, x, coefficient := .witness (coefficientAt program counter) }
@@ -156,20 +162,19 @@ abbrev stepComponent (h_length : program.length < 2 ^ 63) (initial : BF64) : Com
 state after all steps. -/
 def verifier (initial : BF64) : Verifier.Program BF64 field where
   main final := do
-    Verifier.pull (stateChannel program initial) (.const (g ^ program.length), final)
-    Verifier.push (stateChannel program initial) (1, .const initial)
-  Spec final data := (stateChannel program initial).Guarantees (g ^ program.length, final) data
-  soundness := by simp [circuit_norm]
+    Verifier.pull stateChannel (.const (g ^ program.length), final)
+    Verifier.push stateChannel (1, .const initial)
 
 def vm (h_length : program.length < 2 ^ 63) (initial : BF64) : VmTables BF64 field where
-  channel := stateChannel program initial
+  channel := stateChannel
+  Reached k state _ := Reached program initial k state
+  guarantees_of_reached := by simp [stateChannel]
   tables := [stepComponent program h_length initial]
   verifier := verifier program initial
+  final := (g ^ program.length, ·)
   tables_channel := by simp [circuit_norm, step, sub_eq_zero]
-  verifier_channel := by simp [circuit_norm, verifier]
-  verifier_requirements _ := by
-    simp only [circuit_norm, verifier, stateChannel]
-    exact ⟨0, by simp, by simp, by simp [run]⟩
+  verifier_channel := by
+    simp [circuit_norm, verifier, Reached, run, ProverData.getPublicInput_eq_eval]
 
 /-- The public statement: running the program on the initial state ends with `final`. -/
 def Spec (initial final : BF64) : Prop := final = run program initial
@@ -189,10 +194,8 @@ def formalEnsemble (h_length : program.length < 2 ^ 63) (initial : BF64) :
   |>.toFormal (fun _ heights => heights.sum < 2 ^ 62) (Spec program initial)
     (by simp [circuit_norm, vm])
     (by
-      intro witness _ verifier_spec
-      obtain ⟨k, hk, h_counter, h_final⟩ := verifier_spec
+      rintro witness - - ⟨k, -, -, -, hk, h_counter, h_final⟩
       obtain rfl : program.length = k := pow_inj (by omega) (by omega) h_counter
-      rw [witness.data_getPublicInput] at h_final
       simp only [List.take_length] at h_final
       exact h_final)
     (closedFit := by
