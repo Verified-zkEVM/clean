@@ -320,8 +320,11 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Step 4: Analyze the Right Hand Side (RHS) of the main equation
     -- Link the circuit's reconstruction loop to `fieldFromBits` of the output vars
     -- Hint: Use `foldl_explicit` and `Bits.fieldFromBits_eval`
-    have h_rhs_eval : Expression.eval env (Fin.foldl n (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 * 2)) (0, 1)).1 = fieldFromBits (Vector.mapRange n fun i => env.get (i₀ + i)) := by
-      -- By definition of `fieldFromBits`, the right-hand side is the sum of the output bits multiplied by their respective powers of 2.
+    have h_rhs_eval : Expression.eval env (Fin.foldl n
+        (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 * 2)) (0, 1)).1 =
+        fieldFromBits (Vector.mapRange n fun i => env.get (i₀ + i)) := by
+      -- By definition of `fieldFromBits`, the right-hand side is the sum of the output bits
+      -- multiplied by their respective powers of 2.
       apply Eq.symm; exact (by
       convert foldl_explicit _ _ _ _ using 1;
       any_goals exact fun i => h_out_bool _ i.2;

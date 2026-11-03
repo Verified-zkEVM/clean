@@ -383,8 +383,9 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   obtain ⟨h_input_state, h_input_block⟩ := h_input
   obtain ⟨h_sched, h_rounds, h_add⟩ := h_holds
   have h_sched_full := h_sched h_block_norm
-  have h_sched_map : Vector.map valueBits (eval env (MessageSchedule.varSchedule i₀ input_var_block 48))
-      = Specs.SHA256.messageSchedule (Vector.map valueBits input_block) := by
+  have h_sched_map :
+      Vector.map valueBits (eval env (MessageSchedule.varSchedule i₀ input_var_block 48))
+        = Specs.SHA256.messageSchedule (Vector.map valueBits input_block) := by
     ext j hj
     simp only [Vector.getElem_map]
     exact (h_sched_full ⟨j, hj⟩).1

@@ -358,8 +358,8 @@ private def vectorAtomLiftEvalCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
         mkAppM ``ProvableType.getElem_eval_fields #[env, xs, i, hval]
       -- `mkAppM` cannot assign the element `TypeMap` of `Expression`-component pairs
       else if elemTy.isAppOf ``Prod then
-        mkAppOptM ``getElem_eval_vector
-          #[none, none, none, some (mkConst ``fieldPair), none, some env, some xs, some i, some hval]
+        mkAppOptM ``getElem_eval_vector #[none, none, none, some (mkConst ``fieldPair), none,
+          some env, some xs, some i, some hval]
       else mkAppM ``getElem_eval_vector #[env, xs, i, hval]
     let some (_, lhs0, rhs0) := (← inferType proof).eq? | return .continue
     unless ← withNewMCtxDepth <| withDefault <| isDefEq lhs0 e do return .continue
