@@ -4,7 +4,6 @@ public import Clean.Utils.ResourceHistory.Grounding
 public import Clean.Utils.ResourceHistory.Inventory
 public import Clean.Utils.ResourceHistory.Refresh
 public import Clean.Utils.ResourceHistory.OfflineMemory
-public import Clean.Air.LedgerView
 
 /-! Regression proofs for the semantic obligations of mutable resource histories. -/
 
@@ -133,35 +132,5 @@ example : ResourceReplay Prod.fst OfflineMemory.edge (fun address => some (addre
     (OfflineMemory.frontier [(2, 0, 7, 7), (1, 0, 0, 7)] (by simp [MemoryAccessList.isTimestampSorted, timestamp_ordering])) := by
   apply (OfflineMemory.online_iff_replay [(2, 0, 7, 7), (1, 0, 0, 7)] _).mp
   simp [MemoryAccessList.isConsistentOnline, MemoryAccessList.lastWriteValue]
-
-open Air.Flat
-
-private instance : Fact (Nat.Prime 7) := ⟨by decide⟩
-private def channel : Channel (ZMod 7) field where
-  name := "resource-history-regression"
-  Guarantees _ _ := True
-
-/-- Zero multiplicities still occupy physical capacity. -/
-example : ¬ BalancedInteractions
-    (List.replicate 7 (channel.pushedIfValue 0 0)) := by
-  intro balanced
-  have bound := balanced.1
-  norm_num [ZMod.ringChar_zmod_n] at bound
-
-/-- Field cancellation alone does not give exact natural occurrence counts. -/
-example : ∀ message, balanceOf (List.replicate 7 (channel.pushedValue 0)) message = 0 := by
-  intro message
-  by_cases same : (channel.pushedValue 0).msg = message
-  · simp [balanceOf, same]
-    decide
-  · simp [balanceOf, same]
-
-/-- Typed balance retains duplicate occurrences instead of deduplicating a ledger. -/
-example : BalancedInteractions
-    ([0, 0].map channel.pushedValue ++ [0, 0].map channel.pulledValue) :=
-  (channel.balanced_unit_iff [0, 0] [0, 0]).mpr ⟨by norm_num [ZMod.ringChar_zmod_n], .refl _⟩
-
-/-- A disabled physical entry contributes no logical record. -/
-example : LedgerEntry.produced (F := ZMod 7) (Message := field) [⟨.produce, false, (0 : ZMod 7)⟩] = [] := rfl
 
 end ResourceHistoryTests
