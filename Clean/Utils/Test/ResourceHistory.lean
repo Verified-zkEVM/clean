@@ -5,7 +5,6 @@ public import Clean.Utils.ResourceHistory.Inventory
 public import Clean.Utils.ResourceHistory.Refresh
 public import Clean.Utils.ResourceHistory.OfflineMemory
 public import Clean.Air.LedgerView
-public import Clean.Air.Realizes
 
 /-! Regression proofs for the semantic obligations of mutable resource histories. -/
 
