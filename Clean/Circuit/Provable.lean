@@ -857,9 +857,20 @@ lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
     (eval env (vars[i] : M (Expression F)) : M F) = vals[i] := by
   rw [getElem_eval_vector, h]
 
-/-- Chain fold through a pair-element vector access, straight to the whole-vector atom
-(used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the simproc
-can elaborate it without higher-order unification). -/
+/-! The vector evaluation lemmas at the element `TypeMap` `fieldPair`: higher-order
+unification cannot recover that `TypeMap` from an element type `Expression F × Expression F`,
+so the simprocs of `StructEvalSimprocs` match these instances directly. -/
+
+theorem eval_pairVector {n : ℕ} (env : Environment F)
+    (x : ProvableVector fieldPair n (Expression F)) :
+    eval env x = x.map (eval env) :=
+  eval_vector env x
+
+theorem getElem_eval_pairVector {n : ℕ} (env : Environment F)
+    (x : ProvableVector fieldPair n (Expression F)) (i : ℕ) (h : i < n) :
+    eval env x[i] = (eval env x)[i] :=
+  getElem_eval_vector env x i h
+
 theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
     (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
     Expression.eval env ((c[i]'hi).1) =

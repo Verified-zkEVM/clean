@@ -164,6 +164,28 @@ private partial def chainRoot (e : Expr) : Expr :=
     chainRoot e.appArg!
   else e
 
+/-- Rewrite `e` at the root with the first of `lemmas` whose left-hand side (right-hand side,
+when `symm`) matches it up to reducible and instance unfolding, the transparency simp matches
+its lemmas at. Metavariables of `e` (circuits under elaboration) are never assigned. The proof
+is annotated with the exact equation `e = rhs`, so the rewritten term stays type-correct at
+reducible transparency even where the lemma spells an instance or type alias differently. -/
+private def rewriteRoot? (lemmas : List Name) (symm : Bool) (e : Expr) :
+    MetaM (Option Simp.Result) := do
+  for name in lemmas do
+    let match? ← withNewMCtxDepth <| withReducibleAndInstances do
+      let thm ← mkConstWithFreshMVarLevels name
+      let (args, _, type) ← forallMetaTelescopeReducing (← inferType thm)
+      let some (_, lhs, rhs) := type.eq? | return none
+      let (source, target) := if symm then (rhs, lhs) else (lhs, rhs)
+      unless ← isDefEq source e do return none
+      unless ← args.allM (·.mvarId!.isAssigned) do return none
+      let proof ← instantiateMVars (mkAppN thm args)
+      if proof.hasLevelMVar then return none
+      return some (← instantiateMVars target, ← if symm then mkEqSymm proof else pure proof)
+    if let some (rhs, proof) := match? then
+      return some { expr := rhs, proof? := some (← mkExpectedTypeHint proof (← mkEq e rhs)) }
+  return none
+
 /-- Vector constructors that evaluation is pushed into, each with the lemma that moves a
 `Vector.map` inside it. Evaluating a vector built by one of these decomposes inward, into
 evaluations of its elements or sub-vectors. Every other vector is opaque: its evaluation stays
@@ -179,200 +201,77 @@ private def vectorMapPushLemmas : List (Name × Name) :=
    -- the elements of a provable value: evaluated as the elements of its evaluation
    (``ProvableType.toElements, ``ProvableType.map_eval_toElements)]
 
-private def isConstructedVector (e : Expr) : Bool :=
-  match e.getAppFn with
-  | .const name _ => vectorMapPushLemmas.any (·.1 == name)
-  | _ => false
+/-- The push lemma of a constructed vector, `none` for an opaque one. -/
+private def pushLemma? (v : Expr) : Option Name :=
+  match v.getAppFn with
+  | .const name _ => (vectorMapPushLemmas.find? (·.1 == name)).map (·.2)
+  | _ => none
 
-/-- The rewrite `e ~~> rhs` proved by `proof`, whose stated left-hand side may differ from `e`
-up to defeq (instance paths). The proof is annotated with the exact equation, so that the
-rewritten term stays type-correct at reducible transparency. -/
-private def rewriteTo (e rhs proof : Expr) : MetaM Simp.Result := do
-  return { expr := rhs, proof? := some (← mkExpectedTypeHint proof (← mkEq e rhs)) }
-
-/-- Rewrite `e` at the root with an equation lemma whose arguments its left-hand side
-determines. Metavariables of `e` (circuits under elaboration) are never assigned. -/
-private def rewriteRoot? (lemmaName : Name) (e : Expr) : MetaM (Option Simp.Result) := do
-  try
-    withNewMCtxDepth do
-      let thm ← mkConstWithFreshMVarLevels lemmaName
-      let (args, _, type) ← forallMetaTelescopeReducing (← inferType thm)
-      let some (_, lhs, rhs) := type.eq? | return none
-      unless ← isDefEq lhs e do return none
-      unless ← args.allM (·.mvarId!.isAssigned) do return none
-      let proof ← instantiateMVars (mkAppN thm args)
-      if proof.hasLevelMVar then return none
-      return some (← rewriteTo e (← instantiateMVars rhs) proof)
-  catch _ => return none
-
-/-- Rewrite `Vector.map f v` at the root with the push lemma of `v`'s constructor. -/
-private def pushVectorMap? (e : Expr) : MetaM (Option Simp.Result) := do
-  unless e.isAppOfArity ``Vector.map 5 do return none
-  let .const head _ := e.appArg!.getAppFn | return none
-  let some (_, lemmaName) := vectorMapPushLemmas.find? (·.1 == head) | return none
-  rewriteRoot? lemmaName e
-
-/-- The evaluator of a `Vector.map` whose function evaluates expressions (`Expression.eval env`)
-or provable values (`Eval.eval env`), together with that environment. -/
-private def vectorMapEvalEnv? (e : Expr) : Option (Name × Expr) :=
-  if e.isAppOfArity ``Vector.map 5 then
-    let f := e.getAppArgs[3]!.eta
-    if f.getAppFn.isConstOf ``Expression.eval then some (``Expression.eval, f.appArg!)
-    else if f.getAppFn.isConstOf ``Eval.eval then some (``Eval.eval, f.appArg!)
-    else none
-  else none
-
-/-- `eval env v = v.map (eval env)` for a vector-typed subject, dispatched on the element type:
-`Expression` elements use the `fields` lemma, provable elements the `ProvableVector` one. -/
-private def evalVectorEq? (env v : Expr) : MetaM (Option (Expr × Expr × Expr)) := do
-  try
-    let vType ← withDefault <| whnf (← inferType v)
-    unless vType.isAppOf ``Vector do return none
-    let elemType ← withDefault <| whnf vType.getAppArgs[0]!
-    let proof ← withDefault <| do
-      if elemType.isAppOf ``Expression then mkAppM ``ProvableType.eval_fields #[env, v]
-      -- `mkAppM` cannot assign the element `TypeMap` of `Expression`-component pairs
-      else if elemType.isAppOf ``Prod then
-        mkAppOptM ``eval_vector
-          #[none, none, none, some (mkConst ``fieldPair), none, some env, some v]
-      else mkAppM ``eval_vector #[env, v]
-    let some (_, lhs, rhs) := (← inferType proof).eq? | return none
-    return some (lhs, rhs, proof)
-  catch _ => return none
+/-- `eval env v = v.map (eval env)`, at `Expression` elements (`fields`), provable elements, and
+`fieldPair` elements. -/
+private def evalVectorLemmas : List Name :=
+  [``ProvableType.eval_fields, ``eval_vector, ``eval_pairVector]
 
 /-- Inward side of the vector normal form: evaluating a constructed vector pushes the
 evaluation into the constructor, `eval env (Vector.ofFn f) ~~> Vector.ofFn fun i => eval env
 (f i)`. Opaque vectors stay folded atoms. -/
 private def vectorEvalLiteralCore (e : Expr) : SimpM Simp.Step := do
-  let args := e.getAppArgs
-  unless e.getAppFn.isConstOf ``Eval.eval && args.size ≥ 2 do
-    return .continue
-  let subject := args[args.size - 1]!
-  unless isConstructedVector subject do return .continue
-  let some (lhs, mapped, proof) ← evalVectorEq? args[args.size - 2]! subject | return .continue
-  -- alias-typed subjects (`U32`, `SHA256State`, …) carry their own `Eval` instances and hide
-  -- behind regular defs; validate at full transparency
-  unless lhs == e || (← withNewMCtxDepth <| withTransparency .all <| isDefEq lhs e) do
-    return .continue
-  let some pushed ← pushVectorMap? mapped | return .continue
-  return .visit (← rewriteTo e pushed.expr (← mkEqTrans proof (← pushed.getProof)))
+  unless e.isAppOfArity ``Eval.eval 6 do return .continue
+  let some push := pushLemma? e.appArg! | return .continue
+  let some mapped ← rewriteRoot? evalVectorLemmas false e | return .continue
+  let some pushed ← rewriteRoot? [push] false mapped.expr | return .continue
+  return .visit (← mapped.mkEqTrans pushed)
 
 simproc vectorEvalLiteral (Eval.eval _ _) := vectorEvalLiteralCore
 attribute [circuit_norm] vectorEvalLiteral
 
-/-- `Vector.map` of an evaluator: pushed into a constructed vector, folded into the
-whole-vector atom `eval env v` for an opaque one. This makes the atom the single spelling of
-an evaluated opaque vector, also for `fields` vectors. -/
+/-- `Vector.map` of an evaluator (`Expression.eval env` or `Eval.eval env`): pushed into a
+constructed vector, folded into the whole-vector atom `eval env v` for an opaque one. This makes
+the atom the single spelling of an evaluated opaque vector, also for `fields` vectors. -/
 private def vectorMapEvalCore (e : Expr) : SimpM Simp.Step := do
-  let some (_, env) := vectorMapEvalEnv? e | return .continue
-  let subject := e.appArg!
-  if isConstructedVector subject then
-    let some pushed ← pushVectorMap? e | return .continue
-    return .visit pushed
-  let some (lhs, mapped, proof) ← evalVectorEq? env subject | return .continue
-  unless ← withNewMCtxDepth <| withDefault <| isDefEq mapped e do return .continue
-  return .visit (← rewriteTo e lhs (← mkEqSymm proof))
+  unless e.isAppOfArity ``Vector.map 5 do return .continue
+  let evaluator := e.getAppArgs[3]!.eta.getAppFn
+  unless evaluator.isConstOf ``Expression.eval || evaluator.isConstOf ``Eval.eval do
+    return .continue
+  let result? ← match pushLemma? e.appArg! with
+    | some push => rewriteRoot? [push] false e
+    | none => rewriteRoot? evalVectorLemmas true e
+  let some result := result? | return .continue
+  return .visit result
 
 simproc vectorMapEval (Vector.map _ _) := vectorMapEvalCore
 attribute [circuit_norm] vectorMapEval
 
-/-- Outward side of the vector normal form: scalar evals whose subject chains down to a free
-variable fold toward the whole-atom eval (`Expression.eval env x[i] ~~> (eval env x)[i]`,
-`Expression.eval env (c[i]).1 ~~> ((eval env c)[i]).1`). Chains rooted in an application stay
-element-wise, so per-element lemmas about that function keep applying. -/
-private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
-  let args := e.getAppArgs
-  unless e.getAppFn.isConstOf ``Expression.eval && args.size ≥ 2 do
-    return .continue
-  let env := args[args.size - 2]!
-  let subject := args[args.size - 1]!
-  unless (chainRoot subject).isFVar do return .continue
-  if subject.isAppOfArity ``GetElem.getElem 8 then
-    let gArgs := subject.getAppArgs
-    let xs := gArgs[5]!
-    let i := gArgs[6]!
-    let hval := gArgs[7]!
-    try
-      let xsType ← withDefault <| whnf (← inferType xs)
-      unless xsType.isAppOf ``Vector do return .continue
-      -- a bare `v[i]` access into a pair-element vector cannot be `Expression.eval`-headed;
-      -- pair components are handled by the projection branch below
-      let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
-      if elemTy.isAppOf ``Prod then return .continue
-      let lemmaName := if elemTy.isAppOf ``Expression then
-        ``ProvableType.getElem_eval_fields else ``getElem_eval_vector
-      let proof ← withDefault <| mkAppM lemmaName #[env, xs, i, hval]
-      let some (_, lhs0, rhs0) := (← inferType proof).eq? | return .continue
-      unless ← withNewMCtxDepth <| withDefault <| isDefEq lhs0 e do return .continue
-      return .visit (← rewriteTo e rhs0 proof)
-    catch _ => return .continue
-  -- Projection chain through a pair-element vector access, folded to the whole-vector atom in
-  -- one step: `Expression.eval env (c[i]).1 ~~> ((eval env c)[i]).1`. The intermediate
-  -- spelling `(eval env c[i]).1` must never be produced: the pair `Eval` instance
-  -- defeq-collapses, so it would loop against the component-wise `eval_fieldPair` lemmas.
-  let isFst := subject.isAppOfArity ``Prod.fst 3
-  unless isFst || subject.isAppOfArity ``Prod.snd 3 do return .continue
-  let t := subject.appArg!
-  unless t.isAppOfArity ``GetElem.getElem 8 do return .continue
-  let gArgs := t.getAppArgs
-  let xs := gArgs[5]!
-  let i := gArgs[6]!
-  let hval := gArgs[7]!
-  try
-    let xsType ← withDefault <| whnf (← inferType xs)
-    unless xsType.isAppOf ``Vector do return .continue
-    let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
-    unless elemTy.isAppOf ``Prod do return .continue
-    let chainLemma := if isFst then ``eval_fst_getElem_pairVector
-      else ``eval_snd_getElem_pairVector
-    let proof ← withDefault <| mkAppM chainLemma #[env, xs, i, hval]
-    let some (_, lhs0, rhs0) := (← inferType proof).eq? | return .continue
-    unless ← withNewMCtxDepth <| withDefault <| isDefEq lhs0 e do return .continue
-    return .visit (← rewriteTo e rhs0 proof)
-  catch _ => return .continue
+/-- Lemmas lifting an element access to an access into the evaluated vector, by the evaluator
+heading the access: `Expression.eval env x[i] ~~> (eval env x)[i]`,
+`Expression.eval env (c[i]).1 ~~> ((eval env c)[i]).1`, `eval env x[i] ~~> (eval env x)[i]`.
+Pair components fold to the whole-vector atom in one step: the intermediate `(eval env c[i]).1`
+would loop against the component-wise `eval_fieldPair` lemmas. -/
+private def liftLemmas (evalHead : Name) : List Name :=
+  if evalHead == ``Expression.eval then
+    [``ProvableType.getElem_eval_fields, ``eval_fst_getElem_pairVector,
+      ``eval_snd_getElem_pairVector]
+  else if evalHead == ``Eval.eval then [``getElem_eval_vector, ``getElem_eval_pairVector]
+  else [``ProvableStruct.eval_getElem_vector]
 
-simproc vectorAtomLift (Expression.eval _ _) := vectorAtomLiftCore
+/-- Outward side of the vector normal form: evaluations of an element access whose chain is
+rooted in a free variable fold toward the whole-atom eval. Chains rooted in an application stay
+element-wise, so per-element lemmas about that function keep applying. -/
+private def vectorAtomLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Step := do
+  unless e.getAppFn.isConstOf evalHead && e.getAppNumArgs ≥ 2 do return .continue
+  unless (chainRoot e.appArg!).isFVar do return .continue
+  let some result ← rewriteRoot? (liftLemmas evalHead) false e | return .continue
+  return .visit result
+
+simproc vectorAtomLift (Expression.eval _ _) := vectorAtomLiftCore ``Expression.eval
 attribute [circuit_norm] vectorAtomLift
 
-/-- The provable-element link of the same chains, `eval env x[i] ~~> (eval env x)[i]`, for
-`Eval.eval` and, on struct elements, `ProvableStruct.eval`. -/
-private def vectorAtomLiftEvalCore (evalHead : Name) (e : Expr) : SimpM Simp.Step := do
-  let args := e.getAppArgs
-  unless e.getAppFn.isConstOf evalHead && args.size ≥ 2 do
-    return .continue
-  let env := args[args.size - 2]!
-  let subject := args[args.size - 1]!
-  unless subject.isAppOfArity ``GetElem.getElem 8 do return .continue
-  unless (chainRoot subject).isFVar do return .continue
-  let gArgs := subject.getAppArgs
-  let xs := gArgs[5]!
-  let i := gArgs[6]!
-  let hval := gArgs[7]!
-  try
-    let xsType ← withDefault <| whnf (← inferType xs)
-    unless xsType.isAppOf ``Vector do return .continue
-    let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
-    let proof ← withDefault <| do
-      if evalHead == ``ProvableStruct.eval then
-        mkAppM ``ProvableStruct.eval_getElem_vector #[env, xs, i, hval]
-      else if elemTy.isAppOf ``Expression then
-        mkAppM ``ProvableType.getElem_eval_fields #[env, xs, i, hval]
-      -- `mkAppM` cannot assign the element `TypeMap` of `Expression`-component pairs
-      else if elemTy.isAppOf ``Prod then
-        mkAppOptM ``getElem_eval_vector #[none, none, none, some (mkConst ``fieldPair), none,
-          some env, some xs, some i, some hval]
-      else mkAppM ``getElem_eval_vector #[env, xs, i, hval]
-    let some (_, lhs0, rhs0) := (← inferType proof).eq? | return .continue
-    unless ← withNewMCtxDepth <| withDefault <| isDefEq lhs0 e do return .continue
-    return .visit (← rewriteTo e rhs0 proof)
-  catch _ => return .continue
-
-simproc vectorAtomLiftEval (Eval.eval _ _) := vectorAtomLiftEvalCore ``Eval.eval
+simproc vectorAtomLiftEval (Eval.eval _ _) := vectorAtomLiftCore ``Eval.eval
 attribute [circuit_norm] vectorAtomLiftEval
 
-/-- `vectorAtomLiftEvalCore` on struct elements, registered below. -/
+/-- `vectorAtomLiftCore` on struct elements, registered below. -/
 def vectorAtomLiftStructEvalProc : Simproc :=
-  vectorAtomLiftEvalCore ``ProvableStruct.eval
+  vectorAtomLiftCore ``ProvableStruct.eval
 
 /--
 Evaluate struct *literals* component-wise:
