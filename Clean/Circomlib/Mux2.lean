@@ -1,8 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Tactics
-import Clean.Gadgets.Equality
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Tactics
+public import Clean.Gadgets.Equality
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 namespace Circomlib
 open Circuit
@@ -44,15 +47,13 @@ template MultiMux2(n) {
 }
 -/
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
-  let { c, s } := input
-
-  let s10 <== s[1] * s[0]
+  let s10 <== input.s[1] * input.s[0]
 
   -- Witness and constrain output vector
-  let out <== c.map fun ci =>
+  let out <== input.c.map fun ci =>
     let a10 := (ci[3] - ci[2] - ci[1] + ci[0]) * s10
-    let a1 := (ci[2] - ci[0]) * s[1]
-    let a0 := (ci[1] - ci[0]) * s[0]
+    let a1 := (ci[2] - ci[0]) * input.s[1]
+    let a0 := (ci[1] - ci[0]) * input.s[0]
     let a := ci[0]
     a10 + a1 + a0 + a
 
@@ -134,10 +135,8 @@ template Mux2() {
 }
 -/
 def main (input : Var Inputs (F p)) := do
-  let { c, s } := input
-
   -- Call MultiMux2 with n=1
-  let mux_out ← MultiMux2.circuit 1 { c := #v[c], s }
+  let mux_out ← MultiMux2.circuit 1 { c := #v[input.c], s := input.s }
   return mux_out[0]
 
 def circuit : FormalCircuit (F p) Inputs field where

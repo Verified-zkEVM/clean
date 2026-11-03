@@ -1,5 +1,9 @@
-import Clean.Circuit
-import Clean.Types.U32
+module
+
+public import Clean.Circuit
+public import Clean.Types.U32
+
+@[expose] public section
 
 namespace TestCircuitStructDeriving
 

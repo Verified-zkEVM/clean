@@ -102,10 +102,9 @@ deliberately deferred until then.
 
 ## Nondeterminism: tables, prover data, hints
 
-- `.arrGet xs i` — read a constant `Array F` at a computed index (0 out of bounds).
-  Example: FemtoCairo instruction fetch over `Array.ofFn program`.
+- `xs[i]` with `i : U64Expr F` — read a constant `Array F` (or `Vector`) at a computed index (0 out of bounds). Example: FemtoCairo instruction fetch, `program[pc.val]`.
 - `.dataGet key width row col` / `.hintGet ...` — read committed prover data /
-  uncommitted hints (`ProverData`-keyed). Prefer `Table.dataGet` / `Table.hintGet`,
+  uncommitted hints, keyed by name and width. Prefer `Table.dataGet` / `Table.hintGet`,
   which return typed rows (see FemtoCairo).
 - `witnessNative fun env => ...` — the escape hatch for genuinely arbitrary Lean.
   Not exportable: `#assert_exportable` rejects it, and it stays interpreted in Lean.

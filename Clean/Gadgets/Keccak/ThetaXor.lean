@@ -1,7 +1,11 @@
-import Clean.Circuit.Loops
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.Xor.Xor64
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.ThetaXor
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -11,9 +15,9 @@ structure Inputs (F : Type) where
   d : KeccakRow F
 deriving ProvableStruct
 
-def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
-  | { state, d } => .mapFinRange 25 fun i =>
-    Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
+def main (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+  .mapFinRange 25 fun i =>
+    Xor64.circuit ⟨inputs.state[i.val], inputs.d[i.val / 5]⟩
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main := by
   elaborate_circuit

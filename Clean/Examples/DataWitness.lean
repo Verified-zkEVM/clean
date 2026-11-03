@@ -14,7 +14,11 @@ component that carries it.
 not suffice. The obligation would not merely be hard to prove, it would be false. That is why
 `AgreesBelow` constrains all three channels of a `ProverEnvironment` and not just `get`.
 -/
-import Clean.Circuit
+module
+
+public import Clean.Circuit
+
+@[expose] public section
 
 namespace Examples.DataWitness
 variable {p : ℕ} [Fact p.Prime]
@@ -67,10 +71,11 @@ false. Both environments below agree on every cell (they are constantly zero) ye
 different memory, so the witness generator returns different values. -/
 
 private def emptyEnv : ProverEnvironment (F p) :=
-  ⟨⟨fun _ => 0, fun _ _ => #[]⟩, ProverHint.empty _⟩
+  ⟨⟨fun _ => 0, .empty _⟩, ProverHint.empty _⟩
 
 private def onesEnv : ProverEnvironment (F p) :=
-  ⟨⟨fun _ => 0, fun _ k => #[Vector.replicate k 1]⟩, ProverHint.empty _⟩
+  ⟨⟨fun _ => 0, { ProverData.empty _ with tables _ k := #[Vector.replicate k 1] }⟩,
+    ProverHint.empty _⟩
 
 theorem not_computable_from_cells_alone :
     ¬ ∀ (n : ℕ) (compute : Witgen.WitgenIR (F p) 1) (env env' : ProverEnvironment (F p)),

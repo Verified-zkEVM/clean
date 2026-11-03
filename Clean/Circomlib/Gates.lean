@@ -1,11 +1,14 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Gadgets.Boolean
-import Clean.Utils.Bitwise
-import Clean.Utils.Vector
-import Clean.Utils.BinaryOps
-import Clean.Circuit.Theorems
-import Mathlib.Data.Nat.Bitwise
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Boolean
+public import Clean.Utils.Bitwise
+public import Clean.Utils.Vector
+public import Clean.Utils.BinaryOps
+public import Clean.Circuit.Theorems
+public import Mathlib.Data.Nat.Bitwise
+
+@[expose] public section
 
 open IsBool
 
@@ -834,7 +837,6 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
           main input_var2 >>= fun out2 =>
           AND.circuit (out1, out2)).operations offset) by
         convert this
-        rfl
 
       rw [h_main_eq] at h_local_witnesses
       rw [Circuit.ConstraintsHold.bind_usesLocalWitnesses] at h_local_witnesses

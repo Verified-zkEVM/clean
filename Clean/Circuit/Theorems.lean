@@ -4,8 +4,12 @@ This file contains theorems that immediately follow from the definitions in `Cir
 For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
-import Clean.Circuit.Formal
-import Clean.Circuit.Provable
+module
+
+public import Clean.Circuit.Formal
+public import Clean.Circuit.Provable
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {α β : Type}
 

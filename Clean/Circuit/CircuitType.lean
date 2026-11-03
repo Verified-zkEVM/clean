@@ -1,5 +1,9 @@
-import Clean.Circuit.Expression
-import Clean.Utils.FiniteField
+module
+
+public import Clean.Circuit.Expression
+public import Clean.Utils.FiniteField
+
+@[expose] public section
 
 /--
 _Circuit types_ are usually just structured collections of field elements.

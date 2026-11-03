@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Circomlib.Bitify
-import Mathlib.Data.Int.Basic
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Circomlib.Bitify
+public import Mathlib.Data.Int.Basic
+
+@[expose] public section
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/comparators.circom
@@ -133,9 +137,8 @@ structure Inputs (F : Type) where
 deriving ProvableStruct
 
 def main (inputs : Var Inputs (F p)) := do
-  let { enabled, inp } := inputs
-  let isz ← IsZero.circuit (inp.2 - inp.1)
-  enabled * (1 - isz) === 0
+  let isz ← IsZero.circuit (inputs.inp.2 - inputs.inp.1)
+  inputs.enabled * (1 - isz) === 0
 
 def circuit : FormalAssertion (F p) Inputs where
   main

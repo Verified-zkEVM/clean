@@ -1,8 +1,12 @@
 /-
 Shared circuit infrastructure for Clean.Air.
 -/
-import Clean.Circuit
-import Clean.Circuit.Extensions
+module
+
+public import Clean.Circuit
+public import Clean.Circuit.Extensions
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
@@ -27,6 +31,22 @@ lemma ProvableType.valueFromOffset_zero_fromInput_eq (input : Input F) (data : P
   rw [fromElements_eq_iff, Vector.ext_iff]
   simp only [circuit_norm, Vector.getElem?_toArray]
   grind
+
+/-- The public input of the prover data, as a value of the public input type: its first elements,
+padded with zeros. -/
+def ProverData.getPublicInput (data : ProverData F) (PublicIO : TypeMap) [ProvableType PublicIO] :
+    PublicIO F :=
+  fromElements (.ofFn fun i => data.publicInput[i.val]?.getD 0)
+
+/-- The public input is what the verifier's variables evaluate to. -/
+lemma ProverData.getPublicInput_eq_eval (data : ProverData F) (PublicIO : TypeMap)
+    [ProvableType PublicIO] :
+    data.getPublicInput PublicIO =
+      eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0) := by
+  rw [ProvableType.eval_varFromOffset, getPublicInput]
+  congr 1
+  ext i hi
+  simp [Vector.getElem_mapRange]
 
 namespace GeneralFormalCircuit
 /--
