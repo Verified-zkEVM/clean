@@ -5,7 +5,6 @@ public import Clean.Air.ResourceHistory
 public import Clean.Examples.WitnessExport
 public import Clean.Utils.FiniteField
 public import Clean.Utils.BinaryField
-public import Clean.Utils.SourceSinkPath
 public import Clean.Utils.OfflineMemory
 public import Clean.Circomlib.AliasCheck
 public import Clean.Circomlib.BinSum
