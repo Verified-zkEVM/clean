@@ -10,8 +10,7 @@ mod generated_air;
 pub mod witness_generation;
 
 pub use ensemble_prover::{
-    prove_ensemble, verify_ensemble, EnsembleProvingError, EnsembleVerificationError,
-    PcsProverError,
+    EnsembleKey, EnsembleProvingError, EnsembleVerificationError, PcsProverError,
 };
 pub use generated_air::*;
 pub use p3_batch_stark::{BatchProof, PcsError, StarkGenericConfig, Val};

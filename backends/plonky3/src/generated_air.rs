@@ -74,7 +74,7 @@ pub enum EnsembleShapeError {
         expected: Vec<usize>,
         actual: Vec<usize>,
     },
-    /// The verifier failed to set up the ensemble's preprocessed columns and lookups.
+    /// Computing the lookups of the statement's demand-generated components failed.
     Setup,
     /// The configuration is zero-knowledge, which the backend doesn't support.
     ZeroKnowledge,
@@ -89,6 +89,15 @@ pub enum EnsembleShapeError {
         channel: &'static str,
         interactions: u128,
         field_order: u64,
+    },
+    /// A demand-generated component has fixed columns.
+    DemandFixedColumns {
+        component: usize,
+    },
+    /// The statement's verifier AIR doesn't have the minimum height of the key.
+    KeyMinimumHeight {
+        expected: usize,
+        actual: usize,
     },
 }
 
@@ -338,6 +347,18 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
             .collect()
     }
 
+    /// Whether the height of each AIR in `airs` is fixed by the program: those of the components
+    /// with a fixed height, and the verifier's.
+    pub(crate) fn fixed_height_airs(&self) -> Vec<bool> {
+        self.airs
+            .iter()
+            .map(|air| match air.kind {
+                AirKind::Component(component) => P::FIXED_HEIGHTS[component] != 0,
+                AirKind::Verifier { .. } => true,
+            })
+            .collect()
+    }
+
     /// The height of the verifier AIR's trace.
     pub(crate) fn verifier_height(&self) -> usize {
         match self.airs.last().map(|air| air.kind) {
@@ -345,6 +366,41 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
             _ => unreachable!("the verifier AIR is the last AIR"),
         }
     }
+}
+
+/// The AIRs whose height the program fixes, with those heights: the components with a fixed
+/// height, then the verifier AIR with `minimum_height` rows. Every statement has them.
+pub(crate) fn fixed_height_airs<P: GeneratedAirSpec>(
+    minimum_height: usize,
+) -> Result<(Vec<GeneratedAir<P>>, Vec<usize>), EnsembleShapeError> {
+    if !minimum_height.is_power_of_two() {
+        return Err(EnsembleShapeError::MinimumHeight {
+            height: minimum_height,
+        });
+    }
+    let mut airs = Vec::new();
+    let mut heights = Vec::new();
+    for (component, (&height, fixed_columns)) in
+        P::FIXED_HEIGHTS.iter().zip(P::FIXED_COLUMNS).enumerate()
+    {
+        // a demand-generated component has no preprocessed trace, whatever its height
+        if height == 0 {
+            if !fixed_columns.is_empty() {
+                return Err(EnsembleShapeError::DemandFixedColumns { component });
+            }
+            continue;
+        }
+        if !height.is_power_of_two() || height < minimum_height {
+            return Err(EnsembleShapeError::TraceHeight { component, height });
+        }
+        airs.push(GeneratedAir::new(AirKind::Component(component)));
+        heights.push(height);
+    }
+    airs.push(GeneratedAir::new(AirKind::Verifier {
+        height: minimum_height,
+    }));
+    heights.push(minimum_height);
+    Ok((airs, heights))
 }
 
 impl<F: WitnessField, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
