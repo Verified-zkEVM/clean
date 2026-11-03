@@ -169,15 +169,31 @@ def formalEnsemble : FormalEnsemble BF64 State .multiset :=
     (fun _ channel => by
       simp only [circuit_norm, verifier, stateChannel]
       exact fun _ => ⟨0, by simp, rfl⟩)
-  |>.toFormal (fun _ => True) Spec
+  |>.toFormal (fun _ heights => heights.sum < 2 ^ 62) Spec
     (by simp [circuit_norm, stateCounterChannel])
-    (fun _ h => h.1)
+    (fun witness h => by
+      have h : verifier.Spec (witness.data.getPublicInput State) witness.data := h.1
+      rw [witness.data_getPublicInput] at h
+      exact h)
+    (closedFit := by
+      intro _ heights h_heights channel h_channel
+      simp only [circuit_norm, stateCounterChannel, List.mem_singleton] at h_channel
+      subst h_channel
+      refine lt_of_le_of_lt (Ensemble.interactionCount_le _
+        (by simp [circuit_norm, stateCounterChannel]) heights 2 ?_) ?_
+      · simp only [circuit_norm, stateCounterChannel, List.mem_singleton, forall_eq]
+        rw [Component.interactionsWith_of_exposedChannels (table := stepComponent)
+          (List.mem_singleton_self _)]
+        simp
+      · simp [circuit_norm, verifier]
+        rw [show FiniteField.size BF64 = 2 ^ 64 from rfl]
+        omega)
 
-/-- End-to-end soundness: a valid proof for the public input `final` shows that it is the state
-after some number of steps. -/
-theorem soundness (final : State BF64) :
-    formalEnsemble.ensemble.Statement .multiset final → Spec final :=
-  formalEnsemble.soundness final trivial
+/-- End-to-end soundness: a valid proof for the public input `final`, with fewer than `2 ^ 62` rows,
+shows that it is the state after some number of steps. -/
+theorem soundness (final : State BF64) (heights : List ℕ) (h_heights : heights.sum < 2 ^ 62) :
+    formalEnsemble.ensemble.Statement .multiset final heights → Spec final :=
+  formalEnsemble.soundness final heights h_heights
 
 /-- Generate a complete ensemble witness from the claimed final state. -/
 def generate (final : State BF64) (fuel : ℕ) :

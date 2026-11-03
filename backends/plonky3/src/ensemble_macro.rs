@@ -34,6 +34,7 @@ macro_rules! ensemble {
             const PROVER_INPUTS: usize = $prover_inputs;
             const HINT_TABLES: &'static [$crate::witness_generation::HintTable] =
                 &[$($hint_table),*];
+            const ROW_WIDTHS: &'static [usize] = &[$($component::WIDTH),+];
             const FIXED_COLUMNS: &'static [&'static [usize]] = &[$($component::FIXED_COLUMNS),+];
             const COMPONENT_NAMES: &'static [&'static str] = &[$($component::NAME),+];
 
@@ -65,7 +66,7 @@ macro_rules! ensemble {
                     &$crate::witness_generation::WitnessData<F>,
                 )] = &[$($component::complete::<F>),+];
                 let input_widths: &[usize] = &[$($component::INPUT_WIDTH),+];
-                let widths: &[usize] = &[$($component::WIDTH),+];
+                let row_widths = <Self as $crate::witness_generation::Program<F>>::ROW_WIDTHS;
                 let Some(complete) = completes.get(component) else {
                     return Err($crate::__private::format!(
                         "component index {component} is out of bounds"
@@ -80,11 +81,11 @@ macro_rules! ensemble {
                 }
                 let mut row = input.to_vec();
                 complete(&mut row, data, hint);
-                if row.len() != widths[component] {
+                if row.len() != row_widths[component] {
                     return Err($crate::__private::format!(
                         "generated row has width {}, expected {}",
                         row.len(),
-                        widths[component]
+                        row_widths[component]
                     ));
                 }
                 Ok(row)

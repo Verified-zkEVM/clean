@@ -69,9 +69,8 @@ structure VmTables (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
     [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw]
 
   -- verifier requirements hold unconditionally (without relying on channel guarantees)
-  verifier_requirements :
-    ∀ env,
-      Operations.ChannelRequirements channel env verifier.circuitOperations
+  verifier_requirements : ∀ data : ProverData F,
+    Operations.ChannelRequirements channel data.publicEnvironment verifier.circuitOperations
 
 instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
 
@@ -79,18 +78,24 @@ instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMess
 Soundness for a VM ensemble is simple:
 - the ensemble spec is the verifier spec
 - the verifier spec follows from verifier guarantees
-- verifier guarantees follow from table constraints and channel balance
+- verifier guarantees follow from table constraints and channel balance, with fewer interactions
+  with the closed channels than the field has elements
 -/
-def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) (balance : Balance F) : Prop :=
+def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) (balance : Balance F)
+    (closed : List (RawChannel F)) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Assumptions →
     witness.Constraints →
+    witness.InteractionsFit balance →
+    witness.FitField closed →
     witness.Balanced balance →
-      ens.VerifierGuarantees witness.publicInput witness.data
+      ens.VerifierGuarantees witness.data
 
 structure SoundVmEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]
     (balance : Balance F) extends ensemble : Ensemble F PublicIO where
-  soundVmChannel : ensemble.SoundVmChannel balance
+  closed : List (RawChannel F)
+  closed_subset : closed ⊆ ensemble.channels
+  soundVmChannel : ensemble.SoundVmChannel balance closed
 
 namespace SoundVmEnsemble
 variable {balance : Balance F}
@@ -100,6 +105,8 @@ def withProverInput (ens : SoundVmEnsemble F PublicIO balance) (ProverInput : Ty
     [ProvableType ProverInput] (hintTables : List HintTable) :
     SoundVmEnsemble F PublicIO balance where
   ensemble := ens.ensemble.withProverInput ProverInput hintTables
+  closed := ens.closed
+  closed_subset := ens.closed_subset
   -- the witnesses of both ensembles have the same tables
   soundVmChannel witness := ens.soundVmChannel { witness with }
 
@@ -108,30 +115,34 @@ def withProverInput (ens : SoundVmEnsemble F PublicIO balance) (ProverInput : Ty
     (ens.withProverInput ProverInput hintTables).ensemble =
       ens.ensemble.withProverInput ProverInput hintTables := rfl
 /--
-Bundle a sound VM ensemble with its public statement. `Assumptions` and `Spec` only refer to the
-public input. The verifier spec is evaluated on prover data derived from the witness, so the bridge
-from it to `Spec` quantifies over witnesses.
+Bundle a sound VM ensemble with its public statement. `Assumptions` refer to the public input and
+the table heights, `Spec` only to the public input. The verifier spec is evaluated on prover data
+derived from the witness, so the bridge from it to `Spec` quantifies over witnesses.
 -/
 def toFormal (ens : SoundVmEnsemble F PublicIO balance)
-    (Assumptions Spec : PublicIO F → Prop)
+    (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop)
     (assumptionsConsistency : ens.ensemble.AssumptionsConsistency Assumptions)
     (spec_of_verifierSpec : ∀ witness : EnsembleWitness ens.ensemble,
-      Assumptions witness.publicInput →
-      ens.VerifierSpec witness.publicInput witness.data → Spec witness.publicInput)
-    (ProverAssumptions : PublicIO F → ens.ensemble.ProverInput F → Prop := fun _ _ => True) :
+      Assumptions witness.publicInput witness.heights →
+      ens.VerifierSpec witness.data → Spec witness.publicInput)
+    (ProverAssumptions : PublicIO F → ens.ensemble.ProverInput F → Prop := fun _ _ => True)
+    (closedFit : ∀ publicInput heights, Assumptions publicInput heights →
+      ens.FitField ens.closed heights := by exact fun _ _ _ _ h_closed => nomatch h_closed) :
     FormalEnsemble F PublicIO balance where
   ensemble := ens.ensemble
   Assumptions
   Spec
   ProverAssumptions
   soundness := by
-    intro publicInput assumptions ⟨witness, input_eq, constraints, balanced⟩
-    subst input_eq
+    intro publicInput heights assumptions
+      ⟨fit, witness, input_eq, heights_eq, constraints, balanced⟩
+    subst input_eq heights_eq
     apply spec_of_verifierSpec witness assumptions
     apply ens.ensemble.verifierSpec_of_verifierGuarantees
     exact ens.soundVmChannel witness
       (Ensemble.assumptions_of_assumptionsConsistency assumptionsConsistency witness assumptions)
-      constraints balanced
+      constraints (EnsembleWitness.interactionsFit_of_heights fit)
+      (EnsembleWitness.fitField_of_heights ens.closed_subset (closedFit _ _ assumptions)) balanced
 end SoundVmEnsemble
 end Air.Flat
 
@@ -367,16 +378,16 @@ noncomputable def rowPush (witness : VmWitness ens vm fits)
     (vm.step (witness.component_mem_tables_of_mem_vmTables h)).push
 
 noncomputable def verifierEnabled (witness : VmWitness ens vm fits) : F :=
-  eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.enabled
+  eval witness.data.publicEnvironment vm.verifierStep.enabled
 
 lemma verifierEnabled_eq_one (witness : VmWitness ens vm fits) : witness.verifierEnabled = 1 := by
   simp only [verifierEnabled, VmTables.verifierStep, circuit_norm]
 
 noncomputable def verifierPull (witness : VmWitness ens vm fits) : vm.Message F :=
-  eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.pull
+  eval witness.data.publicEnvironment vm.verifierStep.pull
 
 noncomputable def verifierPush (witness : VmWitness ens vm fits) : vm.Message F :=
-  eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.push
+  eval witness.data.publicEnvironment vm.verifierStep.push
 
 noncomputable def verifierPair (witness : VmWitness ens vm fits) :
     Interaction F × Interaction F :=
@@ -583,9 +594,8 @@ lemma pulls_requirements_of_vmConstraints {witness : VmWitness ens vm fits} :
   intro constraints pull h_pull
   rw [witness.mem_pulls_iff] at h_pull
   rcases h_pull with rfl | ⟨table, table_mem, row, row_mem, rfl⟩
-  · have verifier_requirements := vm.verifier_requirements
-      (Environment.fromInput witness.publicInput witness.data)
-    change (ens.addVm vm fits).VerifierChannelRequirements witness.publicInput witness.data
+  · have verifier_requirements := vm.verifier_requirements witness.data
+    change (ens.addVm vm fits).VerifierChannelRequirements witness.data
       vm.channel.toRaw at verifier_requirements
     rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
     apply verifier_requirements
@@ -632,9 +642,9 @@ theorem verifierChannelGuarantees_of_verifierChannelRequirements
     table.component.operations.ChannelRequirements vm.channel.toRaw
       (table.environment row)) →
   -- vm channel verifier requirements imply vm channel verifier guarantees
-  (ens.addVm vm fits).VerifierChannelRequirements witness.publicInput witness.data
+  (ens.addVm vm fits).VerifierChannelRequirements witness.data
       vm.channel.toRaw →
-    (ens.addVm vm fits).VerifierChannelGuarantees witness.publicInput witness.data
+    (ens.addVm vm fits).VerifierChannelGuarantees witness.data
       vm.channel.toRaw := by
   intro balance witness_constraints constraints verifier_requirements
   have row_enabled_boolean := witness.rowEnabled_isBool_of_vmConstraints witness_constraints
@@ -803,7 +813,8 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
     (fits : vm.FitsInto ens)
     -- and the guarantees of the closed channels in the ensemble with the VM
     (closed_guarantees : ∀ witness : EnsembleWitness (ens.addVm vm fits), witness.Assumptions →
-      witness.Constraints → witness.Balanced balance →
+      witness.Constraints → witness.InteractionsFit balance → witness.FitField closed →
+      witness.Balanced balance →
       ∀ channel ∈ closed, ∀ i ∈ witness.interactionsWith channel, i.Guarantees witness.data) :
     -- assuming that none of the existing tables interacted with the VM channel
     (∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels) →
@@ -815,10 +826,10 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
     (∀ channel ∈ ordered ++ closed, channel ∉ vm.verifier.channelsWithRequirements ∧
       ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements) →
     -- the ensemble with the VM tables satisfies SoundVmChannel
-    (ens.addVm vm fits).SoundVmChannel balance := by
+    (ens.addVm vm fits).SoundVmChannel balance closed := by
   intro not_mem_vm_channel grts_subset reqs_disjoint (witness : VmWitness ens vm fits) assumptions
-    constraints balanced
-  have balance := witness.balancedChannels_of_balanced balanced
+    constraints fit closed_fit balanced
+  have balance := witness.balancedChannels_of_balanced fit balanced
   have consistent := soundChannels.right.right
   -- the guarantees of the closed channels hold in every table
   have closed_grts : ∀ channel ∈ closed, ∀ table ∈ witness.tables,
@@ -826,7 +837,7 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
     intro channel h_channel table h_table
     rw [Table.channelGuarantees_iff_forall, witness.same_data table h_table]
     intro i h_i
-    apply closed_guarantees witness assumptions constraints balanced channel h_channel i
+    apply closed_guarantees witness assumptions constraints fit closed_fit balanced channel h_channel i
     rw [witness.mem_interactionsWith]
     exact .inr ⟨table, h_table, h_i⟩
   /-
@@ -919,15 +930,15 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
   have vm_verifier_guarantees :=
     witness.verifierChannelGuarantees_of_verifierChannelRequirements vm_balance vm_constraints
       reqs_of_grts
-      (vm.verifier_requirements (Environment.fromInput witness.publicInput witness.data))
+      (vm.verifier_requirements witness.data)
   have finished_verifier_guarantees : ∀ channel ∈ ordered ++ closed,
-      (ens.addVm vm fits).VerifierChannelGuarantees witness.publicInput witness.data channel := by
+      (ens.addVm vm fits).VerifierChannelGuarantees witness.data channel := by
     intro channel channel_mem
     rcases List.mem_append.mp channel_mem with h_ordered | h_closed
     swap
     · rw [witness.verifierChannelGuarantees_iff_forall]
       intro i h_i
-      apply closed_guarantees witness assumptions constraints balanced channel h_closed i
+      apply closed_guarantees witness assumptions constraints fit closed_fit balanced channel h_closed i
       rw [witness.mem_interactionsWith]
       exact .inl h_i
     let : channel.Consistent := consistent channel h_ordered
@@ -987,14 +998,16 @@ theorem addVm_closedGuarantees (ens : SoundEnsemble F PublicIO balance) (vm : Vm
       ∀ table ∈ vm.tables, ∀ channel ∈ table.circuit.channelsWithRequirements,
         channel ∈ vm.channel.toRaw :: ens.channels ∧ channel ∉ ens.finished)
     (witness : EnsembleWitness (ens.ensemble.addVm vm fits)) :
-    witness.Assumptions → witness.Constraints → witness.Balanced balance →
+    witness.Assumptions → witness.Constraints → witness.InteractionsFit balance →
+      witness.FitField (ens.closed.map (·.channel)) → witness.Balanced balance →
       ∀ channel ∈ ens.closed.map (·.channel), ∀ i ∈ witness.interactionsWith channel,
         i.Guarantees witness.data := by
-  intro assumptions constraints balanced channel h_channel
+  intro assumptions constraints fit closed_fit balanced channel h_channel
   obtain ⟨closedChannel, h_closed, rfl⟩ := List.mem_map.mp h_channel
   have h_finished : closedChannel.channel ∈ ens.finished := List.mem_append_right _ h_channel
-  apply closedChannel.guarantees_of_balanced witness assumptions constraints
-    (balanced _ (List.mem_cons_of_mem _ (ens.closed_subset h_channel)))
+  have h_mem := List.mem_cons_of_mem vm.channel.toRaw (ens.closed_subset h_channel)
+  apply closedChannel.guarantees_of_balanced witness assumptions constraints (fit _ h_mem)
+    (closed_fit _ h_channel) (balanced _ h_mem)
   · intro table h_table h_owner
     apply table.requirements_of_not_mem_of_constraints (constraints table h_table)
     intro h_req
@@ -1019,6 +1032,8 @@ def addVm (ens : SoundEnsemble F PublicIO balance) (vm : VmTables F PublicIO)
     SoundVmEnsemble F PublicIO balance where
   __ := ens.ensemble.addVm vm
     (ens.vmFitsInto vm fresh_channel grts_subset_finished reqs_unfinished names)
+  closed := ens.closed.map (·.channel)
+  closed_subset := List.Subset.trans ens.closed_subset (List.subset_cons_self _ _)
   soundVmChannel := ens.ensemble.addVm_soundVmChannel_of_soundChannels
     ens.soundChannels ens.ordered_subset vm
     (ens.vmFitsInto vm fresh_channel grts_subset_finished reqs_unfinished names)
@@ -1046,6 +1061,8 @@ variable {soundEns : SoundEnsemble F PublicIO balance} {vm : VmTables F PublicIO
   (soundEns.addVm vm fresh gsf reqs names).channels = vm.channel.toRaw :: soundEns.channels := rfl
 @[circuit_norm] lemma addVm_verifier :
   (soundEns.addVm vm fresh gsf reqs names).verifier = vm.verifier := rfl
+@[circuit_norm] lemma addVm_closed :
+  (soundEns.addVm vm fresh gsf reqs names).closed = soundEns.closed.map (·.channel) := rfl
 @[circuit_norm] lemma addVm_ensemble :
   (soundEns.addVm vm fresh gsf reqs names).ensemble = soundEns.ensemble.addVm vm
     (soundEns.vmFitsInto vm fresh gsf reqs names) := rfl

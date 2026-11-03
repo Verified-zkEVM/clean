@@ -1,4 +1,4 @@
-use clean_backend::StarkConfig;
+use clean_backend::{EnsembleKey, GeneratedAirSpec, StarkConfig};
 use p3_baby_bear::{BabyBear, Poseidon2BabyBear};
 use p3_challenger::DuplexChallenger;
 use p3_commit::ExtensionMmcs;
@@ -46,5 +46,10 @@ pub mod setup {
         let pcs = Pcs::new(dft, val_mmcs, fri);
         let challenger = Challenger::new(perm);
         MyConfig::new(pcs, challenger)
+    }
+
+    /// The key of the ensemble `P` under the test configuration.
+    pub fn test_key<P: GeneratedAirSpec>(seed: u64) -> EnsembleKey<MyConfig, P> {
+        EnsembleKey::new(test_config(seed), MINIMUM_TRACE_HEIGHT).expect("invalid key setup")
     }
 }

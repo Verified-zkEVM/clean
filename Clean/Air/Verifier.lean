@@ -1,6 +1,6 @@
 module
 
-public import Clean.Circuit.Theorems
+public import Clean.Air.Circuit
 
 @[expose] public section
 
@@ -92,7 +92,7 @@ lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F)
   · left
     rw [channelsWithGuarantees, List.mem_filterMap]
     refine ⟨.interact interaction requirements, h_operation, ?_⟩
-    simp only [Operation.guaranteeChannel, Operation.interaction, assumes, if_true]
+    simp only [Operation.guaranteeChannel, Operation.interaction, assumes, ite_true]
   · right
     exact fun h => absurd h assumes
 
@@ -111,7 +111,7 @@ lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F)
   · left
     rw [channelsWithRequirements, List.mem_filterMap]
     refine ⟨.interact interaction requirements, h_operation, ?_⟩
-    simp only [Operation.requirementChannel, Operation.interaction, assumes, if_false]
+    simp only [Operation.requirementChannel, Operation.interaction, assumes, ite_false]
 
 end Operations
 
@@ -174,14 +174,16 @@ def push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message
   VerifierM.addOperation (.interact (channel.pushed message).toRaw
     (Channel.Direction.noConfusion ·))
 
-/-- A verifier program parameterized by the proof's public input variables. -/
+/-- A verifier program parameterized by the proof's public input variables. It runs in the prover
+data's `publicEnvironment`, whose variables are the public input. -/
 structure Program (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   main : Var PublicIO F → VerifierM F Unit
   Spec : PublicIO F → ProverData F → Prop
-  soundness : ∀ env,
-    ((main (varFromOffset PublicIO 0)).operations.circuitOperations).FullGuarantees env →
-      Spec (eval env (varFromOffset (F := F) PublicIO 0)) env.data
+  soundness : ∀ data : ProverData F,
+    ((main (varFromOffset PublicIO 0)).operations.circuitOperations).FullGuarantees
+      data.publicEnvironment →
+    Spec (eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0)) data
 
 namespace Program
 

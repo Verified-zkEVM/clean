@@ -186,19 +186,40 @@ def formalEnsemble (h_length : program.length < 2 ^ 63) (initial : BF64) :
     (by simp +instances [circuit_norm, vm, step, verifier, stateChannel, programMemory])
     (by simp +instances [circuit_norm, vm, step, verifier, stateChannel, programMemory])
     (by simp [circuit_norm, vm, step, programMemory])
-  |>.toFormal (fun _ => True) (Spec program initial)
+  |>.toFormal (fun _ heights => heights.sum < 2 ^ 62) (Spec program initial)
     (by simp [circuit_norm, vm])
     (by
       intro witness _ verifier_spec
       obtain ⟨k, hk, h_counter, h_final⟩ := verifier_spec
       obtain rfl : program.length = k := pow_inj (by omega) (by omega) h_counter
-      simpa [Spec] using h_final)
+      rw [witness.data_getPublicInput] at h_final
+      simp only [List.take_length] at h_final
+      exact h_final)
+    (closedFit := by
+      intro _ heights h_heights channel h_channel
+      simp only [circuit_norm, List.mem_singleton] at h_channel
+      subst h_channel
+      refine lt_of_le_of_lt (Ensemble.interactionCount_le _ (by simp [circuit_norm]) heights 2 ?_) ?_
+      · simp only [circuit_norm, vm, List.mem_singleton]
+        refine ⟨?_, ?_, ?_⟩
+        · rw [Component.interactionsWith_nil_of_not_mem (by simp [circuit_norm, step, stateChannel])]
+          simp
+        · rw [Component.interactionsWith_of_exposedChannels
+            (table := (programMemory program h_length).table) (List.mem_singleton_self _)]
+          simp
+        · rw [Component.interactionsWith_of_exposedChannels
+            (table := (programMemory program h_length).readerComponent) (List.mem_singleton_self _)]
+          simp
+      · simp [circuit_norm, vm, verifier, programMemory, stateChannel]
+        rw [show FiniteField.size BF64 = 2 ^ 64 from rfl]
+        omega)
 
-/-- End-to-end soundness: a valid proof for the public input `final` shows that running the program
-on the initial state ends with `final`. -/
-theorem soundness (h_length : program.length < 2 ^ 63) (initial final : BF64) :
-    (formalEnsemble program h_length initial).ensemble.Statement .multiset final →
+/-- End-to-end soundness: a valid proof for the public input `final`, with fewer than `2 ^ 62` rows,
+shows that running the program on the initial state ends with `final`. -/
+theorem soundness (h_length : program.length < 2 ^ 63) (initial final : BF64) (heights : List ℕ)
+    (h_heights : heights.sum < 2 ^ 62) :
+    (formalEnsemble program h_length initial).ensemble.Statement .multiset final heights →
       final = run program initial :=
-  (formalEnsemble program h_length initial).soundness final trivial
+  (formalEnsemble program h_length initial).soundness final heights h_heights
 
 end BinaryProgram

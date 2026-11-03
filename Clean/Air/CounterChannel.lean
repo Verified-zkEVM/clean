@@ -156,20 +156,22 @@ lemma decode_toArray (value : Message F) :
 variable {counterChannel} in
 /-- Soundness of counter channels: in a witness where all components other than the owners satisfy
 their requirements on the channel, all its guarantees hold. -/
-theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
+theorem guarantees_of_balanced {balance : Balance F}
     {PublicIO : TypeMap} [ProvableType PublicIO] {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) (_ : witness.Assumptions)
     (constraints : witness.Constraints)
+    (fit : balance.fits (witness.interactionsWith counterChannel.channel.toRaw).length)
+    (length_lt : (witness.interactionsWith counterChannel.channel.toRaw).length < FiniteField.size F)
     (balanced : balance.Balanced
       (witness.interactionsWith counterChannel.channel.toRaw))
     (requirements : ∀ table ∈ witness.tables, table.component ∉ counterChannel.owners →
       table.ChannelRequirements counterChannel.channel.toRaw)
-    (verifier_requirements : ens.VerifierChannelRequirements witness.publicInput witness.data
+    (verifier_requirements : ens.VerifierChannelRequirements witness.data
       counterChannel.channel.toRaw) :
     ∀ i ∈ witness.interactionsWith counterChannel.channel.toRaw, i.Guarantees witness.data := by
   set channel := counterChannel.channel
   set interactions := witness.interactionsWith channel.toRaw
-  have kernel := balance.balancedInteractions_of_balanced _ balanced
+  have kernel := balance.balancedInteractions_of_balanced _ fit balanced
   have h_channel (i) (h_i : i ∈ interactions) : i.channel = channel.toRaw :=
     witness.channel_eq_of_mem_interactionsWith h_i
   -- an interaction is from a row of an owner, or satisfies its requirements
@@ -191,7 +193,7 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
   have not_bad := CounterChannel.not_bad counterChannel.step counterChannel.Valid
     counterChannel.iterate_ne_self
     (fun message => counterChannel.counter (decode message)) (·.msg) interactions
-    (Balance.LengthLtSize.length_lt_size _ balanced) Bad (by
+    length_lt Bad (by
       rintro message ⟨a, a_mem, a_pull, rfl, a_bad⟩
       obtain ⟨b, b_mem, b_msg, b_push⟩ := kernel.exists_push_of_pull a a_mem a_pull
       have a_of_b (b_reqs : b.Requirements witness.data) : a.Guarantees witness.data :=
@@ -230,14 +232,14 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
   · exact RawChannel.Normal.guarantees_of_not_pull i _ (h_channel i h_i) h_pull
 
 /-- The counter channel, closed by `guarantees_of_balanced`. -/
-def closedChannel (balance : Balance F) [balance.LengthLtSize] : ClosedChannel F balance where
+def closedChannel (balance : Balance F) : ClosedChannel F balance where
   channel := counterChannel.channel.toRaw
   owners := counterChannel.owners
   guarantees_of_balanced := guarantees_of_balanced
 
-@[circuit_norm] lemma closedChannel_channel (balance : Balance F) [balance.LengthLtSize] :
+@[circuit_norm] lemma closedChannel_channel (balance : Balance F) :
     (counterChannel.closedChannel balance).channel = counterChannel.channel.toRaw := rfl
-@[circuit_norm] lemma closedChannel_owners (balance : Balance F) [balance.LengthLtSize] :
+@[circuit_norm] lemma closedChannel_owners (balance : Balance F) :
     (counterChannel.closedChannel balance).owners = counterChannel.owners := rfl
 
 end CounterChannel

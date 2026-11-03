@@ -86,12 +86,14 @@ lemma BalancedInteractions.nil : BalancedInteractions ([] : List (Interaction F)
   ⟨ by simp, by simp [activeCount] ⟩
 
 /--
-A balance check: the condition that a verifier checks on the interactions with each channel, and its
-proof that the condition implies `BalancedInteractions`.
+A balance check: the condition that a verifier checks on the interactions with each channel, the
+numbers of interactions with a channel that the check is sound for, and its proof that the condition
+implies `BalancedInteractions` for those.
 -/
 structure Balance (F : Type) [FiniteField F] where
   Balanced : List (Interaction F) → Prop
-  balancedInteractions_of_balanced : ∀ interactions,
+  fits : ℕ → Bool
+  balancedInteractions_of_balanced : ∀ interactions, fits interactions.length →
     Balanced interactions → BalancedInteractions interactions
 
 /-
@@ -132,19 +134,19 @@ lemma balanceOf_eq_sub_of_isBool {interactions : List (Interaction F)} {msg : Ar
     · simp [h_msg]
 
 /--
-LogUp balance: for every message, the signed multiplicities sum to zero, and there are fewer
-interactions than the characteristic, so that counts can't wrap around.
+LogUp balance: for every message, the signed multiplicities sum to zero.
 -/
 def LogUpBalanced (interactions : List (Interaction F)) : Prop :=
-  interactions.length < ringChar F ∧ ∀ msg, balanceOf interactions msg = 0
+  ∀ msg, balanceOf interactions msg = 0
 
 /-- If all interactions carrying a message have multiplicity `0` or `1`, it is pushed and pulled
-equally often. -/
+equally often, as long as there are fewer interactions than the characteristic, so that counts
+can't wrap around. -/
 theorem LogUpBalanced.activeCount_push_eq_activeCount_pull_of_isBool
-    {interactions : List (Interaction F)} (balanced : LogUpBalanced interactions) (msg : Array F)
+    {interactions : List (Interaction F)} (length_lt : interactions.length < ringChar F)
+    (sums : LogUpBalanced interactions) (msg : Array F)
     (isBool : ∀ i ∈ interactions, i.msg = msg → IsBool i.mult) :
     activeCount interactions .push msg = activeCount interactions .pull msg := by
-  obtain ⟨ length_lt, sums ⟩ := balanced
   have activeCount_lt (direction : Channel.Direction) :
       activeCount interactions direction msg < ringChar F :=
     lt_of_le_of_lt (List.countP_le_length) length_lt
@@ -153,9 +155,10 @@ theorem LogUpBalanced.activeCount_push_eq_activeCount_pull_of_isBool
     Lean.Grind.IsCharP.natCast_eq_iff_of_lt _ (activeCount_lt _) (activeCount_lt _)] at sum
   exact sum
 
-/-- Every pull of multiplicity `1` is matched by a push of its message. -/
+/-- Every pull of multiplicity `1` is matched by a push of its message, if there are fewer
+interactions than the characteristic. -/
 theorem LogUpBalanced.exists_push_of_pull {interactions : List (Interaction F)}
-    (balanced : LogUpBalanced interactions) :
+    (length_lt : interactions.length < ringChar F) (balanced : LogUpBalanced interactions) :
     ∀ a ∈ interactions, a.Pull → ∃ b ∈ interactions, b.msg = a.msg ∧ b.Push := by
   intro a a_mem a_pull
   -- assuming no such push exists, all interactions with the message are pulls of multiplicity `1`
@@ -175,14 +178,17 @@ theorem LogUpBalanced.exists_push_of_pull {interactions : List (Interaction F)}
   have pull_pos : 0 < activeCount interactions .pull a.msg := by
     apply List.countP_pos_iff.mpr
     exact ⟨ a, a_mem, by simp [a_pull.1, a_pull.2] ⟩
-  have := balanced.activeCount_push_eq_activeCount_pull_of_isBool a.msg isBool
+  have := balanced.activeCount_push_eq_activeCount_pull_of_isBool length_lt a.msg isBool
   omega
 
-/-- LogUp: field sums with the interaction-count bound. -/
-def Balance.logUp : Balance F where
+/-- LogUp: field sums, sound for fewer interactions than the characteristic. -/
+def Balance.logUp [ComputableRingChar F] : Balance F where
   Balanced := LogUpBalanced
-  balancedInteractions_of_balanced _ balanced :=
-    ⟨ balanced.exists_push_of_pull, balanced.activeCount_push_eq_activeCount_pull_of_isBool ⟩
+  fits count := count < ComputableRingChar.char F
+  balancedInteractions_of_balanced _ fits balanced :=
+    have length_lt := ComputableRingChar.char_eq (R := F) ▸ of_decide_eq_true fits
+    ⟨ balanced.exists_push_of_pull length_lt,
+      balanced.activeCount_push_eq_activeCount_pull_of_isBool length_lt ⟩
 
 /-
 ## Multiset balance with `0`/`1` activations
@@ -190,17 +196,20 @@ def Balance.logUp : Balance F where
 
 /--
 Multiset balance: every multiplicity is `0` or `1`, and the messages of the active pushes are a
-permutation of the messages of the active pulls. There are fewer interactions than field elements.
+permutation of the messages of the active pulls. The permutation gives equal counts for any number
+of interactions; the soundness error of a randomized check of it, like a product argument, is up to
+the proof system.
 -/
 def Balance.multiset : Balance F where
   Balanced interactions :=
-    interactions.length < FiniteField.size F ∧ (∀ i ∈ interactions, IsBool i.mult) ∧
+    (∀ i ∈ interactions, IsBool i.mult) ∧
       (activeMessages interactions .push).Perm (activeMessages interactions .pull)
-  balancedInteractions_of_balanced interactions h_check := by
+  fits _ := true
+  balancedInteractions_of_balanced interactions _ h_check := by
     have counts (msg : Array F) :
         activeCount interactions .push msg = activeCount interactions .pull msg := by
       rw [← count_activeMessages, ← count_activeMessages]
-      exact h_check.2.2.count_eq msg
+      exact h_check.2.count_eq msg
     refine ⟨ ?_, fun msg _ => counts msg ⟩
     intro a a_mem a_pull
     have pull_pos : 0 < activeCount interactions .pull a.msg := by
@@ -210,22 +219,6 @@ def Balance.multiset : Balance F where
     obtain ⟨ b, b_mem, h_b ⟩ := List.countP_pos_iff.mp pull_pos
     simp only [decide_eq_true_eq] at h_b
     exact ⟨ b, b_mem, h_b.2.1, h_b.2.2, by simp [h_b.1] ⟩
-
-/--
-A balance check that bounds the number of interactions by the size of the field. Offline memory
-checking relies on it to bound the number of reads of one address.
--/
-class Balance.LengthLtSize (balance : Balance F) : Prop where
-  length_lt_size : ∀ interactions,
-    balance.Balanced interactions → interactions.length < FiniteField.size F
-
-instance : (Balance.multiset (F := F)).LengthLtSize where
-  length_lt_size _ balanced := balanced.1
-
-instance {p : ℕ} [Fact p.Prime] : (Balance.logUp (F := _root_.F p)).LengthLtSize where
-  length_lt_size _ balanced := by
-    have : FiniteField.size (_root_.F p) = p := rfl
-    simpa [Balance.logUp, ZMod.ringChar_zmod_n, this] using balanced.1
 
 /- ## Conditions on channels that strengthen the implications of interaction balance. -/
 

@@ -9,8 +9,8 @@ mod generated {
 use clean_backend::witness_generation::{Interaction, WitnessField, WitnessGenerationError};
 use clean_backend::StarkConfig;
 use clean_backend::{
-    prove_ensemble, verify_ensemble, EnsembleProvingError, EnsembleShapeError,
-    EnsembleVerificationError, GeneratedAirSpec, GeneratedEnsemble,
+    EnsembleKey, EnsembleProvingError, EnsembleShapeError, EnsembleVerificationError,
+    GeneratedAirSpec, GeneratedEnsemble,
 };
 use common::setup;
 use p3_baby_bear::BabyBear;
@@ -76,9 +76,37 @@ fn extracted_rust_coalesces_repeated_chip_pulls() {
     );
 }
 
+/// Without steps, the verifier's push and pull cancel, so the Fibonacci and addition tables are
+/// empty and only the byte table has an AIR. One key proves statements with and without them.
+#[test]
+fn extracted_fibonacci_air_proves_with_empty_tables() {
+    let mut key = setup::test_key(7);
+    for (public_values, heights) in [
+        (vec![field(0), field(0), field(1)], vec![0, 0, 256]),
+        (vec![field(32), field(5), field(226)], vec![32, 32, 256]),
+        (vec![field(0), field(0), field(1)], vec![0, 0, 256]),
+    ] {
+        let traces = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
+            .expect("extracted Rust witness generation failed")
+            .into_traces()
+            .expect("invalid extracted traces");
+        let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
+        assert_eq!(trace_heights, heights);
+
+        let statement =
+            generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+                .expect("invalid generated AIR shape");
+        let proof = key
+            .prove(&statement, traces, &public_values)
+            .expect("invalid proving shape");
+        key.verify(&statement, &proof, &public_values)
+            .expect("Fibonacci proof failed verification");
+    }
+}
+
 #[test]
 fn extracted_fibonacci_air_proves_and_verifies() {
-    let config = setup::test_config(7);
+    let mut key = setup::test_key(7);
     let public_values = vec![field(4096), field(59), field(29)];
     let witness_started = Instant::now();
     let witness = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
@@ -100,14 +128,15 @@ fn extracted_fibonacci_air_proves_and_verifies() {
             .expect("invalid generated AIR shape");
     let witness_elapsed = witness_started.elapsed();
     let proving_started = Instant::now();
-    let proof =
-        prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
+    let proof = key
+        .prove(&statement, traces, &public_values)
+        .expect("invalid proving shape");
     let proving_elapsed = proving_started.elapsed();
     let proof_json_bytes = serde_json::to_vec(&proof)
         .expect("proof serialization failed")
         .len();
     let verification_started = Instant::now();
-    verify_ensemble(&config, &statement, &proof, &public_values)
+    key.verify(&statement, &proof, &public_values)
         .expect("extracted Fibonacci AIR proof failed verification");
     eprintln!(
         "4096 steps: witness+padding={witness_elapsed:?}, proving={proving_elapsed:?}, \
@@ -118,7 +147,7 @@ fn extracted_fibonacci_air_proves_and_verifies() {
 
 #[test]
 fn ensemble_api_reports_shape_errors() {
-    let config = setup::test_config(7);
+    let mut key = setup::test_key(7);
     let public_values = vec![field(32), field(5), field(226)];
     let witness = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect("extracted Rust witness generation failed");
@@ -129,17 +158,19 @@ fn ensemble_api_reports_shape_errors() {
             .expect("invalid generated AIR shape");
     assert_eq!(statement.component_count(), 3);
     assert_eq!(statement.trace_heights(), trace_heights);
-    assert_eq!(statement.interaction_count(), 418);
+    assert_eq!(
+        statement
+            .interaction_counts()
+            .clone()
+            .into_iter()
+            .collect::<Vec<_>>(),
+        [("add8", 64), ("bytes", 288), ("fibonacci", 66)]
+    );
     let different_dynamic_shape =
         generated::Statement::<BabyBear>::new(&[64, 32, 256], setup::MINIMUM_TRACE_HEIGHT)
             .expect("valid alternative dynamic shape");
     assert!(matches!(
-        prove_ensemble(
-            &config,
-            &different_dynamic_shape,
-            traces.clone(),
-            &public_values,
-        ),
+        key.prove(&different_dynamic_shape, traces.clone(), &public_values,),
         Err(EnsembleProvingError::Shape(
             EnsembleShapeError::StatementTraceHeight {
                 component: 0,
@@ -152,7 +183,7 @@ fn ensemble_api_reports_shape_errors() {
     traces.pop();
 
     assert!(matches!(
-        prove_ensemble(&config, &statement, traces, &public_values),
+        key.prove(&statement, traces, &public_values),
         Err(EnsembleProvingError::Shape(
             EnsembleShapeError::TraceCount {
                 expected: 3,
@@ -178,6 +209,14 @@ fn ensemble_api_reports_shape_errors() {
         })
     ));
 
+    // only demand-generated tables may be empty
+    assert!(matches!(
+        generated::Statement::<BabyBear>::new(&[32, 32, 0], setup::MINIMUM_TRACE_HEIGHT),
+        Err(EnsembleShapeError::TraceHeight {
+            component: 2,
+            height: 0,
+        })
+    ));
     assert!(matches!(
         generated::Statement::<BabyBear>::new(&[2, 32, 256], setup::MINIMUM_TRACE_HEIGHT),
         Err(EnsembleShapeError::TraceHeight {
@@ -199,9 +238,8 @@ fn ensemble_api_reports_shape_errors() {
             ..
         })
     ));
-    let zk_config = zk_test_config(7);
     assert!(matches!(
-        prove_ensemble(&zk_config, &statement, Vec::new(), &public_values),
+        EnsembleKey::<_, Spec>::new(zk_test_config(7), setup::MINIMUM_TRACE_HEIGHT),
         Err(EnsembleProvingError::Shape(
             EnsembleShapeError::ZeroKnowledge
         ))
@@ -213,6 +251,7 @@ fn ensemble_api_reports_shape_errors() {
         Err(EnsembleShapeError::InteractionCountBound {
             interactions,
             field_order,
+            ..
         }) if interactions >= field_order as u128
     ));
 }
@@ -234,7 +273,7 @@ fn generated_code_rejects_other_fields() {
 
 #[test]
 fn short_runs_are_padded_to_the_minimum_trace_height() {
-    let config = setup::test_config(5);
+    let mut key = setup::test_key(5);
     let public_values = vec![field(4), field(3), field(5)];
     let witness = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect("extracted Rust witness generation failed");
@@ -251,9 +290,10 @@ fn short_runs_are_padded_to_the_minimum_trace_height() {
     let statement =
         generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
             .expect("invalid generated AIR shape");
-    let proof =
-        prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
-    verify_ensemble(&config, &statement, &proof, &public_values)
+    let proof = key
+        .prove(&statement, traces, &public_values)
+        .expect("invalid proving shape");
+    key.verify(&statement, &proof, &public_values)
         .expect("extracted Fibonacci AIR proof failed verification");
 }
 
@@ -271,7 +311,7 @@ fn witness_generation_rejects_preallocated_tables_below_the_minimum_height() {
 
 #[test]
 fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
-    let config = setup::test_config(11);
+    let mut key = setup::test_key(11);
     let public_values = vec![field(32), field(5), field(226)];
     let expected = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect("extracted Rust witness generation failed");
@@ -283,18 +323,14 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
     let wrong_statement =
         generated::Statement::<BabyBear>::new(&wrong_heights, setup::MINIMUM_TRACE_HEIGHT)
             .expect("invalid wrong-height AIR shape");
-    let wrong_proof = prove_ensemble(&config, &wrong_statement, wrong_traces, &public_values)
+    let wrong_proof = key
+        .prove(&wrong_statement, wrong_traces, &public_values)
         .expect("invalid wrong-height proving shape");
-    verify_ensemble(&config, &wrong_statement, &wrong_proof, &public_values)
+    key.verify(&wrong_statement, &wrong_proof, &public_values)
         .expect("the wrong-height proof must be otherwise valid");
     let altered_public_values = vec![field(32), field(6), field(226)];
     assert!(matches!(
-        verify_ensemble(
-            &config,
-            &wrong_statement,
-            &wrong_proof,
-            &altered_public_values,
-        ),
+        key.verify(&wrong_statement, &wrong_proof, &altered_public_values,),
         Err(EnsembleVerificationError::Proof(_))
     ));
 
@@ -307,9 +343,20 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
         generated::Statement::<BabyBear>::new(&expected_heights, setup::MINIMUM_TRACE_HEIGHT)
             .expect("invalid expected AIR shape");
     assert!(matches!(
-        verify_ensemble(&config, &expected_statement, &wrong_proof, &public_values),
+        key.verify(&expected_statement, &wrong_proof, &public_values),
         Err(EnsembleVerificationError::Shape(
             EnsembleShapeError::ProofDegreeBits { .. }
+        ))
+    ));
+    let larger_minimum_height =
+        generated::Statement::<BabyBear>::new(&wrong_heights, 64).expect("invalid AIR shape");
+    assert!(matches!(
+        key.verify(&larger_minimum_height, &wrong_proof, &public_values),
+        Err(EnsembleVerificationError::Shape(
+            EnsembleShapeError::KeyMinimumHeight {
+                expected: setup::MINIMUM_TRACE_HEIGHT,
+                actual: 64,
+            }
         ))
     ));
 }
@@ -321,7 +368,7 @@ fn assert_tampered_trace_rejected(
     seed: u64,
     tamper: impl FnOnce(&mut Vec<RowMajorMatrix<BabyBear>>),
 ) {
-    let config = setup::test_config(seed);
+    let mut key = setup::test_key(seed);
     let public_values = vec![field(32), field(5), field(226)];
     let witness = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect("extracted Rust witness generation failed");
@@ -331,10 +378,11 @@ fn assert_tampered_trace_rejected(
     let statement =
         generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
             .expect("invalid generated AIR shape");
-    let proof =
-        prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
+    let proof = key
+        .prove(&statement, traces, &public_values)
+        .expect("invalid proving shape");
     assert!(matches!(
-        verify_ensemble(&config, &statement, &proof, &public_values),
+        key.verify(&statement, &proof, &public_values),
         Err(EnsembleVerificationError::Proof(_))
     ));
 }
@@ -403,7 +451,7 @@ impl GeneratedAirSpec for WideVerifierMessages {
 #[cfg(not(debug_assertions))]
 #[test]
 fn verifier_rejects_traces_of_other_public_values() {
-    let config = setup::test_config(21);
+    let mut key = setup::test_key(21);
     let honest = [field(32), field(5), field(226)];
     let claimed = [field(32), field(6), field(226)];
     let traces = generated::generate(&honest, &[], setup::MINIMUM_TRACE_HEIGHT)
@@ -414,10 +462,11 @@ fn verifier_rejects_traces_of_other_public_values() {
     let statement =
         generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
             .expect("invalid generated AIR shape");
-    let proof =
-        prove_ensemble(&config, &statement, traces, &claimed).expect("invalid proving shape");
+    let proof = key
+        .prove(&statement, traces, &claimed)
+        .expect("invalid proving shape");
     assert!(matches!(
-        verify_ensemble(&config, &statement, &proof, &claimed),
+        key.verify(&statement, &proof, &claimed),
         Err(EnsembleVerificationError::Proof(_))
     ));
 }

@@ -105,7 +105,7 @@ at `rowOf` of the message, if it carries the message. -/
 def PreallocatedMode.findRow (state : ComponentState F)
     (mode : PreallocatedMode F state.component.Input) (demand : Demand F) (data : ProverData F)
     (hint : ProverHint F) : Option (ℕ × GeneratedRow F) :=
-  let index := mode.rowIndex.eval { env := .fromArray demand.message (fun _ _ => #[]) hint }
+  let index := mode.rowIndex.eval { env := .fromArray demand.message (.empty F) hint }
   state.rows[index.toNat]?.bind fun row =>
     if state.carries row data mode.channel.name mode.trigger demand.message then
       some (index.toNat, row)
@@ -195,10 +195,11 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
           let (states, tally) := applyAnswer states tally index change data
           generateLoop data hint fuel states tally
 
-/-- The padded height of a demand-generated table. Preallocated tables are never padded. -/
+/-- The padded height of a demand-generated table: a power of two, or zero for a table without
+rows. Preallocated tables are never padded. -/
 def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
   match state.component.generation with
-  | .demand _ => nextPowerOfTwo state.rows.size
+  | .demand _ => if state.rows.isEmpty then 0 else nextPowerOfTwo state.rows.size
   | .preallocated _ => state.rows.size
 
 /-- Pad a demand-generated table to its target height; returns the padded state and the
@@ -242,11 +243,13 @@ def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fue
   let states := (ens.tables.zip valid.multiplicities).toArray.map fun (component, multiplicity) =>
     ComponentState.initial component multiplicity
   let inputs := states.map (initialInputs · hint)
-  let data : ProverData F := readNamedRows (initialData states inputs)
+  let data : ProverData F := {
+    tables := readNamedRows (initialData states inputs)
+    publicInput := (toElements publicInput).toArray }
   let states := (states.zip inputs).map fun (state, inputs) =>
     inputs.foldl (fun state input => state.pushRow (completeRow state input data hint)) state
   -- start the chain reaction from the verifier's and the preallocated rows' interactions
-  let verifier := ens.verifierOperations.interactionValues (.fromInput publicInput data)
+  let verifier := ens.verifierOperations.interactionValues data.publicEnvironment
   let rows := states.toList.flatMap fun state =>
     state.rows.toList.flatMap (rowInteractions state · data)
   let tally := Tally.empty.addInteractions (verifier ++ rows)
@@ -256,11 +259,11 @@ def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fue
   have hunique : (assembled.tables.map fun table => table.component.circuit.name).Nodup := by
     simpa [← assembled.map_component, Function.comp_def] using ens.unique_names
   return {
-    tables := withDerivedData assembled.tables hunique
+    tables := withDerivedData assembled.tables hunique (toElements publicInput).toArray
     publicInput
     same_length := by simp [withDerivedData, assembled.same_length]
     same_circuits := by simp [withDerivedData, assembled.same_circuits]
-    same_data := withDerivedData_data assembled.tables hunique
+    same_data := withDerivedData_data assembled.tables hunique _
   }
 
 /-- Validate the generation of an ensemble, then generate a witness from the public input and the

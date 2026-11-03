@@ -305,7 +305,7 @@ def reader : GeneralFormalCircuit F (ProvablePair field (ProvablePair Entry fiel
       pushedIf input.1 (input.2.1, input.2.2 * .const memory.generator)]
   exposedChannels_eq input _ := by
     obtain ⟨enabled, entry, counter⟩ := input
-    simp only [circuit_norm, if_neg (memory.channel_eq_counterChannel_iff.not.mpr not_false)]
+    simp only [circuit_norm, memory.channel_eq_counterChannel_iff]
   channelsWithRequirements := [memory.counterChannel.toRaw, memory.channel.toRaw]
   ProverAssumptions
   | (enabled, (entry, counter)), _, _ =>
@@ -498,16 +498,18 @@ variable {memory} in
 Soundness of offline memory checking: in a witness where all components other than the memory's
 satisfy their requirements on its counter channel, every read is of an entry of the memory.
 -/
-theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
+theorem guarantees_of_balanced {balance : Balance F}
     {PublicIO : TypeMap} [ProvableType PublicIO] {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) (assumptions : witness.Assumptions)
     (constraints : witness.Constraints)
+    (fit : balance.fits (witness.interactionsWith memory.counterChannel.toRaw).length)
+    (length_lt : (witness.interactionsWith memory.counterChannel.toRaw).length < FiniteField.size F)
     (balanced : balance.Balanced
       (witness.interactionsWith memory.counterChannel.toRaw))
     (requirements : ∀ table ∈ witness.tables,
       table.component ∉ [memory.table, memory.readerComponent] →
         table.ChannelRequirements memory.counterChannel.toRaw)
-    (verifier_requirements : ens.VerifierChannelRequirements witness.publicInput witness.data
+    (verifier_requirements : ens.VerifierChannelRequirements witness.data
       memory.counterChannel.toRaw) :
     ∀ i ∈ witness.interactionsWith memory.counterChannel.toRaw, i.Guarantees witness.data := by
   set channel := memory.counterChannel.toRaw
@@ -529,8 +531,8 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
       intro i h_i
       rw [i.same_size, h_channel i h_i]
       simp [channel, circuit_norm])
-    (h_flatten ▸ balance.balancedInteractions_of_balanced _ balanced)
-    (h_flatten ▸ Balance.LengthLtSize.length_lt_size _ balanced)
+    (h_flatten ▸ balance.balancedInteractions_of_balanced _ fit balanced)
+    (h_flatten ▸ length_lt)
     (by
       intro block h_block
       simp only [blocks, List.mem_cons, List.mem_flatMap, List.mem_map] at h_block
@@ -566,7 +568,7 @@ theorem guarantees_of_balanced {balance : Balance F} [balance.LengthLtSize]
   · exact RawChannel.Normal.guarantees_of_not_pull i _ (h_channel i h_i) h_pull
 
 /-- The memory's counter channel, closed by offline memory checking. -/
-def closedChannel (balance : Balance F) [balance.LengthLtSize] : ClosedChannel F balance where
+def closedChannel (balance : Balance F) : ClosedChannel F balance where
   channel := memory.counterChannel.toRaw
   owners := [memory.table, memory.readerComponent]
   guarantees_of_balanced := guarantees_of_balanced
@@ -587,9 +589,9 @@ def closedChannel (balance : Balance F) [balance.LengthLtSize] : ClosedChannel F
     memory.table.Assumptions input data = True := rfl
 @[circuit_norm] lemma readerComponent_assumptions (input : memory.readerComponent.Input F)
     (data : ProverData F) : memory.readerComponent.Assumptions input data = True := rfl
-@[circuit_norm] lemma closedChannel_channel (balance : Balance F) [balance.LengthLtSize] :
+@[circuit_norm] lemma closedChannel_channel (balance : Balance F) :
     (memory.closedChannel balance).channel = memory.counterChannel.toRaw := rfl
-@[circuit_norm] lemma closedChannel_owners (balance : Balance F) [balance.LengthLtSize] :
+@[circuit_norm] lemma closedChannel_owners (balance : Balance F) :
     (memory.closedChannel balance).owners = [memory.table, memory.readerComponent] := rfl
 
 end Memory
@@ -599,7 +601,7 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO] {balance : Balance F}
 
 /-- Add a memory: its components, its counter channel, which is closed, and its channel, which is
 finished right away. -/
-def addMemory (soundEns : SoundEnsemble F PublicIO balance) [balance.LengthLtSize]
+def addMemory (soundEns : SoundEnsemble F PublicIO balance)
     (memory : Memory F Entry)
     (names : ([memory.table, memory.readerComponent] ++ soundEns.tables).map
       (·.circuit.name) |>.Nodup := by simp [circuit_norm])
@@ -645,7 +647,7 @@ def addMemory (soundEns : SoundEnsemble F PublicIO balance) [balance.LengthLtSiz
           true_and]
         exact fun h => channel_not_mem (soundEns.closed_subset h))
 
-variable {soundEns : SoundEnsemble F PublicIO balance} [balance.LengthLtSize]
+variable {soundEns : SoundEnsemble F PublicIO balance}
   {memory : Memory F Entry} {names fresh_channel fresh_counter}
 
 @[circuit_norm] lemma addMemory_tables :

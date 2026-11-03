@@ -53,13 +53,9 @@ private theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
     simp only [x16, y16] at h_u16
     simp only [← UInt16.toNat_or]
     norm_num at h_u16 ⊢
-    repeat rw [Nat.mod_eq_of_lt] <;> try omega
-    · repeat rw [Nat.mod_eq_of_lt] at h_u16 <;> try omega
-      · simpa
-      · repeat rw [Nat.mod_eq_of_lt] <;> try omega
-        simp only [UInt16.toNat, UInt16.toBitVec_ofNat, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
-        omega
-    · repeat rw [Nat.mod_eq_of_lt] <;> try omega
+    rw [Nat.mod_eq_of_lt (show x < 65536 by omega), Nat.mod_eq_of_lt (show y < 65536 by omega)]
+      at h_u16 ⊢
+    exact h_u16
 
   have h_lhs : 2 * (x ||| y) < 2^16 := by linarith
   have h_rhs : x + y + (x ^^^ y) < 2^16 := by linarith
