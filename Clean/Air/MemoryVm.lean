@@ -374,18 +374,6 @@ def toStep (step : MemoryStepVars Message (F p)) (env : Environment (F p)) :
   access := step.access.map fun (previous, next) => (eval env previous, eval env next)
 end MemoryStepVars
 
-/-- A component that doesn't use a channel has no interactions with it. -/
-lemma Component.interactionsWith_nil_of_not_mem {component : Component (F p)}
-    {channel : RawChannel (F p)} (h : channel ∉ component.circuit.channels) :
-    component.operations.interactionsWith channel = [] := by
-  classical
-  rw [Component.interactionsWith_eq, Operations.interactionsWith, List.filter_eq_nil_iff]
-  intro i h_i h_channel
-  apply h
-  apply component.circuit.channels_subset component.rowInputVar component.rowOffset
-  simp only [Operations.channels, List.mem_map]
-  exact ⟨i, h_i, of_decide_eq_true h_channel⟩
-
 /-- The value with the given elements, with `0`s in place of missing ones. -/
 def ProvableType.fromArray {F : Type} [Zero F] (M : TypeMap) [ProvableType M] (elements : Array F) :
     M F :=

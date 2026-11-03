@@ -122,6 +122,21 @@ lemma interactionsWith_eq {channel : RawChannel F} :
 lemma interactionsValues_eq : component.operations.interactionValues env = component.rowOperations.interactionValues env := by
   simp only [Operations.interactionValues, interactions_eq]
 
+lemma channel_mem_of_mem_interactions {i : AbstractInteraction F}
+    (h_i : i ∈ component.operations.interactions) : i.channel ∈ component.circuit.channels := by
+  rw [interactions_eq] at h_i
+  apply component.circuit.channels_subset component.rowInputVar component.rowOffset
+  simp only [Operations.channels, List.mem_map]
+  exact ⟨i, h_i, rfl⟩
+
+lemma interactionsWith_nil_of_not_mem {channel : RawChannel F}
+    (h_channel : channel ∉ component.circuit.channels) :
+    component.operations.interactionsWith channel = [] := by
+  classical
+  rw [Operations.interactionsWith, List.filter_eq_nil_iff]
+  intro i h_i h_eq
+  exact h_channel (of_decide_eq_true h_eq ▸ component.channel_mem_of_mem_interactions h_i)
+
 lemma interactionsWith_of_exposedChannels {table : Component F} {channel : RawChannel F}
   {interactions : List (AbstractInteraction F)}
   (h_exposed : ⟨ channel, interactions ⟩ ∈ table.exposedChannels) :
