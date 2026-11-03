@@ -142,12 +142,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     Ch32.circuit, Maj32.circuit, Add32.circuit]
   obtain ⟨h_state_norm, h_k_norm, h_w_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_k, h_input_w⟩ := h_input
-  have h_eval (i : ℕ) (hi : i < 8) :
-      Vector.map (Expression.eval env.toEnvironment) (input_var_state[i]'hi) = input_state[i]'hi := by
-    have h := getElem_eval_vector env.toEnvironment input_var_state i hi
-    rw [h_input_state] at h
-    rw [← CircuitType.eval_var_fields env.toEnvironment (input_var_state[i]'hi)]
-    exact h
   have h_a := h_state_norm 0; have h_b := h_state_norm 1
   have h_c := h_state_norm 2; have h_d := h_state_norm 3
   have h_e := h_state_norm 4; have h_f := h_state_norm 5

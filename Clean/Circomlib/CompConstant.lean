@@ -120,10 +120,6 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     let out : F p := env.get (i₀ + 127 + 1 + 135)
     let input_val : ℕ := fromBits (input.map ZMod.val)
 
-    have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
-      intro j hj
-      rw [ProvableType.getElem_eval_fields _ input_var j hj, h_input]
-
     have h_parts' :
         ∀ i : Fin 127,
           parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] c := by
@@ -203,10 +199,6 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     let parts : Vector (F p) 127 := Vector.mapRange 127 fun i => env.get (i₀ + i)
     let sout : F p := env.get (i₀ + 127)
-
-    have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
-      intro j hj
-      rw [ProvableType.getElem_eval_fields _ input_var j hj, h_input]
 
     have h_parts' :
         ∀ i : Fin 127,
