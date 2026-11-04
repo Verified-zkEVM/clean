@@ -1,6 +1,8 @@
-import Lean
-import Lean.Elab.Deriving.Util
-import Clean.Circuit.Provable
+module
+
+public meta import Lean
+public meta import Lean.Elab.Deriving.Util
+public meta import Clean.Circuit.Provable
 
 /-!
   # Deriving handlers for ProvableStruct and CircuitType
@@ -107,6 +109,8 @@ import Clean.Circuit.Provable
 
   This pattern is used in the codebase for types like `BLAKE3State`, `KeccakState`, etc.
 -/
+
+public meta section
 
 open Lean Meta Elab Term Command Parser.Term
 
@@ -457,6 +461,20 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
     )
 
   elabCommand theoremCmd
+
+  -- The inverse simp lemma, so that `toElements` of a structure literal computes.
+  let toTheoremIdent := mkIdent (← relativeToCurrentNamespace (structName ++ `toComponents_mk))
+  let toTheoremCmd ← `(
+      @[circuit_norm]
+      theorem $toTheoremIdent:ident $binderSyntaxes:bracketedBinder* $theoremFBinder:bracketedBinder
+          $fieldBinderSyntaxes:bracketedBinder* :
+          toComponents (α := $appliedStructType) (F := $theoremFTerm) $theoremMkAppSyntax =
+            (($theoremFromCompTerm : ProvableStruct.ProvableTypeList $theoremFTerm
+              $componentsListSyntax)) := by
+        rfl
+    )
+
+  elabCommand toTheoremCmd
 
 /-- The deriving handler for ProvableStruct -/
 def provableStructDerivingHandler (declNames : Array Name) : CommandElabM Bool := do

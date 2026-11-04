@@ -5,14 +5,18 @@ and returns a field element that is 1 when the inputs are equal, 0 otherwise.
 This is the boolean-returning counterpart of `Gadgets.Equality`, which asserts
 equality without returning a value.
 -/
-import Clean.Circuit.Basic
-import Clean.Circuit.Provable
-import Clean.Circuit.Theorems
-import Clean.Circuit.Loops
-import Clean.Gadgets.IsZeroField
-import Clean.Gadgets.IsZero
-import Clean.Utils.Field
-import Clean.Utils.Tactics
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Provable
+public import Clean.Circuit.Theorems
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.IsZeroField
+public import Clean.Gadgets.IsZero
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.IsEqual
 
@@ -56,11 +60,7 @@ theorem soundness : Soundness (Input:=ProvablePair α α) (Output:=field) F (mai
       Expression.eval env (diffs input_var.1 input_var.2)[i] =
       (toElements input.1)[i] - (toElements input.2)[i] := by
     intro i hi
-    simp only [diffs, Vector.getElem_mapFinRange, circuit_norm]
-    rw [← ProvableType.getElem_eval_fields env (toElements input_var.1) i hi,
-      ← ProvableType.getElem_eval_fields env (toElements input_var.2) i hi]
-    erw [ProvableType.getElem_eval_toElements input_var.1 i, ProvableType.getElem_eval_toElements input_var.2 i,
-      h_x, h_y]
+    simp only [diffs, Vector.getElem_mapFinRange, circuit_norm, h_x, h_y]
   -- Helper: (toElements 0)[i] = 0
   have h_zero_elem : ∀ (i : ℕ) (_ : i < size α), (toElements (0 : α F))[i] = (0 : F) := by
     intro i _

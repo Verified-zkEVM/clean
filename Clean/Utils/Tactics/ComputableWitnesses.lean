@@ -1,5 +1,8 @@
-import Clean.Circuit.Explicit
-import Clean.Utils.Tactics.ProvableStructSimp
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Clean.Circuit.Explicit
+public meta import Clean.Utils.Tactics.ProvableStructSimp
 
 /-!
 # `computable_witnesses`
@@ -75,6 +78,8 @@ timeouts): never whnf-execute an operations list, never unfold a bundle, never l
 (`clearOpsLengthHyps`), and match goals against hypotheses syntactically before
 attempting defeq (`syntacticAssumption`).
 -/
+
+public meta section
 
 open Lean Meta Simp Elab Tactic
 
@@ -675,7 +680,6 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
   -- the cwn set carries their scalar twins (`vectorAtomLiftScalar` and friend), so
   -- drop the folding originals from this tactic's contexts
   let cnProcsRaw := (← getAttrSimprocs `circuit_norm)
-    |>.erase ``ProvableStruct.vectorAtomLift |>.erase ``ProvableStruct.vectorAtomLiftEval
   let cnProcs : SimprocsArray := #[cnProcsRaw]
   let cwnProcs ← getAttrSimprocs `computable_witnesses_norm
   let mut normHints ← simpOnlyBase

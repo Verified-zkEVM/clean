@@ -1,6 +1,8 @@
-import Clean.Circuit
-import Clean.Gadgets.Equality
-import Clean.Utils.Primes
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Equality
+public import Clean.Utils.Primes
 
 /-!
 # Regression tests for `elaborate_circuit`'s output quality
@@ -25,10 +27,12 @@ stays stuck and blows up all downstream elaboration (e.g. the loop body of
 Keccak's Permutation).
 -/
 
+@[expose] public section
+
 open Lean Meta Elab Command
 
 /-- Fail if any of the `forbidden` constants occurs in the normalized form of `e`. -/
-private def checkNoConsts (forbidden : List Name) (e : Expr) : MetaM Unit := do
+private meta def checkNoConsts (forbidden : List Name) (e : Expr) : MetaM Unit := do
   let e ← instantiateMVars e
   let e ← withTransparency .instances <| whnf e
   let bad := forbidden.filter fun n => (e.find? fun sub => sub.isConstOf n).isSome
@@ -36,7 +40,7 @@ private def checkNoConsts (forbidden : List Name) (e : Expr) : MetaM Unit := do
     throwError "elaborated data is not reduced: found {bad} in{indentExpr e}"
 
 /-- The circuit-metadata projections that must never survive elaboration. -/
-private def forbiddenMeta : List Name :=
+private meta def forbiddenMeta : List Name :=
   [``ElaboratedCircuit.localLength, ``ElaboratedCircuit.output,
    ``FormalCircuitBase.elaborated, ``FormalCircuit.base,
    ``Circuit.localLength, ``Circuit.output]
@@ -78,7 +82,21 @@ assert_nat_literal (elaboratedPair (p := pBabybear)).localLength 1
 assert_reduced (elaboratedPair (p := pBabybear)).localLength
 assert_reduced (elaboratedPair (p := pBabybear)).output
 
-/-! ### 2. Loop (`Circuit.foldl`) whose body contains a subcircuit -/
+/-! ### 2. Named circuit wrapper
+
+Lean 4.33 compares metavariable types at implicit transparency by default. The inferred
+instance must therefore remain indexed by `namedPair`, rather than by its unfolded body,
+after the tactic's scoped compatibility setting ends. -/
+
+def namedPair (input : Var fieldPair (F p)) : Circuit (F p) (Expression (F p)) :=
+  mainPair input
+
+instance explicitNamedPair : ExplicitCircuits (namedPair (p := p)) := by
+  infer_explicit_circuits
+
+example : ExplicitCircuit.localLength (namedPair (p := pBabybear) default) 0 = 1 := rfl
+
+/-! ### 3. Loop (`Circuit.foldl`) whose body contains a subcircuit -/
 
 def loopBody (acc x : Expression (F p)) : Circuit (F p) (Expression (F p)) := do
   let y ← witnessField (.expr (acc + x))
@@ -96,7 +114,7 @@ assert_nat_literal (elaboratedLoop (p := pBabybear)).localLength 3
 assert_reduced (elaboratedLoop (p := pBabybear)).localLength
 assert_reduced (elaboratedLoop (p := pBabybear)).output
 
-/-! ### 3. Parametric circuit: a loop over a variable bound with a subcircuit body.
+/-! ### 4. Parametric circuit: a loop over a variable bound with a subcircuit body.
 `localLength` cannot be a literal, but must be arithmetic over `n` — free of
 metadata projections (regression: the parametric path used to store the raw
 `ExplicitCircuits.localLength (main n) ⟨inferred instance⟩` projection, a
@@ -112,7 +130,7 @@ instance elaboratedParam (n : ℕ) :
 assert_reduced fun (n : ℕ) => (elaboratedParam (p := pBabybear) n).localLength
 assert_reduced fun (n : ℕ) => (elaboratedParam (p := pBabybear) n).output
 
-/-! ### 4. Parametric output type: the shape that used to produce an `Eq.mpr`-wrapped
+/-! ### 5. Parametric output type: the shape that used to produce an `Eq.mpr`-wrapped
 instance from `infer_explicit_circuits`' goal-simp, blocking all projection reduction
 (cf. Orchard `Mul/Incomplete.DoubleAndAdd`). -/
 

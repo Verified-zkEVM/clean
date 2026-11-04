@@ -1,5 +1,15 @@
-import Clean.Circuit.Operations
-import Mathlib.Control.Monad.Writer
+module
+
+public import Clean.Circuit.Operations
+public import Mathlib.Control.Monad.Writer
+
+-- `attribute [circuit_norm]` below registers core simprocs, which are `meta` declarations.
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Fin
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Nat
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Core
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.String
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
@@ -119,36 +129,31 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 
 end Circuit
 
-/-- Emit an interaction to the channel -/
+/-- Push a message `mult` times. -/
 @[circuit_norm]
 def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ mult, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.emitted mult msg).toRaw])
 
 @[circuit_norm]
 def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ -1, msg, true ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pulled msg).toRaw])
 
 @[circuit_norm]
 def Channel.pullIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ -enabled, msg, true ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pulledIf enabled msg).toRaw])
 
 @[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pushed msg).toRaw])
 
 @[circuit_norm]
 def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ enabled, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pushedIf enabled msg).toRaw])
 
 /-- Low-level method to create a new variable of an arbitrary "provable type" from raw `WitgenIR`. -/
 @[circuit_norm]
@@ -406,7 +411,7 @@ theorem Witnessable.witnessIR_provableVector {m : ℕ} (α : TypeMap) [NonEmptyP
 /-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/
 def ProverEnvironment.fromList (witnesses : List F) (hint : ProverHint F) : ProverEnvironment F where
   get i := witnesses[i]?.getD 0
-  data _ _ := #[]
+  data := .empty F
   hint
 
 def FlatOperation.dynamicWitness (hint : ProverHint F) (op : FlatOperation F) (acc : List F) : List F := match op with
@@ -421,11 +426,38 @@ def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : Prover
 def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) :=
   ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
 
--- unfold `AgreesBelow` under `circuit_norm` so its `∀ i < n` / hint / data facts are directly
--- available to `simp`/`grind` in `computableWitnesses` proofs (no manual unfolding needed)
+/--
+Two prover environments are indistinguishable to a witness generator running at offset `n`.
+
+A `ProverEnvironment` has three channels a witness generator can read: cells (`get`, via
+`Expression.eval`), prover hints (`hint`, via `FExpr.hintGet`) and committed prover data (`data`,
+via `FExpr.dataGet`). All three appear here, but not in the same way: cells are determined
+incrementally by witness generation, so only those *below* the current offset are constrained,
+whereas `hint` and `data` are ambient inputs fixed before generation begins, so they are
+constrained in full.
+-/
 @[circuit_norm, computable_witnesses_norm, grind]
 def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
   (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
+
+namespace ProverEnvironment.AgreesBelow
+variable {env env' : ProverEnvironment F}
+
+omit [FiniteField F] in
+theorem get_eq (h : env.AgreesBelow n env') {i : ℕ} (hi : i < n) : env.get i = env'.get i := h.1 i hi
+
+omit [FiniteField F] in
+theorem hint_eq (h : env.AgreesBelow n env') : env.hint = env'.hint := h.2.1
+
+omit [FiniteField F] in
+theorem data_eq (h : env.AgreesBelow n env') : env.data = env'.data := h.2.2
+
+end ProverEnvironment.AgreesBelow
+
+omit [FiniteField F] in
+theorem ProverEnvironment.agreesBelow_rfl (n : ℕ) (env : ProverEnvironment F) :
+    env.AgreesBelow n env :=
+  ⟨fun _ _ => rfl, rfl, rfl⟩
 
 /-- `AgreesBelow` is symmetric; as a forward `grind` rule so both orientations are
 available when discharging composition-rule premises. -/
@@ -619,17 +651,16 @@ because they would sometimes be applied too eagerly where using the correspondin
 
 -- simplify Vector.mapFinRange
 attribute [circuit_norm]
-    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc Fin.reduceCastSucc
+    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc
 
 -- simplify stuff like (3 : Fin 8).val = 3 % 8
 attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 
 -- simplify `vector[i]` (which occurs in ProvableType definitions) and similar
-attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
+attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero zero_add neg_zero neg_eq_zero one_ne_zero zero_ne_one
-  Nat.reduceAdd
 
 attribute [circuit_norm] List.append_nil
 
@@ -649,4 +680,18 @@ lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
     (List.ofFn fun _ : Fin m => ([] : List α)).flatten = [] := by
   simp
 
-attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false
+attribute [circuit_norm] forall_eq decide_false
+
+/- Core builtin simprocs that `circuit_norm` needs. `attribute [circuit_norm] Fin.reduceCastSucc`
+would be the direct spelling, but a simp set may only be given a declaration marked `meta`, and
+core's `builtin_(d)simproc`s are declared in a plain `public section`. Re-exporting each one as a
+local `meta` simproc with the same pattern is equivalent and is the only spelling the module
+system accepts. -/
+public meta section
+dsimproc [circuit_norm] finReduceCastSucc (Fin.castSucc _) := Fin.reduceCastSucc
+dsimproc [circuit_norm] finIsValue ((OfNat.ofNat _ : Fin _)) := Fin.isValue
+dsimproc [circuit_norm] natReduceAdd ((_ + _ : ℕ)) := Nat.reduceAdd
+simproc ↓ [circuit_norm] iteReduce (ite _ _ _) := reduceIte
+simproc [circuit_norm] stringReduceEq ((_ : String) = _) := String.reduceEq
+end
+

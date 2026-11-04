@@ -9,19 +9,22 @@
 
 `clean` is an embedded Lean DSL for writing zk circuits, targeting popular arithmetizations like AIR, PLONK and R1CS.
 
-**Check out our blog post for an introduction: https://blog.zksecurity.xyz/posts/clean**
+**Check out the [Clean Website](https://clean.zksecurity.xyz) for more information**
 
-`clean` is developed by [zkSecurity](https://zksecurity.xyz/), currently as part of a Verified-zkEVM grant.
+## Development
 
-We intend to build out `clean` into a universal zk framework that produces **formally verified, bug-free circuits** for the entire ecosystem. See the [roadmap](#roadmap).
+The `clean` framework is developed by [zkSecurity](https://zksecurity.xyz/), currently funded by the Verified-zkEVM grant.
 
 ## Community
 
-Public Telegram group to discuss `clean`: [t.me/clean_zk](https://t.me/clean_zk)
+The [Clean website](https://clean.zksecurity.xyz) explains how *anyone* can get started with Clean.
 
-Please join if you want to use `clean`, or contribute, or if you have any questions!
+If you have questions, or want to contribute,
+please join our Public Telegram group [t.me/clean_zk](https://t.me/clean_zk).
+We are happy to answer any questions or just discuss!
 
-We always welcome contributors! Check out our [good first issues](https://github.com/Verified-zkEVM/clean/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22).
+We love contributors!
+Check out our [good first issues](https://github.com/Verified-zkEVM/clean/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22).
 
 ## Using the repo
 
@@ -37,15 +40,20 @@ After that, we recommend open the repo in VSCode to get immediate inline feedbac
 
 Make sure to install the `lean4` extension for VSCode!
 
-## Documentation
+### Using Clean as a dependency
 
-We are actively working on creating proper documentation for `clean`. In the meantime, we recommend checking out our [AI-generated DeepWiki](https://deepwiki.com/Verified-zkEVM/clean).
+Every Lean toolchain bump on `main` creates a release tagged with the toolchain version, e.g. `v4.34.1`. Newer `main` commits on the same toolchain are released by hand as `v4.34.1-patch1`, `v4.34.1-patch2`, etc. Each release carries a prebuilt `Clean` library, which Lake downloads instead of compiling Clean when your project pins the release tag:
 
-⚠️ **Disclaimer:** The wiki may contain inaccuracies or outdated details. Please take all information with a grain of salt until the official documentation is released.
+```lean
+require Clean from git "https://github.com/Verified-zkEVM/clean" @ "v4.34.1"
+```
+
+The prebuilt library only works with the release's exact toolchain. A project that pins a `main` commit without a release tag builds Clean from source; Lake then warns that it found no release, which fails `lake build --wfail`.
 
 ## Code Style
 
-We follow standard Lean/Mathlib conventions with some local variations. See [doc/conventions.md](doc/conventions.md) for details.
+We follow standard Lean/Mathlib conventions with some local variations.
+See [doc/conventions.md](doc/conventions.md) for details.
 
 ## Proof Finding Guide
 

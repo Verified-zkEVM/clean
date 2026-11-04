@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Gadgets.ByteLookup
-import Clean.Gadgets.Boolean
-import Clean.Gadgets.Addition8.Theorems
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.ByteLookup
+public import Clean.Gadgets.Boolean
+public import Clean.Gadgets.Addition8.Theorems
+
+@[expose] public section
 
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -20,17 +24,15 @@ structure Outputs (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨x, y, carryIn⟩ := input
-
   -- witness the result
-  let z ← witness ((x + y + carryIn).val % 256).toField
+  let z ← witness ((input.x + input.y + input.carryIn).val % 256).toField
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witness ((x + y + carryIn).val / 256).toField
+  let carryOut ← witness ((input.x + input.y + input.carryIn).val / 256).toField
   assertBool carryOut
 
-  assertZero (x + y + carryIn - z - carryOut * 256)
+  assertZero (input.x + input.y + input.carryIn - z - carryOut * 256)
 
   return { z, carryOut }
 

@@ -1,4 +1,8 @@
-import Clean.Gadgets.SHA256.BitwiseOps
+module
+
+public import Clean.Gadgets.SHA256.BitwiseOps
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -110,10 +114,9 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     have key : env.get (i₀ + i.val) - (input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i]) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
-  have h_z : Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + i} : Expression (F p)))
+  have h_z : (Vector.mapRange 32 fun i => env.get (i₀ + i))
       = Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
-    ext i; simp [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    ext i; simp [Vector.getElem_mapRange]
   rw [h_z]
   have h_norm : ∀ i : Fin 32, env.get (i₀ + i.val) = 0 ∨ env.get (i₀ + i.val) = 1 := by
     intro i; rw [h_eq i]; exact IsBool.xor_is_bool (ha i) (hb i)

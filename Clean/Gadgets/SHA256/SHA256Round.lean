@@ -1,9 +1,13 @@
-import Clean.Gadgets.SHA256.Add32
-import Clean.Gadgets.SHA256.Ch32
-import Clean.Gadgets.SHA256.Maj32
-import Clean.Gadgets.SHA256.UpperSigma0
-import Clean.Gadgets.SHA256.UpperSigma1
-import Clean.Specs.SHA256
+module
+
+public import Clean.Gadgets.SHA256.Add32
+public import Clean.Gadgets.SHA256.Ch32
+public import Clean.Gadgets.SHA256.Maj32
+public import Clean.Gadgets.SHA256.UpperSigma0
+public import Clean.Gadgets.SHA256.UpperSigma1
+public import Clean.Specs.SHA256
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -84,12 +88,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     Ch32.circuit, Maj32.circuit, Add32.circuit]
   obtain ⟨h_state_norm, h_k_norm, h_w_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_k, h_input_w⟩ := h_input
-  have h_eval (i : ℕ) (hi : i < 8) :
-      Vector.map (Expression.eval env) (input_var_state[i]'hi) = input_state[i]'hi := by
-    have h := getElem_eval_vector env input_var_state i hi
-    rw [h_input_state] at h
-    rw [← CircuitType.eval_var_fields env (input_var_state[i]'hi)]
-    exact h
   simp only [UpperSigma1.Assumptions, UpperSigma0.Assumptions,
     Ch32.Assumptions, Maj32.Assumptions, Add32.Assumptions,
     UpperSigma1.Spec, UpperSigma0.Spec,
@@ -124,27 +122,17 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     rw [s_t1.1, s_t12.1, s_t11.1, s_t10.1, s_sig1.1, s_ch.1, s_t2.1, s_sig0.1, s_maj.1] at v_newa
     rw [s_t1.1, s_t12.1, s_t11.1, s_t10.1, s_sig1.1, s_ch.1] at v_newe
     clear s_sig1 s_ch s_t10 s_t11 s_t12 s_t1 s_sig0 s_maj s_t2 s_newa s_newe
-    have e (i : ℕ) (hi : i < 8) :
-        valueBits (Vector.map (Expression.eval env) input_var_state[i]) = valueBits input_state[i] :=
-      congrArg valueBits (h_eval i hi)
-    -- Reduce `(a + b) % 2^32` to `_root_.add32 a b` in v_newa/v_newe so they match the spec literal.
-    simp only [show ∀ a b : ℕ, (a + b) % 2 ^ 32 = _root_.add32 a b from fun _ _ => rfl] at v_newa v_newe
-    -- Push the outer `Vector.map valueBits ∘ eval env` inside the literal #v[...] and unfold the
-    -- spec, so both sides become explicit 8-element vectors with matching slot shapes.
-    try simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-      circuit_norm]
-    simp only [Specs.SHA256.sha256Round, Vector.getElem_map]
     rw [v_newa, v_newe]
+    simp only [Specs.SHA256.sha256Round, Vector.getElem_map]
+    rfl
   · -- Normalized for each position
     intro i
     fin_cases i
-    · convert s_newa.2 using 1
-      congr 1
+    · exact s_newa.2
     · exact h_a
     · exact h_b
     · exact h_c
-    · convert s_newe.2 using 1
-      congr 1
+    · exact s_newe.2
     · exact h_e
     · exact h_f
     · exact h_g
@@ -154,12 +142,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     Ch32.circuit, Maj32.circuit, Add32.circuit]
   obtain ⟨h_state_norm, h_k_norm, h_w_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_k, h_input_w⟩ := h_input
-  have h_eval (i : ℕ) (hi : i < 8) :
-      Vector.map (Expression.eval env.toEnvironment) (input_var_state[i]'hi) = input_state[i]'hi := by
-    have h := getElem_eval_vector env.toEnvironment input_var_state i hi
-    rw [h_input_state] at h
-    rw [← CircuitType.eval_var_fields env.toEnvironment (input_var_state[i]'hi)]
-    exact h
   have h_a := h_state_norm 0; have h_b := h_state_norm 1
   have h_c := h_state_norm 2; have h_d := h_state_norm 3
   have h_e := h_state_norm 4; have h_f := h_state_norm 5

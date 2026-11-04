@@ -4,13 +4,17 @@ This table has exactly 17 rows:
 - Rows 0-15: Process up to 16 blocks (64 bytes each)
 - Row 16: Final output containing the result of processBlocks
 -/
-import Clean.Table.Inductive
-import Clean.Circuit.Loops
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Specs.BLAKE3
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Conditional
-import Clean.Gadgets.IsZero
+module
+
+public import Clean.Table.Inductive
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Specs.BLAKE3
+public import Clean.Gadgets.Addition32.Addition32
+public import Clean.Gadgets.Conditional
+public import Clean.Gadgets.IsZero
+
+@[expose] public section
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
@@ -78,8 +82,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
     simp_all
 
   completeness := by
-    circuit_proof_all [U32.AssertNormalized.circuit, ProcessBlocksState.Normalized,
-      getElem_eval_vector] -- provable_vector_simp wanted
+    circuit_proof_all [U32.AssertNormalized.circuit, ProcessBlocksState.Normalized]
 
 end BLAKE3ProcessBlocksStateNormalized
 
@@ -109,17 +112,11 @@ def circuit : FormalAssertion (F p) BlockInput where
 
   soundness := by
     circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
-    constructor
-    · simp_all
-    simp only [←h_input, eval_vector] -- provable_vector_simp wanted
     simp_all
 
   completeness := by
     circuit_proof_start [U32.AssertNormalized.circuit]
     simp only [BlockInput.Normalized] at h_spec
-    constructor
-    · simp_all
-    simp only [←h_input, eval_vector] at h_spec -- provable_vector_simp wanted
     simp_all
 
 end BLAKE3BlockInputNormalized
@@ -227,7 +224,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   · intro input
     rintro (_ | _) <;> simp_all
   by_cases h_x : x_block_exists = 1
-  · simp only [h_x, decide_true, cond_true, circuit_norm] at *
+  · simp only [h_x, decide_true, Bool.cond_true, circuit_norm] at *
     have h_state_norm := h_holds.1
     have h_input_norm := h_holds.2.1
     have h_iszero := h_holds.2.2.1
@@ -309,7 +306,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     · exact h_state_norm.2.1
     change ({ x0 := env.get 5554, x1 := env.get 5556, x2 := env.get 5558, x3 := env.get 5560 } : U32 (F p)).Normalized
     exact h_add_norm
-  · simp only [h_x, decide_false, cond_false]
+  · simp only [h_x, decide_false, Bool.cond_false]
     simp only [circuit_norm] at h_holds
     have x_block_exists_zero : x_block_exists = 0 := by
       simp only [BlockInput.Normalized] at input_normalized

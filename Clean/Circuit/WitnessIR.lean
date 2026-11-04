@@ -1,8 +1,13 @@
-import Clean.Circuit.Expression
-import Clean.Utils.Field
-import Clean.Utils.FiniteField
-import Clean.Utils.Vector
-import Clean.Circuit.Provable
+module
+
+public import Clean.Circuit.Expression
+public import Clean.Utils.Field
+public import Clean.Utils.FiniteField
+public import Clean.Utils.Vector
+public import Clean.Circuit.Provable
+
+-- The simprocs below call `omega` from meta code.
+public meta import Lean.Elab.Tactic.Omega.Frontend
 
 /-!
 # Witness-generation IR
@@ -13,8 +18,8 @@ A deep-embedded IR for witness-generation callbacks
 
 A witness program (`WitgenIR F m`) is either
 - `native f` — an arbitrary Lean closure, the migration escape hatch. Not serializable.
-  `eval (native f) = f` holds definitionally, which is what lets phase 2 wrap all
-  existing callbacks without touching any gadget or proof.
+  `eval (native f) = f` holds definitionally, which lets existing callbacks be wrapped
+  without touching any gadget or proof.
 - `ir steps out` — structured IR: a list of scalar `let`-steps, followed by a
   vector-shaped output expression.
 
@@ -43,6 +48,8 @@ range, a field-element bit decomposition, or an append.
    needed for serialization anyway).
 -/
 
+@[expose] public section
+
 variable {F : Type}
 
 namespace Witgen
@@ -68,9 +75,8 @@ inductive FExpr (F : Type) where
   | ite (c : BExpr F) (t e : FExpr F)
   /-- Read an expression list at a computed index, 0 if out of range -/
   | listGet (xs : List (FExpr F)) (i : U64Expr F)
-  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`:
-  row `row` of table `key` with rows of width `n`, projected at column `col`.
-  Missing rows read as 0. The nondeterministic escape hatch (FemtoCairo memory). -/
+  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`: row `row` of
+  component `key` with rows of width `n`, projected at column `col`. Missing rows read as 0. -/
   | dataGet (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n)
   /-- Same as `dataGet` but reads the uncommitted `ProverEnvironment.hint`. -/
   | hintGet (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n)
@@ -157,7 +163,7 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
   | .listGet xs i => FExpr.evalList ctx (i.eval ctx).toNat xs
   | .dataGet key n row col =>
-    ((ctx.env.data key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
+    ((ctx.env.data.tables key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
   | .hintGet key n row col =>
     ((ctx.env.hint key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
 
@@ -225,7 +231,7 @@ open Lean Meta Simp
 
 /-- Closed `ℕ` value of an expression, seeing through `b ^ k` (which `Meta.evalNat` does
 not reduce at the `Monoid.toPow` instance that `2 ^ 64` elaborates to). -/
-partial def natLit? (e : Expr) : MetaM (Option ℕ) := do
+private meta partial def natLit? (e : Expr) : MetaM (Option ℕ) := do
   if let some n ← evalNat e |>.run then return some n
   if e.isAppOfArity ``HPow.hPow 6 then
     let args := e.getAppArgs
@@ -249,7 +255,7 @@ local hypotheses as facts) whether `n` is already below the modulus, and rewrite
 when it is. Other moduli are left alone, so ordinary `% 256`-style specification
 arithmetic is untouched.
 -/
-def u64WrapSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def u64WrapSimproc (e : Expr) : SimpM Simp.Step := do
   unless e.isAppOfArity ``HMod.hMod 6 do return .continue
   let args := e.getAppArgs
   let n := args[4]!
@@ -330,11 +336,12 @@ inductive Step (F : Type) where
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
 @[circuit_norm]
 def evalSteps [FiniteField F] (env : ProverEnvironment F)
-    (steps : List (Step F)) (locals : Array (F ⊕ UInt64) := #[]) : Array (F ⊕ UInt64) :=
+    (steps : List (Step F)) (locals : Array (F ⊕ UInt64) := #[])
+    (idx : ℕ := 0) : Array (F ⊕ UInt64) :=
   match steps with
   | [] => locals
-  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals })))
-  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals })))
+  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals, idx }))) idx
+  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals, idx }))) idx
 
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIR (F : Type) : ℕ → Type where
@@ -568,7 +575,8 @@ where
 theorem eval_eq_eval {M : TypeMap} [ProvableStruct M] (ctx : Ctx F) (x : M (FExpr F)) :
     Witgen.eval ctx x = StructEval.eval ctx x := by
   symm
-  simp only [Witgen.eval, eval, fromElements, toElements, size]
+  simp only [Witgen.eval, eval, fromElements, toElements, size,
+    ProvableStruct.structToElements_eq, ProvableStruct.structFromElements_eq]
   congr 1
   apply eval_eq_eval_aux
 where
@@ -581,7 +589,7 @@ where
   | c :: cs, .cons a as => by
     simp only [_root_.ProvableStruct.componentsToElements,
       _root_.ProvableStruct.componentsFromElements, eval.go,
-      _root_.ProvableStruct.combinedSize', List.map_cons, List.sum_cons]
+      _root_.ProvableStruct.combinedSize']
     simp only [Vector.map_append, Vector.cast_take_append_of_eq_length,
       Vector.cast_drop_append_of_eq_length]
     congr
@@ -615,7 +623,7 @@ structure projection like `.value`, `.address`, etc.  The meta code recognizes p
 applications, rebuilds the same projection on the evaluated row, then proves the rewrite by
 simplifying the generated RHS with the small struct-evaluation theorem set below.
 -/
-def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   -- The simproc is registered on `Witgen.FExpr.eval _ _`; the last two explicit arguments are
   -- the evaluation context and the scalar expression being evaluated.
   let args := e.getAppArgs
@@ -698,7 +706,7 @@ simproc above. Decomposing an opaque value via structure eta would produce
 confluent: a literal's components are the program's own expressions, never projections
 of an opaque base.
 -/
-def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Witgen.eval && args.size >= 2 do
     return .continue
@@ -713,8 +721,8 @@ def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
     let some (_, _, rhs) := (← inferType proof).eq? | return .continue
     return .visit { expr := rhs, proof? := proof }
   catch _ => pure ()
-  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise,
-  -- validated by definitional equality. Covers flat structs of scalars; bails if a field
+  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise
+  -- using the public vector/array map lemmas. Covers flat structs of scalars; bails if a field
   -- is not a scalar `FExpr` or the instance doesn't evaluate field-by-field in
   -- constructor order.
   try
@@ -726,10 +734,15 @@ def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
     for a in ctorArgs[info.numParams:] do
       newArgs := newArgs.push (some (← mkAppM ``Witgen.FExpr.eval #[ctx, a]))
     let rhs ← mkAppOptM fn newArgs
-    -- custom instances typically need `.all` transparency to reduce (cf. `Point.eval_eq`
-    -- being proved by `with_unfolding_all rfl`); the kernel re-checks this unrestricted
-    unless ← withTransparency .all (isDefEq e rhs) do return .continue
-    return .visit { expr := rhs, proof? := none }
+    let mut thms : SimpTheorems := {}
+    for name in [``Witgen.eval, ``ProvableType.toElements, ``ProvableType.fromElements] do
+      thms ← thms.addDeclToUnfold name
+    for name in [``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil] do
+      thms ← thms.addConst name
+    let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
+    let (result, _) ← Meta.simp e simpCtx #[]
+    unless ← withDefault <| isDefEq result.expr rhs do return .continue
+    return .visit { expr := rhs, proof? := some (← result.getProof) }
   catch _ => return .continue
 
 simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc
@@ -738,3 +751,29 @@ end Eval
 end Witgen
 
 export Witgen (WitgenIR)
+
+/-- Interpret the rows stored under a component name using their declared circuit-input type. -/
+def ProverData.getRows (data : ProverData F) (name : String)
+    (Row : TypeMap) [ProvableType Row] : Array (Row F) :=
+  data.tables name (size Row) |>.map fromElements
+
+/-- Read a typed component-input row from committed prover data. -/
+def Witgen.dataGet (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
+  fromElements <| Vector.mapFinRange (size Row) fun col =>
+    Witgen.FExpr.dataGet name (size Row) row col
+
+@[circuit_norm]
+lemma Witgen.eval_dataGet [FiniteField F] (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
+    Witgen.eval ctx (Witgen.dataGet name Row row) =
+      ((ctx.env.data.getRows name Row)[(row.eval ctx).toNat]?.getD default) := by
+  simp only [Witgen.eval, Witgen.dataGet, ProverData.getRows]
+  rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements,
+    Vector.map_mapFinRange]
+  simp only [Witgen.FExpr.eval]
+  by_cases h : (row.eval ctx).toNat < (ctx.env.data.tables name (size Row)).size
+  · simp [h]
+    rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
+  · simp [h, Vector.mapFinRange_eq_self]
+    simp only [default, ProvableType.toElements_fromElements]

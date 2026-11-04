@@ -11,8 +11,12 @@ range checks, and size-dependent reasoning.
 
 Part of issue #154: Generalize prime field assumption to cover binary fields.
 -/
-import Mathlib.Algebra.Field.ZMod
-import Clean.Utils.Field
+module
+
+public import Mathlib.Algebra.Field.ZMod
+public import Clean.Utils.Field
+
+@[expose] public section
 
 /--
 `FiniteField` extends `Field` with a canonical embedding into `ℕ` and finiteness.
@@ -114,3 +118,15 @@ theorem FiniteField.val_inj_F {p : ℕ} [Fact p.Prime] (x y : F p) :
     ZMod.val x = ZMod.val y ↔ x = y := by
   rw [← FiniteField.val_F, ← FiniteField.val_F]
   exact FiniteField.val_inj
+
+/-! ## Computable characteristic -/
+
+/-- The characteristic of a ring as data, for code that runs: Mathlib's `ringChar` is
+noncomputable. -/
+class ComputableRingChar (R : Type) [NonAssocSemiring R] where
+  char : ℕ
+  char_eq : char = ringChar R
+
+instance (p : ℕ) : ComputableRingChar (ZMod p) where
+  char := p
+  char_eq := (ZMod.ringChar_zmod_n p).symm

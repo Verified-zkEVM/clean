@@ -1,9 +1,13 @@
-import Clean.Circuit.Expression
-import Clean.Circuit.Lookup
-import Clean.Circuit.WitnessIRSugar
-import Clean.Circuit.Provable
-import Clean.Circuit.Channel
-import Clean.Circuit.SimpGadget
+module
+
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Lookup
+public import Clean.Circuit.WitnessIRSugar
+public import Clean.Circuit.Provable
+public import Clean.Circuit.Channel
+public import Clean.Circuit.SimpGadget
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {α : Type} {n : ℕ}
 
@@ -466,6 +470,17 @@ open Classical in
     (FlatOperation.interactions s.ops.toFlat).filter (fun i => i.channel = channel) ++
       interactionsWith channel ops := by
   simp [interactionsWith, interactions]
+
+open Classical in
+/-- A lawful subcircuit has no interactions on a channel outside its declared channels. -/
+@[circuit_norm]
+theorem _root_.Subcircuit.interactions_filter_eq_nil {n : ℕ} (s : Subcircuit F n)
+    {channel : RawChannel F} (h_lawful : s.ChannelsLawful)
+    (h : channel ∉ s.channelsWithGuarantees ++ s.channelsWithRequirements) :
+    (FlatOperation.interactions s.ops.toFlat).filter (fun i => i.channel = channel) = [] := by
+  rw [List.filter_eq_nil_iff]
+  intro i hi heq
+  exact h (h_lawful.2.2 (of_decide_eq_true heq ▸ List.mem_map_of_mem hi))
 
 def shallowInteractions : Operations F → List (AbstractInteraction F)
   | [] => []
@@ -1126,10 +1141,10 @@ lemma subcircuitChannelsLawful_iff_forAllNoOffset {ops : Operations F} :
   simp [SubcircuitChannelsLawful, forAllNoOffset_iff_forall_mem]
 
 def shallowChannelsWithGuarantees (ops : Operations F) : List (RawChannel F) :=
-  (ops.shallowInteractions.filter (·.assumeGuarantees)).map (·.channel)
+  (ops.shallowInteractions.filter (·.direction = .pull)).map (·.channel)
 
 def shallowChannelsWithRequirements (ops : Operations F) : List (RawChannel F) :=
-  (ops.shallowInteractions.filter fun i => !i.assumeGuarantees).map (·.channel)
+  (ops.shallowInteractions.filter (·.direction = .push)).map (·.channel)
 
 /-- Channel metadata used by circuit elaboration: guarantee channels and lawful subcircuit metadata. -/
 @[circuit_norm]

@@ -1,4 +1,8 @@
-import Clean.Gadgets.SHA256.LowerSigma0
+module
+
+public import Clean.Gadgets.SHA256.LowerSigma0
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -151,11 +155,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
          2 * env.get (i₀ + i.val) * Expression.eval env (shr32 10 input_var)[i.val]) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
-  set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + (32 + 32 * 0) + i} : Expression (F p))) with hz_def
+  set z : fields 32 (F p) := Vector.mapRange 32 fun i => env.get (i₀ + (32 + 32 * 0) + i)
+    with hz_def
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
-    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    intro i; simp [z, Vector.getElem_mapRange]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 17).val] + input[(i + 19).val] -
         2 * input[(i + 17).val] * input[(i + 19).val])

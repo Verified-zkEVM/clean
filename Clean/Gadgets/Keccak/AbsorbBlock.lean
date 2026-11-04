@@ -1,6 +1,10 @@
-import Clean.Gadgets.Keccak.Permutation
-import Clean.Circuit.Explicit
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Gadgets.Keccak.Permutation
+public import Clean.Circuit.Explicit
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.AbsorbBlock
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
@@ -12,12 +16,12 @@ structure Input (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
-  let { state, block } := input
   -- absorb the block into the state by XORing with the first RATE elements
-  let state_rate ← Circuit.mapFinRange RATE fun i => Xor64.circuit ⟨state[i.val], block[i.val]⟩
+  let state_rate ← Circuit.mapFinRange RATE fun i =>
+    Xor64.circuit ⟨input.state[i.val], input.block[i.val]⟩
 
   -- the remaining elements of the state are unchanged
-  let state_capacity := Vector.mapFinRange (25 - RATE) fun i => state[RATE + i.val]
+  let state_capacity := Vector.mapFinRange (25 - RATE) fun i => input.state[RATE + i.val]
   let state' : Vector _ 25 := state_rate ++ state_capacity
 
   -- apply the permutation
@@ -51,6 +55,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   suffices goal : KeccakState.Normalized (eval env state_after_absorb)
     ∧ KeccakState.value (eval env state_after_absorb) =
       Vector.mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
+    simp only [state_after_absorb, circuit_norm] at goal
     simp_all
   replace h_holds := h_holds.left
 
@@ -89,6 +94,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   suffices goal : KeccakState.Normalized (eval env.toEnvironment state_after_absorb)
     ∧ KeccakState.value (eval env.toEnvironment state_after_absorb) =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
+    simp only [state_after_absorb, circuit_norm] at goal
     simp_all
   replace h_env := h_env.left
 

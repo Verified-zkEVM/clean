@@ -4,8 +4,12 @@ This file contains theorems that immediately follow from the definitions in `Cir
 For more complicated interconnected theorems, we have separate files,
 such as `Circuit.Subcircuit` which focuses on establishing the foundation for subcircuit composition.
 -/
-import Clean.Circuit.Formal
-import Clean.Circuit.Provable
+module
+
+public import Clean.Circuit.Formal
+public import Clean.Circuit.Provable
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {α β : Type}
 
@@ -519,7 +523,9 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
-      refine ⟨fun j hj => ?_, rfl, rfl⟩
+      -- `data` and `hint` are literally shared: every environment here is `.fromList _ hint`.
+      refine ⟨?_, rfl, rfl⟩
+      intro j hj
       simp [ProverEnvironment.fromList, hj,
         getElem?_dynamicWitnesses_of_lt]
 end FlatOperation
@@ -574,8 +580,8 @@ lemma ProverEnvironment.onlyAccessedBelow_environment_get_iff_lt {n m : ℕ} :
   · grind
   contrapose!
   intro lt
-  use { get _ := 0, data := default, hint := default }
-  use { get i := if (i = m) then 1 else 0, data := default, hint := default }
+  use { get _ := 0, data := .empty F, hint := default }
+  use { get i := if (i = m) then 1 else 0, data := .empty F, hint := default }
   grind
 
 omit [FiniteField F] in

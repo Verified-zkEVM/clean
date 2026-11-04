@@ -1,0 +1,100 @@
+name: Release tag
+
+on:
+  # a toolchain bump on main creates the `vX.Y.Z` tag and release
+  push:
+    branches:
+      - 'main'
+      - 'master'
+    paths:
+      - 'lean-toolchain'
+  # releases created by hand, e.g. `vX.Y.Z-patchN` for a newer main commit on the same toolchain.
+  # The release created by the `lean-release-tag` job uses `GITHUB_TOKEN`, which does not trigger
+  # workflows, so this does not fire a second time for toolchain bumps.
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and attach prebuilt oleans to
+        required: true
+        type: string
+
+jobs:
+  lean-release-tag:
+    name: Add Lean release tag
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: lean-release-tag action
+      uses: leanprover-community/lean-release-tag@v4.18804.0
+      with:
+        do-release: true
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Attach the prebuilt `Clean` library to the release. Consumers that pin the release tag
+  # download it instead of compiling Clean, through `preferReleaseBuild` in `lakefile.lean`.
+  publish-oleans:
+    name: Publish prebuilt oleans
+    needs: lean-release-tag
+    if: >-
+      always() &&
+      (needs.lean-release-tag.result == 'success' ||
+       needs.lean-release-tag.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # `lean-release-tag` names the tag after the toolchain and puts it on the commit that
+      # changed `lean-toolchain`, which need not be the pushed commit. Build from the tag itself,
+      # so that the archive matches the tagged sources.
+      - name: Resolve release tag
+        id: resolve
+        run: |
+          case "${{ github.event_name }}" in
+            workflow_dispatch) tag='${{ inputs.tag }}' ;;
+            release)           tag='${{ github.event.release.tag_name }}' ;;
+            *)                 tag="$(sed -n 's|^leanprover/lean4:||p' lean-toolchain | tr -d '[:space:]')" ;;
+          esac
+          git fetch --tags --force --quiet
+          git rev-parse -q --verify "refs/tags/$tag" >/dev/null \
+            || { echo "::error::tag '$tag' does not exist"; exit 1; }
+          git checkout --quiet "refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # `lake upload` runs `gh release upload`, which needs an existing release
+      - name: Check the release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ steps.resolve.outputs.tag }}" >/dev/null \
+            || { echo "::error::no release for tag '${{ steps.resolve.outputs.tag }}'"; exit 1; }
+
+      # after the tag checkout, so that elan uses the tag's `lean-toolchain`;
+      # fetches Mathlib's oleans with `lake exe cache get`
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+          use-github-cache: false
+          use-mathlib-cache: true
+
+      # `lake upload` packs the whole build directory, so build only the `Clean` library into an
+      # empty one: executables and tests would add platform-specific native code to the archive
+      - name: Build the library
+        run: |
+          rm -rf .lake/build
+          lake build --no-cache Clean
+
+      - name: Pack and attach the archive
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: lake upload "${{ steps.resolve.outputs.tag }}"

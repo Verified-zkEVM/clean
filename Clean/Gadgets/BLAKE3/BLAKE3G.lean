@@ -1,9 +1,13 @@
-import Clean.Gadgets.Xor.Xor32
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Rotation32.Rotation32
-import Clean.Specs.BLAKE3
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.Xor.Xor32
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Gadgets.Addition32.Addition32
+public import Clean.Gadgets.Rotation32.Rotation32
+public import Clean.Specs.BLAKE3
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.G
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -18,7 +22,9 @@ structure Inputs (F : Type) where
 deriving ProvableStruct
 
 def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
-  let { state, x, y } := input
+  let state := input.state
+  let x := input.x
+  let y := input.y
 
   let state_a ← Addition32.circuit ⟨state[a], ← Addition32.circuit ⟨state[b], x⟩⟩
 
@@ -54,6 +60,7 @@ def output (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (i₀ : �
     |>.set c (⟨var ⟨i₀ + 76⟩, var ⟨i₀ + 78⟩, var ⟨i₀ + 80⟩, var ⟨i₀ + 82⟩⟩) c.is_lt
     |>.set d (Rotation32.output 8 (i₀ + 68)) d.is_lt
 
+@[reducible]
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State (main a b c d) := by
   elaborate_circuit_with {
     output inputs i0 := output a b c d inputs.state i0
@@ -71,7 +78,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumption
   circuit_proof_start [output, BLAKE3State.Normalized, Xor32.circuit, Addition32.circuit,
     Rotation32.circuit, Rotation32.elaborated, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector]
+    Xor32.Assumptions, Xor32.Spec]
 
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14⟩ := h_holds
 
@@ -88,31 +95,29 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumption
   -- See, for example, https://www.ietf.org/archive/id/draft-aumasson-blake3-00.html#name-quarter-round-function-g
   constructor
   · ext i hi
-    simp only [BLAKE3State.value, eval_vector, Vector.map_set, Vector.map_map, ↓Vector.getElem_set,
+    simp only [BLAKE3State.value, Vector.map_set, ↓Vector.getElem_set,
       Vector.getElem_map, g, Fin.getElem_fin, add32]
     repeat' split
-    · rw [c11.left]
-    · simp only [circuit_norm]
+    · simp only [add_assoc, Nat.reduceAdd] at c11 ⊢
+      rw [c11.left]
+    · simp only [circuit_norm, add_assoc, Nat.reduceAdd] at c12 ⊢
       rw [c12.left]
-    · rw [c14.left]
-    · simp only [circuit_norm]
+    · simp only [add_assoc, Nat.reduceAdd] at c14 ⊢
+      rw [c14.left]
+    · simp only [circuit_norm, add_assoc, Nat.reduceAdd] at c9 ⊢
       rw [c9.left]
-    · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
+    · rfl
 
   · intro i
-    simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set]
+    simp only [add_assoc, Nat.reduceAdd] at c9 c11 c12 c14
     repeat' split
     · exact c11.right
-    · simp only [U32.Normalized, explicit_provable_type, Vector.map_mk, List.map_toArray,
-        List.map_cons, List.map_nil, fromElements] at c12 ⊢
-      simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c12 ⊢
+    · simp only [U32.Normalized]
       exact c12.right
     · exact c14.right
-    · simp only [U32.Normalized, explicit_provable_type, Vector.map_mk, List.map_toArray,
-        List.map_cons, List.map_nil, fromElements] at c9 ⊢
-      simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c9 ⊢
+    · simp only [U32.Normalized]
       exact c9.right
-    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
+    · exact h_assumptions.1 i
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]

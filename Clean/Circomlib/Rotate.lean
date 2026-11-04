@@ -1,6 +1,9 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Tactics
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
@@ -39,7 +42,7 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     rw [h_holds]
     ext i hi
     -- Simplify LHS: circuit computation at index i
-    simp only [Vector.getElem_map, Vector.getElem_mapFinRange]
+    simp only [Vector.getElem_mapFinRange]
     -- Simplify RHS: (input.rotate r)[i] = input[(i + r) % n]
     rw [Vector.getElem_rotate]
     -- Use h_input: eval input_var = input
@@ -56,7 +59,7 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     -- element-wise equality
     ext i hi
     -- simplify output to witness value
-    simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    simp only [Vector.getElem_mapRange]
     -- witness = eval of rotated input
     rw [h_env ⟨i, hi⟩]
     -- simplify RHS to match

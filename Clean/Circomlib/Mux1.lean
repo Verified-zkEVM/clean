@@ -1,8 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Tactics
-import Clean.Gadgets.Equality
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Tactics
+public import Clean.Gadgets.Equality
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 namespace Circomlib
 open Circuit
@@ -31,11 +34,9 @@ template MultiMux1(n) {
 }
 -/
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
-  let { c, s } := input
-
   -- Witness and constrain output vector
-  let out <== c.map fun (c0, c1) =>
-    (c1 - c0) * s + c0
+  let out <== input.c.map fun (c0, c1) =>
+    (c1 - c0) * input.s + c0
   return out
 
 lemma Vector.mapRange_one {α : Type} (f : ℕ → α) :
@@ -54,8 +55,6 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
   rw [Vector.getElem_flatten_singleton (v.map (fun x => #v[f x])) i hi]
   simp only [Vector.getElem_map (fun x => #v[f x]) hi]
   rfl
-
--- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
 
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
@@ -77,11 +76,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     intro i hi
     have h_holds_i := congrArg (fun v => v[i]) h_holds
     simp only [circuit_norm, Vector.getElem_map, Vector.getElem_mapRange] at h_holds_i
-    rw [h_holds_i, h_input.2, h_input.1]
+    rw [h_holds_i, h_input.1]
     rcases h_assumptions with h0 | h1
-    · simp only [h0, mul_zero, zero_add, if_pos]
-    · simp only [h1, mul_one]
-      rw [if_neg one_ne_zero]
+    · simp [h0]
+    · simp only [h1, mul_one, one_ne_zero, ite_false]
       ring
 
   completeness := by
@@ -94,9 +92,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [circuit_norm]
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
-    rw [h_env_i, h_input.2]
-    exact congrArg
-      (fun v => ((v[i]'hi).2 - (v[i]'hi).1) * input_s + (v[i]'hi).1) h_input.1.symm
+    rw [h_env_i]
+    simp only [h_input.1]
 
 end MultiMux1
 
@@ -126,10 +123,11 @@ template Mux1() {
 }
 -/
 def main (input : Var Inputs (F p)) := do
-  let { c, s } := input
-
   -- Call MultiMux1 with n=1
-  let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
+  let mux_out ← MultiMux1.circuit 1 {
+    c := #v[(input.c[0], input.c[1])]
+    s := input.s
+  }
   return mux_out[0]
 
 def circuit : FormalCircuit (F p) Inputs field where

@@ -1,10 +1,14 @@
-import Clean.Circuit.Basic
-import Clean.Circuit.Provable
-import Clean.Circuit.Theorems
-import Clean.Circuit.Loops
-import Clean.Gadgets.IsZeroField
-import Clean.Utils.Field
-import Clean.Utils.Tactics
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Provable
+public import Clean.Circuit.Theorems
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.IsZeroField
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.IsZero
 
@@ -99,12 +103,6 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
 
 theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Spec := by
   circuit_proof_start [IsZeroField.circuit]
-  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
-  rcases h_holds with ⟨ h_fold, h_final ⟩
-  suffices Expression.eval env (Fin.foldl (size M) (fun acc i ↦ acc * var { index := i₀ + ↑i * 2 + 1 }) 1) =
-      if input = 0 then 1 else 0 by
-    rw [← this, ← h_final]
-    split <;> simp_all
   conv_rhs =>
     arg 1
     rw [Zero.toOfNat0, OfNat.ofNat]
@@ -112,12 +110,11 @@ theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Sp
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff
-  · assumption
+  apply foldl_isZero_eq_one_iff (vars := toElements input_var) (vals := toElements input)
+  · simp only [circuit_norm, h_input]
   · intro i _
-    have h := h_fold i
-    rw [← ProvableType.getElem_eval_fields env (toElements input_var) i.val i.isLt] at h
-    exact h
+    simp only [circuit_norm, IsZeroField.circuit, h_input]
+    exact h_holds i
 
 theorem completeness : Completeness F (main (M:=M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit]

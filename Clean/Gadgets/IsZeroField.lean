@@ -1,8 +1,12 @@
-import Clean.Circuit.Basic
-import Clean.Circuit.Provable
-import Clean.Gadgets.Equality
-import Clean.Utils.Field
-import Clean.Utils.Tactics
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Provable
+public import Clean.Gadgets.Equality
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.IsZeroField
 variable {F : Type} [FiniteField F] [DecidableEq F]

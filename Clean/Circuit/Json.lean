@@ -1,6 +1,10 @@
-import Clean.Utils.Field
-import Clean.Circuit.Expression
-import Clean.Circuit.Basic
+module
+
+public import Clean.Utils.Field
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Basic
+
+@[expose] public section
 
 open Lean
 
@@ -42,6 +46,7 @@ instance : ToJson (Lookup F) where
 instance : ToJson (AbstractInteraction F) where
   toJson i := Json.mkObj [
     ("channel", toJson i.channel.name),
+    ("direction", toJson i.direction.name),
     ("multiplicity", toJson i.mult),
     ("message", toJson i.msg.toArray)
   ]

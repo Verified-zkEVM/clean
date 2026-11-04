@@ -1,12 +1,16 @@
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Gadgets.BLAKE3.ApplyRounds
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Gadgets.Or.Or32
-import Clean.Gadgets.IsZero
-import Clean.Specs.BLAKE3
-import Clean.Tables.BLAKE3.ProcessBlocksInductive
-import Clean.Circuit.Provable
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Gadgets.BLAKE3.ApplyRounds
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Gadgets.Or.Or32
+public import Clean.Gadgets.IsZero
+public import Clean.Specs.BLAKE3
+public import Clean.Tables.BLAKE3.ProcessBlocksInductive
+public import Clean.Circuit.Provable
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.FinalizeChunk
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 2^16 + 2^8)]
@@ -124,24 +128,7 @@ lemma eval_bytesToWords (env : Environment (F p))
     (input_var_buffer_data : BLAKE3Buffer (Expression (F p))) :
   eval env (bytesToWords input_var_buffer_data : ProvableVector U32 16 (Expression (F p))) =
       bytesToWords (eval env input_var_buffer_data : BLAKE3Buffer (F p)) := by
-  simp only [bytesToWords, circuit_norm, eval_vector]
-  rw [Vector.ext_iff]
-  intro i hi
-  simp only [Vector.getElem_map, Vector.getElem_ofFn, U32.eval_of_literal]
-  simp only [U32.mk.injEq]
-  refine ⟨?_, ?_, ?_, ?_⟩ <;>
-    exact ProvableType.getElem_eval_fields env input_var_buffer_data _ (by omega)
-
-omit p_large_enough in
-lemma eval_take_normalized (env : Environment (F p)) (v : BLAKE3State (Expression (F p)))
-    (h : ∀ i : Fin 16, (eval env v : BLAKE3State (F p))[i.val].Normalized) (i : ℕ) (h_i : i < 8) :
-    ((eval env (v.take 8) : ProvableVector U32 8 (F p))[i]'(by omega)).Normalized := by
-  have h_eq : (eval env (v.take 8) : ProvableVector U32 8 (F p)) =
-      (eval env v : BLAKE3State (F p)).take 8 := eval_vector_take env v 8
-  rw [h_eq]
-  show (((eval env v : BLAKE3State (F p)).take 8)[i]'(by omega)).Normalized
-  simp only [Vector.getElem_take]
-  exact h ⟨i, by omega⟩
+  simp only [bytesToWords, circuit_norm]
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
@@ -160,7 +147,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have val_two : (2 : F p).val = 2 := FieldUtils.val_lt_p 2 (by linarith [p_large_enough.elim])
   specialize h_Or32_2 (by simp [val_two])
   specialize h_Compress (by simp_all)
-    (by apply bytesToWords_normalized; simp_all [circuit_norm, eval_vector])
+    (by apply bytesToWords_normalized; simp_all [circuit_norm])
     (by linarith)
     h_Or32_2.2.1 h_Or32_2.2.2.1 h_Or32_2.2.2.2.1 h_Or32_2.2.2.2.2
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
@@ -174,11 +161,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   apply And.intro
   · simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
     List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
-    simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
-      List.map_cons, List.map_nil]
+    simp only [circuit_norm, Vector.map_mk, List.map_toArray,
+      List.map_cons, List.map_nil] at h_compress' ⊢
     refine h_compress'.trans ?_
     simp only [finalizeChunk]
-    apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
+    apply congrArg (fun (v : Vector ℕ 16) => (v.take 8).toArray)
     have : Vector.map U32.value (eval env (bytesToWords input_var_buffer_data)) =
         (Specs.BLAKE3.bytesToWords
         (List.map (fun x ↦ ZMod.val x) (input_buffer_data.extract 0 (ZMod.val input_buffer_len)).toList)) := by
@@ -208,11 +195,8 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   · rintro ⟨i, h_i⟩
     rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
-    refine eval_take_normalized env _ ?_ i h_i
-    intro j
-    simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
-      List.map_cons, List.map_nil]
-    exact h_Compress_Normalized j
+    rw [Vector.getElem_take]
+    exact h_Compress_Normalized ⟨i, by omega⟩
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
@@ -272,7 +256,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   clear h_or h_env
   constructor
   · apply bytesToWords_normalized
-    simp_all [circuit_norm, eval_vector]
+    simp_all [circuit_norm]
   · constructor
     · norm_num
     · constructor

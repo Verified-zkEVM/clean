@@ -1,4 +1,8 @@
-import Clean.Table.Basic
+module
+
+public import Clean.Table.Basic
+
+@[expose] public section
 
 variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [FiniteField F]
 
@@ -95,7 +99,7 @@ def witnessesWithData
     current := next
   trace
 
-/-- Like `witnessesWithData` but without prover data (uses `fun _ _ => #[]`). -/
+/-- Like `witnessesWithData` but without prover data. -/
 def witnesses
     (tc : TableConstraint W S F Unit) (init_row : Row F S) (n : ℕ) : Array (Array F) :=
-  witnessesWithData tc init_row n (fun _ _ => #[])
+  witnessesWithData tc init_row n (.empty F)

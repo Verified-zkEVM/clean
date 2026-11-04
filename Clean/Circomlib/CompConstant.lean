@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Circomlib.Bitify
-import Clean.Circomlib.CompConstantLemmas
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Circomlib.Bitify
+public import Clean.Circomlib.CompConstantLemmas
+
+@[expose] public section
 
 /-
 Original source code:
@@ -156,10 +160,6 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     let out : F p := env.get (i₀ + 127 + 1 + 135)
     let input_val : ℕ := fromBits (input.map ZMod.val)
 
-    have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
-      intro j hj
-      rw [ProvableType.getElem_eval_fields _ input_var j hj, h_input]
-
     have h_parts' :
         ∀ i : Fin 127,
           parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] c := by
@@ -212,10 +212,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     have h_bits' : bits = fieldToBits 135 sout := by
       show Vector.mapRange 135 (fun i => env.get (i₀ + 127 + 1 + i)) = fieldToBits 135 (env.get (i₀ + 127))
-      have h_bits_valid' := h_bits_valid
-      simp only [Vector.map_mapRange, circuit_norm] at h_bits_valid'
       ext j hj
-      have h_bits_j := congrArg (fun v => v[j]) h_bits_valid'
+      have h_bits_j := congrArg (fun v => v[j]) h_bits_valid
       simp only [Vector.getElem_mapRange] at h_bits_j ⊢
       exact h_bits_j
 
@@ -241,10 +239,6 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     let parts : Vector (F p) 127 := Vector.mapRange 127 fun i => env.get (i₀ + i)
     let sout : F p := env.get (i₀ + 127)
-
-    have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
-      intro j hj
-      rw [ProvableType.getElem_eval_fields _ input_var j hj, h_input]
 
     have h_parts' :
         ∀ i : Fin 127,
@@ -333,7 +327,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     and_intros
     · ext i hi
       have h_parts_i := h_parts ⟨i, hi⟩
-      simp only [Vector.getElem_map, Vector.getElem_mapRange, circuit_norm]
+      simp only [Vector.getElem_mapRange, circuit_norm]
       exact h_parts_i
     · exact h_sout
     · exact h_sout_lt

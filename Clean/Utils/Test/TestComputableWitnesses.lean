@@ -1,12 +1,16 @@
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Gadgets.Keccak.ThetaD
-import Clean.Gadgets.Keccak.RhoPi
-import Clean.Gadgets.Rotation32.Rotation32
-import Clean.Gadgets.Rotation64.Rotation64
-import Clean.Gadgets.Addition32.Addition32Full
-import Clean.Gadgets.SHA256.Xor32
-import Clean.Gadgets.IsZero
-import Clean.Circomlib.Mux1
+module
+
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Gadgets.Keccak.ThetaD
+public import Clean.Gadgets.Keccak.RhoPi
+public import Clean.Gadgets.Rotation32.Rotation32
+public import Clean.Gadgets.Rotation64.Rotation64
+public import Clean.Gadgets.Addition32.Addition32Full
+public import Clean.Gadgets.SHA256.Xor32
+public import Clean.Gadgets.IsZero
+public import Clean.Circomlib.Mux1
+
+@[expose] public section
 
 /-!
 Regression suite for `computable_witnesses`: the representative obligations the tactic

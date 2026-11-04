@@ -1,5 +1,9 @@
-import Clean.Gadgets.SHA256.BitwiseOps
-import Clean.Specs.SHA256
+module
+
+public import Clean.Gadgets.SHA256.BitwiseOps
+public import Clean.Specs.SHA256
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime]
@@ -181,11 +185,9 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     have key : env.get (i₀ + i.val) - (input_g[i] + input_e[i] * (input_f[i] - input_g[i])) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
-  set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + i} : Expression (F p))) with hz_def
+  set z : fields 32 (F p) := Vector.mapRange 32 fun i => env.get (i₀ + i) with hz_def
   have h_z : ∀ i : Fin 32, z[i] = env.get (i₀ + i.val) := by
-    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    intro i; simp [z, Vector.getElem_mapRange]
   have h_eq' : ∀ i : Fin 32, z[i] = input_g[i] + input_e[i] * (input_f[i] - input_g[i]) := by
     intro i; rw [h_z i]; exact h_eq i
   exact spec_of_constraint input_e input_f input_g z he hf hg h_eq'

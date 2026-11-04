@@ -1,6 +1,10 @@
-import Mathlib.Analysis.Normed.Ring.Lemmas
-import Mathlib.Combinatorics.Enumerative.Composition
-import Init.Data.List.Find
+module
+
+public import Mathlib.Analysis.Normed.Ring.Lemmas
+public import Mathlib.Combinatorics.Enumerative.Composition
+public import Init.Data.List.Find
+
+@[expose] public section
 
 variable {α β : Type} {n m : ℕ}
 
@@ -194,11 +198,11 @@ theorem cast_mapFinRange {n} {create : Fin n → α} (h : n = m) :
 
 theorem getElemFin_mapFinRange {n} {create : Fin n → α} :
     ∀ i : Fin n, (mapFinRange n create)[i] = create i := by
-  simp [mapFinRange, finRange]
+  simp [mapFinRange, getElem_finRange]
 
 theorem getElem_mapFinRange {n} {create : Fin n → α} :
     ∀ (i : ℕ) (hi : i < n), (mapFinRange n create)[i] = create ⟨ i, hi ⟩ := by
-  simp [mapFinRange, finRange]
+  simp [mapFinRange, getElem_finRange]
 
 attribute [grind norm] Vector.getElem_map Vector.getElem_mapFinRange
 
@@ -419,6 +423,30 @@ lemma map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n)
 
 /-- coerce any Array to a Vector of the given size -/
 def ofArray [Inhabited α] (n : ℕ) (arr : Array α) : Vector α n :=
-  ⟨ arr.take n |>.rightpad n default, by simp ⟩
+  ⟨ arr.take n |>.rightpad n default, by simp [Array.size_rightpad] ⟩
+
+/-! Pushing a `map` inside a vector constructor, with pointwise results stated as lambdas. -/
+
+theorem map_ofFn_fun {f : Fin n → α} {g : α → β} :
+    (ofFn f).map g = ofFn fun i => g (f i) := by
+  rw [map_ofFn]; rfl
+
+theorem map_map_fun {f : α → β} {γ : Type} {g : β → γ} {xs : Vector α n} :
+    (xs.map f).map g = xs.map fun a => g (f a) := by
+  rw [map_map]; rfl
+
+theorem map_mapIdx_fun {γ : Type} {f : ℕ → α → β} {g : β → γ} {xs : Vector α n} :
+    (xs.mapIdx f).map g = xs.mapIdx fun i a => g (f i a) := by
+  ext i hi
+  simp only [getElem_map, getElem_mapIdx]
+
+theorem map_take_comm (f : α → β) (xs : Vector α n) (i : ℕ) :
+    (xs.take i).map f = (xs.map f).take i :=
+  (map_take f xs i).symm
+
+theorem map_cast {f : α → β} {xs : Vector α n} (h : n = m) :
+    (xs.cast h).map f = (xs.map f).cast h := by
+  ext i hi
+  simp only [getElem_map, getElem_cast]
 
 end Vector

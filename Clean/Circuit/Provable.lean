@@ -1,7 +1,11 @@
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Vector
-import Clean.Circuit.CircuitType
-import Clean.Circuit.SimpGadget
+module
+
+public import Mathlib.Data.ZMod.Basic
+public import Clean.Utils.Vector
+public import Clean.Circuit.CircuitType
+public import Clean.Circuit.SimpGadget
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 
@@ -209,7 +213,6 @@ instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDepNative Hint)) :
 
 abbrev field : TypeMap := fun F => F
 
-@[circuit_norm]
 instance : ProvableType field where
   size := 1
   toElements x := #v[x]
@@ -242,6 +245,18 @@ instance (priority := high) : ProvableType fieldTriple where
   toElements := fun (x, y, z) => #v[x, y, z]
   fromElements := fun ⟨⟨[x, y, z]⟩, _ ⟩ => (x, y, z)
 instance : NonEmptyProvableType fieldTriple where
+
+@[circuit_norm] lemma toElements_field {F : Type} (x : F) : toElements (M := field) x = #v[x] := rfl
+@[circuit_norm] lemma toElements_fieldPair {F : Type} (x y : F) :
+    toElements (M := fieldPair) (x, y) = #v[x, y] := rfl
+@[circuit_norm] lemma toElements_fieldTriple {F : Type} (x y z : F) :
+    toElements (M := fieldTriple) (x, y, z) = #v[x, y, z] := rfl
+@[circuit_norm] lemma fromElements_field {F : Type} (x : F) :
+    fromElements (M := field) #v[x] = x := rfl
+@[circuit_norm] lemma fromElements_fieldPair {F : Type} (x y : F) :
+    fromElements (M := fieldPair) #v[x, y] = (x, y) := rfl
+@[circuit_norm] lemma fromElements_fieldTriple {F : Type} (x y z : F) :
+    fromElements (M := fieldTriple) #v[x, y, z] = (x, y, z) := rfl
 
 variable {n : ℕ}
 abbrev ProvableVector (α : TypeMap) (n : ℕ) := fun F => Vector (α F) n
@@ -328,7 +343,14 @@ inductive ProvableTypeList (F : Type) : List WithProvableType → Type 1 where
 | nil : ProvableTypeList F []
 | cons : ∀ {a : WithProvableType} {as : List WithProvableType}, a.type F → ProvableTypeList F as → ProvableTypeList F (a :: as)
 
-abbrev combinedSize' (cs : List WithProvableType) : ℕ := cs.map (fun x => x.provableType.size) |>.sum
+/-- Total flattened size of a heterogeneous list of provable types.
+
+This appears in dependent `Vector` lengths, so Lean must unfold it while checking
+implicit arguments. -/
+@[implicit_reducible]
+def combinedSize' : List WithProvableType → ℕ
+  | [] => 0
+  | c :: cs => c.provableType.size + combinedSize' cs
 end ProvableStruct
 
 -- if we can split a type into components that are provable types, then this gives us a provable type
@@ -402,23 +424,83 @@ theorem toElements_fromElements {F} : (cs : List WithProvableType) → (xs : Vec
     simp only [componentsToElements, componentsFromElements,
       toElements_fromElements, ProvableType.toElements_fromElements]
     rw [Vector.append_take_drop]
+
+/-- Flattening half of `ProvableType.fromStruct`. Split out so it can be sealed; see the note
+on `attribute [irreducible]` below. -/
+def structToElements {α : TypeMap} [ProvableStruct α] {F : Type} (x : α F) :
+    Vector F (combinedSize α) :=
+  toComponents x |> componentsToElements (components α) |>.cast combinedSize_eq.symm
+
+/-- Splitting half of `ProvableType.fromStruct`. -/
+def structFromElements {α : TypeMap} [ProvableStruct α] {F : Type}
+    (v : Vector F (combinedSize α)) : α F :=
+  v.cast combinedSize_eq |> componentsFromElements (components α) |> fromComponents
+
+@[circuit_norm] lemma structToElements_eq {α : TypeMap} [ProvableStruct α]
+    {F : Type} (x : α F) :
+    structToElements x
+      = (componentsToElements (components α) (toComponents x)).cast combinedSize_eq.symm := rfl
+
+@[circuit_norm] lemma structFromElements_eq {α : TypeMap} [ProvableStruct α]
+    {F : Type} (v : Vector F (combinedSize α)) :
+    structFromElements v
+      = fromComponents (componentsFromElements (components α) (v.cast combinedSize_eq)) := rfl
+
+/- `ProvableTypeList` is indexed by `List WithProvableType`, and `WithProvableType` carries its
+`ProvableType` instance as *data*. Elaborating a `fromComponents` pattern match therefore has to
+decide definitional equality of those instances, and when one of them comes from `fromStruct`
+that descends into the element functions and does not come back: `deriving ProvableStruct`
+diverges for a struct nesting another struct.
+
+Sealing the two element functions stops the descent there while leaving `size` — which is just
+`combinedSize α` — free to compute, as the table and cell machinery needs. The two lemmas above
+are what `circuit_norm` reduces through, so they must be proved before this line. -/
+attribute [irreducible] structToElements structFromElements
+
 end ProvableStruct
 
 open ProvableStruct in
 instance ProvableType.fromStruct {α : TypeMap} [ProvableStruct α] : ProvableType α where
   size := combinedSize α
-  toElements x :=
-    toComponents x |> componentsToElements (components α) |>.cast combinedSize_eq.symm
-  fromElements v :=
-    v.cast combinedSize_eq |> componentsFromElements (components α) |> fromComponents
+  toElements x := structToElements x
+  fromElements v := structFromElements v
   fromElements_toElements x := by
-    simp only [Vector.cast_cast, Vector.cast_rfl]
+    simp only [structToElements_eq, structFromElements_eq,
+      Vector.cast_cast, Vector.cast_rfl]
     rw [ProvableStruct.fromElements_toElements, fromComponents_toComponents]
   toElements_fromElements x := by
+    simp only [structToElements_eq, structFromElements_eq]
     rw [toComponents_fromComponents, ProvableStruct.toElements_fromElements]
     simp only [Vector.cast_cast, Vector.cast_rfl]
 
 namespace ProvableStruct
+
+/-- The elements of a list of components, as a list. -/
+def componentsToList {F : Type} : (cs : List WithProvableType) → ProvableTypeList F cs → List F
+  | [], .nil => []
+  | _ :: cs, .cons a as => (toElements a).toList ++ componentsToList cs as
+
+@[circuit_norm] lemma componentsToList_nil {F : Type} :
+    componentsToList [] (.nil : ProvableTypeList F []) = [] := rfl
+
+@[circuit_norm] lemma componentsToList_cons {F : Type} {c : WithProvableType}
+    {cs : List WithProvableType} (a : c.type F) (as : ProvableTypeList F cs) :
+    componentsToList (c :: cs) (.cons a as) = (toElements a).toList ++ componentsToList cs as := rfl
+
+lemma toList_componentsToElements {F : Type} :
+    (cs : List WithProvableType) → (as : ProvableTypeList F cs) →
+      (componentsToElements cs as).toList = componentsToList cs as
+  | [], .nil => rfl
+  | _ :: cs, .cons a as => by
+    simp [componentsToElements, componentsToList, toList_componentsToElements cs as]
+
+/-- The elements of a structure, as a list, are those of its components. Applied before simp
+descends into `toElements`, so that the elements of a structure literal compute. -/
+@[circuit_norm ↓] lemma toList_toElements {α : TypeMap} [ProvableStruct α] {F : Type} (x : α F) :
+    (toElements x).toList = componentsToList (components α) (toComponents x) := by
+  change (structToElements x).toList = _
+  rw [structToElements_eq, Vector.toList_cast, toList_componentsToElements]
+
 variable {α : TypeMap} [ProvableStruct α] {F : Type} [FiniteField F]
 
 /--
@@ -446,7 +528,8 @@ theorem eval_eq_eval {α : TypeMap} [ProvableStruct α] : ∀ (env : Environment
   intro env x
   rw [CircuitType.eval_expression]
   symm
-  simp only [eval, ProvableType.eval, fromElements, toElements, size]
+  simp only [eval, ProvableType.eval, fromElements, toElements, size,
+    ProvableStruct.structToElements_eq, ProvableStruct.structFromElements_eq]
   congr 1
   apply eval_eq_eval_aux
 where
@@ -454,8 +537,7 @@ where
     eval.go env cs as = (componentsToElements cs as |> Vector.map (Expression.eval env) |> componentsFromElements cs)
   | [], .nil => rfl
   | c :: cs, .cons a as => by
-    simp only [componentsToElements, componentsFromElements, eval.go,
-      combinedSize', List.map_cons, List.sum_cons]
+    simp only [componentsToElements, componentsFromElements, eval.go, combinedSize']
     simp only [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
     congr
     · exact (ProvableType.fromElements_eval_toElements (env:=env) a).symm
@@ -517,7 +599,8 @@ omit [FiniteField F] in
 theorem varFromOffset_eq_varFromOffset {α : TypeMap} [ProvableStruct α] (offset : ℕ) :
     ProvableType.varFromOffset (F:=F) α offset = ProvableStruct.varFromOffset α offset := by
   symm
-  simp only [varFromOffset, ProvableType.varFromOffset, fromElements, size]
+  simp only [varFromOffset, ProvableType.varFromOffset, fromElements, size,
+    ProvableStruct.structFromElements_eq]
   congr
   rw [←Vector.cast_mapRange combinedSize_eq.symm]
   apply varFromOffset_eq_varFromOffset_aux (components α) offset
@@ -530,7 +613,7 @@ where
       simp only [varFromOffset.go, componentsFromElements, ProvableType.varFromOffset]
       have h_size : combinedSize' (c :: cs) = size c.type + combinedSize' cs := rfl
       rw [Vector.cast_mapRange h_size, Vector.mapRange_add_eq_append]
-      simp only [combinedSize', List.map_cons, List.sum_cons]
+      simp only [combinedSize']
       simp_rw [Vector.cast_rfl, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
       congr
       -- recursively use this lemma
@@ -767,6 +850,10 @@ theorem getElem_eval_fields_prover {n : ℕ} {env : ProverEnvironment F}
     Expression.eval env.toEnvironment x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression_prover]
   simp only [explicit_provable_type, fromElements, Vector.getElem_map]
+
+theorem map_eval_toElements (env : Environment F) (x : α (Expression F)) :
+    (toElements x).map (Expression.eval env) = toElements (Eval.eval env x) :=
+  (toElements_eval env x).symm
 end ProvableType
 
 -- more concrete ProvableType instances
@@ -812,6 +899,10 @@ theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expr
   have h' := congrArg (fun xs : Vector (α F) n => xs[i]) (eval_vector env x)
   simpa only [Vector.getElem_map] using h'.symm
 
+theorem ProvableStruct.eval_getElem_vector {α : TypeMap} [ProvableStruct α] (env : Environment F)
+    (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) :
+    ProvableStruct.eval (α := α) env x[i] = (Eval.eval env x)[i] :=
+  (ProvableStruct.eval_eq_eval (α := α) env x[i]).symm.trans (_root_.getElem_eval_vector env x i h)
 /-- `eval` distributes over vector append (companion to `eval_vector_set`, for
 `grind`'s benefit at the folded spelling). -/
 @[grind =] theorem eval_vector_append {m k : ℕ} (env : Environment F)
@@ -843,10 +934,21 @@ lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
     (eval env (vars[i] : M (Expression F)) : M F) = vals[i] := by
   rw [getElem_eval_vector, h]
 
-/-- Chain fold through a pair-element vector access, straight to the whole-vector atom
-(used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the simproc
-can elaborate it without higher-order unification). -/
-@[grind =] theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
+/-! The vector evaluation lemmas at the element `TypeMap` `fieldPair`: higher-order
+unification cannot recover that `TypeMap` from an element type `Expression F × Expression F`,
+so the simprocs of `StructEvalSimprocs` match these instances directly. -/
+
+theorem eval_pairVector {n : ℕ} (env : Environment F)
+    (x : ProvableVector fieldPair n (Expression F)) :
+    eval env x = x.map (eval env) :=
+  eval_vector env x
+
+theorem getElem_eval_pairVector {n : ℕ} (env : Environment F)
+    (x : ProvableVector fieldPair n (Expression F)) (i : ℕ) (h : i < n) :
+    eval env x[i] = (eval env x)[i] :=
+  getElem_eval_vector env x i h
+
+theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
     (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
     Expression.eval env ((c[i]'hi).1) =
       (((eval env (c : ProvableVector fieldPair n (Expression F))) :
@@ -1005,12 +1107,19 @@ namespace CircuitType
 @[circuit_norm] lemma eval_field_pair (F : Type) [FiniteField F]
   (env : Environment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  with_unfolding_all rfl
+  unfold Eval.eval
+  change ProvableType.eval (M := fieldPair) env (p1, p2) =
+    (ProvableType.eval (M := field) env p1, ProvableType.eval (M := field) env p2)
+  simp [ProvableType.eval, toElements, fromElements, Vector.map_mk, List.map_toArray]
 
 @[circuit_norm] lemma eval_field_pair_prover (F : Type) [FiniteField F]
   (env : ProverEnvironment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  with_unfolding_all rfl
+  unfold Eval.eval
+  change ProvableType.eval (M := fieldPair) env.toEnvironment (p1, p2) =
+    (ProvableType.eval (M := field) env.toEnvironment p1,
+      ProvableType.eval (M := field) env.toEnvironment p2)
+  simp [ProvableType.eval, toElements, fromElements, Vector.map_mk, List.map_toArray]
 
 end CircuitType
 
@@ -1034,7 +1143,9 @@ theorem eval_pair_both_expr (env : Environment F)
   (a b : Expression F) :
     eval env ((a, b) : ProvablePair field field (Expression F)) =
       (Expression.eval env a, Expression.eval env b) := by
-  with_unfolding_all rfl
+  have h := CircuitType.eval_field_pair F env a b
+  simp only [CircuitType.eval_expr] at h
+  exact h
 
 omit [FiniteField F] in
 @[circuit_norm ↓ high]
