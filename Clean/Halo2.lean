@@ -11,6 +11,8 @@ import Clean.Halo2.Loops
 import Clean.Halo2.Formal.Tactics
 import Clean.Halo2.Keygen
 import Clean.Halo2.TopLevel
+import Clean.Halo2.Compiler.ConstraintsCompiled
+import Clean.Halo2.Compiler.CopyPermutation
 import Clean.Halo2.Tactics.ProvableTypeSimp
 import Clean.Halo2.Tactics.SelectorFree
 import Clean.Halo2.Tactics.ContractBridges
