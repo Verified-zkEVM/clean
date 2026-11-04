@@ -110,14 +110,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     ⟨chaining_value_norm 4, state_norm 12⟩, ⟨chaining_value_norm 5, state_norm 13⟩,
     ⟨chaining_value_norm 6, state_norm 14⟩, chaining_value_norm 7, state_norm 15⟩
 
-omit [Fact (p > 2 ^ 16 + 2 ^ 8)] in
-lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ}
-    (h : ∀ i < n, env.get i = env'.get i) (hk : k + 4 ≤ n) :
-    eval env (varFromOffset U32 k : U32 (Expression (F p))) =
-      eval env' (varFromOffset U32 k : U32 (Expression (F p))) := by
-  simp only [ProvableType.eval_varFromOffset, size, Vector.mapRange_succ, Vector.mapRange_zero]
-  grind
-
 def circuit : FormalCircuit (F p) Inputs BLAKE3State where
   main := main
   elaborated := elaborated
@@ -125,4 +117,5 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State where
   Spec := Spec
   soundness := soundness
   completeness := completeness
+
 end Gadgets.BLAKE3.FinalStateUpdate

@@ -17,7 +17,6 @@ def not64_bytewise (x : U64 (Expression (F p))) : U64 (Expression (F p)) := U64.
 def not64_bytewise_value (x : U64 (F p)) : U64 (F p) := x.map (fun x => 255 - x)
 
 omit p_large_enough in
-@[circuit_norm, grind =]
 lemma eval_not {env : Environment (F p)} {x_var : U64 (Expression (F p))} :
     eval env (not64_bytewise x_var) = not64_bytewise_value (eval env x_var) := by
   rw [not64_bytewise, not64_bytewise_value, U64.map, U64.map]
@@ -70,5 +69,6 @@ def circuit : FormalCircuit (F p) U64 U64 where
     -- there are no constraints to satisfy!
     intros
     exact trivial
+  computableWitnesses := by computable_witnesses [eval_not]
 
 end Gadgets.Not

@@ -10,14 +10,28 @@ variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 section
 variable {Input Output : TypeMap}
 
+open Lean Meta Elab Tactic in
+elab "unfold_formal_circuit_consts" : tactic => do
+  withMainContext do
+    let noUnfold ← labelled `explicit_circuit_no_unfold
+    let unfoldTypes ← labelled `explicit_circuit_unfold_type
+    let names ← collectUnfoldableCircuitDecls (← getMainTarget) #[]
+      (some noUnfold) (some unfoldTypes)
+    for name in names do
+      try
+        evalTactic (← `(tactic| unfold $(mkIdent name)))
+      catch _ =>
+        pure ()
+
 namespace FormalCircuitBase
 variable {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
 /--
 Formulation of `Circuit.ComputableWitnesses` that includes an assumption on the circuit input,
-used later for formal circuit bundles.
+used later for formal circuit bundles: every witness generator and every subcircuit input reads
+only the input and earlier witnesses, and so does the output.
 -/
 @[circuit_norm]
-def ComputableWitnesses (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main] : Prop :=
+def ComputableWitnesses (main : Var Input F → Circuit F (Var Output F)) : Prop :=
   ∀ (n : ℕ) (input : Var Input F) (env env' : ProverEnvironment F),
   -- witness operations only refer to the input and previous witnesses (lower offsets)
   (main input |>.operations n |>.forAll n {
@@ -31,8 +45,8 @@ def ComputableWitnesses (main : Var Input F → Circuit F (Var Output F)) [Elabo
     }) ∧
   -- the output only refers to the input and this circuit's witnesses (below `n + localLength`)
   (eval env input = eval env' input →
-  ProverEnvironment.OnlyAccessedBelow (n + ElaboratedCircuit.localLength main input)
-    (fun env => eval env (ElaboratedCircuit.output main input n)) env env')
+  ProverEnvironment.OnlyAccessedBelow (n + (main input).localLength n)
+    (fun env => eval env ((main input).output n)) env env')
 end FormalCircuitBase
 
 open Lean Meta Elab Tactic in
@@ -114,24 +128,6 @@ def output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offs
       channelsWithRequirements requirementsChannelsLawful computableWitnesses).output input offset =
     elaborated.output input offset := rfl
 
-open Lean Meta Simp in
-/-- Reduce `FormalCircuitBase.output` on record constructors without asking the
-simplifier to unify the constructor's dependent proof fields. -/
-private meta def outputSimproc (e : Expr) : SimpM Simp.Step := do
-  unless e.isAppOfArity ``FormalCircuitBase.output 9 do return .continue
-  let args := e.getAppArgs
-  let self := args[6]!
-  unless self.isAppOfArity ``FormalCircuitBase.mk 13 do return .continue
-  let selfArgs := self.getAppArgs
-  let outputProj := mkProj ``ElaboratedCircuit 2 selfArgs[8]!
-  let some outputFn ← withTransparency .none <| reduceProj? outputProj
-    | return .continue
-  let rhs := mkAppN outputFn #[args[7]!, args[8]!]
-  return .done { expr := rhs, proof? := none }
-
-simproc outputReduce (FormalCircuitBase.output _ _ _) := outputSimproc
-attribute [circuit_norm] outputReduce
-
 @[explicit_circuit_norm]
 def localLength (self : FormalCircuitBase F Input Output) (input : Var Input F) : ℕ :=
   self.elaborated.localLength input
@@ -157,6 +153,30 @@ def channelsWithGuarantees (self : FormalCircuitBase F Input Output) : List (Raw
     (FormalCircuitBase.mk name main elaborated exposedChannels exposedChannels_eq
       channelsWithRequirements requirementsChannelsLawful computableWitnesses).channelsWithRequirements =
     channelsWithRequirements := rfl
+
+open Lean Meta Simp in
+/-- Reduce the metadata definitions `output`, `localLength` and `channelsWithGuarantees` on record
+constructors to the corresponding `ElaboratedCircuit` field, without asking the simplifier to
+unify the constructor's dependent proof fields. -/
+private meta def metadataSimproc (e : Expr) : SimpM Simp.Step := do
+  let some (field, arity) := [(``FormalCircuitBase.output, (`output, 9)),
+      (``FormalCircuitBase.localLength, (`localLength, 8)),
+      (``FormalCircuitBase.channelsWithGuarantees, (`channelsWithGuarantees, 7))].lookup
+      (e.getAppFn.constName?.getD .anonymous) | return .continue
+  unless e.getAppNumArgs == arity do return .continue
+  let args := e.getAppArgs
+  let self := args[6]!
+  unless self.isAppOfArity ``FormalCircuitBase.mk 14 do return .continue
+  let some idx := (getStructureFields (← getEnv) ``ElaboratedCircuit).idxOf? field
+    | return .continue
+  let some value ← withTransparency .none <| reduceProj? (mkProj ``ElaboratedCircuit idx self.getAppArgs[8]!)
+    | return .continue
+  return .done { expr := mkAppN value (args.extract 7), proof? := none }
+
+simproc metadataReduce (FormalCircuitBase.output _ _ _) := metadataSimproc
+simproc localLengthReduce (FormalCircuitBase.localLength _ _) := metadataSimproc
+simproc channelsWithGuaranteesReduce (FormalCircuitBase.channelsWithGuarantees _) := metadataSimproc
+attribute [circuit_norm] metadataReduce localLengthReduce channelsWithGuaranteesReduce
 
 theorem localLength_eq (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) :
   (self.main input).localLength offset = self.localLength input :=

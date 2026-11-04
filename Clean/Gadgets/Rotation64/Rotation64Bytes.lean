@@ -70,8 +70,7 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
 theorem soundness (off : Fin 8) : Soundness (F p) (main off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
-  simp only [circuit_norm, explicit_provable_type, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-    fromElements, U64.mk.injEq] at h_inputs
+  simp only [circuit_norm, explicit_provable_type, U64.mk.injEq] at h_inputs
   obtain ⟨h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7⟩ := h_inputs
   clear h
 
@@ -87,7 +86,7 @@ theorem completeness (off : Fin 8) : Completeness (F p) (main off) Assumptions :
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [main, circuit_norm]
 
-def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 where
+def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
   main := main off
   elaborated := elaborated off
   requirementsChannelsLawful := by
@@ -97,6 +96,6 @@ def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 where
   soundness := soundness off
   completeness := completeness off
   computableWitnesses := by
-    -- the witness is selected by an `if`-nest on `off`; decide it first
     fin_cases off <;> computable_witnesses [reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+}
 end Gadgets.Rotation64Bytes

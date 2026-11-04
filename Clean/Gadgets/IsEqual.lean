@@ -93,6 +93,6 @@ def circuit : FormalCircuit F (ProvablePair α α) field where
   Spec
   soundness
   completeness
-  computableWitnesses := by computable_witnesses [diffs, ProvableType.eval_fromElements]
+  computableWitnesses := by computable_witnesses [diffs]
 
 end Gadgets.IsEqual

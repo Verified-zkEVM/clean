@@ -403,21 +403,6 @@ theorem forAll_implies {c c' : _root_.Condition F} (n : ℕ) {ops : List (FlatOp
 end FlatOperation
 
 namespace Operations
-/-- Monotonicity of `forAll` under a pointwise (op-independent) condition implication. -/
-theorem forAll_mono {c c' : Condition F} {n : ℕ} {ops : Operations F}
-    (hw : ∀ n' (m : ℕ) (compute : WitgenIR F m), c.witness n' m compute → c'.witness n' m compute)
-    (ha : ∀ n' (e : Expression F), c.assert n' e → c'.assert n' e)
-    (hl : ∀ n' (l : Lookup F), c.lookup n' l → c'.lookup n' l)
-    (hi : ∀ n' (i : AbstractInteraction F), c.interact n' i → c'.interact n' i)
-    (hs : ∀ n' {m : ℕ} (s : Subcircuit F m), c.subcircuit n' s → c'.subcircuit n' s) :
-    forAll n c ops → forAll n c' ops := by
-  intro h
-  induction ops generalizing n with
-  | nil => trivial
-  | cons op ops ih =>
-    rw [forAll_cons] at h ⊢
-    exact ⟨by cases op <;> simp_all [Condition.apply], ih h.2⟩
-
 theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : Operations F} :
     (forAll n (c.implies c') ops) → (forAll n c ops → forAll n c' ops) := by
   simp only [Condition.implies]
@@ -426,6 +411,14 @@ theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : Operations F} :
   | nil => simp [forAll_empty]
   | cons op ops ih =>
     specialize ih (n + op.localLength)
+    cases op <;> simp_all [forAll_cons, Condition.apply]
+
+theorem forAll_of_forall {c : Condition F} (h : ∀ n op, c.apply n op) (n : ℕ) (ops : Operations F) :
+    forAll n c ops := by
+  induction ops generalizing n with
+  | nil => simp [forAll_empty]
+  | cons op ops ih =>
+    have := h n op
     cases op <;> simp_all [forAll_cons, Condition.apply]
 
 lemma forAll_toFlat_iff (n : ℕ) (condition : Condition F) (ops : Operations F) :
@@ -543,52 +536,6 @@ theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (h
   intro env env'
   rw [Operations.forAll_toFlat_iff]
   exact h_computable env env'
-
-lemma ProverEnvironment.agreesBelow_of_le {F} {n m : ℕ} {env env' : ProverEnvironment F} :
-    env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
-  fun h_same hi => ⟨fun i hi' => h_same.1 i (Nat.lt_of_lt_of_le hi' hi), h_same.2.1, h_same.2.2⟩
-
-/-- A `varFromOffset` window evaluates equally under environments that agree below the
-window's end: it is a fresh block of witness variables, independent of any circuit input.
-This is the congruence behind "the output of a subcircuit with a plain witness output is
-computable", without threading input congruence through the parent. -/
-lemma ProverEnvironment.eval_varFromOffset_congr {F} [FiniteField F] {M : TypeMap} [ProvableType M]
-    {env env' : ProverEnvironment F} {n : ℕ} (h : env.AgreesBelow (n + size M) env') :
-    (eval env.toEnvironment (varFromOffset (F:=F) M n) : M F) =
-      eval env'.toEnvironment (varFromOffset (F:=F) M n) := by
-  grind
-
-/-- Backward-reasoning form for `grind`: the agreement bound is a separate variable with
-an arithmetic side premise, so E-matching can fire on whatever `AgreesBelow` hypothesis
-is in context before bound normalization (the same shaping as the
-`…_of_offset_eq` composition rules). -/
-lemma ProverEnvironment.eval_varFromOffset_congr_of_le {F} [FiniteField F] {M : TypeMap}
-    [ProvableType M] {env env' : ProverEnvironment F} {n m : ℕ}
-    (h : env.AgreesBelow m env') (hle : n + size M ≤ m) :
-    (eval env.toEnvironment (varFromOffset (F:=F) M n) : M F) =
-      eval env'.toEnvironment (varFromOffset (F:=F) M n) :=
-  ProverEnvironment.eval_varFromOffset_congr (ProverEnvironment.agreesBelow_of_le h hle)
-
-grind_pattern ProverEnvironment.eval_varFromOffset_congr_of_le =>
-  eval env.toEnvironment (varFromOffset (F:=F) M n), env.AgreesBelow m env'
-
-@[circuit_norm]
-lemma ProverEnvironment.onlyAccessedBelow_environment_get_iff_lt {n m : ℕ} :
-    (∀ env env', ProverEnvironment.OnlyAccessedBelow n (fun env => env.get (F:=F) m) env env') ↔ m < n := by
-  simp only [OnlyAccessedBelow, AgreesBelow]
-  constructor; swap
-  · grind
-  contrapose!
-  intro lt
-  use { get _ := 0, data := .empty F, hint := default }
-  use { get i := if (i = m) then 1 else 0, data := .empty F, hint := default }
-  grind
-
-omit [FiniteField F] in
-lemma ProverEnvironment.onlyAccessedBelow_environment_get_of_lt {n m : ℕ} {env env' : ProverEnvironment F}
-  (h : m < n) : ProverEnvironment.OnlyAccessedBelow n (fun env => env.get (F:=F) m) env env' := by
-  simp only [OnlyAccessedBelow, AgreesBelow]
-  grind
 
 namespace FlatOperation
 /--

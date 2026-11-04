@@ -98,8 +98,6 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     simp only [h_input] at h_env ⊢
     use h_assumptions
 
-  computableWitnesses := by computable_witnesses [Witgen.WitgenIR.eval_nativeValue]
-
 @[circuit_norm]
 def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) : Circuit F (Var β F) :=
   lookupCircuit circuit hint input

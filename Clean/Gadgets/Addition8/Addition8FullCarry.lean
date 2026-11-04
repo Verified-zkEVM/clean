@@ -128,6 +128,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
 def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   circuit with
   name := "Addition8FullCarry"
+
 }
 
 end Gadgets.Addition8FullCarry

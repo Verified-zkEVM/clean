@@ -82,8 +82,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
   main, Assumptions, Spec, soundness, completeness
-  computableWitnesses := by
-    computable_witnesses
 }
 
 end Gadgets.Keccak256.ThetaD

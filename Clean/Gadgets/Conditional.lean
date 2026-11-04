@@ -100,9 +100,6 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
   Spec
   soundness
   completeness
-  computableWitnesses := by
-    computable_witnesses [ProvableType.eval_fromElements, ProvableType.getElem_eval_toElements,
-      Vector.ext_iff]
 
 /--
 Conditional selection.

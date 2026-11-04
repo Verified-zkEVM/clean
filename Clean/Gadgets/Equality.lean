@@ -19,9 +19,8 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
-  have h := h_holds ⟨i, hi⟩
-  rw [← ProvableType.getElem_eval_fields env xs i hi] at h
-  exact h
+  rw [ProvableType.getElem_eval_fields env xs i hi]
+  exact h_holds ⟨i, hi⟩
 
 theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) →
@@ -113,29 +112,6 @@ lemma channelsWithGuarantees_eq :
 lemma channelsWithRequirements_eq :
   (circuit M (F:=F)).channelsWithRequirements = [] := by simp only [circuit_norm, circuit]
 
-/-- `Equality` is assert-only (no witnesses), so its subcircuit is trivially computable — for
-*any* pair of offsets. Decoupling the `toSubcircuit` offset `m` (the `Subcircuit F m` type index)
-from the `ComputableWitnesses` offset `n` matters: a parent's `circuit_norm` can reduce the free
-`n` while the offset inside the type index stays unreduced (dependent motive), so a same-offset
-statement stops matching. -/
-@[circuit_norm, computable_witnesses_norm]
-theorem toSubcircuit_computableWitnesses {m n : ℕ} (input : Var (ProvablePair M M) F)
-    {env env' : ProverEnvironment F} :
-    ((circuit M).toSubcircuit m input).ComputableWitnesses n env env' := by
-  -- destructure up front: simp does not iota-reduce the pair `match` coming from `main`'s
-  -- destructuring against an opaque variable
-  obtain ⟨x, y⟩ := input
-  have h_n : ((circuit M).toSubcircuit n (x, y)).ComputableWitnesses n env env' := by
-    simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, circuit, main,
-      Operations.forAll_toFlat_iff, Operations.forAllFlat, circuit_norm]
-  have h_ops : ((circuit M).main (x, y)).operations m = ((circuit M).main (x, y)).operations n := by
-    simp only [circuit, main]
-    rw [Circuit.forEach.operations_eq, Circuit.forEach.operations_eq]
-    rfl
-  simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit] at h_n ⊢
-  rw [h_ops]
-  exact h_n
-
 -- rewrite spec/proverAssumptions/proverSpec directly
 
 @[circuit_norm]
@@ -176,7 +152,6 @@ instance : HasAssertEq (M (Expression F)) F where
   assert_eq := @assertEquals F _ M _
 
 attribute [circuit_norm] HasAssertEq.assert_eq
-attribute [computable_witnesses_norm] HasAssertEq.assert_eq
 infix:50 " === " => HasAssertEq.assert_eq
 
 -- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
@@ -200,7 +175,6 @@ instance {n : ℕ} : HasAssignEq (Vector (Expression F) n) F :=
   inferInstanceAs (HasAssignEq (fields n (Expression F)) F)
 
 attribute [circuit_norm] HasAssignEq.assignEq
-attribute [computable_witnesses_norm] HasAssignEq.assignEq
 
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem

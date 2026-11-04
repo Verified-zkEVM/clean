@@ -156,6 +156,4 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
   Spec
   soundness
   completeness
-  computableWitnesses := by
-    computable_witnesses
 end Gadgets.Addition32Full

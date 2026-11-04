@@ -174,50 +174,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact ⟨n_sig0, n_maj⟩
   · exact ⟨n_t1, by simp_all⟩
   · exact ⟨h_d, n_t1⟩
-
-omit [Fact (p > 2 ^ 33)] in
-/-- Env-agreement transfers to a fresh window of witness variables (own heartbeat budget). -/
-lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}
-    (f : ℕ → ℕ) (h : ∀ i < n, env.get i = env'.get i) (hf : ∀ i < 32, f i < n) :
-    Vector.map (Expression.eval env.toEnvironment)
-        (Vector.mapRange 32 fun i => var ⟨f i⟩ : Vector (Expression (F p)) 32) =
-      Vector.map (Expression.eval env'.toEnvironment)
-        (Vector.mapRange 32 fun i => var ⟨f i⟩) := by
-  refine Vector.ext fun i hi => ?_
-  simp only [Vector.getElem_map, Vector.getElem_mapRange, circuit_norm]
-  exact h (f i) (hf i (by omega))
-
-omit [Fact (p > 2 ^ 33)] in
-/-- Env-agreement transfers through one round step (window base `w`): the two witness
-windows are fresh cells below the bound, the remaining entries evaluate through the
-previous state. Spelled base-first (`w + 389 + i`), matching `SHA256Compress.stateVar`. -/
-lemma output_eval_congr {env env' : ProverEnvironment (F p)}
-    {state : SHA256State (Expression (F p))} {w : ℕ}
-    (hstate : (eval env.toEnvironment state : SHA256State (F p)) = eval env'.toEnvironment state)
-    (h_agrees : env.AgreesBelow (w + 455) env') :
-    (eval env.toEnvironment
-        (#v[Vector.mapRange 32 fun i => var ⟨w + 389 + i⟩,
-            state[0], state[1], state[2],
-            Vector.mapRange 32 fun i => var ⟨w + 422 + i⟩,
-            state[4], state[5], state[6]] : Var SHA256State (F p)) : SHA256State (F p)) =
-      eval env'.toEnvironment
-        (#v[Vector.mapRange 32 fun i => var ⟨w + 389 + i⟩,
-            state[0], state[1], state[2],
-            Vector.mapRange 32 fun i => var ⟨w + 422 + i⟩,
-            state[4], state[5], state[6]] : Var SHA256State (F p)) := by
-  have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr hstate jj hjj
-  simp only [eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-    Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true]
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> rw [ProvableType.eval_fields, ProvableType.eval_fields]
-  · exact mapRange_var_eval_congr (fun i => w + 389 + i) h_agrees.1 (fun i hi => by omega)
-  · exact hel 0 (by omega)
-  · exact hel 1 (by omega)
-  · exact hel 2 (by omega)
-  · exact mapRange_var_eval_congr (fun i => w + 422 + i) h_agrees.1 (fun i hi => by omega)
-  · exact hel 4 (by omega)
-  · exact hel 5 (by omega)
-  · exact hel 6 (by omega)
-
 def circuit : FormalCircuit (F p) Inputs SHA256State where
   main; elaborated; Assumptions; Spec; soundness; completeness
 end SHA256Round

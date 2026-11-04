@@ -122,10 +122,11 @@ theorem completeness (offset : Fin 8) : Completeness (Input:=field) (Output:=Out
     have : (2^offset.val : F p) = ((2^offset.val : ℕ+) : F p) := by simp
     rw [this, mul_comm, FieldUtils.mod_add_floorDiv lt]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs where
+def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs := {
   main := main offset
   Assumptions
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
+}
 end Gadgets.ByteDecomposition

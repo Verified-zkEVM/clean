@@ -99,7 +99,7 @@ If a circuit has computable witnesses, the environment built from `Circuit.witge
 uses the circuit's local witnesses — i.e., array-backed witness generation is honest.
 -/
 theorem witgen_usesLocalWitnesses (circuit : Circuit F α) (hint : ProverHint F)
-    (init : Array F) (h_computable : circuit.ComputableWitnesses init.size) :
+    (init : Array F) (h_computable : ∀ env env', circuit.ComputableWitnesses init.size env env') :
     (ProverEnvironment.fromArray (circuit.witgen hint init) (.empty F) hint)
       |>.UsesLocalWitnesses init.size (circuit.operations init.size) := by
   rw [witgen_proverEnvironment]

@@ -40,7 +40,7 @@ def Spec (x : fields 32 (F p)) (z : fields 32 (F p)) : Prop :=
 
 /-! ## Spec proof factored out to avoid kernel deep recursion -/
 
-lemma spec_of_constraint
+private lemma spec_of_constraint
     (input z : fields 32 (F p))
     (hx : Normalized input)
     (h_z : ∀ i : Fin 32, z[i] =
@@ -215,13 +215,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
-  -- Manual: the rotation-xor witness IR reads input bits; its eval-congruence needs the
-  -- sigma-specific decomposition facts, beyond the tactic's generic close.
-  computableWitnesses := by
-    computable_witnesses_start [upperSigma0, xor32, rotr32, Vector.ext_iff, Vector.getElem_rotate]
-    · computable_witnesses_close [h ((i + 2) % 32) (by omega), h ((i + 13) % 32) (by omega)]
-    · computable_witnesses_close [h ((i + 22) % 32) (by omega)]
-    · computable_witnesses_close
+  computableWitnesses := by computable_witnesses [rotr32, Vector.getElem_rotate]
 
 end UpperSigma0
 end Gadgets.SHA256

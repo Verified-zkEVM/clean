@@ -213,6 +213,7 @@ def step (program : Program) (h_program : program.length < p) (opcode : Opcode) 
   completeness := by
     circuit_proof_start [programCell, programCellIn]
     rcases h_assumptions with h | ⟨h, h_state, h_contains⟩ <;> simp_all
+  computableWitnesses := by computable_witnesses [programCell]
 
 /-- The table of `opcode`: one row per state whose `pc` holds `opcode`. -/
 abbrev stepComponent (program : Program) (h_program : program.length < p) (opcode : Opcode) :

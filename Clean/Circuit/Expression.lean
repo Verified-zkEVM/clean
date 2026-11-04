@@ -104,24 +104,6 @@ def eval (env : Environment F) : Expression F → F
   | add x y => eval env x + eval env y
   | mul x y => eval env x * eval env y
 
-/-! `eval`'s defining equations as `grind =` rules rather than `grind unfold`:
-unfold only reduces syntactic constructor applications, while E-matching rules also
-fire when the argument's e-class contains the constructor form (window atoms folded
-to `var` by other rules). The unfold tag would additionally erase these very rules
-at registration time by normalizing their left-hand sides. -/
-
-@[grind =] theorem eval_var_ctor (env : Environment F) (v : Variable F) :
-    eval env (var v) = env.get v.index := rfl
-
-@[grind =] theorem eval_const_ctor (env : Environment F) (c : F) :
-    eval env (const c) = c := rfl
-
-@[grind =] theorem eval_add_ctor (env : Environment F) (x y : Expression F) :
-    eval env (add x y) = eval env x + eval env y := rfl
-
-@[grind =] theorem eval_mul_ctor (env : Environment F) (x y : Expression F) :
-    eval env (mul x y) = eval env x * eval env y := rfl
-
 def toString [Repr F] : Expression F → String
   | var v => reprStr v
   | const c => reprStr c
@@ -158,16 +140,6 @@ attribute [circuit_norm] Bool.and_eq_true
 instance : Coe F (Expression F) where coe f := const f
 instance {n : ℕ} [OfNat F n] : OfNat (Expression F) n where
   ofNat := const (OfNat.ofNat n)
-/-- Numeral spellings of `const`: goals carry `(0 : Expression F)` through the
-`Zero`/`One`/`OfNat` instances, never the syntactic `const` constructor. -/
-@[grind =] theorem eval_zero (env : Environment F) :
-    eval env (0 : Expression F) = 0 := rfl
-
-@[grind =] theorem eval_one (env : Environment F) :
-    eval env (1 : Expression F) = 1 := rfl
-
-@[grind =] theorem eval_ofNat (env : Environment F) (n : ℕ) [OfNat F n] :
-    eval env (OfNat.ofNat n : Expression F) = OfNat.ofNat n := rfl
 
 instance : HMul F (Expression F) (Expression F) where hMul f e := mul f e
 instance : HMul (Expression F) F (Expression F) where hMul f e := mul f e
@@ -197,27 +169,21 @@ instance [Field F] : Inhabited (Expression F) where
 section EvalLemmas
 variable [Field F]
 
-/-! The eval distribution rules are keyed on the operator spellings (`a + b`, not
-`Expression.add a b`): circuits are written in operator sugar, so that is the form goals
-contain, and `grind` in particular never unfolds the `HAdd`/`Sub`/`Neg`/`Mul` instances
-down to the constructors. The operator forms are definitionally the constructors, so
-they prove by `rfl` and also apply wherever the constructor spelling appears. -/
-
 /-- Expression.eval distributes over multiplication -/
-@[circuit_norm, grind =]
+@[circuit_norm]
 lemma eval_mul (env : Environment F) (a b : Expression F) :
-    Expression.eval env (a * b) = Expression.eval env a * Expression.eval env b := rfl
+    Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
+  simp only [Expression.eval]
 
 /-- Expression.eval distributes over addition -/
-@[circuit_norm, grind =]
+@[circuit_norm]
 lemma eval_add (env : Environment F) (a b : Expression F) :
-    Expression.eval env (a + b) = Expression.eval env a + Expression.eval env b := rfl
+    Expression.eval env (Expression.add a b) = (Expression.eval env a) + (Expression.eval env b) := by
+  simp only [Expression.eval]
 
 /-- Expression.eval distributes over negation. Keyed on the `-a` surface syntax: the
 `Expression.eval` matcher does not unfold the composite `Neg`/`Sub` instances, so the
-`Expression.mul`-keyed lemmas do not reach these spellings. Not a `grind` rule: the
-`-1` literal hidden in the desugared pattern trips a grind internalization bug
-("term has not been internalized"). -/
+`Expression.mul`-keyed lemmas do not reach these spellings. -/
 @[circuit_norm]
 lemma eval_neg (env : Environment F) (a : Expression F) :
     Expression.eval env (-a) = -Expression.eval env a := by
@@ -225,10 +191,10 @@ lemma eval_neg (env : Environment F) (a : Expression F) :
   simp only [Expression.eval, neg_one_mul]
 
 /-- Expression.eval distributes over subtraction (see `eval_neg`). -/
-@[circuit_norm, grind =]
+@[circuit_norm]
 lemma eval_sub (env : Environment F) (a b : Expression F) :
     Expression.eval env (a - b) = Expression.eval env a - Expression.eval env b := by
-  show Expression.eval env (a + -b) = _
+  show Expression.eval env (Expression.add a (-b)) = _
   rw [eval_add, eval_neg, ← sub_eq_add_neg]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/
@@ -256,5 +222,46 @@ lemma eval_foldl (env : Environment F) (n : ℕ)
     rw [hf (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) (Fin.last n')]
     -- Rewrite using h1
     rw [h1]
+
+/-- Expression.eval distributes over the branches of an `if`. -/
+lemma eval_ite (env : Environment F) (c : Prop) [Decidable c] (a b : Expression F) :
+    Expression.eval env (if c then a else b) = if c then Expression.eval env a else Expression.eval env b :=
+  apply_ite _ c a b
+
+/-- Expression.eval distributes over the branches of a dependent `if`. -/
+lemma eval_dite (env : Environment F) (c : Prop) [Decidable c] (a : c → Expression F)
+    (b : ¬c → Expression F) :
+    Expression.eval env (if h : c then a h else b h) =
+      if h : c then Expression.eval env (a h) else Expression.eval env (b h) :=
+  apply_dite _ c a b
+
+/-- Expression.eval distributes over the sum of a vector. -/
+lemma eval_vector_sum (env : Environment F) {n : ℕ} (v : Vector (Expression F) n) :
+    Expression.eval env v.sum = (v.map (Expression.eval env)).sum := by
+  rcases v with ⟨⟨l⟩, rfl⟩
+  simp only [Vector.sum_mk, Vector.map_mk, List.sum_toArray, List.map_toArray]
+  induction l with
+  | nil => rfl
+  | cons a l ih => simp only [List.sum_cons, List.map_cons, ← ih]; rfl
+
+/-- Expression.eval distributes over a sum folded over `Fin n`. -/
+lemma eval_foldl_add (env : Environment F) (n : ℕ) (g : Fin n → Expression F) (init : Expression F) :
+    Expression.eval env (Fin.foldl n (fun acc i => acc + g i) init) =
+      Fin.foldl n (fun acc i => acc + Expression.eval env (g i)) (Expression.eval env init) := by
+  induction n with
+  | zero => simp only [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ_last, Expression.eval]
+    rw [ih fun i => g i.castSucc]
+
+/-- Expression.eval distributes over a product folded over `Fin n`. -/
+lemma eval_foldl_mul (env : Environment F) (n : ℕ) (g : Fin n → Expression F) (init : Expression F) :
+    Expression.eval env (Fin.foldl n (fun acc i => acc * g i) init) =
+      Fin.foldl n (fun acc i => acc * Expression.eval env (g i)) (Expression.eval env init) := by
+  induction n with
+  | zero => simp only [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ_last, Expression.eval]
+    rw [ih fun i => g i.castSucc]
 
 end EvalLemmas

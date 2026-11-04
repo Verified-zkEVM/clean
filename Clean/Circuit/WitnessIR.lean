@@ -148,7 +148,7 @@ variable [FiniteField F]
 
 mutual
 
-@[circuit_norm, grind unfold]
+@[circuit_norm]
 def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .expr e => e.eval ctx.env.toEnvironment
   | .const c => c
@@ -167,13 +167,13 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .hintGet key n row col =>
     ((ctx.env.hint key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
 
-@[circuit_norm, grind unfold]
+@[circuit_norm]
 def FExpr.evalList (ctx : Ctx F) : ℕ → List (FExpr F) → F
   | _, [] => 0
   | 0, x :: _ => x.eval ctx
   | i + 1, _ :: xs => FExpr.evalList ctx i xs
 
-@[circuit_norm, grind unfold]
+@[circuit_norm]
 def U64Expr.eval (ctx : Ctx F) : U64Expr F → UInt64
   | .const n => n
   | .val x => UInt64.ofNat (FiniteField.val (x.eval ctx))
@@ -193,7 +193,7 @@ def U64Expr.eval (ctx : Ctx F) : U64Expr F → UInt64
   | .shiftR x y => x.eval ctx >>> y.eval ctx
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
 
-@[circuit_norm, grind unfold]
+@[circuit_norm]
 def BExpr.eval (ctx : Ctx F) : BExpr F → Bool
   | .true => true
   | .false => false
@@ -447,7 +447,7 @@ section
 variable [FiniteField F] {value : TypeMap} [ProvableType value]
 
 /-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term. -/
-@[circuit_norm ↓, grind =]
+@[circuit_norm ↓]
 theorem VExpr.getElem_eval_mapRange (ctx : Ctx F) (n : ℕ) (body : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
@@ -461,7 +461,7 @@ theorem VExpr.getElem_eval_envRange (ctx : Ctx F) {n : ℕ} (offset : ℕ)
   simp [VExpr.eval, Vector.getElem_mapRange]
 
 /-- Elementwise evaluation of bit decompositions, keyed on the eval term. -/
-@[circuit_norm ↓, grind =]
+@[circuit_norm ↓]
 theorem VExpr.getElem_eval_bitsOf (ctx : Ctx F) {n : ℕ} (x : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.bitsOf (n := n) x))[i]
@@ -477,7 +477,7 @@ theorem VExpr.getElem_eval_lit {n : ℕ} (ctx : Ctx F)
 
 /-- Elementwise evaluation of general witness programs, keyed on `getElem`:
 reduces to the output vector expression evaluated with the `let`-steps in scope. -/
-@[circuit_norm ↓, grind =]
+@[circuit_norm ↓]
 theorem WitgenIR.getElem_eval_ir {n : ℕ} (steps : List (Step F))
     (out : VExpr F n) (env : ProverEnvironment F)
     (i : ℕ) (hi : i < n) :
@@ -486,7 +486,7 @@ theorem WitgenIR.getElem_eval_ir {n : ℕ} (steps : List (Step F))
   rfl
 
 /-- Scalar witness programs evaluate elementwise to their IR expression. -/
-@[circuit_norm ↓, grind =]
+@[circuit_norm ↓]
 theorem WitgenIR.getElem_eval_ofFExpr (e : FExpr F)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < 1) :
     ((ofFExpr e).eval env)[i] = e.eval { env } := by
@@ -494,7 +494,7 @@ theorem WitgenIR.getElem_eval_ofFExpr (e : FExpr F)
   simp [ofFExpr, WitgenIR.eval, VExpr.eval, evalSteps]
 
 /-- Elementwise evaluation of multi-element witness programs, keyed on `getElem`. -/
-@[circuit_norm ↓, grind =]
+@[circuit_norm ↓]
 theorem WitgenIR.getElem_eval_ofCompositeFExpr (e : value (FExpr F))
     (env : ProverEnvironment F) (i : ℕ) (hi : i < size value) :
     ((ofCompositeFExpr e).eval env)[i] = (toElements e)[i].eval { env } := by
@@ -516,8 +516,10 @@ theorem WitgenIR.eval_ofCompositeFExpr_one {F : Type} [FiniteField F]
   with_unfolding_all rfl
 
 /-- Field-equality conditions decide propositional equality (via the injective
-`ℕ` embedding). -/
-@[circuit_norm]
+`ℕ` embedding). Rewrites top-down, before `BExpr.eval` unfolds: the unfolded condition is
+`decide` of an equation whose sides `FExpr.eval` then rewrites definitionally, leaving the
+`Decidable` instance at the old spelling, where no lemma matches it any more. -/
+@[circuit_norm ↓]
 theorem BExpr.eval_feq_iff (x y : FExpr F) (ctx : Ctx F) :
     (BExpr.feq x y).eval ctx = Bool.true ↔ x.eval ctx = y.eval ctx := by
   simp only [BExpr.eval, decide_eq_true_eq]

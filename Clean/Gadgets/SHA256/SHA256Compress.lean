@@ -66,7 +66,7 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
 omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 33)] in
 /-- Generic version of `output_eq`: for any bound `k`, the `Fin.foldl k` over our round body
     equals `stateVar i₀ input_var_state k`. -/
-lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
+private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
     Fin.foldl k
       (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
         #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
@@ -98,7 +98,7 @@ lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p
     Uses `SHA256State (Expression (F p))` for the accumulator type (not the
     `Var SHA256State (F p)` alias) so the lemma's pattern matches `h_holds`
     syntactically — `rw` can't see through the alias. -/
-lemma foldlAcc_eq_stateVar (i₀ : ℕ)
+private lemma foldlAcc_eq_stateVar (i₀ : ℕ)
     (input_var_state : SHA256State (Expression (F p)))
     (input_var_schedule : SHA256Schedule (Expression (F p)))
     (k : ℕ) (h : k < 64) :
@@ -168,7 +168,7 @@ private lemma valueBits_constWord32_of_lt (env : Environment (F p)) {n : ℕ} (h
   rw [valueBits_constWord32, Nat.mod_eq_of_lt h]
 
 /-- The value-level state at the end of round `k`. -/
-def valStateAfterRound (input_state : Vector ℕ 8)
+private def valStateAfterRound (input_state : Vector ℕ 8)
     (input_schedule : Vector ℕ 64) : ℕ → Vector ℕ 8
   | 0 => input_state
   | k + 1 =>
@@ -179,7 +179,7 @@ def valStateAfterRound (input_state : Vector ℕ 8)
       valStateAfterRound input_state input_schedule k
 
 /-- `sha256Compress` equals our `valStateAfterRound` at index 64. -/
-lemma sha256Compress_eq_valStateAfterRound
+private lemma sha256Compress_eq_valStateAfterRound
     (input_state : Vector ℕ 8) (input_schedule : Vector ℕ 64) :
     Specs.SHA256.sha256Compress input_state input_schedule =
       valStateAfterRound input_state input_schedule 64 := by
@@ -338,49 +338,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
-  -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
-  -- plus Add32-family witness IR); see those gadgets' comments.
-  computableWitnesses := by
-    computable_witnesses_start
-    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by try rfl; try omega) fun h_agrees => ?_
-      have hsv := Circuit.FoldlM.foldlAcc_eval_congr
-        (xs := Vector.finRange 64)
-        (body := fun s (i : Fin 64) => subcircuit SHA256Round.circuit
-          { state := s, k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
-            w := input_schedule[i.val]'i.isLt })
-        (constant := ⟨455, fun _ _ => rfl⟩)
-        h.1
-        (fun acc k hk hacc hag =>
-          SHA256Round.output_eval_congr hacc
-            (ProverEnvironment.agreesBelow_of_le hag
-              (show n + k * 455 + 455 ≤ n + (k + 1) * 455 by omega)))
-        i
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only []; omega))
-      have hSch := fun (jj : ℕ) (hjj : jj < 64) => map_eval_getElem_congr h.2 jj hjj
-      simp only [circuit_norm]
-      refine ⟨?_, ?_, ?_⟩
-      · exact hsv
-      · -- the round constant: env-independent
-        refine Vector.ext fun j hj => ?_
-        simp only [Vector.getElem_map, constWord32, Vector.getElem_ofFn, circuit_norm]
-      · rw [← getElem_eval_vector, ← getElem_eval_vector,
-          ProvableType.eval_fields, ProvableType.eval_fields]
-        exact hSch i.val (by omega)
-    · rw [← fin_foldl_eq_stateVar]
-      exact Circuit.FoldlM.finFoldl_output_eval_congr
-        (xs := Vector.finRange 64)
-        (body := fun s (i : Fin 64) => subcircuit SHA256Round.circuit
-          { state := s, k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
-            w := input_schedule[i.val]'i.isLt })
-        (constant := ⟨455, fun _ _ => rfl⟩)
-        h.1
-        (fun acc k hk hacc hag =>
-          SHA256Round.output_eval_congr hacc
-            (ProverEnvironment.agreesBelow_of_le hag
-              (show n + k * 455 + 455 ≤ n + (k + 1) * 455 by omega)))
-        (ProverEnvironment.agreesBelow_of_le h_agrees
-          (show n + 64 * 455 ≤ n + 29120 by omega))
+  computableWitnesses := by computable_witnesses [constWord32]
 }
 
 end SHA256Rounds
@@ -468,46 +426,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
-  -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
-  -- plus Add32-family witness IR); see those gadgets' comments. maxRecDepth: the
-  -- Add32 leg unifies `SHA256Rounds.circuit.output` against its 64-step unfolding.
-  computableWitnesses := by
-    computable_witnesses_start
-    · computable_witnesses_close
-    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => ?_
-      simp only [circuit_norm]
-      refine ⟨h.1, ?_⟩
-      exact FormalCircuit.output_of_input_eq (MessageSchedule.circuit (p:=p))
-        (input_var := input_block) (n := n) h.2
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by
-          have eM : ∀ x, (MessageSchedule.circuit (p:=p)).localLength x = 10896 := fun _ => rfl
-          simp only [eM]; omega))
-    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => ?_
-      have oR := FormalCircuit.output_of_input_eq (SHA256Rounds.circuit (p:=p))
-        (input_var := ⟨input_state, (MessageSchedule.circuit (p:=p)).output input_block n⟩)
-        (n := n + 10896)
-        (by simp only [circuit_norm]
-            refine ⟨h.1, ?_⟩
-            exact FormalCircuit.output_of_input_eq (MessageSchedule.circuit (p:=p))
-              (input_var := input_block) (n := n) h.2
-              (ProverEnvironment.agreesBelow_of_le h_agrees (by
-                have eM : ∀ x, (MessageSchedule.circuit (p:=p)).localLength x = 10896 := fun _ => rfl
-                simp only [eM]; omega)))
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by
-          have eR : ∀ x, (SHA256Rounds.circuit (p:=p)).localLength x = 29120 := fun _ => rfl
-          simp only [eR]; omega))
-      have hb := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr oR jj hjj
-      have ha := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
-      simp only [circuit_norm]
-      have ha' := ha i.val i.isLt
-      have hb' := hb i.val i.isLt
-      rw [← ProvableType.eval_fields, ← ProvableType.eval_fields,
-        getElem_eval_vector, getElem_eval_vector] at ha'
-      rw [← ProvableType.eval_fields, ← ProvableType.eval_fields] at hb'
-      exact ⟨ha', hb'⟩
-    · computable_witnesses_close
 }
 
 end CompressBlock

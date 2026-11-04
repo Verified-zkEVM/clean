@@ -666,10 +666,8 @@ def isUnfoldableCircuitDecl (declName : Name)
   | _ => return false
 
 /-- Collect constants in an expression that are unfoldable circuit wrappers according to
-`isUnfoldableCircuitDecl`. Pass already-read label sets to avoid re-reading attributes per node.
-Uses `Expr.foldConsts` (cached over the expression DAG) — a naive recursion re-visits shared
-subterms tree-many times, which is quadratic-plus on large normalized circuit goals. -/
-def collectUnfoldableCircuitDecls
+`isUnfoldableCircuitDecl`. Pass already-read label sets to avoid re-reading attributes per node. -/
+partial def collectUnfoldableCircuitDecls
     (e : Expr) (decls : Array Name := #[])
     (noUnfold? : Option (Array Name) := none) (unfoldType? : Option (Array Name) := none) :
     MetaM (Array Name) := do
@@ -677,14 +675,21 @@ def collectUnfoldableCircuitDecls
     | some s => pure s | none => labelled `explicit_circuit_no_unfold
   let unfoldType ← match unfoldType? with
     | some s => pure s | none => labelled `explicit_circuit_unfold_type
-  let candidates := e.foldConsts (#[] : Array Name) fun n acc =>
-    if acc.contains n then acc else acc.push n
-  let mut result := decls
-  for declName in candidates do
-    unless result.contains declName do
-      if ← isUnfoldableCircuitDecl declName (some noUnfold) (some unfoldType) then
-        result := result.push declName
-  return result
+  let rec go (e : Expr) (decls : Array Name) : MetaM (Array Name) := do
+    match e with
+    | .const declName _ =>
+        if decls.contains declName ||
+            !(← isUnfoldableCircuitDecl declName (some noUnfold) (some unfoldType)) then
+          return decls
+        else
+          return decls.push declName
+    | .app f a => go a (← go f decls)
+    | .lam _ t b _ | .forallE _ t b _ => go b (← go t decls)
+    | .letE _ t v b _ => go b (← go v (← go t decls))
+    | .mdata _ b => go b decls
+    | .proj _ _ b => go b decls
+    | _ => return decls
+  go e decls
 
 /-- The `@[explicit_circuit_constructor]` lemma whose conclusion `ExplicitCircuit <c>` keys on
 `head` (the head constant of `<c>`), if any. -/
@@ -1288,9 +1293,9 @@ example : ElaboratedCircuit F field unit (fun x ↦ assertZero (x * (x - 1))) :=
   elaborate_circuit_naive
 
 -- works with circuits hidden behind definitions
-def assertBoolExample (x : Expression F) := do
+private def assertBool (x : Expression F) := do
   assertZero (x * (x - 1))
 
-example : ElaboratedCircuit F field unit assertBoolExample := by elaborate_circuit_naive
+example : ElaboratedCircuit F field unit assertBool := by elaborate_circuit_naive
 
 end

@@ -436,7 +436,6 @@ incrementally by witness generation, so only those *below* the current offset ar
 whereas `hint` and `data` are ambient inputs fixed before generation begins, so they are
 constrained in full.
 -/
-@[circuit_norm, computable_witnesses_norm, grind]
 def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
   (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
 
@@ -452,31 +451,123 @@ theorem hint_eq (h : env.AgreesBelow n env') : env.hint = env'.hint := h.2.1
 omit [FiniteField F] in
 theorem data_eq (h : env.AgreesBelow n env') : env.data = env'.data := h.2.2
 
+omit [FiniteField F] in
+theorem of_le {m : ℕ} (h : env.AgreesBelow n env') (hm : m ≤ n) : env.AgreesBelow m env' :=
+  ⟨fun i hi => h.1 i (Nat.lt_of_lt_of_le hi hm), h.2.1, h.2.2⟩
+
+/-! Transport laws of `computable_witnesses`: the cells, hints and data an evaluation under `env`
+reads are those of `env'`. The agreement premise comes first: proving it determines `env'`. -/
+
+omit [FiniteField F] in
+@[computable_witnesses_law]
+theorem get_congr {i : ℕ} (h : env.AgreesBelow (i + 1) env') : env.get i = env'.get i :=
+  h.get_eq (Nat.lt_succ_self i)
+
+omit [FiniteField F] in
+@[computable_witnesses_law]
+theorem hint_congr (h : env.AgreesBelow 0 env') : env.hint = env'.hint := h.hint_eq
+
+omit [FiniteField F] in
+@[computable_witnesses_law]
+theorem data_congr (h : env.AgreesBelow 0 env') : env.data = env'.data := h.data_eq
+
+/-- A window of witness cells, for value types whose size is not a numeral (where the window does
+not decompose into cells). -/
+@[computable_witnesses_law]
+theorem eval_varFromOffset_congr {M : TypeMap} [ProvableType M]
+    (h : env.AgreesBelow (n + size M) env') :
+    eval env.toEnvironment (varFromOffset M n : M (Expression F)) =
+      eval env'.toEnvironment (varFromOffset M n : M (Expression F)) := by
+  simp only [ProvableType.eval_varFromOffset]
+  congr 1
+  ext i hi
+  simp only [Vector.getElem_mapRange]
+  exact h.get_eq (by omega)
+
 end ProverEnvironment.AgreesBelow
+
+/-- The default value of a provable type is a constant: it reads no cells. -/
+@[computable_witnesses_law]
+theorem ProverEnvironment.eval_default_congr {env env' : ProverEnvironment F} {M : TypeMap}
+    [ProvableType M] :
+    eval env.toEnvironment (default : M (Expression F)) =
+      eval env'.toEnvironment (default : M (Expression F)) := by
+  simp only [default, CircuitType.eval_expression, ProvableType.eval,
+    ProvableType.toElements_fromElements, Vector.map_replicate]
+  rfl
+
+/-- A fold over provable values transports when its initial value does and each step transports
+its accumulator. -/
+@[computable_witnesses_law]
+theorem ProverEnvironment.foldl_congr {env env' : ProverEnvironment F} {M : TypeMap}
+    [ProvableType M] {n : ℕ} (f : M (Expression F) → Fin n → M (Expression F))
+    (init : M (Expression F)) (hinit : eval env.toEnvironment init = eval env'.toEnvironment init)
+    (hf : ∀ a i, eval env.toEnvironment a = eval env'.toEnvironment a →
+      eval env.toEnvironment (f a i) = eval env'.toEnvironment (f a i)) :
+    eval env.toEnvironment (Fin.foldl n f init) = eval env'.toEnvironment (Fin.foldl n f init) := by
+  induction n with
+  | zero => simpa only [Fin.foldl_zero] using hinit
+  | succ n ih =>
+    rw [Fin.foldl_succ_last]
+    exact hf _ _ (ih (fun a i => f a i.castSucc) (fun a i => hf a i.castSucc))
+
+/-- A fold over pairs of expressions transports when its initial value does and each step
+transports its accumulator. -/
+theorem ProverEnvironment.foldl_pair_congr {env env' : ProverEnvironment F} {n : ℕ}
+    (f : Expression F × Expression F → Fin n → Expression F × Expression F)
+    (init : Expression F × Expression F)
+    (hinit : Expression.eval env.toEnvironment init.1 = Expression.eval env'.toEnvironment init.1 ∧
+      Expression.eval env.toEnvironment init.2 = Expression.eval env'.toEnvironment init.2)
+    (hf : ∀ a i, Expression.eval env.toEnvironment a.1 = Expression.eval env'.toEnvironment a.1 →
+      Expression.eval env.toEnvironment a.2 = Expression.eval env'.toEnvironment a.2 →
+      Expression.eval env.toEnvironment (f a i).1 = Expression.eval env'.toEnvironment (f a i).1 ∧
+        Expression.eval env.toEnvironment (f a i).2 = Expression.eval env'.toEnvironment (f a i).2) :
+    Expression.eval env.toEnvironment (Fin.foldl n f init).1 =
+        Expression.eval env'.toEnvironment (Fin.foldl n f init).1 ∧
+      Expression.eval env.toEnvironment (Fin.foldl n f init).2 =
+        Expression.eval env'.toEnvironment (Fin.foldl n f init).2 := by
+  induction n with
+  | zero => simpa only [Fin.foldl_zero] using hinit
+  | succ n ih =>
+    rw [Fin.foldl_succ_last]
+    obtain ⟨h1, h2⟩ := ih (fun a i => f a i.castSucc) (fun a i => hf a i.castSucc)
+    exact hf _ _ h1 h2
+
+@[computable_witnesses_law]
+theorem ProverEnvironment.foldl_fst_congr {env env' : ProverEnvironment F} {n : ℕ}
+    (f : Expression F × Expression F → Fin n → Expression F × Expression F)
+    (init : Expression F × Expression F)
+    (hinit : Expression.eval env.toEnvironment init.1 = Expression.eval env'.toEnvironment init.1 ∧
+      Expression.eval env.toEnvironment init.2 = Expression.eval env'.toEnvironment init.2)
+    (hf : ∀ a i, Expression.eval env.toEnvironment a.1 = Expression.eval env'.toEnvironment a.1 →
+      Expression.eval env.toEnvironment a.2 = Expression.eval env'.toEnvironment a.2 →
+      Expression.eval env.toEnvironment (f a i).1 = Expression.eval env'.toEnvironment (f a i).1 ∧
+        Expression.eval env.toEnvironment (f a i).2 = Expression.eval env'.toEnvironment (f a i).2) :
+    Expression.eval env.toEnvironment (Fin.foldl n f init).1 =
+      Expression.eval env'.toEnvironment (Fin.foldl n f init).1 :=
+  (foldl_pair_congr f init hinit hf).1
+
+@[computable_witnesses_law]
+theorem ProverEnvironment.foldl_snd_congr {env env' : ProverEnvironment F} {n : ℕ}
+    (f : Expression F × Expression F → Fin n → Expression F × Expression F)
+    (init : Expression F × Expression F)
+    (hinit : Expression.eval env.toEnvironment init.1 = Expression.eval env'.toEnvironment init.1 ∧
+      Expression.eval env.toEnvironment init.2 = Expression.eval env'.toEnvironment init.2)
+    (hf : ∀ a i, Expression.eval env.toEnvironment a.1 = Expression.eval env'.toEnvironment a.1 →
+      Expression.eval env.toEnvironment a.2 = Expression.eval env'.toEnvironment a.2 →
+      Expression.eval env.toEnvironment (f a i).1 = Expression.eval env'.toEnvironment (f a i).1 ∧
+        Expression.eval env.toEnvironment (f a i).2 = Expression.eval env'.toEnvironment (f a i).2) :
+    Expression.eval env.toEnvironment (Fin.foldl n f init).2 =
+      Expression.eval env'.toEnvironment (Fin.foldl n f init).2 :=
+  (foldl_pair_congr f init hinit hf).2
 
 omit [FiniteField F] in
 theorem ProverEnvironment.agreesBelow_rfl (n : ℕ) (env : ProverEnvironment F) :
     env.AgreesBelow n env :=
   ⟨fun _ _ => rfl, rfl, rfl⟩
 
-/-- `AgreesBelow` is symmetric; as a forward `grind` rule so both orientations are
-available when discharging composition-rule premises. -/
-@[grind →]
-theorem ProverEnvironment.AgreesBelow.symm {F} {n : ℕ} {env env' : ProverEnvironment F}
-    (h : env.AgreesBelow n env') : env'.AgreesBelow n env :=
-  ⟨fun i hi => (h.1 i hi).symm, h.2.1.symm, h.2.2.symm⟩
-
-@[computable_witnesses_norm, grind]
 def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=
   env.AgreesBelow n env' → f env = f env'
-
-omit [FiniteField F] in
-@[grind norm]
-theorem ProverEnvironment.onlyAccessedBelow_iff (n : ℕ)
-    (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :
-    ProverEnvironment.OnlyAccessedBelow n f env env' ↔
-      (env.AgreesBelow n env' → f env = f env') := by
-  rfl
 
 def Subcircuit.ComputableWitnesses {m : ℕ} (s : Subcircuit F m) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
   FlatOperation.forAll n {
@@ -633,15 +724,6 @@ attribute [circuit_norm ↓] Fin.getElem_fin
   Vector.getElem_push Vector.getElem_set Vector.getElem_cast
   Vector.getElem_mk Vector.getElem_toArray Vector.getElem_ofFn
   List.getElem_cons_zero List.getElem_cons_succ List.getElem_toArray
-
-attribute [grind norm]
-  Vector.getElem_ofFn Vector.getElem_mk List.getElem_toArray
-  List.getElem_cons_zero List.getElem_cons_succ
-
--- Extensionality introduces indexed `mapRange` terms during grind's search.
--- Normalize these pointwise terms immediately; this eliminates `mapRange` without
--- expanding the whole vector.
-attribute [grind norm] Vector.getElem_mapRange
 
 /-
 lemmas that would expand `Vector.{mapRange, mapFinRange}` are not added to the simp set,

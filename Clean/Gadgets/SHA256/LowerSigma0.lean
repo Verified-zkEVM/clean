@@ -256,7 +256,7 @@ lemma shr_isbool (k : ℕ) (input : fields 32 (F p)) (ha : Normalized input) (i 
 
 /-! ## Spec proof factored out to avoid kernel deep recursion -/
 
-lemma spec_of_constraint
+private lemma spec_of_constraint
     (input z : fields 32 (F p))
     (hx : Normalized input)
     (h_z : ∀ i : Fin 32, z[i] =
@@ -458,19 +458,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
-  -- Manual: the rotation-xor witness IR reads input bits; its eval-congruence needs the
-  -- sigma-specific decomposition facts, beyond the tactic's generic close.
-  computableWitnesses := by
-    computable_witnesses_start [lowerSigma0, xor32, rotr32, shr32, Vector.ext_iff, Vector.getElem_rotate]
-    · computable_witnesses_close [h ((i + 7) % 32) (by omega), h ((i + 18) % 32) (by omega)]
-    · have hz := h_agrees.1 (n + i) (by omega)
-      split_ifs with hc
-      · have h3 := h (i + 3 % 32) (by omega)
-        grind
-      · have h3 := h ((i + 3 % 32) % 32) (by omega)
-        simp only [circuit_norm]
-        grind
-    · computable_witnesses_close
+  computableWitnesses := by computable_witnesses [rotr32, shr32, Vector.getElem_rotate]
 
 end LowerSigma0
 end Gadgets.SHA256

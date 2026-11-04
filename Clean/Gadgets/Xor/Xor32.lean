@@ -103,5 +103,4 @@ def circuit : FormalCircuit (F p) Inputs U32 where
   Spec
   soundness
   completeness
-
 end Gadgets.Xor32

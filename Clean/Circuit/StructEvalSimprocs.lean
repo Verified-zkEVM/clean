@@ -50,6 +50,22 @@ private def proveEvalEq (lhs rhs : Expr) : MetaM (Option Expr) := do
     return none
   return some (← mkEqTrans (← lhsResult.getProof) (← mkEqSymm (← rhsResult.getProof)))
 
+/-- `proveEvalEq` for a rewrite of a projection of `base`. When `base` is opaque, the projected
+component is the field of its evaluation only by the structure's eta law: the equation is proved
+for a destructured variable in place of `base`, then instantiated. -/
+private def proveProjectionEvalEq (base lhs rhs : Expr) : MetaM (Option Expr) := do
+  if let some proof ← proveEvalEq lhs rhs then return some proof
+  let goal ← kabstract (← mkEq lhs rhs) base
+  unless goal.hasLooseBVars do return none
+  -- the type spelled through `Var` is the structure only up to instance unfolding
+  withLocalDeclD `x (← withTransparency .instances <| whnf (← inferType base)) fun x => do
+    let g ← mkFreshExprSyntheticOpaqueMVar (goal.instantiate1 x)
+    let #[sub] ← try g.mvarId!.cases x.fvarId! catch _ => return none | return none
+    let some (_, l, r) := (← instantiateMVars (← sub.mvarId.getType)).eq? | return none
+    let some proof ← sub.mvarId.withContext (proveEvalEq l r) | return none
+    sub.mvarId.assign proof
+    return some (mkApp (← mkLambdaFVars #[x] (← instantiateMVars g)) base)
+
 /-- View an expression as a structure projection `base.field`, returning the base and a
 function that rebuilds the same projection on a new base. Handles both `.proj` nodes and
 projection-function applications (same logic as the witgen `evalProjection` simproc). -/
@@ -119,7 +135,7 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
       -- Compose the indexing lemma with a proof that evaluating the field is the
       -- corresponding projection of the evaluated row.
       let rhs := mkAppN rhs0.getAppFn (rhs0.getAppArgs.set! 5 projEval)
-      let some projectionProof ← proveEvalEq rhs0 rhs | return .continue
+      let some projectionProof ← proveProjectionEvalEq base rhs0 rhs | return .continue
       return .visit { expr := rhs, proof? := some (← mkEqTrans proof projectionProof) }
     catch _ => return .continue
   let some (base, mkRhs) ← projectionView? projected | return .continue
@@ -131,7 +147,7 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
     catch _ =>
       return .continue
   let rhs ← mkRhs evalBase
-  let some proof ← proveEvalEq e rhs | return .continue
+  let some proof ← proveProjectionEvalEq base e rhs | return .continue
   return .done { expr := rhs, proof? := some proof }
 
 /-- `evalProjectionLiftCore` registered on scalar evaluation. -/
@@ -254,12 +270,18 @@ private def liftLemmas (evalHead : Name) : List Name :=
   else if evalHead == ``Eval.eval then [``getElem_eval_vector, ``getElem_eval_pairVector]
   else [``ProvableStruct.eval_getElem_vector]
 
+/-- The values a circuit proof treats as black boxes: free variables (inputs), child outputs and
+loop accumulators (folds). -/
+private def isAtomRoot (e : Expr) : Bool :=
+  e.isFVar || e.isAppOfArity `FormalCircuitBase.output 9 || e.isAppOfArity ``Fin.foldl 4
+
 /-- Outward side of the vector normal form: evaluations of an element access whose chain is
-rooted in a free variable fold toward the whole-atom eval. Chains rooted in an application stay
-element-wise, so per-element lemmas about that function keep applying. -/
+rooted in a black-box value (`isAtomRoot`) fold toward the whole-atom eval, the spelling facts
+about that value are stated at. Chains rooted in any other application stay element-wise, so
+per-element lemmas about that function keep applying. -/
 private def vectorAtomLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Step := do
   unless e.getAppFn.isConstOf evalHead && e.getAppNumArgs ≥ 2 do return .continue
-  unless (chainRoot e.appArg!).isFVar do return .continue
+  unless isAtomRoot (chainRoot e.appArg!) do return .continue
   let some result ← rewriteRoot? (liftLemmas evalHead) false e | return .continue
   return .visit result
 
@@ -407,73 +429,4 @@ attribute [circuit_norm] ProvableStruct.structEvalProjectionProc
   ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
   ProvableStruct.vectorAtomLiftStructEvalProc
 
-/-! The `computable_witnesses` normal form shares the struct/vector eval
-canonicalization. -/
-
-attribute [computable_witnesses_norm] structEvalProjectionExpr
-  vectorEvalLiteral vectorMapEval vectorAtomLift vectorAtomLiftEval structEqSplit
-attribute [computable_witnesses_norm] ProvableStruct.structEvalProjectionProc
-  ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
-
 end ProvableStruct
-
-/-- Reducibility classification for the extensionality dispatch. `Vector.ext_iff` on an
-equality is productive exactly when both sides' `getElem` at a fresh symbolic index
-takes at least one reduction step under the route's lemmas: heads with a
-`getElem_*` distribution lemma (`map`, `mapRange`, `ofFn`, `mapFinRange`, `mapIdx`,
-`set`, `append`) or a window head (`varFromOffset`, reduced by the branch stage's
-`eval_varFromOffset` + agreement rewriting). Literals decline — a literal indexed at a
-symbolic index is irreducible (elements buried), and the `injEq` family decomposes them
-instead — and literal children of reducible heads defer until the set's
-literal-reduction lemmas (`map_mk`, `take`-family, …) have exposed them. Bare
-variables decline: `x[i]` takes no step, so the pointwise form only trades the whole
-atom for a stuck family.
-Result: 0 = literal, 1 = reducible, 2 = neither/defer. -/
-private partial def vecShape (e : Expr) : Nat :=
-  let e := e.consumeMData
-  match e.getAppFn with
-  | .const n _ =>
-    if n == ``Vector.mk || n == ``List.toArray || n == ``Array.mk then 0
-    else if n == `ProvableType.varFromOffset || n == ``Vector.mapRange ||
-        n == ``Vector.ofFn || n == ``Vector.mapFinRange || n == ``Vector.mapIdx ||
-        -- witness-IR evaluation is vector-valued and its `getElem` reduces through the
-        -- witgen eval lemmas of `circuit_norm` — opaque head, reducible pointwise
-        n == `Witgen.WitgenIR.eval then 1
-    else if n == ``Vector.map || n == ``Vector.set then
-      -- the vector argument must not be a literal (defer to `map_mk` etc.); a bare
-      -- variable child is fine — `x[i]` is an acceptable leaf atom under a reduced head
-      match vecShape e.appArg! with
-      | 0 => 2
-      | _ => 1
-    else if n == ``Vector.append || n == ``HAppend.hAppend then
-      match vecShape e.appFn!.appArg!, vecShape e.appArg! with
-      | 0, _ => 2
-      | _, 0 => 2
-      | _, _ => 1
-    else 2
-  | _ => 2
-
-/-- Extensionality dispatch: rewrite a `Vector`-typed equality by `Vector.ext_iff`
-exactly when both sides classify reducible under `vecShape` — the per-term form of the
-old two-stage ordering between the literal (`injEq`) and extensional decomposition
-families. -/
-def extIffDispatchCore : Simp.Simproc := fun e => do
-  unless e.isAppOfArity ``Eq 3 do return .continue
-  let args := e.getAppArgs
-  unless args[0]!.getAppFn.isConstOf ``Vector do return .continue
-  let lhs := args[1]!
-  let rhs := args[2]!
-  unless vecShape lhs == 1 && vecShape rhs == 1 do return .continue
-  try
-    let iff ← withDefault <| mkAppOptM ``Vector.ext_iff #[none, none, some lhs, some rhs]
-    let some (l, target) := (← inferType iff).iff? | return .continue
-    -- validate the instance against the matched term before rewriting (the
-    -- `vectorEvalLiteral` precedent): a defeq-but-differently-spelled statement
-    -- must not be handed to simp as a rewrite at `e`'s position
-    unless l == e || (← withTransparency .all <| isDefEq l e) do return .continue
-    return .visit { expr := target, proof? := some (← mkPropExt iff) }
-  catch _ => return .continue
-
-simproc extIffDispatch (_ = _) := extIffDispatchCore
-attribute [computable_witnesses_norm] extIffDispatch
-

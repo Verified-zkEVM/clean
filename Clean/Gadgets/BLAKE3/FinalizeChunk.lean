@@ -117,14 +117,14 @@ def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
   output.map U32.value = Specs.BLAKE3.finalizeChunk chunk_state input.base_flags.value ∧
   (∀ i : Fin 8, output[i].Normalized)
 
-lemma ZMod_val_chunkEnd :
+private lemma ZMod_val_chunkEnd :
     ZMod.val (n:=p) ↑chunkEnd = 2 := by
   have := p_large_enough.elim
   simp only [ZMod.val_natCast, chunkEnd, pow_one]
   rw [Nat.mod_eq_of_lt]; omega
 
 omit p_large_enough in
-lemma eval_bytesToWords (env : Environment (F p))
+private lemma eval_bytesToWords (env : Environment (F p))
     (input_var_buffer_data : BLAKE3Buffer (Expression (F p))) :
   eval env (bytesToWords input_var_buffer_data : ProvableVector U32 16 (Expression (F p))) =
       bytesToWords (eval env input_var_buffer_data : BLAKE3Buffer (F p)) := by
@@ -267,9 +267,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   main, elaborated, Assumptions, Spec, soundness, completeness
-  computableWitnesses := by
-    computable_witnesses [bytesToWords, eval_vector_set,
-      U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
+  computableWitnesses := by computable_witnesses [bytesToWords]
 }
 
 end Gadgets.BLAKE3.FinalizeChunk

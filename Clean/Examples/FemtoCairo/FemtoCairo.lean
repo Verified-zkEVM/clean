@@ -388,6 +388,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   Returns the next state.
 -/
 def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
+  computableWitnesses := by computable_witnesses [varFromOffset, explicit_provable_type]
   main (input : Var StateTransitionInput (F p)) := do
     let state := input.state
     let decoded := input.decoded
@@ -519,8 +520,6 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
         simp only [circuit_norm, explicit_provable_type, h_env1]
       · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
-
-  computableWitnesses := by computable_witnesses [explicit_provable_type]
 
 /--
   The main femtoCairo step circuit, which combines instruction fetch, decode,
@@ -730,10 +729,8 @@ theorem femtoCairoStepCompleteness (program : Array (F p))
 
 variable (program : Array (F p)) (h_program : ValidProgram program)
 
--- TODO how to get grind to do this generically?
-@[local grind norm] lemma size_state_eq : size State = 3 := rfl
-
 def femtoCairoStep : GeneralFormalCircuit (F p) State State where
+  computableWitnesses := by computable_witnesses [fetchInstruction]
   main := femtoCairoStepMain program h_program
   ProverAssumptions := FemtoCairoStepAssumptions program
   Spec := FemtoCairoStepSpec program

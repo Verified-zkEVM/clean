@@ -294,22 +294,6 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] =
           fieldFromBits output + aux * (2^n : F p)
 
-  -- Manual: witness IR over input bits with a symbolic width bound; needs the file's
-  -- decomposition facts and induction the tactic's close cannot do.
-  computableWitnesses := by
-    computable_witnesses_start
-    -- both witnesses read `lin`, a Fin.foldl the grind rules cannot see under; its
-    -- evaluations are bridged through `inputLinearSub_eval_eq_sub`
-    all_goals have bridge := inputLinearSub_eval_eq_sub env.toEnvironment input _ rfl
-    all_goals have bridge' := inputLinearSub_eval_eq_sub env'.toEnvironment input _ rfl
-    · simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
-      ext i hi
-      simp only [circuit_norm]
-      rw [bridge, bridge', h]
-    · simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
-      rw [bridge, bridge', h]
-    · computable_witnesses_close
-
   soundness := by
     circuit_proof_start
 

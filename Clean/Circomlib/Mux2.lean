@@ -77,10 +77,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> decide
       output[i] = (c[i])[idx]
 
-  computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type,
-      Vector.getElem_map]
-
   soundness := by
     circuit_proof_start
     obtain ⟨h_s10, h_out⟩ := h_holds
@@ -141,9 +137,6 @@ def main (input : Var Inputs (F p)) := do
 
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
-
-  computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff, Vector.getElem_map]
 
   Assumptions input :=
     let ⟨_, s⟩ := input

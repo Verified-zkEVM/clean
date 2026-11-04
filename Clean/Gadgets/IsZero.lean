@@ -26,14 +26,14 @@ def main (input : Var M F) : Circuit F (Var field F) := do
   let result ← Circuit.foldlRange (size M) (1 : Expression F) fun acc i => do
     let isZeroElem ← IsZeroField.circuit elemVars[i]
     return acc * isZeroElem
-  let result <== result
   return result
 
 @[reducible]
 instance elaborated : ElaboratedCircuit F M field main := by
   elaborate_circuit_with {
-    localLength _ := 2 * size M + 1
-    output input i₀ := varFromOffset field (i₀ + size M * 2)
+    localLength _ := 2 * size M
+    output input i₀ := Fin.foldl (size M)
+      (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
   } using by simp +arith +instances [circuit_norm]
 
 def Assumptions (_ : M F) : Prop := True
@@ -118,15 +118,6 @@ theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Sp
 
 theorem completeness : Completeness F (main (M:=M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit]
-  simp_all +arith
-
-omit [DecidableEq F] in
-lemma eval_fin_foldl_mul {env : ProverEnvironment F} {n m : ℕ} :
-  Expression.eval (F:=F) env (Fin.foldl m (fun acc i => acc * var ⟨n + ↑i * 2 + 1⟩) 1)
-    = Fin.foldl m (fun acc i => acc * Expression.eval env (var ⟨n + ↑i * 2 + 1⟩)) 1 := by
-  induction m with
-  | zero => simp [Expression.eval]
-  | succ m ih => simp only [Fin.foldl_succ_last, Fin.val_castSucc, Expression.eval, ih]
 
 def circuit [DecidableEq (M F)] : FormalCircuit F M field where
   main
@@ -135,6 +126,5 @@ def circuit [DecidableEq (M F)] : FormalCircuit F M field where
   Spec
   soundness
   completeness
-  computableWitnesses := by computable_witnesses [IsZeroField.circuit, eval_fin_foldl_mul]
 
 end Gadgets.IsZero

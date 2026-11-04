@@ -47,15 +47,6 @@ structure Inputs (F : Type) where
   c : fields 32 F
 deriving ProvableStruct
 
-/-- Constructor-keyed composite eval (see `U64.eval_mk`): lets `grind` decompose literal
-`Inputs` evals into the `Vector.map` component spelling used by `circuit_norm`. -/
-@[grind =]
-theorem Inputs.eval_mk {F : Type} [FiniteField F] (env : Environment F)
-    (a b c : fields 32 (Expression F)) :
-    eval env ({ a := a, b := b, c := c } : Inputs (Expression F)) =
-      { a := Vector.map (Expression.eval env) a, b := Vector.map (Expression.eval env) b, c := Vector.map (Expression.eval env) c } := by
-  simp only [circuit_norm, ProvableType.eval_fields]
-
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   maj32 input.a input.b input.c
 
@@ -73,7 +64,7 @@ def Spec (input : Inputs (F p)) (z : fields 32 (F p)) : Prop :=
 ## Helper lemmas for valueBits and bitwise Maj
 -/
 
-lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
+private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
     ∑ i : Fin n, f i * 2^i.val < 2^n := by
   induction n with
   | zero => simp
@@ -86,7 +77,7 @@ lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) 
     have h2 : 2^m + 2^m = 2^(m+1) := by ring
     omega
 
-lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
+private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
     Nat.testBit (∑ i : Fin n, f i * 2^i.val) k.val = decide (f k = 1) := by
   induction n with
   | zero => exact k.elim0
@@ -109,7 +100,7 @@ lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ 
 
 /-- For boolean field elements a, b, c: the field expression t + c*(a+b-2t) where t=a*b
     has val equal to the bitwise Nat majority of a.val, b.val, c.val -/
-lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
+private lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
     {a b c : F p} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
     (a * b + c * (a + b - 2 * (a * b))).val = (a.val &&& b.val) ^^^ (a.val &&& c.val) ^^^ (b.val &&& c.val) := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>
@@ -117,12 +108,12 @@ lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
 
 /-- For boolean field elements a, b, c: the field expression t + c*(a+b-2t) where t=a*b
     is boolean -/
-lemma maj_is_bool {α : Type*} [Ring α] {a b c : α} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
+private lemma maj_is_bool {α : Type*} [Ring α] {a b c : α} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
     IsBool (a * b + c * (a + b - 2 * (a * b))) := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>
     simp [ha, hb, hc] <;> norm_num <;> first | exact IsBool.zero | exact IsBool.one
 
-lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
+private lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
     (hf : ∀ i, f i = 0 ∨ f i = 1) (hg : ∀ i, g i = 0 ∨ g i = 1) (hk : ∀ i, k i = 0 ∨ k i = 1) :
     ((∑ i : Fin n, f i * 2^i.val) &&& (∑ i : Fin n, g i * 2^i.val)) ^^^
     ((∑ i : Fin n, f i * 2^i.val) &&& (∑ i : Fin n, k i * 2^i.val)) ^^^
@@ -168,7 +159,7 @@ lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le hmajS pow_le)]
 
 /-- Spec holds for any vector `z` whose bits satisfy the per-bit constraint. -/
-lemma spec_of_constraint
+private lemma spec_of_constraint
     (input_a input_b input_c z : fields 32 (F p))
     (ha : Normalized input_a) (hb : Normalized input_b) (hc : Normalized input_c)
     (h_eq : ∀ i : Fin 32, z[i] =
