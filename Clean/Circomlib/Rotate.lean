@@ -42,16 +42,14 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     rw [h_holds]
     ext i hi
     -- Simplify LHS: circuit computation at index i
-    simp only [Vector.getElem_map, Vector.getElem_mapFinRange]
+    simp only [Vector.getElem_mapFinRange]
     -- Simplify RHS: (input.rotate r)[i] = input[(i + r) % n]
     rw [Vector.getElem_rotate]
     simp only [Vector.get]
     -- Use h_input: eval input_var = input
-    simp only [← h_input, Vector.getElem_map]
-    congr 1
+    simp only [← h_input]
     -- Normalize array/vector indexing
     simp only [Vector.getElem_toArray]
-    congr 1
     -- Prove index equality via Fin arithmetic
     simp [Fin.val_cast, Fin.val_add]
 
@@ -60,7 +58,7 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     -- element-wise equality
     ext i hi
     -- simplify output to witness value
-    simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    simp only [Vector.getElem_mapRange]
     -- witness = eval of rotated input
     rw [h_env ⟨i, hi⟩]
     -- simplify RHS to match

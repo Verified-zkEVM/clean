@@ -80,8 +80,6 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     simp only [h_input, circuit_norm] at h_env ⊢
     simp only [Num2Bits.lc_eq, Fin.forall_iff,
       mul_eq_zero, sub_eq_zero] at h_env ⊢
-    rw [Vector.map_mapRange]
-    simp only [Expression.eval]
     have h_bits i (hi : i < 254) : env.get (i0 + i) = 0 ∨ env.get (i0 + i) = 1 := by
       rw [h_env i hi]
       rcases Nat.mod_two_eq_zero_or_one (ZMod.val input >>> i) with h | h <;> simp [h]
@@ -205,12 +203,11 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
       simp_all only [Nat.reducePow, gt_iff_lt, pow_zero, add_zero, lt_self_iff_false,
         ↓reduceDIte, Fin.foldl_zero, mul_one, ↓reduceIte]
       unfold Vector.mapRange
-      simp only [Vector.map_mk, List.map_toArray, List.map_nil, Vector.mk_eq, Array.empty_eq,
-        Vector.toArray_eq_empty_iff]
-    · set bits := Vector.map (Expression.eval env) (Vector.mapRange n fun i => var { index := i0 + i })
+      simp only [Vector.mk_eq, Array.empty_eq, Vector.toArray_eq_empty_iff]
+    · set bits := Vector.mapRange n fun i => env.get (i0 + i)
       have h_bits' : ∀ (i : ℕ) (hi : i < n), bits[i] = 0 ∨ bits[i] = 1 := by
         intro i hi
-        simp only [bits, Vector.getElem_map, Vector.getElem_mapRange]
+        simp only [bits, Vector.getElem_mapRange]
         apply h_bits ⟨i, hi⟩
 
       set bits_vars := Vector.mapRange n fun i => var (F := F p) { index := i0 + i }
@@ -234,16 +231,17 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         have h_val_zero : fieldFromBits bits = 0 := by
           simp only [fieldFromBits_eval] at h_eq
           have h_bits_eq : Vector.map (Expression.eval env) bits_vars = bits := by
-            simp only [bits, bits_vars]
+            simp only [bits, bits_vars, circuit_norm]
           rw [h_bits_eq] at h_eq
           exact h_eq
         rw [h_val_zero]
         simp [fieldToBits, toBits, Vector.getElem_mapRange]
       · simp_all only [↓reduceIte, dite_eq_ite, add_zero, zero_mul]
         rw [← h_eq]
-        simp only [fieldFromBits_eval]
-        rw [fieldToBits_fieldFromBits hn]
-        exact h_bits'
+        have h_bits_eq : Vector.map (Expression.eval env) bits_vars = bits := by
+          simp only [bits, bits_vars, circuit_norm]
+        simp only [fieldFromBits_eval, h_bits_eq]
+        rw [fieldToBits_fieldFromBits hn bits h_bits']
 
   completeness := by
     simp only [circuit_norm, main]

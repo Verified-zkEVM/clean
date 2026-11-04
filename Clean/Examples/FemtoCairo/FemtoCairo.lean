@@ -101,7 +101,7 @@ theorem decodeInstructionSoundness : GeneralFormalCircuit.Soundness (F p) (Input
   simp only [circuit_norm, explicit_provable_type]
   set bits := fieldToBits 8 input with h_bits_def
   rw [Vector.ext_iff] at h_eq
-  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval] at h_eq
+  simp only [Vector.getElem_mapRange] at h_eq
   have h_bits_eval0 := h_eq 0 (by norm_num)
   rw [add_zero] at h_bits_eval0
   simp only [h_bits_eval0, h_eq, Nat.reduceLT]

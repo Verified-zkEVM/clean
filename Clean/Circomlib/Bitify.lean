@@ -94,8 +94,6 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     · intro i hi
       simpa [sub_eq_zero] using h_holds.left ⟨i, hi⟩
     · congr 1
-      rw [Vector.ext_iff]
-      simp [circuit_norm]
 
   completeness := by
     circuit_proof_start
@@ -203,7 +201,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env) = input := by
       rw [← h_input]
       ext i hi
-      rw [Vector.getElem_map, Vector.getElem_mapFinRange, Fin.getElem_fin]
+      simp only [Vector.getElem_mapFinRange, Fin.getElem_fin, circuit_norm]
 
     rw [h1] at h_holds
     simp only [h_holds, true_and]

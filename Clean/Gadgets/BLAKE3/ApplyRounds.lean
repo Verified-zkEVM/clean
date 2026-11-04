@@ -56,7 +56,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
   soundness := by
     circuit_proof_start [Round.circuit, Permute.circuit,
-      Round.Assumptions, Permute.Assumptions, Round.Spec, Permute.Spec]
+      Round.Assumptions, Permute.Assumptions, Round.Spec, Permute.Spec, output]
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     specialize h_holds1 h_assumptions
     specialize h_holds2 h_assumptions.right
@@ -467,7 +467,8 @@ lemma initial_state_and_messages_are_normalized
     fin_cases i
     -- First 8 elements are from chaining_value
     case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
-      state_vec_norm_simp; simp [h_chaining_value_normalized]
+      state_vec_norm_simp
+      exact h_chaining_value_normalized _ (by omega)
     -- Next 4 are IV constants
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
@@ -523,7 +524,7 @@ private lemma initializeStateVector_value_eq
   simp only [initializeStateVector, Vector.map_mk,
     List.map_toArray, List.map_cons, List.map_nil]
   simp only [circuit_norm]
-  simp only [getElem_eval_vector, h_input.1, h_input.2.2.1,
+  simp only [h_input.1, h_input.2.2.1,
     h_input.2.2.2.1, h_input.2.2.2.2.1, h_input.2.2.2.2.2,
     U32.value_fromUInt32]
 

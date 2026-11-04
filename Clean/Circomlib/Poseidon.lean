@@ -250,12 +250,7 @@ theorem soundness (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fi
   rw [ark_t2_eq C offset.val (by omega)]
   simp only [Specs.Poseidon.sigma, mix_matrix_t2_eq, Vector.getElem_map]
   obtain ⟨h0, h1, h2, h3⟩ := h_holds
-  have h_in0 : Expression.eval env input_var[0] = input[0] := by
-    simpa using congrArg (fun v => v[0]) h_input
-  have h_in1 : Expression.eval env input_var[1] = input[1] := by
-    simpa using congrArg (fun v => v[1]) h_input
   rw [h2, h3, h0, h1]
-  rw [h_in0, h_in1]
   rfl
 
 theorem completeness (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71) :
@@ -333,11 +328,7 @@ theorem soundness (round : Fin 56) :
   simp only [Specs.PoseidonOptimized.partialRoundOpt_t2, Specs.Poseidon.sigma,
     dite_eq_left (show 10 + round.val < 72 by omega), Specs.PoseidonOptimized.mixS_t2]
   obtain ⟨h0, h1, h2, h3⟩ := h_holds
-  have h_in0 : Expression.eval env input_var[0] = input[0] := by
-    simpa using congrArg (fun v => v[0]) h_input
-  have h_in1 : Expression.eval env input_var[1] = input[1] := by
-    simpa using congrArg (fun v => v[1]) h_input
-  rw [h2, h3, h1, h0, h_in0, h_in1]
+  rw [h2, h3, h1, h0]
   simp +arith [show round.val * 3 = 3 * round.val by ring]
 
 theorem completeness (round : Fin 56) :

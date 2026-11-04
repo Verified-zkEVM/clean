@@ -152,6 +152,127 @@ def structEvalProjectionEvalProc : Simproc :=
 simproc structEvalProjectionExpr (Expression.eval _ _) := structEvalProjectionExprProc
 attribute [circuit_norm] structEvalProjectionExpr
 
+/-- Root of a projection/getElem chain: walk through `GetElem.getElem` and `Prod`
+projections to the underlying subject. -/
+private partial def chainRoot (e : Expr) : Expr :=
+  if e.isAppOfArity ``GetElem.getElem 8 then chainRoot e.getAppArgs[5]!
+  else if e.isAppOfArity ``Prod.fst 3 || e.isAppOfArity ``Prod.snd 3 then
+    chainRoot e.appArg!
+  else if e.isProj then chainRoot e.projExpr!
+  else if e.getAppFn.isConstOf ``ProvableType.toElements && e.getAppNumArgs ≥ 1 then
+    -- `toElements` is a projection-like wrapper: chains through it stay opaque
+    chainRoot e.appArg!
+  else e
+
+/-- Rewrite `e` at the root with the first of `lemmas` whose left-hand side (right-hand side,
+when `symm`) matches it up to reducible and instance unfolding, the transparency simp matches
+its lemmas at. Metavariables of `e` (circuits under elaboration) are never assigned. The proof
+is annotated with the exact equation `e = rhs`, so the rewritten term stays type-correct at
+reducible transparency even where the lemma spells an instance or type alias differently. -/
+private def rewriteRoot? (lemmas : List Name) (symm : Bool) (e : Expr) :
+    MetaM (Option Simp.Result) := do
+  for name in lemmas do
+    let match? ← withNewMCtxDepth <| withReducibleAndInstances do
+      let thm ← mkConstWithFreshMVarLevels name
+      let (args, _, type) ← forallMetaTelescopeReducing (← inferType thm)
+      let some (_, lhs, rhs) := type.eq? | return none
+      let (source, target) := if symm then (rhs, lhs) else (lhs, rhs)
+      unless ← isDefEq source e do return none
+      unless ← args.allM (·.mvarId!.isAssigned) do return none
+      let proof ← instantiateMVars (mkAppN thm args)
+      if proof.hasLevelMVar then return none
+      return some (← instantiateMVars target, ← if symm then mkEqSymm proof else pure proof)
+    if let some (rhs, proof) := match? then
+      return some { expr := rhs, proof? := some (← mkExpectedTypeHint proof (← mkEq e rhs)) }
+  return none
+
+/-- Vector constructors that evaluation is pushed into, each with the lemma that moves a
+`Vector.map` inside it. Evaluating a vector built by one of these decomposes inward, into
+evaluations of its elements or sub-vectors. Every other vector is opaque: its evaluation stays
+a folded whole-vector atom, the spelling input premises (`h_input`) are stated at. -/
+private def vectorMapPushLemmas : List (Name × Name) :=
+  [(``Vector.mk, ``Vector.map_mk), (``Vector.ofFn, ``Vector.map_ofFn_fun),
+   (``Vector.mapFinRange, ``Vector.map_mapFinRange), (``Vector.mapRange, ``Vector.map_mapRange),
+   (``Vector.mapIdx, ``Vector.map_mapIdx_fun), (``Vector.map, ``Vector.map_map_fun),
+   (``HAppend.hAppend, ``Vector.map_append), (``Vector.cast, ``Vector.map_cast),
+   (``Vector.replicate, ``Vector.map_replicate), (``Vector.set, ``Vector.map_set),
+   (``Vector.push, ``Vector.map_push), (``Vector.take, ``Vector.map_take_comm),
+   (``Vector.extract, ``Vector.map_extract), (``Vector.takeShort, ``Vector.map_takeShort),
+   -- the elements of a provable value: evaluated as the elements of its evaluation
+   (``ProvableType.toElements, ``ProvableType.map_eval_toElements)]
+
+/-- The push lemma of a constructed vector, `none` for an opaque one. -/
+private def pushLemma? (v : Expr) : Option Name :=
+  match v.getAppFn with
+  | .const name _ => (vectorMapPushLemmas.find? (·.1 == name)).map (·.2)
+  | _ => none
+
+/-- `eval env v = v.map (eval env)`, at `Expression` elements (`fields`), provable elements, and
+`fieldPair` elements. -/
+private def evalVectorLemmas : List Name :=
+  [``ProvableType.eval_fields, ``eval_vector, ``eval_pairVector]
+
+/-- Inward side of the vector normal form: evaluating a constructed vector pushes the
+evaluation into the constructor, `eval env (Vector.ofFn f) ~~> Vector.ofFn fun i => eval env
+(f i)`. Opaque vectors stay folded atoms. -/
+private def vectorEvalLiteralCore (e : Expr) : SimpM Simp.Step := do
+  unless e.isAppOfArity ``Eval.eval 6 do return .continue
+  let some push := pushLemma? e.appArg! | return .continue
+  let some mapped ← rewriteRoot? evalVectorLemmas false e | return .continue
+  let some pushed ← rewriteRoot? [push] false mapped.expr | return .continue
+  return .visit (← mapped.mkEqTrans pushed)
+
+simproc vectorEvalLiteral (Eval.eval _ _) := vectorEvalLiteralCore
+attribute [circuit_norm] vectorEvalLiteral
+
+/-- `Vector.map` of an evaluator (`Expression.eval env` or `Eval.eval env`): pushed into a
+constructed vector, folded into the whole-vector atom `eval env v` for an opaque one. This makes
+the atom the single spelling of an evaluated opaque vector, also for `fields` vectors. -/
+private def vectorMapEvalCore (e : Expr) : SimpM Simp.Step := do
+  unless e.isAppOfArity ``Vector.map 5 do return .continue
+  let evaluator := e.getAppArgs[3]!.eta.getAppFn
+  unless evaluator.isConstOf ``Expression.eval || evaluator.isConstOf ``Eval.eval do
+    return .continue
+  let result? ← match pushLemma? e.appArg! with
+    | some push => rewriteRoot? [push] false e
+    | none => rewriteRoot? evalVectorLemmas true e
+  let some result := result? | return .continue
+  return .visit result
+
+simproc vectorMapEval (Vector.map _ _) := vectorMapEvalCore
+attribute [circuit_norm] vectorMapEval
+
+/-- Lemmas lifting an element access to an access into the evaluated vector, by the evaluator
+heading the access: `Expression.eval env x[i] ~~> (eval env x)[i]`,
+`Expression.eval env (c[i]).1 ~~> ((eval env c)[i]).1`, `eval env x[i] ~~> (eval env x)[i]`.
+Pair components fold to the whole-vector atom in one step: the intermediate `(eval env c[i]).1`
+would loop against the component-wise `eval_fieldPair` lemmas. -/
+private def liftLemmas (evalHead : Name) : List Name :=
+  if evalHead == ``Expression.eval then
+    [``ProvableType.getElem_eval_fields, ``eval_fst_getElem_pairVector,
+      ``eval_snd_getElem_pairVector]
+  else if evalHead == ``Eval.eval then [``getElem_eval_vector, ``getElem_eval_pairVector]
+  else [``ProvableStruct.eval_getElem_vector]
+
+/-- Outward side of the vector normal form: evaluations of an element access whose chain is
+rooted in a free variable fold toward the whole-atom eval. Chains rooted in an application stay
+element-wise, so per-element lemmas about that function keep applying. -/
+private def vectorAtomLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Step := do
+  unless e.getAppFn.isConstOf evalHead && e.getAppNumArgs ≥ 2 do return .continue
+  unless (chainRoot e.appArg!).isFVar do return .continue
+  let some result ← rewriteRoot? (liftLemmas evalHead) false e | return .continue
+  return .visit result
+
+simproc vectorAtomLift (Expression.eval _ _) := vectorAtomLiftCore ``Expression.eval
+attribute [circuit_norm] vectorAtomLift
+
+simproc vectorAtomLiftEval (Eval.eval _ _) := vectorAtomLiftCore ``Eval.eval
+attribute [circuit_norm] vectorAtomLiftEval
+
+/-- `vectorAtomLiftCore` on struct elements, registered below. -/
+def vectorAtomLiftStructEvalProc : Simproc :=
+  vectorAtomLiftCore ``ProvableStruct.eval
+
 /--
 Evaluate struct *literals* component-wise:
 
@@ -280,8 +401,10 @@ run_cmd Command.liftTermElabM do
   registerSimproc ``ProvableStruct.structEvalProjectionProc structEvalKeys
   registerSimproc ``ProvableStruct.structEvalLiteralProc structEvalKeys
   registerSimproc ``ProvableStruct.structEvalProjectionEvalProc (← mkKeys ``Eval.eval)
+  registerSimproc ``ProvableStruct.vectorAtomLiftStructEvalProc structEvalKeys
 
 attribute [circuit_norm] ProvableStruct.structEvalProjectionProc
   ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
+  ProvableStruct.vectorAtomLiftStructEvalProc
 
 end ProvableStruct

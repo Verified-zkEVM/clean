@@ -56,8 +56,6 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
   simp only [Vector.getElem_map (fun x => #v[f x]) hi]
   rfl
 
--- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
-
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
@@ -75,11 +73,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     intro i hi
     have h_holds_i := congrArg (fun v => v[i]) h_holds
     simp only [circuit_norm, Vector.getElem_map, Vector.getElem_mapRange] at h_holds_i
-    rw [h_holds_i, h_input.2, ← h_input.1]
-    simp only [← getElem_eval_vector, circuit_norm]
+    rw [h_holds_i, h_input.1]
     rcases h_assumptions with h0 | h1
     · simp [h0]
-    · simp [h1]
+    · simp only [h1, mul_one, one_ne_zero, ite_false]
+      ring
 
   completeness := by
     circuit_proof_start
@@ -91,7 +89,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     simp only [circuit_norm]
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
-    rw [h_env_i, h_input.2]
+    rw [h_env_i]
+    simp only [h_input.1]
 
 end MultiMux1
 
@@ -142,9 +141,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   soundness := by
     circuit_proof_start [MultiMux1.circuit]
     specialize h_holds h_assumptions 0 (by omega)
-    simp only [circuit_norm, eval_vector] at h_holds
-    rw [← h_input.1]
-    simp only [Vector.getElem_map]
+    simp only [circuit_norm] at h_holds
     exact h_holds
 
   completeness := by
