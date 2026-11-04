@@ -2305,7 +2305,7 @@ theorem lookupInputSelectorFixedValue
     have hraw :
         (compressed.packedCol,
           self.regionStarts.getD region 0 + row,
-          FiniteField.fromNat compressed.assignedRoot) ∈
+          (compressed.assignedRoot : F)) ∈
           Layout.rawAssignments
             (self.usableRowsAt self.domainExponent)
             self.selectorMap self.constraintSystem self.operations := by
@@ -2314,19 +2314,14 @@ theorem lookupInputSelectorFixedValue
       have hselectorAssignment :
           (compressed.packedCol,
             self.regionStarts.getD region 0 + row,
-            FiniteField.fromNat compressed.assignedRoot) ∈
+            (compressed.assignedRoot : F)) ∈
             Layout.selectorAssignments (F := F)
               self.selectorMap self.selectorActivations :=
         Layout.mem_selectorAssignments_of_activation
           self.selectorMap self.selectorActivations hactivation hmap
       simpa only [TopLevelCircuit.selectorActivations] using hselectorAssignment
     have hvalue := self.fixedRows_getD_getD_eq_of_mem_raw _ hraw
-    have hone : (FiniteField.fromNat 1 : F) = 1 := by
-      apply FiniteField.ext
-      rw [FiniteField.val_fromNat]
-      · exact FiniteField.val_one.symm
-      · exact FiniteField.fieldSize_pos
-    rw [hroot, hone] at hvalue
+    rw [hroot, Nat.cast_one] at hvalue
     change ∃ candidate ∈ enabled, candidate.index = selector at henabled
     simpa only [henabled, ↓reduceIte] using hvalue
   · have habsent :
