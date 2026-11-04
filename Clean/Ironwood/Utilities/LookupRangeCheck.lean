@@ -159,10 +159,12 @@ theorem mem_rangeCheckLookup_auxiliarySelectorIndices (K : ℕ) (cfg : Config K)
   rcases hselector with hselector | hselector
   · have hmaster : selector = cfg.qLookup.index := by
       simpa only [Expression.selectorIndices_querySelector,
-        List.mem_singleton] using hselector
+        List.mem_singleton, ComplexSelector.toSelector] using hselector
     exact False.elim ((bne_iff_ne.mp hne) hmaster)
   · simp only [Expression.selectorIndices_querySelector,
-      Expression.selectorIndices_queryAdvice, List.mem_singleton] at hselector
+      Expression.selectorIndices_queryAdvice, List.mem_singleton, ComplexSelector.toSelector,
+      Expression.sub_def, Expression.selectorIndices, List.nil_append, List.mem_append,
+      List.not_mem_nil, or_false] at hselector
     tauto
 
 /-- Registration against the range-check lookup, together with the running-sum
@@ -333,6 +335,7 @@ theorem configure_constraintDegree (K : ℕ)
   unfold configure
   infer_instance
 
+set_option backward.isDefEq.respectTransparency true in
 private theorem configure_selectorRequirements
     (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) (counts) :
     (configureInferred K runningSum tableIdx).selectorRequirements counts := by
@@ -346,6 +349,7 @@ private theorem configure_selectorRequirements
   simp [Expression.selectorBound]
   omega
 
+set_option backward.isDefEq.respectTransparency true in
 private theorem configure_externalSelectorSummary
     (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) (counts) :
     ((configureInferred K runningSum tableIdx).selectorSummary counts).externalAt
@@ -661,7 +665,7 @@ def shortRangeCheck (K numBits : ℕ) :
           (K := K) (cfg := configInput) (anchor := anchor)
         · simpa only [keygen_norm] using hregistered
         · simpa only [lookupSelectorAnchorRequirements,
-            SelectorAnchorRequirementsSatisfied] using hanchor
+            SelectorAnchorRequirementsSatisfied, Configure.output_pure, List.Forall, and_true] using hanchor
         · rw [FloorPlanner.V1.column_mem_physicalColumns_iff,
             FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns,
             FloorPlanner.mem_unionColumns_iff]
@@ -1198,7 +1202,7 @@ theorem rangeCheckLoop_synthesisSummary (K : ℕ) (cfg : Config K)
       simpa only [Nat.mul_one] using
         rangeCheckRound_synthesisSummary K cfg element i.val
           (offset + i.val) self]
-  simpa only [Nat.one_mul, Nat.add_zero, Nat.add_assoc] using
+  simpa only [Nat.one_mul, Nat.add_zero, Nat.add_assoc, List.map_cons, List.map_nil] using
     (FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelectorPattern_eq_repeatColumnsWithSelectorPattern
         [(cfg.qLookup.index, 0), (cfg.qRunning.index, 0)]
         [.selector cfg.qLookup.index, .selector cfg.qRunning.index,
@@ -1421,7 +1425,7 @@ def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
         (K := K) (cfg := configInput) (anchor := anchor)
       · simpa only [keygen_norm] using hregistered
       · simpa only [lookupSelectorAnchorRequirements,
-          SelectorAnchorRequirementsSatisfied] using hanchor
+          SelectorAnchorRequirementsSatisfied, Configure.output_pure, List.Forall, and_true] using hanchor
       · apply
           FloorPlanner.adviceColumn_mem_physicalColumns_regionSynthesisSummary_of_assignAdvice_mem
           (row := offset) (value := .ofFExpr (.expr input.element))
@@ -1456,7 +1460,8 @@ def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
               rangeCheckLoop_copyCellsAssignedFrom K configInput input.element
                 offset numWords region
                   [Cell.of region offset configInput.runningSum, input.element.cell]
-          · simpa only [output_cellAt, AssignedCell.of_cell, List.singleton_append]
+          · simpa only [output_cellAt, AssignedCell.of_cell, List.singleton_append,
+              RegionOperations.assignedCellsAfter, RegionOperation.assignedCells]
               using finalCell_mem_rangeCheckLoop_assignedCellsAfter K configInput
                 input.element offset numWords region
                 [Cell.of region offset configInput.runningSum, input.element.cell]
@@ -1743,7 +1748,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
               (K := K) (cfg := configInput) (anchor := anchor)
             · simpa only [keygen_norm] using hregistered
             · simpa only [lookupSelectorAnchorRequirements,
-                SelectorAnchorRequirementsSatisfied] using hanchor
+                SelectorAnchorRequirementsSatisfied, Configure.output_pure, List.Forall, and_true] using hanchor
             · simp only [rangeCheckAtBody, circuit_norm]
               rw [FloorPlanner.V1.column_mem_physicalColumns_iff,
                 FloorPlanner.mem_unionColumns_iff]
@@ -1786,7 +1791,8 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
             refine ⟨rangeCheckLoop_copyCellsAssignedFrom K configInput
               (AssignedCell.of region offset configInput.runningSum)
               offset numWords region [], ?_⟩
-            simpa only [output_cellAt, AssignedCell.of_cell] using
+            simpa only [output_cellAt, AssignedCell.of_cell,
+              RegionOperations.assignedCellsAfter, RegionOperation.assignedCells] using
               finalCell_mem_rangeCheckLoop_assignedCellsAfter K configInput
                 (AssignedCell.of region offset configInput.runningSum)
                 offset numWords region [] (by
@@ -2026,7 +2032,7 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
           (K := 10) (cfg := configInput) (anchor := anchor)
         · simpa only [keygen_norm] using hregistered
         · simpa only [lookupSelectorAnchorRequirements,
-            SelectorAnchorRequirementsSatisfied] using hanchor
+            SelectorAnchorRequirementsSatisfied, Configure.output_pure, List.Forall, and_true] using hanchor
         · simp only [rangeCheckAtDecomposedBody, circuit_norm]
           rw [FloorPlanner.V1.column_mem_physicalColumns_iff]
           exact (FloorPlanner.V1.column_mem_physicalColumns_iff _ _ _).mp
@@ -2052,7 +2058,8 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
         simp only [true_and, and_true]
         refine ⟨rangeCheckLoop_copyCellsAssignedFrom 10 configInput
           (AssignedCell.of region offset configInput.runningSum) offset numWords region [], ?_⟩
-        simpa only [output_cellAt, AssignedCell.of_cell] using
+        simpa only [output_cellAt, AssignedCell.of_cell,
+              RegionOperations.assignedCellsAfter, RegionOperation.assignedCells] using
           finalCell_mem_rangeCheckLoop_assignedCellsAfter 10 configInput
             (AssignedCell.of region offset configInput.runningSum) offset numWords region []
             (by intro hzero; omega) }
@@ -2687,10 +2694,10 @@ theorem witnessCheckDecomposed_output_cells_assigned
     RegionOperation.assignedCells, List.singleton_append, List.flatMap_append,
     List.flatMap_nil, List.append_nil, List.mem_cons]
   refine ⟨Or.inl trivial, Or.inr ?_, Or.inr ?_⟩
-  · simpa only [Nat.zero_add] using
+  · simpa only [Nat.zero_add, RegionOperations.assignedCells] using
       rangeCell_mem_rangeCheckLoop_assignedCells
         10 cfg (AssignedCell.of i 0 cfg.runningSum) 0 25 1 i (by omega) (by omega)
-  · simpa only [Nat.zero_add] using
+  · simpa only [Nat.zero_add, RegionOperations.assignedCells] using
       rangeCell_mem_rangeCheckLoop_assignedCells
         10 cfg (AssignedCell.of i 0 cfg.runningSum) 0 25 13 i (by omega) (by omega)
 

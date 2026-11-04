@@ -863,6 +863,7 @@ theorem Configured.permutationColumns_eq (G : Generators) (ns : List ℕ) (Q : P
     hashCircuit, FormalRegionCircuit.toFormal,
     ElaboratedRegionCircuit.keygenRequirements, hashRegion,
     Configure.delta_pure, List.append_nil]
+  rfl
 
 @[keygen_norm]
 theorem hashCircuit_inputCells (G : Generators) (ns : List ℕ) (Q : Point Fp)

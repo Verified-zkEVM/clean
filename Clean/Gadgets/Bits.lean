@@ -47,6 +47,9 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
   completeness := by
     circuit_proof_start
+    change (∀ i : Fin n, env.get (i₀ + i.val) =
+      ((((input_var.eval env.toEnvironment).val >>> i.val) % 2 : ℕ) : F p)) at h_env
+    rw [h_input] at h_env
 
     constructor
     · intro i

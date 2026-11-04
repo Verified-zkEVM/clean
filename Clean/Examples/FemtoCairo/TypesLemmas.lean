@@ -22,18 +22,21 @@ variable {F : Type} [FiniteField F]
 @[circuit_norm]
 lemma State.eval_pc (env : Environment F) (s : Var State F) :
     (eval env s).pc = Expression.eval env s.pc := by
+  cases s
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a State variable and extracting ap equals evaluating the ap expression -/
 @[circuit_norm]
 lemma State.eval_ap (env : Environment F) (s : Var State F) :
     (eval env s).ap = Expression.eval env s.ap := by
+  cases s
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a State variable and extracting fp equals evaluating the fp expression -/
 @[circuit_norm]
 lemma State.eval_fp (env : Environment F) (s : Var State F) :
     (eval env s).fp = Expression.eval env s.fp := by
+  cases s
   simp [circuit_norm, explicit_provable_type]
 
 end StateEval
@@ -45,24 +48,28 @@ variable {F : Type} [FiniteField F]
 @[circuit_norm]
 lemma RawInstruction.eval_rawInstrType (env : Environment F) (r : Var RawInstruction F) :
     (eval env r).rawInstrType = Expression.eval env r.rawInstrType := by
+  cases r
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op1 equals evaluating the op1 expression -/
 @[circuit_norm]
 lemma RawInstruction.eval_op1 (env : Environment F) (r : Var RawInstruction F) :
     (eval env r).op1 = Expression.eval env r.op1 := by
+  cases r
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op2 equals evaluating the op2 expression -/
 @[circuit_norm]
 lemma RawInstruction.eval_op2 (env : Environment F) (r : Var RawInstruction F) :
     (eval env r).op2 = Expression.eval env r.op2 := by
+  cases r
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op3 equals evaluating the op3 expression -/
 @[circuit_norm]
 lemma RawInstruction.eval_op3 (env : Environment F) (r : Var RawInstruction F) :
     (eval env r).op3 = Expression.eval env r.op3 := by
+  cases r
   simp [circuit_norm, explicit_provable_type]
 
 end RawInstructionEval

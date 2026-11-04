@@ -272,6 +272,9 @@ class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : T
 
 export Witnessable (witness)
 
+-- Concrete instance projections must normalize before inspecting their operations.
+attribute [circuit_norm] Witnessable.witness Witnessable.witnessIR
+
 /-- Witness a provable value computed by an arbitrary Lean closure. -/
 @[circuit_norm]
 def witnessNative {value : TypeMap} [ProvableType value] {var : TypeMap}

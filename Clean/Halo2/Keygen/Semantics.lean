@@ -120,8 +120,9 @@ theorem selReplacement_eval (d : SelCompress) (v : Query → F) :
   · simp only [hcase, ite_false, Option.map_some]
     congr 1
     show (_ : Expression F Query).eval v = _
-    simp only [Expression.eval, sub_eq_add_neg]
-    ring
+    simp only [HSub.hSub, Sub.sub, Expression.instSub, Expression.instNeg, Neg.neg, Expression.eval, sub_eq_add_neg]
+    rw [neg_one_mul]
+    exact (sub_eq_add_neg _ _).symm
 
 /-- Where no member of the combination is active the packed cell is `0`, and the
 replacement vanishes. -/
@@ -195,7 +196,7 @@ theorem selReplacement_selectorFree (d : SelCompress) :
   · simp [hcase] at hj
   · rw [if_neg hcase, Option.some_inj] at hj
     subst hj
-    simp [Expression.SelectorFree]
+    simp [HSub.hSub, Sub.sub, Expression.instSub, Expression.instNeg, Neg.neg, Expression.SelectorFree]
 
 /-- Compression leaves exactly the uncovered selector atoms: the substituted expression
 is selector-free iff the map covers every selector occurrence. -/
@@ -285,7 +286,7 @@ theorem selReplacement_queriesResolved (description : SelCompress)
     · simp [hroot] at hresult
     · rw [if_neg hroot, Option.some_inj] at hresult
       subst factor
-      simpa [Expression.QueriesResolved] using hpacked
+      simpa [HSub.hSub, Sub.sub, Expression.instSub, Expression.instNeg, Neg.neg, Expression.QueriesResolved] using hpacked
 
 /-- Selector substitution preserves resolution when every replacement's packed query
 has been registered by selector compression. -/

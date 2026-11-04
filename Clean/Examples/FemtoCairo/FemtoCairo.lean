@@ -1,3 +1,4 @@
+import Clean.Gadgets.WitnessEvaluation
 import Clean.Circuit
 import Clean.Table.Inductive
 import Clean.Gadgets.Bits
@@ -193,7 +194,7 @@ def fetchInstruction
     have : (input + 1).val = input.val + 1 := by field_to_nat
     have : (input + 2).val = input.val + 2 := by field_to_nat
     have : (input + 3).val = input.val + 3 := by field_to_nat
-    simp_all
+    simp_all [Witgen.eval_vector_const_read, circuit_norm]
 
 structure MemoryEntry F where
   address : F
@@ -497,44 +498,46 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
     -- `h_env` equation needs the explicit unfolding path to decompose into components
     simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_env
     obtain ⟨h_env0, h_env1, h_env2⟩ := h_env
+    simp only [Witgen.EqCond.eqCond, Witgen.BExprOver.eval, Witgen.FExprOver.eval,
+      circuit_norm, h_input1, h_input2] at h_env0 h_env1 h_env2
     rcases h_encode with h_add | h_mul | h_load | h_store
     · simp only [h_add, ↓reduceIte, Option.isSome_ite] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
       · simp only [← h_exec]; ring_nf
       · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_add, ↓reduceIte] at h_env0
-        simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
+        simp only [circuit_norm, explicit_provable_type, h_env0, h_input1] <;> ring_nf
       · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_add, ↓reduceIte] at h_env1
-        simp only [circuit_norm, explicit_provable_type, h_env1]
+        simp only [circuit_norm, explicit_provable_type, h_env1, h_input1]
       · simp only [circuit_norm, explicit_provable_type, zero_ne_one, h_add, ↓reduceIte] at h_env2
-        simp only [circuit_norm, explicit_provable_type, h_env2]
+        simp only [circuit_norm, explicit_provable_type, h_env2, h_input1]
     · simp only [h_mul, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
       · simp only [← h_exec]; ring_nf
       · simp only [circuit_norm, explicit_provable_type, h_mul, ↓reduceIte] at h_env0
-        simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
+        simp only [circuit_norm, explicit_provable_type, h_env0, h_input1] <;> ring_nf
       · simp only [circuit_norm, explicit_provable_type, h_mul, ↓reduceIte] at h_env1
-        simp only [circuit_norm, explicit_provable_type, h_env1]
+        simp only [circuit_norm, explicit_provable_type, h_env1, h_input1]
       · simp only [circuit_norm, explicit_provable_type, h_mul, ↓reduceIte] at h_env2
-        simp only [circuit_norm, explicit_provable_type, h_env2]
+        simp only [circuit_norm, explicit_provable_type, h_env2, h_input1]
     · simp only [h_load, zero_ne_one, ↓reduceIte, Option.isSome_ite] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
-      · simp only [h_exec, ← h_input1]; ring_nf
-      · simp only [h_exec, ← h_input1]; ring_nf
-      · simp only [h_exec, ← h_input1]; ring_nf
+      · simp only [h_exec, ← h_input1] <;> ring_nf
+      · simp only [h_exec, ← h_input1] <;> ring_nf
+      · simp only [h_exec, ← h_input1] <;> ring_nf
       · simp only [circuit_norm, explicit_provable_type, h_load, ↓reduceIte] at h_env0
-        simp only [circuit_norm, explicit_provable_type, h_env0]; ring_nf
+        simp only [circuit_norm, explicit_provable_type, h_env0, h_input1] <;> ring_nf
       · simp only [circuit_norm, explicit_provable_type, h_load, ↓reduceIte] at h_env1
-        simp only [circuit_norm, explicit_provable_type, h_env1]
+        simp only [circuit_norm, explicit_provable_type, h_env1, h_input1]
       · simp only [circuit_norm, explicit_provable_type, h_load, ↓reduceIte] at h_env2
-        simp only [circuit_norm, explicit_provable_type, h_env2]
+        simp only [circuit_norm, explicit_provable_type, h_env2, h_input1]
     · simp only [h_store, zero_ne_one, ↓reduceIte] at h_exec ⊢
       ring_nf; simp only [true_and, circuit_norm]; and_intros
       · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env0
-        simp only [circuit_norm, explicit_provable_type, h_env0]
+        simp only [circuit_norm, explicit_provable_type, h_env0, h_input1]
       · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env1
-        simp only [circuit_norm, explicit_provable_type, h_env1]
+        simp only [circuit_norm, explicit_provable_type, h_env1, h_input1]
       · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env2
-        simp only [circuit_norm, explicit_provable_type, h_env2]
+        simp only [circuit_norm, explicit_provable_type, h_env2, h_input1]
 
 /--
   The main femtoCairo step circuit, which combines instruction fetch, decode,
@@ -591,6 +594,9 @@ def femtoCairoStepSoundness
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepMain,
     Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory, nextState,
     decodeInstruction, decodeInstructionSpec, Gadgets.toBits]
+  generalize hd : (decodeInstructionMain (p := p) _ _).1 = decodedOut at *
+  rcases decodedOut with ⟨decodedType, decodedMode1, decodedMode2, decodedMode3⟩
+  simp only [circuit_norm, explicit_provable_type] at *
 
   obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
   obtain ⟨pc, ap, fp⟩ := input
@@ -615,7 +621,6 @@ def femtoCairoStepSoundness
       -- instruction decode is always successful
       contradiction
     case h_1 instr_type mode1 mode2 mode3 h_eq_decode =>
-      simp only [circuit_norm, explicit_provable_type] at h_eq_decode ⊢
       simp only [h_eq_decode, Option.bind_some]
       obtain ⟨ h_instr_type_val, h_instr_type_encoded_correctly, h_mode1_val,
         h_mode1_encoded_correctly, h_mode2_val, h_mode2_encoded_correctly,
@@ -676,6 +681,9 @@ def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize �
       (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
     fetchInstruction, decodeInstruction, readFromMemory, nextState, Gadgets.toBits]
+  generalize hd : (decodeInstructionMain (p := p) _ _).1 = decodedOut at *
+  rcases decodedOut with ⟨decodedType, decodedMode1, decodedMode2, decodedMode3⟩
+  simp only [circuit_norm, explicit_provable_type] at *
 
   obtain ⟨h_valid_size, h_valid_program, h_memory_completeness, h_transition_isSome⟩ := h_assumptions
 
@@ -701,7 +709,7 @@ def femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize �
 
   obtain ⟨h_fetch_env, h_decode_env, h_read1_env, h_read2_env, h_read3_env, h_next_env⟩ := h_env
   have h_eval_pc : Expression.eval env input_var.pc = input.pc := by
-    rw [← State.eval_pc env input_var, h_input]
+    exact congrArg State.pc h_input
   simp only [h_eval_pc] at h_fetch_env
   specialize h_fetch_env h_pc_bound
   simp only [h_fetch, circuit_norm, explicit_provable_type, RawInstruction.mk.injEq] at h_fetch_env

@@ -94,6 +94,15 @@ lemma soundness_lhs_eval {n : ℕ} [NeZero n] (env : Environment (F p)) (input_v
 lemma fieldToBits_boolean {n : ℕ} (x : F p) (i : Fin n) : IsBool (fieldToBits n x)[i] :=
   fieldToBits_bits i.val i.isLt
 
+private lemma cast_mod_two_boolean (value : ℕ) : IsBool ((value.mod 2 : ℕ) : F p) := by
+  rcases Nat.mod_two_eq_zero_or_one value with h | h
+  · change value.mod 2 = 0 at h
+    rw [h]
+    simp [IsBool]
+  · change value.mod 2 = 1 at h
+    rw [h]
+    simp [IsBool]
+
 -- Lemma: fieldFromBits produces values bounded by 2^n
 lemma fieldFromBits_bound {n : ℕ} (bits : Vector (F p) n) (h_bool : ∀ i : Fin n, IsBool bits[i]) :
     (fieldFromBits bits).val < 2^n := by
@@ -301,7 +310,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     have h_out_bool : ∀ i < n, IsBool (env.get (i₀ + i)) := by
       intro i hi
       specialize h_out_constrs ⟨i, hi⟩
-      simpa [sub_eq_zero] using h_out_constrs
+      simpa [sub_eq_zero, IsBool] using h_out_constrs
 
     -- Step 2: Establish that the aux bit is Boolean
     have h_aux_bool : IsBool (env.get (i₀ + n)) := by
@@ -340,6 +349,9 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
 
     -- Decompose the witness generation assumption (h_env) into parts for 'out' and 'aux'
     rcases h_env with ⟨h_env_out, h_env_aux⟩
+    simp only [HShiftRight.hShiftRight, ShiftRight.shiftRight, HDiv.hDiv, Div.div,
+      HMod.hMod, Mod.mod, Witgen.NExprOver.eval, Witgen.FExprOver.eval,
+      Expression.val, circuit_norm] at h_env_out h_env_aux
 
     -- Step 1: Define 'lin' for clarity
     set lin := Expression.eval env (inputLinearSub n input_var)
@@ -347,14 +359,13 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Step 2: Establish that the 'out' bits in the environment are binary
     have h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)) := by
       rintro ⟨i, h⟩
-      simp only [h_env_out ⟨i, h⟩, IsBool]
-      rcases Nat.mod_two_eq_zero_or_one (_ >>> i) with hb | hb <;> rw [hb] <;> simp
+      rw [h_env_out ⟨i, h⟩]
+      exact cast_mod_two_boolean _
 
     -- Step 3: Establish that the 'aux' bit is binary
     have h_aux_binary : IsBool (env.get (i₀ + n)) := by
       rw [h_env_aux]
-      simp only [IsBool]
-      rcases Nat.mod_two_eq_zero_or_one (_ >>> n) with hb | hb <;> rw [hb] <;> simp
+      exact cast_mod_two_boolean _
 
     -- Final Goal: Prove the conjunction of constraints
     and_intros
@@ -376,7 +387,12 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         rfl
       have h_env_aux' : env.get (i₀ + n) =
           if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0 := by
-        rw [h_env_aux, Nat.shiftRight_eq_div_pow]
+        rw [h_env_aux]
+        change (((Expression.eval env (inputLinearSub n input_var)).val.shiftRight n).mod 2 : F p) = _
+        have hshift := Nat.shiftRight_eq_div_pow
+          (Expression.eval env (inputLinearSub n input_var)).val n
+        change (Expression.eval env (inputLinearSub n input_var)).val.shiftRight n = _ at hshift
+        rw [hshift]
         show (↑((Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2) : F p) = _
         rcases Nat.mod_two_eq_zero_or_one
           ((Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n) with hb | hb <;>

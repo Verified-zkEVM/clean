@@ -120,5 +120,9 @@ def boolNatParent : GeneralFormalCircuit F field field where
 
   completeness := by
     circuit_proof_start [boolNatCircuit]
+    change ((decide (FiniteField.val (F:=F)
+      (Expression.eval env.toEnvironment input_var) = 0) && true) = true) =
+        (FiniteField.val (F:=F) input = 0)
+    simp only [Bool.and_true, h_input, decide_eq_true_eq]
 
 end TestMixedCircuitType

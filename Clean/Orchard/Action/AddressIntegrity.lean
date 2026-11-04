@@ -97,6 +97,7 @@ def ProverAssumptions (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
           ivk = (B + ((show ℕ from input.rivk : ℕ) : Fq) • R).x) →
       pkDOld = ivk.val • gDOld
 
+set_option backward.isDefEq.respectTransparency true in
 theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ R) Assumptions
@@ -106,11 +107,15 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   let ivkOut : Var field Fp := (CommitIvk.circuit G Q hQ R).output
     { ak := input_var.ak, nk := input_var.nk, rivk := input_var.rivk } i₀
   have h_ivk_child : CommitIvk.Spec G Q R input_ak input_nk (eval env ivkOut) := by
-    simpa [ivkOut, CommitIvk.Spec, circuit_norm] using h_ivk
+    dsimp only [ivkOut, CommitIvk.circuit, FormalCircuitBase.output, CommitIvk.elaborated]
+    simpa [ivkOut, CommitIvk.Spec, CommitIvk.circuit, CommitIvk.elaborated, FormalCircuitBase.output, Mul.Spec, circuit_norm] using h_ivk
   refine ⟨eval env ivkOut, h_ivk_child, ?_⟩
   have hmul := h_mul h_assumptions
-  exact h_eq.symm.trans (by simpa [ivkOut, circuit_norm] using hmul)
+  exact h_eq.symm.trans (by
+    dsimp only [ivkOut, CommitIvk.circuit, FormalCircuitBase.output, CommitIvk.elaborated]
+    simpa [ivkOut, CommitIvk.circuit, CommitIvk.elaborated, FormalCircuitBase.output, Mul.Spec, circuit_norm] using hmul)
 
+set_option backward.isDefEq.respectTransparency true in
 theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ R)
@@ -131,14 +136,16 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   have h_ivk_child_prover :
       CommitIvk.ProverSpec G Q R input_ak input_nk ((show ℕ from input_rivk : ℕ) : Fq)
         (Expression.eval env.toEnvironment ivkOut) := by
-    simpa [ivkOut, CommitIvk.ProverSpec, circuit_norm]
+    dsimp only [ivkOut, CommitIvk.circuit, FormalCircuitBase.output, CommitIvk.elaborated]
+    simpa [ivkOut, CommitIvk.ProverSpec, CommitIvk.circuit, CommitIvk.elaborated, FormalCircuitBase.output, Mul.Spec, circuit_norm]
       using (h_env.1 h_commit_assumptions).2
   have h_mul_spec := h_env.2 h_gd
   have hderived := h_mul_spec
   have hpkd := h_pkd (Expression.eval env.toEnvironment ivkOut) h_ivk_child_prover
   refine ⟨⟨h_commit_assumptions, h_gd, ?_⟩, ?_⟩
   · rw [hpkd]
-    simpa [ivkOut, circuit_norm] using hderived
+    dsimp only [ivkOut, CommitIvk.circuit, FormalCircuitBase.output, CommitIvk.elaborated]
+    simpa [ivkOut, CommitIvk.circuit, CommitIvk.elaborated, FormalCircuitBase.output, Mul.Spec, circuit_norm] using hderived
   refine ⟨(Expression.eval env.toEnvironment ivkOut : Fp), h_ivk_child_prover, ?_⟩
   exact hpkd
 

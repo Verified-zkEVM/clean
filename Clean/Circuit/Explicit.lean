@@ -225,9 +225,9 @@ instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a =>
   operations _ _ := []
   channelsWithGuarantees _ _ := []
 
--- `bind` of two explicit circuits yields an explicit circuit
-@[explicit_circuit_constructor]
-instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
+-- The tactic supplies these explicit instances; typeclass search cannot infer them.
+@[explicit_circuit_constructor, instance_reducible]
+def ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
     let a := output f n
@@ -289,9 +289,9 @@ theorem ExplicitCircuit.from_bind_channelsWithGuarantees {f : Circuit F α} {g :
       ExplicitCircuit.channelsWithGuarantees f n ++
         ExplicitCircuit.channelsWithGuarantees (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
 
--- `map` of an explicit circuit yields an explicit circuit
-@[explicit_circuit_constructor]
-instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
+-- Keep the explicit constructor available to the derivation tactic.
+@[explicit_circuit_constructor, instance_reducible]
+def ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
   localLength n := localLength g n

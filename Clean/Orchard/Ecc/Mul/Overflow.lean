@@ -211,6 +211,8 @@ theorem completeness : FormalAssertion.Completeness Fp main (fun _ => True) Spec
     Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Overflow.circuit, Overflow.Spec]
   obtain ⟨hRec, hLoZ, sHi, sLo, hsLo_lt, hkey, hHiZ, hEtaSpec⟩ := h_spec
   obtain ⟨hs_wit, ⟨_, h_values⟩, h_eta⟩ := h_env
+  simp only [Witgen.EqCond.eqCond, Witgen.BExprOver.eval, Witgen.FExprOver.eval,
+    circuit_norm, h_input] at h_eta
   have h2124 : (OfNat.ofNat (2 ^ 124) : Fp) = (2 : Fp) ^ 124 := by norm_num
   have h2130 : (OfNat.ofNat (2 ^ 130) : Fp) = (2 : Fp) ^ 130 := by norm_num
   -- the honest final decomposition cell, and its vanishing when s fits in 130 bits

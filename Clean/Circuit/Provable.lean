@@ -681,7 +681,8 @@ theorem eval_varFromOffset (env : Environment F) (offset : ℕ) :
   congr
   rw [Vector.ext_iff]
   intro i hi
-  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+  rw [Vector.getElem_map]
+  simp only [Vector.getElem_mapRange, Expression.eval]
 
 theorem eval_varFromOffset_prover {α : TypeMap} [ProvableType α] (env : ProverEnvironment F) (offset : ℕ) :
     (Eval.eval env (varFromOffset α offset : α (Expression F)) : α F) =
@@ -710,13 +711,15 @@ theorem getElem_eval_toElements
 theorem getElem_eval_fields (env : Environment F) (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
     Expression.eval env x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression]
-  simp only [explicit_provable_type, fromElements, Vector.getElem_map]
+  simp only [explicit_provable_type, fromElements]
+  exact (Vector.getElem_map _ hi).symm
 
 theorem getElem_eval_fields_prover {n : ℕ} {env : ProverEnvironment F}
   (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
     Expression.eval env.toEnvironment x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression_prover]
-  simp only [explicit_provable_type, fromElements, Vector.getElem_map]
+  simp only [explicit_provable_type, fromElements]
+  exact (Vector.getElem_map _ hi).symm
 end ProvableType.Clean
 
 -- more concrete ProvableType instances

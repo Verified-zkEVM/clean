@@ -762,7 +762,7 @@ theorem soundness (n : ℕ) :
       obtain ⟨h_lb, h_lrest⟩ := h_last
       norm_num at h_lb
       have h := hchain_of_bool _ _ h_lb
-      simpa using h
+      simpa [Expression.eval] using h
   · intro mm hacc h2m hbnd
     let Pt : Point Fp := input_base
     have hPt : Pt.OnCurve := h_assumptions
@@ -838,7 +838,6 @@ theorem soundness (n : ℕ) :
     case hxA0 =>
       rw [show rowXA env i₀ 0 = env.get (i₀ + 1) from if_pos rfl, h_xA0, haccx]
     case hYAD0 =>
-      simp only []
       rw [if_neg (by omega)]
       simp only [Expression.eval, DoubleAndAdd.yA, DoubleAndAdd.xR] at h_init
       simp only [rowD, rowXA, rowXP, rowL1, rowL2, DoubleAndAdd.yA,
@@ -848,7 +847,6 @@ theorem soundness (n : ℕ) :
       linear_combination -h_init
     case hyad =>
       intro r hr
-      simp only []
       rw [if_neg (by omega)]
       simp only [DoubleAndAdd.yA, DoubleAndAdd.xR, rowD]
       try ring
@@ -856,7 +854,6 @@ theorem soundness (n : ℕ) :
     case hyp => exact fun r hr => (hconst r hr).2
     case hg1 =>
       intro r hr
-      simp only []
       rw [if_neg (show ¬(r = n + 1) by omega)]
       have hbit := hbiteq r hr
       rw [← hbit]
@@ -893,7 +890,6 @@ theorem soundness (n : ℕ) :
           linear_combination hlsec
     case hg2 =>
       intro r hr
-      simp only []
       rcases Nat.lt_or_ge r n with h | h
       · rw [if_neg (show ¬(r = n + 1) by omega), if_neg (show ¬(r + 1 = n + 1) by omega)]
         exact (hrow r h).2.2.2.2.2

@@ -161,7 +161,7 @@ theorem actionRegionStarts_eq_reduced :
   let pairs := (slotIn sorted).1
   have hsortedIndices :
       sorted.map RegionShape.index = actionSortedRegionIndices := by
-    simpa only [shapes, sorted] using actionSortedRegionIndices_eq
+    simpa only [shapes, sorted, V1.sortedRegionIndices, V1.sortedRegionOrder] using actionSortedRegionIndices_eq
   have hpairsIndices : pairs.map (·.1) = actionSortedRegionIndices := by
     exact (slotIn_indices sorted).trans hsortedIndices
   have hpairsStarts : pairs.map (·.2) = actionExactSortedStarts := by

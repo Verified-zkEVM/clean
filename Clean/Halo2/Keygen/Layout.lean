@@ -708,14 +708,16 @@ theorem regionAssignments_agree
         leftRow < (FloorPlanner.measureRegion leftIndex leftBody).rowCount := by
       have := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
         leftBody (.assignFixed leftColumn leftRow left.2.2) hleftOperation
-      simpa only [FloorPlanner.measureRegion_rowCount,
-        FloorPlanner.regionOperationRowExtent] using this
+      simp only [FloorPlanner.measureRegion_rowCount,
+        FloorPlanner.regionOperationRowExtent] at this ⊢
+      omega
     have hrightRowBound :
         rightRow < (FloorPlanner.measureRegion rightIndex rightBody).rowCount := by
       have := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
         rightBody (.assignFixed leftColumn rightRow right.2.2) hrightOperation
-      simpa only [FloorPlanner.measureRegion_rowCount,
-        FloorPlanner.regionOperationRowExtent] using this
+      simp only [FloorPlanner.measureRegion_rowCount,
+        FloorPlanner.regionOperationRowExtent] at this ⊢
+      omega
     have hdisjoint := FloorPlanner.V1.starts_sharedColumnIntervalsDisjoint operations
       hleftShape hrightShape hindex hleftColumnMeasured hrightColumnMeasured
     simp only [FixedAssignment.cell] at hcell
@@ -764,7 +766,7 @@ theorem constantAssignments_agree
       exact fixedColumn_eq_of_index_eq hindex
     · exact hcolumns
   simpa only [constantAssignments, List.map_map,
-    FixedAssignment.cell, Function.comp_apply] using
+    FixedAssignment.cell, Function.comp_def, Function.comp_apply] using
       FloorPlanner.V1.constantAssignments_cells_nodup operations
         (constantColumns.map (·.index)) hindices
 
@@ -832,8 +834,9 @@ private theorem rowOccupied_eq_true_of_mem_regionAssignment
       (FloorPlanner.measureRegion index body).rowCount := by
     have hbound := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
       body (.assignFixed column localRow assignment.2.2) hoperation
-    simpa only [FloorPlanner.measureRegion_rowCount,
-      FloorPlanner.regionOperationRowExtent] using hbound
+    simp only [FloorPlanner.measureRegion_rowCount,
+      FloorPlanner.regionOperationRowExtent] at hbound ⊢
+    omega
   rw [FloorPlanner.V1.rowOccupied,
     FloorPlanner.V1.rowOccupiedIn_eq_true_iff_mem_occupiedRowsIn,
     FloorPlanner.V1.mem_occupiedRowsIn_iff]
@@ -1213,8 +1216,9 @@ private theorem regionAssignment_row_lt_placementEnd
       (FloorPlanner.measureRegion index body).rowCount := by
     have hbound := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
       body (.assignFixed column localRow assignment.2.2) hoperation
-    simpa only [FloorPlanner.measureRegion_rowCount,
-      FloorPlanner.regionOperationRowExtent] using hbound
+    simp only [FloorPlanner.measureRegion_rowCount,
+      FloorPlanner.regionOperationRowExtent] at hbound ⊢
+    omega
   rw [hrow]
   unfold place FloorPlanner.V1.placementEnd
   exact (Nat.add_lt_add_left hlocal _).trans_le hend

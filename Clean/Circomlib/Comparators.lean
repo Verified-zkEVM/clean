@@ -57,6 +57,8 @@ def circuit : FormalCircuit (F p) field field where
 
   completeness := by
     circuit_proof_start
+    simp only [Witgen.EqCond.eqCond, Witgen.BExprOver.eval, Witgen.FExprOver.eval,
+      circuit_norm, decide_eq_true_eq] at h_env
     cases h_env with
     | intro left right =>
       simp only [left] at right
@@ -398,12 +400,20 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   main := fun (x, y) =>
     LessThan.circuit n hn (x, y + 1)
 
+  elaborated := by
+    haveI (input : Var fieldPair (F p)) : ExplicitCircuit
+        (match input with | (x, y) => subcircuit (LessThan.circuit n hn) (x, y + 1)) := by
+      rcases input with ⟨x, y⟩
+      infer_instance
+    elaborate_circuit
+
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
     output = (if x.val <= y.val then 1 else 0)
 
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds
+    rcases input with ⟨vx, vy⟩
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by
@@ -428,6 +438,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     intro i env input h_env (x, y) h_input h_assumptions
+    rcases input with ⟨vx, vy⟩
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by
@@ -467,6 +478,13 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x)
 
+  elaborated := by
+    haveI (input : Var fieldPair (F p)) : ExplicitCircuit
+        (match input with | (x, y) => subcircuit (LessThan.circuit n hn) (y, x)) := by
+      rcases input with ⟨x, y⟩
+      infer_instance
+    elaborate_circuit
+
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
 
   Spec := fun (x, y) output =>
@@ -474,6 +492,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds
+    rcases input with ⟨vx, vy⟩
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have hx_le : x.val ≤ 2^n := Nat.le_of_lt h_assumptions.left
@@ -482,6 +501,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     intro i env input h_env (x, y) h_input h_assumptions
+    rcases input with ⟨vx, vy⟩
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have hx_le : x.val ≤ 2^n := Nat.le_of_lt h_assumptions.left
@@ -505,12 +525,20 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
   main := fun (x, y) =>
     LessThan.circuit n hn (y, x + 1)
 
+  elaborated := by
+    haveI (input : Var fieldPair (F p)) : ExplicitCircuit
+        (match input with | (x, y) => subcircuit (LessThan.circuit n hn) (y, x + 1)) := by
+      rcases input with ⟨x, y⟩
+      infer_instance
+    elaborate_circuit
+
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val < 2^n
   Spec := fun (x, y) output =>
     output = (if x.val >= y.val then 1 else 0)
 
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds
+    rcases input with ⟨vx, vy⟩
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by
@@ -535,6 +563,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     intro i env input h_env (x, y) h_input h_assumptions
+    rcases input with ⟨vx, vy⟩
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by

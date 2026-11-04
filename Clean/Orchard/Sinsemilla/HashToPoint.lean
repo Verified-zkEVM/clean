@@ -1,3 +1,4 @@
+import Clean.Gadgets.WitnessEvaluation
 import Batteries.Data.Vector.Lemmas
 import Clean.Orchard.Sinsemilla.Chip
 import Clean.Orchard.Ecc.DoubleAndAdd
@@ -263,7 +264,7 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
       ({ x := P.x, y := P.y } : Point Fp) ≠ Point.zero := by
     intro P hP h
     apply hP
-    simpa [Point.zero_def] using h
+    simpa only [Point.zero, Point.zero_def] using h
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
   have hRadd := Point.nondegenerateAdd_eq_add
     (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
@@ -455,7 +456,6 @@ private theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → �
     (n := d + 1)
     (by
       intro s hs
-      dsimp only
       rw [if_pos (show s ≤ d by omega)]
       rcases Nat.lt_or_ge s d with hsd | hsd
       · rw [if_pos (show s + 1 ≤ d by omega), show r + (s + 1) = r + s + 1 by omega]
@@ -464,7 +464,7 @@ private theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → �
         rw [if_neg (show ¬ s + 1 ≤ s by omega), mul_zero, _root_.add_zero,
           show r + s = w by omega]
         exact hlast)
-    (by dsimp only; rw [if_neg (show ¬ d + 1 ≤ d by omega)])
+    (by rw [if_neg (show ¬ d + 1 ≤ d by omega)])
   simpa using h
 
 /-- The verifier-side contract of one piece, see `step_coordinates_of_constraints` for the chain step. The
@@ -596,11 +596,21 @@ theorem completeness (G : Generators) (w : ℕ) :
   obtain ⟨h_z0, h_zs, h_xPs, h_l1s, h_l2s, h_xAs, -⟩ := h_env
   replace h_zs : ∀ i : Fin w, env.get (i₀ + 1 + i.val) = pieceZ input_piece (i.val + 1) := by
     intro i
-    simp only [h_zs i, pieceZ]
+    simp only [h_zs i, pieceZ, HDiv.hDiv, Div.div, Witgen.NExprOver.eval, circuit_norm, h_input]
     rfl
   replace h_xPs : ∀ i : Fin (w + 1), env.get (i₀ + 1 + w + i.val)
-      = (G.S (pieceWord input_piece i.val)).x :=
-    fun i => (h_xPs i).trans (genX_read_value G input_piece i.val)
+      = (G.S (pieceWord input_piece i.val)).x := by
+    intro i
+    rw [h_xPs i]
+    have hindex : (input_var.piece.val / Witgen.NExprOver.const (2 ^ (K * i.val)) %
+        Witgen.NExprOver.const (2 ^ K)).eval {env} < 2^K := by
+      change (FiniteField.val (Expression.eval env.toEnvironment input_var.piece) /
+        2 ^ (K * i.val)) % 2^K < 2^K
+      exact Nat.mod_lt _ (by norm_num [K])
+    rw [Witgen.eval_vector_const_read _ _ _ hindex]
+    simp only [Vector.getElem_ofFn, HDiv.hDiv, Div.div, HMod.hMod, Mod.mod,
+      Witgen.NExprOver.eval, circuit_norm, h_input, pieceWord]
+    rfl
   have haux := completeness_aux G w input_piece input_xA input_yA hAx hAy hB
   simp only [Vector.getElem_append,
     Vector.getElem_mapRange, circuit_norm]
@@ -1230,7 +1240,7 @@ theorem z1sOfZs_tail {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (z1sOfZs (n :: rest) zs).tail = z1sOfZs rest (HVec.tail zs) := by
   simp only [z1sOfZs, Vector.listCons]
   ext i hi
-  simp; rfl
+  simp
 
 theorem z1sOfZs_getElem_succ {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (zs : HVec (zLengths (n :: rest)) F) (k : ℕ) (hk : k + 1 < (n :: rest).length) :
@@ -1310,12 +1320,10 @@ theorem eval_z1sOfZs {F : Type} [FiniteField F] (env : Environment F) : (ns : Li
       by_cases hn : 1 < n + 1
       · simp only [dif_pos hn]
         rw [ProvableType.Clean.getElem_eval_fields, HVec.eval_head]
-        rfl
       · simp only [dif_neg hn]
         rfl
     · rw [z1sOfZs_getElem_succ, z1sOfZs_getElem_succ, ProvableType.Clean.getElem_eval_fields,
         eval_z1sOfZs env rest (HVec.tail zs), HVec.eval_tail]
-      rfl
 
 def Spec (G : Generators) (ns : List ℕ) (input : Value (Input ns.length) Fp)
     (output : Value (Output ns) Fp) (_ : ProverData Fp) : Prop :=
@@ -1433,6 +1441,12 @@ lemma chainLength_def (list : List ℕ) :
   induction list with
   | nil => rfl
   | cons n rest ih => simp_all +arith [chainLength_cons]
+
+private theorem eval_cons_expanded (env : Environment Fp) {n : ℕ} {ns : List ℕ}
+    (head : Vector (Expression Fp) n) (tail : HVec ns (Expression Fp)) :
+    ({ elems := (HVec.cons head tail).elems.map (Expression.eval env) } : HVec (n :: ns) Fp) =
+      HVec.cons (eval env head) (eval env tail) := by
+  simpa only [circuit_norm, explicit_provable_type] using HVec.eval_cons env head tail
 
 namespace Cons
 
@@ -1589,6 +1603,9 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
       (fun _ _ => True) (Spec G (n :: rest)) := by
   circuit_proof_start [HashPiece.circuit, HashPiece.Spec, Gate.circuit, Gate.Spec]
   obtain ⟨h_piece, h_tail, h_gate⟩ := h_holds
+  generalize hout : tail.output _ _ = tailOut at *
+  rcases tailOut with ⟨tailPoint, tailFirst, tailZs⟩
+  simp only [circuit_norm, explicit_provable_type] at *
   simp only [hAss] at h_tail
   replace h_tail := h_tail trivial
   rw [hS] at h_tail
@@ -1614,7 +1631,7 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
       rw [hv]
       exact htailPC
   · -- the running-sum vectors
-    erw [HVec.eval_cons]
+    erw [eval_cons_expanded]
     simp only [ZsFacts, HVec.head_cons]
     refine ⟨?_, ?_⟩
     · rw [CircuitType.eval_var_fields, hzs]
@@ -1627,7 +1644,7 @@ theorem soundness (G : Generators) (n : ℕ) (rest : List ℕ)
       rw [chunks_head_getD ms tailChunks (r + j) (by simp only [Finset.mem_range] at hj; omega)]
     · rw [chunks_drop_append]
       erw [HVec.tail_cons]
-      exact htailZs
+      simpa only [circuit_norm, explicit_provable_type] using htailZs
   · -- the chain contract
     exact soundness_aux G n rest.isEmpty ms hms hlxP hlyp hchain hsec hyck htfxA
       tailChunks htailchain
@@ -1645,6 +1662,9 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
   circuit_proof_start [HashPiece.circuit, HashPiece.ProverSpec,
     HashPiece.ProverAssumptions, Gate.circuit, Gate.Spec]
   obtain ⟨h_piece_env, h_tail_env⟩ := h_env
+  generalize hout : tail.output _ _ = tailOut at *
+  rcases tailOut with ⟨tailPoint, tailFirst, tailZs⟩
+  simp only [circuit_norm, explicit_provable_type] at *
   obtain ⟨hbounds, A, B, hAon, hAx, hAy, hchain⟩ := h_assumptions
   have hAvalid : A.Valid := Or.inl hAon
   have hA0 : A ≠ 0 := Point.ne_zero_of_onCurve hAon
@@ -1724,7 +1744,7 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
     rw [htfxA] at henter ⊢
     linear_combination 2 * hnext' - 2 * henter
   · -- the honest running-sum vectors
-    erw [HVec.eval_cons]
+    erw [eval_cons_expanded]
     simp only [ZsHonest, HVec.head_cons]
     refine ⟨?_, ?_⟩
     · rw [CircuitType.eval_var_fields, hzsPS]
@@ -1733,7 +1753,7 @@ theorem completeness (G : Generators) (n : ℕ) (rest : List ℕ)
       exact congrArg (fun p => pieceZ p r.val) hp0
     · erw [HVec.tail_cons]
       rw [← hptail]
-      exact htailZsH
+      simpa only [circuit_norm, explicit_provable_type] using htailZsH
   · -- the level's chain contract
     intro A' hA'0 hA'x hA'y
     obtain rfl : A' = A := by
@@ -1866,6 +1886,9 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
   circuit_proof_start [InitialYQ.circuit, InitialYQ.Spec]
   obtain ⟨h_xQ, h_chain, h_yQ⟩ := h_holds
+  generalize hout : (Chain.circuit G (n₀ :: ns)).1.output _ _ = chainOut at *
+  rcases chainOut with ⟨chainPoint, chainFirst, chainZs⟩
+  simp only [circuit_norm, explicit_provable_type] at *
   simp only [(Chain.circuit G (n₀ :: ns)).2.2.1] at h_chain
   replace h_chain := h_chain trivial
   rw [(Chain.circuit G (n₀ :: ns)).2.1] at h_chain
@@ -1885,6 +1908,9 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
   circuit_proof_start [InitialYQ.circuit, InitialYQ.Spec]
   obtain ⟨h_xQ_env, h_chain_env⟩ := h_env
+  generalize hout : (Chain.circuit G (n₀ :: ns)).1.output _ _ = chainOut at *
+  rcases chainOut with ⟨chainPoint, chainFirst, chainZs⟩
+  simp only [circuit_norm, explicit_provable_type] at *
   obtain ⟨hbounds, B, hchain⟩ := h_assumptions
   have hPSchain := h_chain_env (by
     rw [(Chain.circuit G (n₀ :: ns)).2.2.2.1]
@@ -2019,10 +2045,13 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ n₀ ns)
       (fun _ _ => True) (Spec G Q n₀ ns) := by
   circuit_proof_start [output, HashToPoint.circuit, HashToPoint.Spec]
+  generalize hout : (HashToPoint.main G Q n₀ ns input_var i₀).1 = hashOut at *
+  rcases hashOut with ⟨hashPoint, hashZs⟩
+  simp only [circuit_norm, explicit_provable_type] at *
   obtain ⟨chunks, hPC, hZs, hfun⟩ := h_holds
   refine ⟨chunks, hPC, ?_, ?_⟩
   · rw [← ProvableType.Clean.eval_fields, Chain.eval_z1sOfZs]
-    exact Chain.z1Facts_of_zsFacts _ chunks _ hZs
+    exact Chain.z1Facts_of_zsFacts _ chunks _ (by simpa only [circuit_norm, explicit_provable_type] using hZs)
   · intro B hB
     exact hfun B hB
 
@@ -2032,10 +2061,13 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       (ProverAssumptions G Q n₀ ns) (ProverSpec G Q n₀ ns) := by
   circuit_proof_start [output, HashToPoint.circuit,
     HashToPoint.ProverAssumptions, HashToPoint.ProverSpec]
+  generalize hout : (HashToPoint.main G Q n₀ ns input_var i₀).1 = hashOut at *
+  rcases hashOut with ⟨hashPoint, hashZs⟩
+  simp only [circuit_norm, explicit_provable_type] at *
   obtain ⟨-, hZsH, hAfun⟩ := h_env h_assumptions
   refine ⟨h_assumptions, ?_, ?_⟩
   · rw [← ProvableType.Clean.eval_fields, Chain.eval_z1sOfZs]
-    exact Chain.z1sHonest_of_zsHonest _ _ _ h_assumptions.1 hZsH
+    exact Chain.z1sHonest_of_zsHonest _ _ _ h_assumptions.1 (by simpa only [circuit_norm, explicit_provable_type] using hZsH)
   · intro B' hB'
     exact hAfun B' hB'
 

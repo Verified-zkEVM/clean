@@ -421,7 +421,7 @@ theorem constantAssignments_map_fst
         endRow, List.length_map, List.length_zip] using hfull
     omega
   simp only [constantAssignments, List.map_map]
-  simpa only [Function.comp_apply] using
+  simpa only [Function.comp_def, positions, shapes, regionStarts, endRow] using
     List.map_snd_zip hpositions
 
 /-- Every V1 constant allocation uses one of the configured constants columns. -/

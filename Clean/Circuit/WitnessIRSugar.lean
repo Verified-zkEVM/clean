@@ -60,6 +60,28 @@ instance {V : Type} : Inv (FExprOver F V) := ⟨.inv⟩
 instance {V : Type} [Field F] : Neg (FExprOver F V) := ⟨.neg⟩
 instance {V : Type} [Field F] : Sub (FExprOver F V) := ⟨.sub⟩
 
+/-- Evaluation follows the existing subtraction expansion in the witness IR. -/
+@[circuit_norm]
+theorem FExprOver.eval_sub {V Env : Type} [FiniteField F] [WitgenEnv F Env V]
+    (ctx : CtxOver F Env) (left right : FExprOver F V) :
+    (left - right).eval ctx = left.eval ctx - right.eval ctx := by
+  change left.eval ctx + (-1) * right.eval ctx = _
+  rw [neg_one_mul, sub_eq_add_neg]
+
+/-- Negation is multiplication by the constant minus one in the existing IR. -/
+@[circuit_norm]
+theorem FExprOver.eval_neg {V Env : Type} [FiniteField F] [WitgenEnv F Env V]
+    (ctx : CtxOver F Env) (value : FExprOver F V) :
+    (-value).eval ctx = -value.eval ctx := by
+  change (-1) * value.eval ctx = _
+  exact neg_one_mul _
+
+/-- The inverse authoring operator denotes the existing inverse constructor. -/
+@[circuit_norm]
+theorem FExprOver.eval_inv {V Env : Type} [FiniteField F] [WitgenEnv F Env V]
+    (ctx : CtxOver F Env) (value : FExprOver F V) :
+    (value⁻¹).eval ctx = (value.eval ctx)⁻¹ := rfl
+
 end Witgen
 
 namespace Clean
@@ -351,7 +373,7 @@ theorem eval_toIRScalar (program : MOver F V (FExprOver F V)) (env : Env) :
     ((toIRScalar program (Env := Env)).eval env)[0]
       = MOver.eval (value := field) env program := by
   rcases h : program #[] with ⟨out, steps⟩
-  simp [toIRScalar, toIR, eval, WitgenIROver.eval, h, VExprOver.eval]
+  simp [toIRScalar, toIR, eval, WitgenIROver.eval, h, VExprOver.eval, Functor.map]
   with_unfolding_all rfl
 
 instance {α : Type} [Inhabited α] : Inhabited (MOver F V α) where

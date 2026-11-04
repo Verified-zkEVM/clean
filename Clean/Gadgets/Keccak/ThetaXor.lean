@@ -18,6 +18,11 @@ def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
     Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main := by
+  haveI (input : Var Inputs (F p)) : ExplicitCircuit
+      (match input with | {state, d} => Circuit.mapFinRange 25 (fun i => subcircuit Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩)) := by
+    rcases input with ⟨state, d⟩
+    dsimp only
+    infer_explicit_circuit
   elaborate_circuit
 
 def Assumptions (inputs : Inputs (F p)) : Prop :=
@@ -32,7 +37,13 @@ def Spec (inputs : Inputs (F p)) (out : KeccakState (F p)) : Prop :=
 -- rewrite thetaXor as a loop
 lemma thetaXor_loop (state : Vector ℕ 25) (d : Vector ℕ 5) :
     Specs.Keccak256.thetaXor state d = .mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5] := by
-  simp [Specs.Keccak256.thetaXor, circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero]
+  apply Vector.ext
+  intro i hi
+  have h (j : Fin 25) : (Specs.Keccak256.thetaXor state d)[j.val] =
+      (Vector.mapFinRange 25 fun i => state[i.val] ^^^ d[i.val / 5])[j.val] := by
+    simp only [Vector.getElem_mapFinRange]
+    fin_cases j <;> rfl
+  exact h ⟨i, hi⟩
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Xor64.circuit, Xor64.Assumptions, Xor64.Spec]

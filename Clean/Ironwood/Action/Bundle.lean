@@ -3408,9 +3408,10 @@ private theorem mainPost_keygenRegistered
   · rw [(baseCircuit G B).call_operations]
     simpa only [FormalCircuit.keygenRequirements, baseCircuit,
       ElaboratedCircuit.keygenRequirements, KeygenRequirements.inputPermutationColumns,
-      List.map_nil, List.append_nil] using
+      List.map_nil, List.append_nil, List.nil_append] using
         (elaborated G B).registered () counts () () i
-  · simpa only [FormalCircuit.output_call'] using
+  · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
+    simpa only [FormalCircuit.output_call'] using
       synthCrossAddressChecks_baseOutput_keygenRegistered G B counts i (i + 394)
 
 private theorem mainPost_copyCellsAssigned
@@ -3424,7 +3425,7 @@ private theorem mainPost_copyCellsAssigned
   apply Operations.CopyCellsAssignedFrom.append
   · rw [(baseCircuit G B).call_operations]
     simpa only [FormalCircuit.keygenRequirements, baseCircuit,
-      ElaboratedCircuit.keygenRequirements] using
+      ElaboratedCircuit.keygenRequirements, Operations.CopyCellsAssigned] using
         (elaborated G B).copyCellsAssigned () counts () () i
   · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
     rw [FormalCircuit.output_call']
@@ -3532,7 +3533,7 @@ instance elaboratedPost (G : Generators) (B : Bases) :
     cases configInput
     cases hconfig
     cases input
-    simpa only [KeygenRequirements.inputCells] using
+    simpa only [KeygenRequirements.inputCells, Operations.CopyCellsAssigned] using
       mainPost_copyCellsAssigned G B counts i
   lookupSelectorAssignmentsAgree_of_registered := by
     intro configInput counts hconfig input i program operations _hregistered
@@ -3813,6 +3814,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
+          List.get!Internal, Nat.reduceMod, circuit_norm]
         linear_combination hdx
       · rw [w6, w0]
         ring
@@ -3825,6 +3828,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
+          List.get!Internal, Nat.reduceMod, circuit_norm]
         linear_combination hdy
       · rw [w6, w0]
         ring
@@ -3837,6 +3842,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
+          List.get!Internal, Nat.reduceMod, circuit_norm]
         linear_combination hpx
       · rw [w6, w0]
         ring
@@ -3849,6 +3856,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
+          List.get!Internal, Nat.reduceMod, circuit_norm]
         linear_combination hpy
       · rw [w6, w0]
         ring

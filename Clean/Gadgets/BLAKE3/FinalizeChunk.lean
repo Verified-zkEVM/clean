@@ -142,6 +142,7 @@ private lemma eval_take_normalized (env : Environment (F p)) (v : BLAKE3State (E
   simp only [Vector.getElem_take]
   exact h ⟨i, by omega⟩
 
+set_option backward.isDefEq.respectTransparency true in
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [IsZero.circuit, Or32.circuit, Compress.circuit, ApplyRounds.circuit,
     IsZero.Spec, IsZero.Assumptions,

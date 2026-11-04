@@ -127,8 +127,7 @@ def floorDiv (x : F p) (c : ℕ+) : F p := (x.val / c : ℕ)
 
 lemma mod_val {x : F p} {c : ℕ+} {lt : c < p} : (mod x c lt).val = x.val % c := by
   rw [mod, ZMod.val_natCast_of_lt]
-  grw [Nat.mod_lt x.val c.pos]
-  exact lt
+  exact (Nat.mod_lt x.val c.pos).trans lt
 
 lemma floorDiv_val {x : F p} {c : ℕ+} : (floorDiv x c).val = x.val / c := by
   rw [floorDiv, ZMod.val_natCast_of_lt]

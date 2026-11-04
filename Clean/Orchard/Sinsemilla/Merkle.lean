@@ -637,6 +637,12 @@ instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) :
     ElaboratedCircuit Fp Input field (main G Q hQ l) where
   localLength _ := 269
+  output _ offset :=
+    (HashToPoint.Z1s.output G Q 24 [1, 24]
+      #v[var ⟨offset⟩, var ⟨offset + 3⟩, var ⟨offset + 4⟩] (offset + 7)).point.x
+  output_eq input offset := by
+    simp only [main, circuit_norm, HashToPoint.Z1s.circuit,
+      Utilities.LookupRangeCheck.shortRangeCircuit]
   localLength_eq := by
     intro input offset
     have hEL : ∀ x, (HashToPoint.Z1s.circuit G Q hQ 24 [1, 24]).localLength x = 262 := fun _ => rfl
@@ -696,8 +702,8 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
         Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
       (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1) = e := ⟨_, rfl⟩
   obtain ⟨eo, heo⟩ := heoex
-  simp only [heo] at hz1A hz1B hfun hg1 hg2 hg3 hg4
-  simp only [List.append_nil] at hfun hz1A hz1B
+  rcases eo with ⟨⟨ex, ey⟩, ezs⟩
+  simp only [heo, circuit_norm, explicit_provable_type] at hz1A hz1B hfun hg1 hg2 hg3 hg4
   have haval' : env.get i₀
       = ((∑ r ∈ Finset.range 25, msA r * 2 ^ (K * r) : ℕ) : Fp) := haval
   have hbval' : env.get (i₀ + 1 + 1 + 1)
@@ -720,6 +726,11 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 -- Keep the `z₁` projection atomic: unfolding `Chain.z1sOfZs` over the full running-sum
 -- `HVec` (50 cells) blows up `whnf` when the honest-value hypotheses are used.
 attribute [local irreducible] Chain.z1sOfZs
+
+private theorem map_extract_first {α β : Type} (xs : Vector α 3) (f : α → β) :
+    ((xs.map f).extract 1)[0] = f xs[1] := by
+  rw [Vector.getElem_extract]
+  simp only [Nat.add_zero, Vector.getElem_map]
 
 theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
@@ -752,11 +763,17 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
           ++ List.map (pieceWord (env.get (i₀ + 1 + 1 + 1 + 1))) (List.range 25)))
       = some B' := ⟨B, by rw [hp.2]; exact hchain⟩
   have hps := (h_entry_env ⟨hp.1, hex⟩).2
+  have heoex : ∃ e, HashToPoint.Z1s.output G Q 24 [1, 24]
+      #v[Expression.var ⟨i₀⟩, Expression.var ⟨i₀ + 1 + 1 + 1⟩,
+        Expression.var ⟨i₀ + 1 + 1 + 1 + 1⟩]
+      (i₀ + 1 + 1 + 1 + 1 + 1 + 1 + 1) = e := ⟨_, rfl⟩
+  obtain ⟨eo, heo⟩ := heoex
+  rcases eo with ⟨⟨ex, ey⟩, ezs⟩
+  simp only [heo, circuit_norm, explicit_provable_type] at hps ⊢
   have hBfun := hps.2
-  have hzh1 := (Vector.getElem_map (Expression.eval env.toEnvironment)
+  have hzh1 := (Vector.getElem_map (i := 0) (n := 3) (Expression.eval env.toEnvironment)
     (by simp)).symm.trans hps.1.1
-  have hzh2 := (Vector.getElem_map (Expression.eval env.toEnvironment)
-    (by simp)).symm.trans hps.1.2.1
+  have hzh2 := (map_extract_first ezs (Expression.eval env.toEnvironment)).symm.trans hps.1.2.1
   have hg := honest_gate (l := l) (lv := ZMod.val input_left)
     (rv := ZMod.val input_right) (aCell := env.get i₀)
     (bCell := env.get (i₀ + 1 + 1 + 1)) (b1Cell := env.get (i₀ + 1))
@@ -836,6 +853,11 @@ instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) :
     ElaboratedCircuit Fp Input field (main G Q hQ l hl) where
   localLength _ := 274
+  output _ offset :=
+    (HashToPoint.Z1s.output G Q 24 [1, 24]
+      #v[var ⟨offset + 5⟩, var ⟨offset + 8⟩, var ⟨offset + 9⟩] (offset + 12)).point.x
+  output_eq input offset := by
+    simp only [main, circuit_norm, HashLayer.circuit, Utilities.CondSwap.Swap.circuit]
   localLength_eq := by
     intro input offset
     have hHL : ∀ x, (HashLayer.circuit G Q hQ l hl).localLength x = 269 := fun _ => rfl
@@ -846,6 +868,13 @@ instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     have hHLg : (HashLayer.circuit G Q hQ l hl).channelsWithGuarantees = [] := rfl
     simp only [circuit_norm, seval, Utilities.CondSwap.Swap.circuit, hHLg]
     try trivial
+
+private theorem main_output_eq (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2^10) (input : Var Input Fp) (offset : ℕ) :
+    (main G Q hQ l hl input offset).1 =
+      (HashToPoint.Z1s.output G Q 24 [1, 24]
+        #v[var ⟨offset + 5⟩, var ⟨offset + 8⟩, var ⟨offset + 9⟩] (offset + 12)).point.x := by
+  exact (elaborated G Q hQ l hl).output_eq input offset
 
 def Spec (G : Generators) (Q : Point Fp) (l : ℕ)
     (input : Value Input Fp) (output : Value field Fp)
@@ -947,13 +976,30 @@ instance : Inhabited (Var Input Fp) :=
   ⟨{ leaf := default, path := unconstrained (do return default),
      pos := unconstrainedNat (do return 0) }⟩
 
+private theorem small_index_bound {i : ℕ} (hi : i < 32) : i < 2^10 :=
+  Nat.lt_trans hi (by decide)
+
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (input : Var Input Fp) : Circuit Fp (Var field Fp) :=
   Circuit.foldl (.finRange 32) input.leaf
-    (fun node i => Layer.circuit G Q hQ i.val (by omega)
+    (fun node i => Layer.circuit G Q hQ i.val (small_index_bound i.isLt)
       { node := node,
         sibling := unconstrained (do return (← input.path)[i]),
         posBit := unconstrainedBool (do return (← input.pos).testBit i.val =? 1) })
+    (by
+      intro item offset
+      rcases item with ⟨node, i⟩
+      simp only [circuit_norm, Layer.circuit])
+
+/-- The explicit constant-output certificate leaves the executable fold unchanged. -/
+private theorem main_eq_foldlM (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (input : Var Input Fp) :
+    main G Q hQ input = (Vector.finRange 32).foldlM
+      (fun node i => Layer.circuit G Q hQ i.val (small_index_bound i.isLt)
+        { node := node,
+          sibling := unconstrained (do return (← input.path)[i]),
+          posBit := unconstrainedBool (do return (← input.pos).testBit i.val =? 1) }) input.leaf := by
+  rfl
 
 def output (G : Generators) (Q : Point Fp) (offset : ℕ) :=
   HashToPoint.Z1s.output G Q 24 [1, 24]
@@ -988,6 +1034,9 @@ def Spec (G : Generators) (Q : Point Fp)
     (_ : ProverData Fp) : Prop :=
   MerkleRoot G Q 0 input.leaf depth output
 
+private theorem layer_input_node (node : Fp) (sibling posBit : Unit) :
+    ({node := node, sibling := sibling, posBit := posBit} : Value Layer.Input Fp).node = node := rfl
+
 theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     GeneralFormalCircuit.WithHint.Soundness Fp (main G Q hQ)
       (fun _ _ => True) (Spec G Q) := by
@@ -1014,6 +1063,11 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
       Expression.eval env ((Layer.circuit G Q hQ l hl).output inp o₁)
         = Expression.eval env ((Layer.circuit G Q hQ 0 hpf).output default o₂) := by
     intro l hl inp o₁ o₂ h; subst h; rfl
+  have canonical_output (l : ℕ) (hl : l < 2^10) (inp : Var Layer.Input Fp) (o : ℕ) :
+      (Layer.circuit G Q hQ l hl).output inp o =
+        (Layer.circuit G Q hQ 0 hpf).output default o := rfl
+  simp only [canonical_output] at h0 hstep
+  try simp only [hlen] at h0 hstep
   -- state function: f 0 = leaf, f (j+1) = canonical output value at offset i₀ + j*274
   let f : ℕ → Fp := fun n => match n with
     | 0 => input_leaf
@@ -1024,16 +1078,17 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     rw [Nat.zero_add]
     obtain _ | j := i
     · obtain ⟨lv, rv, hlv, hrv, hcase, hfun⟩ := h0 trivial
-      -- layer-0 input node is the leaf itself (`f 0`), so the node part is a definitional
-      -- `rfl`; only the output goes through `bridge`.
-      refine ⟨lv, rv, hlv, hrv,
-        hcase.imp (fun h => h.trans rfl) (fun h => h.trans rfl),
-        fun B hB => (bridge 0 hpf _ _ _ (by simp)).symm.trans (hfun B hB)⟩
-    · obtain ⟨lv, rv, hlv, hrv, hcase, hfun⟩ := hstep j (by omega) trivial
-      refine ⟨lv, rv, hlv, hrv,
-        hcase.imp (fun h => h.trans (bridge j (by omega) _ _ _ (by simp [hlen])))
-          (fun h => h.trans (bridge j (by omega) _ _ _ (by simp [hlen]))),
-        fun B hB => (bridge (j + 1) (by omega) _ _ _ (by simp [hlen])).symm.trans (hfun B hB)⟩
+      simp only [f, Nat.zero_mul, Nat.add_zero]
+      exact ⟨lv, rv, hlv, hrv, hcase, hfun⟩
+    · obtain ⟨lv, rv, hlv, hrv, hcase, hfun⟩ := hstep j hi trivial
+      simp only [f]
+      have hcase' := Eq.mp
+        (congrArg (fun node : Fp => (lv : Fp) = node ∨ (rv : Fp) = node)
+          (layer_input_node
+            (Expression.eval env ((Layer.circuit G Q hQ 0 hpf).output default (i₀ + j * 274)))
+            input_path input_path)) hcase
+      exact ⟨lv, rv, hlv, hrv, hcase', hfun⟩
+
   have hconcl : MerkleRoot G Q 0 (f 0) 32 (f 32) := merkleRoot_of_steps G Q f 0 32 hsteps
   -- the foldl output `goalOut` is the layer-31 canonical output; bridge it to `f 32`
   -- without reducing the output expression.
@@ -1091,24 +1146,57 @@ theorem honestNode_isSome_le (G : Generators) (Q : Point Fp)
 theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     GeneralFormalCircuit.WithHint.Completeness Fp (main G Q hQ)
       (ProverAssumptions G Q) (ProverSpec G Q) := by
-  circuit_proof_start [Layer.circuit,
-    Layer.ProverAssumptions, Layer.ProverSpec, Layer.proverChunks]
+  circuit_proof_start
   obtain ⟨hL0, hLstep⟩ := h_env
-  have hpf : (0 : ℕ) < 2 ^ 10 := by norm_num
-  have hlen : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Fp),
-      (Layer.circuit G Q hQ l hl).localLength inp = 274 := fun _ _ _ => rfl
-  -- output-value canonicalization (see soundness `bridge`): independent of layer / input
-  -- record / proof, with the offset gap folded into a ℕ equation.
-  have bridge : ∀ (l : ℕ) (hl : l < 2 ^ 10) (inp : Var Layer.Input Fp) (o₁ o₂ : ℕ),
-      o₁ = o₂ →
-      Expression.eval env.toEnvironment (Layer.main G Q hQ l hl inp o₁).1
-        = Expression.eval env.toEnvironment (Layer.main G Q hQ 0 hpf default o₂).1 := by
-    intro l hl inp o₁ o₂ h; subst h; rfl
-  -- the canonical running node after `n` layers
-  let acc : ℕ → Fp := fun n => match n with
+  simp only [Witgen.EqCond.eqCond, Witgen.BExprOver.eval, Witgen.NExprOver.testBit,
+    Witgen.NExprOver.eval] at hL0 hLstep
+  -- Use the certified output metadata, so canonicalization never executes a layer.
+  let sourceCell (offset : Nat) : Expression Fp :=
+    (HashToPoint.Z1s.output G Q 24 [1, 24]
+      #v[var ⟨offset + 5⟩, var ⟨offset + 8⟩, var ⟨offset + 9⟩] (offset + 12)).point.x
+  let cellAt := sourceCell
+  have cellAtEq (offset : Nat) : cellAt offset = sourceCell offset := rfl
+  let leaf : Fp := input_leaf
+  let path : Vector Fp 32 := input_path
+  let position : Nat := input_pos
+  let sourcePosition : Nat := Witgen.NExprOver.eval
+    { env := env, locals := Witgen.evalSteps env (input_var.pos #[]).2.toList }
+    (input_var.pos #[]).1
+  let posValue := sourcePosition
+  have sourcePosEq : sourcePosition = position := h_input.2.2
+  have posEq : posValue = position := sourcePosEq
+  have firstContract : Layer.ProverAssumptions G Q 0
+      {node := leaf, sibling := path[0],
+       posBit := decide (posValue >>> 0 % 2 = 1)} env.data env.hint →
+      Layer.ProverSpec G Q 0
+        {node := leaf, sibling := path[0],
+         posBit := decide (posValue >>> 0 % 2 = 1)}
+        (Expression.eval (F := Fp) env.toEnvironment (cellAt i₀)) env.hint := by
+    intro hypothesis
+    exact (hL0 hypothesis).2
+  have stepContract : ∀ i (hi : i + 1 < 32), Layer.ProverAssumptions G Q (i + 1)
+      {node := Expression.eval (F := Fp) env.toEnvironment (cellAt (i₀ + i * 274)),
+       sibling := path[i + 1], posBit := decide (posValue >>> (i + 1) % 2 = 1)}
+      env.data env.hint →
+      Layer.ProverSpec G Q (i + 1)
+        {node := Expression.eval (F := Fp) env.toEnvironment (cellAt (i₀ + i * 274)),
+         sibling := path[i + 1], posBit := decide (posValue >>> (i + 1) % 2 = 1)}
+        (Expression.eval (F := Fp) env.toEnvironment (cellAt (i₀ + (i + 1) * 274))) env.hint := by
+    intro i hi hypothesis
+    exact (hLstep i hi hypothesis).2
+  clear hL0 hLstep
+  have hL0 := firstContract
+  have hLstep := stepContract
+  clear firstContract stepContract
+  have lastCell : cellAt (i₀ + 31 * 274) = output G Q i₀ := by
+    dsimp only [cellAt, sourceCell, output]
+  clear_value cellAt posValue
+  rw [posEq] at hL0 hLstep
+  simp only [Layer.ProverAssumptions, Layer.ProverSpec, Layer.proverChunks,
+    decide_eq_true_eq] at hL0 hLstep
+  let acc : Nat → Fp := fun n => match n with
     | 0 => input_leaf
-    | k + 1 => Expression.eval env.toEnvironment
-        (Layer.main G Q hQ 0 hpf default (i₀ + k * 274)).1
+    | k + 1 => Expression.eval env.toEnvironment (cellAt (i₀ + k * 274))
   set I : ProverValue Input Fp := { leaf := input_leaf, path := input_path, pos := input_pos }
     with hI
   -- the chunk list hashed at layer `k` with running node `acc k`
@@ -1118,8 +1206,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     | zero => intro _; rfl
     | succ k ih =>
       intro hk
-      have hk' : k < 32 := by omega
-      have hik : honestNode G Q I k = some (acc k) := ih (by omega)
+      have hk' : k < 32 := Nat.lt_of_succ_le hk
+      have hik : honestNode G Q I k = some (acc k) := ih (Nat.le_trans (Nat.le_succ k) hk)
       -- honestNode (k+1) reduces to the layer-k hash, mapped to its x-coordinate
       have hred : honestNode G Q I (k + 1) = (Specs.Sinsemilla.hashToPoint G.S Q
           (Layer.proverChunks k
@@ -1127,7 +1215,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
               posBit := decide ((show ℕ from I.pos) >>> k % 2 = 1) })).map (·.x) := by
         rw [honestNode, dif_pos hk', hik]; rfl
       have hsome : (honestNode G Q I (k + 1)).isSome :=
-        honestNode_isSome_le G Q I (by omega) h_assumptions
+        honestNode_isSome_le G Q I hk h_assumptions
       rw [hred] at hsome ⊢
       -- the layer-k hash exists
       set chunks : List ℕ := Layer.proverChunks k
@@ -1139,7 +1227,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
         · exact ⟨B, rfl⟩
       rw [hB]
       show some B.x = some (acc (k + 1))
-      congr 1
+      refine congrArg (some : Fp → Option Fp) ?_
       -- align `hB` with the propositional condition spelling of `hL0`/`hLstep`
       -- (their `decide _ = true` conditions are `circuit_norm`-normalized)
       rw [hchunks] at hB
@@ -1147,20 +1235,12 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
       -- now show `B.x = acc (k+1)` via the per-layer prover spec
       rcases k with _ | j
       · -- layer 0: feed `hL0` the existence we just produced
-        have spec := (hL0 ⟨B, hB⟩).2 B hB
+        have spec := (hL0 ⟨B, hB⟩) B hB
         rw [← spec]
-        exact bridge 0 (by norm_num) _ _ _ (by simp)
-      · -- layer j+1: the running node equals the canonical `acc (j+1)` (bridge)
-        have hbe : Expression.eval env.toEnvironment
-            (Layer.main G Q hQ j (by omega)
-              { node := default,
-                sibling := fun s => ((input_var.path s).1[j], (input_var.path s).2),
-                posBit := fun s => ((input_var.pos s).1.testBit (NExpr.const j) =? 1,
-                  (input_var.pos s).2) } (i₀ + j * 274)).1 = acc (j + 1) :=
-          bridge j (by omega) _ _ _ rfl
-        have spec := (hLstep j hk' ⟨B, by rw [hbe]; exact hB⟩).2 B (by rw [hbe]; exact hB)
-        rw [← spec]
-        exact bridge (j + 1) (by omega) _ _ _ rfl
+        rfl
+      · -- Apply the next layer contract at its canonical output.
+        have spec := (hLstep j hk' ⟨B, hB⟩) B hB
+        exact spec.symm
   -- each layer's hash exists (the running node is the honest one, via `key`)
   have hAsm : ∀ k (hk : k < 32), ∃ B, Specs.Sinsemilla.hashToPoint G.S Q
       (Layer.proverChunks k
@@ -1170,8 +1250,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     have h1 : (Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
           posBit := decide ((show ℕ from I.pos) >>> k % 2 = 1) })).map (·.x) = some (acc (k + 1)) := by
-      have hk1 := key (k + 1) (by omega)
-      rw [honestNode, dif_pos hk, key k (by omega)] at hk1
+      have hk1 := key (k + 1) (Nat.succ_le_of_lt hk)
+      rw [honestNode, dif_pos hk, key k (Nat.le_of_lt hk)] at hk1
       exact hk1
     rcases hh : Specs.Sinsemilla.hashToPoint G.S Q (Layer.proverChunks k
         { node := acc k, sibling := (show Vector Fp 32 from I.path)[k]'hk,
@@ -1182,24 +1262,28 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
   simp only [Layer.proverChunks, hI, decide_eq_true_eq] at hAsm
   refine ⟨⟨?_, ?_⟩, ?_⟩
   · -- layer-0 assumption
-    exact hAsm 0 (by norm_num)
+    change Layer.ProverAssumptions G Q 0
+      {node := leaf, sibling := path[0], posBit := decide (sourcePosition >>> 0 % 2 = 1)}
+      env.data env.hint
+    clear_value sourcePosition
+    rw [sourcePosEq]
+    simpa only [Layer.ProverAssumptions, Layer.proverChunks, decide_eq_true_eq, acc] using
+      hAsm 0 (by decide)
   · -- layer-(i+1) assumptions
     intro i hi
-    have hbe : Expression.eval env.toEnvironment
-        (Layer.main G Q hQ i (by omega)
-          { node := default,
-            sibling := fun s => ((input_var.path s).1[i], (input_var.path s).2),
-            posBit := fun s => ((input_var.pos s).1.testBit (NExpr.const i) =? 1,
-              (input_var.pos s).2) } (i₀ + i * 274)).1 = acc (i + 1) :=
-      bridge i (by omega) _ _ _ rfl
-    rw [hbe]
-    exact hAsm (i + 1) (by omega)
+    change Layer.ProverAssumptions G Q (i + 1)
+      {node := Expression.eval (F := Fp) env.toEnvironment (sourceCell (i₀ + i * 274)),
+       sibling := path[i + 1], posBit := decide (sourcePosition >>> (i + 1) % 2 = 1)}
+      env.data env.hint
+    clear_value sourcePosition
+    rw [sourcePosEq, ← cellAtEq]
+    simpa only [Layer.ProverAssumptions, Layer.proverChunks, decide_eq_true_eq, acc] using
+      hAsm (i + 1) hi
   · -- the output is the honest root
     intro root hroot
     rw [key 32 (le_refl 32)] at hroot
     obtain rfl : acc 32 = root := Option.some.inj hroot
-    simp only [acc, output, circuit_norm, Layer.main, HashLayer.circuit, Utilities.CondSwap.Swap.circuit,
-      HashLayer.main, HashToPoint.Z1s.circuit, Utilities.LookupRangeCheck.shortRangeCircuit]
+    simp only [acc, lastCell]
 
 def circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     GeneralFormalCircuit.WithHint Fp Input field where

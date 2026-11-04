@@ -546,26 +546,48 @@ theorem mainCircuitSynthesisSummary_hasNoFixedColumns (cfg : Config) :
     MulComplete.circuitSynthesisSummary_hasNoFixedColumns]
   simp
 
+section
+attribute [local irreducible] FloorPlanner.unionColumns Add.synthesisSummary
+  MulIncomplete.doubleAndAddSynthesisSummary MulComplete.circuitSynthesisSummary
+
+set_option backward.isDefEq.respectTransparency true in
 theorem mainCircuitSynthesisSummary_eq (cfg : Config)
     (input : Var Inputs Fp) (self : RegionIndex) :
     mainCircuitSynthesisSummary cfg =
       FloorPlanner.regionSynthesisSummary
         ((mainSynthesize cfg input).operations self) := by
-  unfold mainSynthesize
+  simp only [mainCircuitSynthesisSummary, mainSynthesize,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_assignAdvice, operations_constrainConstant, operations_cellAt,
+    operations_copyAdvice, operations_enable, synthesis_summary_norm,
+    configure_selector_norm]
+  have constantSummary (cell : Cell) (value : Fp) :
+      FloorPlanner.regionSynthesisSummary [.constrainConstant cell value] =
+        FloorPlanner.RegionSynthesisSummary.ofColumns [] 0 1 := by
+    with_unfolding_all rfl
+  simp only [constantSummary]
+  generalize Add.synthesisSummary cfg.addConfig offInit = initial
+  generalize MulIncomplete.doubleAndAddSynthesisSummary 124 cfg.hiConfig offHi = hi
+  generalize MulIncomplete.doubleAndAddSynthesisSummary 125 cfg.loConfig offLo = lo
+  generalize MulComplete.circuitSynthesisSummary 3 cfg.completeConfig offComp = complete
+  generalize Add.synthesisSummary cfg.addConfig offLsb = last
+  generalize offLsb = row
   apply FloorPlanner.RegionSynthesisSummary.ext
-  · simp only [mainCircuitSynthesisSummary, circuit_norm,
-      synthesis_summary_norm, configure_selector_norm]
-  · simp only [mainCircuitSynthesisSummary, circuit_norm,
-      synthesis_summary_norm, configure_selector_norm]
-    omega
-  · simp only [mainCircuitSynthesisSummary, circuit_norm,
-      synthesis_summary_norm, configure_selector_norm]
-  · simp only [mainCircuitSynthesisSummary, circuit_norm,
-      synthesis_summary_norm, configure_selector_norm]
-  · simp only [mainCircuitSynthesisSummary, circuit_norm,
-      synthesis_summary_norm, configure_selector_norm]
-  · simp only [mainCircuitSynthesisSummary, circuit_norm,
-      synthesis_summary_norm, configure_selector_norm, lsbGate]
+  all_goals simp only [FloorPlanner.RegionSynthesisSummary.combine,
+    FloorPlanner.RegionSynthesisSummary.ofColumns,
+    FloorPlanner.unionColumns_nil_right, FloorPlanner.unionColumns_normalize_right,
+    Nat.zero_max, Nat.zero_add, List.nil_append]
+  · simp only [FloorPlanner.unionColumns_collapse_normalized, List.singleton_append]
+  · simp only [Nat.add_assoc, Nat.reduceAdd]
+    congr 1
+    congr 1
+    congr 1
+    congr 1
+    congr 1
+    have hmax : max (row + 2) (row + 1) = row + 2 := max_eq_left (by omega)
+    simp only [← Nat.max_assoc, Nat.max_self, hmax]
+
+end
 
 def mainKeygenRequirements : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=
@@ -1031,11 +1053,13 @@ def mainElaborated : ElaboratedRegionCircuit Fp Config Config Inputs MainOutputs
   keygenRequirements := mainKeygenRequirements
   registered := by
     intro cfg counts hconfig offset input region
-    simpa only [Configure.output_pure, Configure.delta_pure, List.append_nil] using
+    simpa only [Configure.output_pure, Configure.delta_pure, Configure.fixedColumns_pure,
+      List.append_nil] using
       mainSynthesize_keygenRegistered cfg hconfig input region
   copyCellsAssigned := by
     intro cfg counts hconfig offset input region
-    simpa only [Configure.output_pure, mainKeygenRequirements] using
+    simpa only [Configure.output_pure, mainKeygenRequirements,
+      RegionOperations.CopyCellsAssigned] using
       mainSynthesize_copyCellsAssigned cfg hconfig input region
   lookupSelectorAssignmentsAgree_of_registered := by
     intro cfg counts hconfig offset input region program operations hregistered
@@ -1104,6 +1128,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     out.k254 = ((kNat input.alpha / 2 ^ 254 : ℕ) : Fp)
 
   soundness := by
+    set_option backward.isDefEq.respectTransparency true in
     circuit_proof_start2 [mainSynthesize, Add.add, MulIncomplete.double_and_add,
       MulComplete.assign_region, lsbGate]
     have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl assumptions
@@ -1236,8 +1261,11 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         have hcy : env.advice cfg.addConfig.yP ((place self + offLsb : ℕ) : ℤ)
             = -input_base_y := by
           linear_combination hLsbY + input_base_y * hk0
-        obtain ⟨hResV, hResEq⟩ := result_spec
-          ⟨by rw [hcx, hcy]; exact Point.valid_neg hbaseV, hCompAccV⟩
+        obtain ⟨hResV, hResEq⟩ := result_spec (by
+          constructor
+          · simpa only [hcx, hcy, Point.neg_def, Point.ofCoords, Point.coords,
+              CompElliptic.CurveForms.ShortWeierstrass.neg] using Point.valid_neg hbaseV
+          · exact hCompAccV)
         rw [hcx, hcy, show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -({ x := input_base_x, y := input_base_y } : Point Fp) from rfl,
           hCompAccEq, point_neg_add_nsmul assumptions hM3pos] at hResEq
@@ -1251,7 +1279,8 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
                   = input_base_x from by linear_combination hLsbX - input_base_x * hk0,
                 show env.advice cfg.addConfig.yP ((place self + offLsb : ℕ) : ℤ)
                   = -input_base_y from by linear_combination hLsbY + input_base_y * hk0]
-              exact Point.valid_neg hbaseV, hCompAccV⟩
+              simpa only [Point.neg_def, Point.ofCoords, Point.coords,
+                CompElliptic.CurveForms.ShortWeierstrass.neg] using Point.valid_neg hbaseV, hCompAccV⟩
         exact hResV
     · -- k₀ = 1: the correction point is the identity, the result is [M₃]•base
       refine ⟨bitsHi, bitsLo, bitsC, true, hK254bit, hOZ130.symm.trans hHiZ124, ?_, ?_, ?_⟩
@@ -1277,6 +1306,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
               exact Point.valid_zero, hCompAccV⟩
         exact hResV
   completeness := by
+    set_option backward.isDefEq.respectTransparency true in
     circuit_proof_start2 [mainSynthesize, Add.add, MulIncomplete.double_and_add,
       MulComplete.assign_region, lsbGate]
     have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := assumptions
@@ -1440,7 +1470,8 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       · simp only [Bool.false_eq_true, if_false]
         rw [show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -{ x := input_base_x, y := input_base_y } from rfl]
-        exact Point.valid_neg hbaseV
+        simpa only [Point.neg_def, Point.ofCoords, Point.coords,
+                CompElliptic.CurveForms.ShortWeierstrass.neg] using Point.valid_neg hbaseV
       · simp only [if_true]
         exact Point.valid_zero
 
@@ -1777,7 +1808,17 @@ private theorem synthesize_keygenRegistered
         FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
         keygenRequirements] at hargument ⊢
       aesop
-    case hfixedColumns => keygen_registration
+    case hfixedColumns =>
+      intro column hcolumn
+      simp only [mainConfigured, FormalCircuit.Configured.ofPure_fixedColumns,
+        FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
+        FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements] at hcolumn
+      rw [mainKeygenRequirements_fixedColumns] at hcolumn
+      simp only [FormalRegionCircuit.Configured.fixedColumns,
+        FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
+        keygenRequirements] at hcolumn ⊢
+      aesop
     case hpermutationColumns =>
       intro column hcolumn
       simp only [mainConfigured,
@@ -1811,7 +1852,13 @@ private theorem synthesize_keygenRegistered
         FormalCircuit.Configured.lookups, FormalCircuit.keygenRequirements,
         MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hargument ⊢
       aesop
-    case hfixedColumns => keygen_registration
+    case hfixedColumns =>
+      intro column hcolumn
+      simp only [keygen_norm, configure, overflowConfigured,
+        keygenRequirements,
+        FormalCircuit.Configured.fixedColumns, FormalCircuit.keygenRequirements,
+        MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hcolumn ⊢
+      aesop
     case hpermutationColumns =>
       intro column hcolumn
       simp only [keygen_norm, configure, overflowConfigured,

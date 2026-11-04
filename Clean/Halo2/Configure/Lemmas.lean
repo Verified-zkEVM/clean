@@ -367,8 +367,7 @@ private theorem ConfigureDelta.queriedCells_instanceQueries_aux
     (ConfigureDelta.queriedCells cells).instanceQueries =
       ConfigureDelta.instanceQueriesOfCells cells := by
   rw [ConfigureDelta.queriedCells]
-  simpa [ConfigureDelta.instanceQueriesOfCells] using
-    ConfigureDelta.queriedCells_instanceQueries_aux
+  exact ConfigureDelta.queriedCells_instanceQueries_aux
       (F := F) cells {}
 
 @[simp] theorem Configure.delta_adviceColumn_instanceQueries

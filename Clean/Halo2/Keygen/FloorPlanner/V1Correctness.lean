@@ -1634,7 +1634,7 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable
             · have hrightCons :
                   (key head :: (beforeRest ++ pivot :: suffix).map key).Pairwise
                     (· ≤ ·) := by
-                simpa only [List.sortedLE_iff_pairwise, List.map_cons] using
+                simpa only [List.sortedLE_iff_pairwise, List.cons_append, List.map_cons] using
                   hsortedRight
               rw [List.pairwise_cons] at hrightCons
               exact hkeysEqual.1.le.trans
@@ -1761,7 +1761,7 @@ theorem slotSummaryStateFromWith_eq_of_sorted_perm_interchangeable
             · have hrightCons :
                   (key head :: (beforeRest ++ pivot :: suffix).map key).Pairwise
                     (· ≤ ·) := by
-                simpa only [List.sortedLE_iff_pairwise, List.map_cons] using
+                simpa only [List.sortedLE_iff_pairwise, List.cons_append, List.map_cons] using
                   hsortedRight
               rw [List.pairwise_cons] at hrightCons
               exact hkeysEqual.1.le.trans
@@ -2299,8 +2299,8 @@ theorem activation_row_lt_placementEnd
       have hlocal : localRow < (measureRegion index body).rowCount := by
         have hbound := regionOperationRowExtent_le_synthesisSummary_of_mem
           body (.enableGate gate localRow) hoperation
-        simpa only [measureRegion_rowCount,
-          regionOperationRowExtent] using hbound
+        simp only [measureRegion_rowCount, regionOperationRowExtent] at hbound ⊢
+        omega
       unfold placementEnd
       simp only [measureRegion] at hend hlocal
       omega
@@ -2465,7 +2465,7 @@ theorem placementEnd_eq_slotSummaryEndFrom (ops : Operations F) :
   have hsummary := slottedEndFrom_eq_slottedSummaryEndFrom
     sortedDesc (∅ : CircuitAllocations)
   simpa only [sortedSummaryOrder, sortedRegionOrder, sortedDesc, slotIn,
-    slotSummaryEndFrom, slotSummaryEndFromWith] using hsummary
+    slotSummaryEndFrom, slotSummaryEndFromWith, slottedSummaryEndFrom] using hsummary
 
 /-- When virtual selectors are anchored by physical columns, the exact V1
 endpoint can be computed after erasing selectors from the consensus-sorted
@@ -2498,8 +2498,8 @@ theorem placementEnd_eq_slotSummaryEndFrom_withoutSelectors
     CircuitAllocations.Valid.empty
     (CircuitAllocations.PhysicalEquivalent.refl ∅)
     (SelectorAllocationsDominatedBy.empty anchor) hsortedAnchors
-  simpa only [sorted, slotSummaryEndFrom, slotSummaryEndFromWith]
-    using herasure
+  simpa only [sorted, slotSummaryEndFrom, slotSummaryEndFromWith,
+    slottedSummaryEndFrom] using herasure
 
 end V1
 end Halo2.FloorPlanner

@@ -125,12 +125,12 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
     (equalityConstraint Input input_state .empty).2.circuit
     ↔ row.1 = input_state := by
   set env' := windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, rfl⟩ env
-  simp only [equalityConstraint, circuit_norm, table_norm, MonadLift.monadLift]
+  simp only [equalityConstraint, circuit_norm, table_norm, MonadLift.monadLift, pure]
 
   have h_env_in i (hi : i < size State) : (toElements row.1)[i] = env'.get i := by
     have h_env' : env' = windowEnv (equalityConstraint Input input_state) ⟨<+> +> row, _⟩ env := rfl
     simp only [windowEnv, table_assignment_norm, equalityConstraint, circuit_norm,
-      MonadLift.monadLift] at h_env'
+      MonadLift.monadLift, pure] at h_env'
     have hi' : i < size State + size Input := by linarith
     simp [h_env', hi', Vector.getElem_mapFinRange, Trace.getLeFromBottom, _root_.Row.get]
     exact (Vector.getElem_append_left hi).symm
@@ -241,11 +241,11 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     set env' := windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1))
     change ConstraintsHold.Soundness env'.toEnvironment _ at constraints
     simp only [table_norm, circuit_norm, witnessAny, inductiveConstraint, zero_add, Nat.add_zero,
-      MonadLift.monadLift] at constraints
+      MonadLift.monadLift, pure] at constraints
     obtain ⟨ main_constraints, return_eq ⟩ := constraints
     have h_env' : env' = windowEnv table.inductiveConstraint ⟨<+> +> curr +> next, _⟩ (env.toEnvironment 0 (rest.len + 1)) := rfl
     simp only [windowEnv, TableConstraint.finalAssignment, inductiveConstraint, circuit_norm, table_norm,
-      MonadLift.monadLift, witnessAny, zero_add, Nat.add_zero] at h_env'
+      MonadLift.monadLift, pure, witnessAny, zero_add, Nat.add_zero] at h_env'
     set curr_var : Var State F × Var Input F := varFromOffset (ProvablePair State Input) 0
     set s := size State
     set x := size Input
@@ -379,7 +379,7 @@ def toFormal (table : InductiveTable F State Input) (input output : State F) : F
 
   offset_consistent := by
     simp +arith [List.Forall, tableConstraints, inductiveConstraint, equalityConstraint,
-      table_assignment_norm, circuit_norm, witnessAny, MonadLift.monadLift,
+      table_assignment_norm, circuit_norm, witnessAny, MonadLift.monadLift, pure,
       CellAssignment.assignmentFromCircuit_offset]
 
 end InductiveTable

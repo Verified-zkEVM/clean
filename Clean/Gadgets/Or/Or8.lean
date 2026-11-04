@@ -47,18 +47,9 @@ private theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
   have h_xor_byte : x ^^^ y < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
 
   have h_mod_2_to_16 : (2 * (x ||| y)) % 2^16 = (x + y + (x ^^^ y)) % 2^16 := by
-    conv_lhs => rw [←hx16, ←hy16]
-    conv_rhs => rw [←hx16, ←hy16]
-    simp only [x16, y16] at h_u16
-    simp only [← UInt16.toNat_or]
-    norm_num at h_u16 ⊢
-    repeat rw [Nat.mod_eq_of_lt] <;> try omega
-    · repeat rw [Nat.mod_eq_of_lt] at h_u16 <;> try omega
-      · simpa
-      · repeat rw [Nat.mod_eq_of_lt] <;> try omega
-        simp only [UInt16.toNat, UInt16.toBitVec_ofNat, BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod]
-        omega
-    · repeat rw [Nat.mod_eq_of_lt] <;> try omega
+    simpa only [UInt16.toNat_mul, UInt16.toNat_add, UInt16.toNat_or,
+      UInt16.toNat_xor, UInt16.toNat_ofNat', UInt16.toNat_ofNat, Nat.reduceMod,
+      x16, y16, hx16, hy16, Nat.mod_add_mod, Nat.mod_mod] using h_u16
 
   have h_lhs : 2 * (x ||| y) < 2^16 := by linarith
   have h_rhs : x + y + (x ^^^ y) < 2^16 := by linarith
@@ -128,7 +119,7 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   circuit_proof_start [ByteXorTable]
-  simp_all only [true_and]
+  simp_all only [HOr.hOr, OrOp.or, Witgen.NExprOver.eval, circuit_norm, true_and]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val input_x ||| ZMod.val input_y
   have hw : w = ZMod.val input_x ||| ZMod.val input_y := rfl
@@ -151,7 +142,7 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
     rw [two_or_val, x_y_val]
     exact two_or_ge_add hx_byte hy_byte
 
-  simp only [w]
+  change (2*w - input_x - input_y).val = input_x.val ^^^ input_y.val
   rw [← or_times_two_sub_xor']
   · rw [ZMod.val_sub]
     · rw [ZMod.val_sub]

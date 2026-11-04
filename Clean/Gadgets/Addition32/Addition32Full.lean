@@ -58,10 +58,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
   -- simplify circuit further
   -- TODO handle simplification of general provable types in `circuit_proof_start`
-  let ⟨ x0, x1, x2, x3 ⟩ := input_x
-  let ⟨ y0, y1, y2, y3 ⟩ := input_y
-  let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := input_var_x
-  let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := input_var_y
+  rcases input_x with ⟨ x0, x1, x2, x3 ⟩
+  rcases input_y with ⟨ y0, y1, y2, y3 ⟩
+  rcases input_var_x with ⟨ x0_var, x1_var, x2_var, x3_var ⟩
+  rcases input_var_y with ⟨ y0_var, y1_var, y2_var, y3_var ⟩
   simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_input
   simp only [circuit_norm, explicit_provable_type, h_input] at *
 
@@ -97,11 +97,13 @@ theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [Addition8FullCarry.main, ByteTable, U32.Normalized]
 
   -- simplify circuit further TODO
-  let ⟨ x0, x1, x2, x3 ⟩ := input_x
-  let ⟨ y0, y1, y2, y3 ⟩ := input_y
-  let ⟨ x0_var, x1_var, x2_var, x3_var ⟩ := input_var_x
-  let ⟨ y0_var, y1_var, y2_var, y3_var ⟩ := input_var_y
+  rcases input_x with ⟨ x0, x1, x2, x3 ⟩
+  rcases input_y with ⟨ y0, y1, y2, y3 ⟩
+  rcases input_var_x with ⟨ x0_var, x1_var, x2_var, x3_var ⟩
+  rcases input_var_y with ⟨ y0_var, y1_var, y2_var, y3_var ⟩
   simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_input
+  simp only [HDiv.hDiv, Div.div, Witgen.NExprOver.eval, Witgen.FExprOver.eval,
+    Expression.val, circuit_norm] at h_env
   simp only [circuit_norm, explicit_provable_type, h_input] at *
 
   -- introduce intermediate variables, like in the circuit

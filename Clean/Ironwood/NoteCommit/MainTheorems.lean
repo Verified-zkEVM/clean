@@ -375,6 +375,7 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
       (List.range 25).map msC := by
     rw [← chunksOf_mod (pkdX / 16) 25]
     convert hChunksC_low using 2
+    simp [bitrange, K]
   have hChunksD := chunksOf_eq_map_of_cast_sum hmsD hD
     (lt_trans hDValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsD 6) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
@@ -388,6 +389,7 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
       (List.range 25).map msF := by
     rw [← chunksOf_mod (rho / 16) 25]
     convert hChunksF_low using 2
+    simp [bitrange, K]
   have hChunksG := chunksOf_eq_map_of_cast_sum hmsG hG
     (lt_trans hGValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsG 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))

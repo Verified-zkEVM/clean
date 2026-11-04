@@ -110,6 +110,15 @@ private instance {W : ℕ+} {S : Type → Type} [ProvableType S] : DecidableEq (
   · simp only [Cell.aux.injEq]
     infer_instance
 
+/-- Reduce the fixed update pattern over abstract cells, keeping circuit metadata opaque. -/
+private theorem update_assignment {α : Type}
+    (a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15
+     b0 b1 b2 b3 b4 b5 b6 b7 : α) :
+    ((((([] ++ [a0,a1,a2,a3,a4,a5,a6,a7] ++ [a8,a9,a10,a11,a12,a13,a14,a15] ++
+      [b0,b1,b2,b3,b4,b5,b6,b7]).set 16 a12).set 18 a13).set 20 a14).set 22 a15) =
+    [a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,
+      a12,b1,a13,b3,a14,b5,a15,b7] := by rfl
+
 -- assignment copied from eval:
 -- #eval! (recursive_relation (p:=p_babybear)).finalAssignment.vars
 -- TODO(4.30 bump): scoped legacy defeq; see the PR notes (still needed after the
@@ -120,13 +129,16 @@ lemma fib_assignment : (recursiveRelation (p:=p)).finalAssignment.vars =
       .input ⟨0, 7⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .input ⟨1, 2⟩, .input ⟨1, 3⟩, .input ⟨1, 4⟩, .input ⟨1, 5⟩,
       .input ⟨1, 6⟩, .input ⟨1, 7⟩, .input ⟨1, 4⟩, .aux 1, .input ⟨1, 5⟩, .aux 3, .input ⟨1, 6⟩, .aux 5,
       .input ⟨1, 7⟩, .aux 7] := by
-  dsimp only [table_assignment_norm, circuit_norm, recursiveRelation, Gadgets.Addition32.circuit, assignU32,
-    MonadLift.monadLift]
+  dsimp only [table_assignment_norm, circuit_norm, recursiveRelation,
+    Gadgets.Addition32.circuit, assignU32, MonadLift.monadLift, pure]
   simp only [circuit_norm, Vector.mapFinRange_succ, Vector.mapFinRange_zero,
-    Vector.mapRange_zero, Vector.mapRange_succ, FormalCircuitBase.localLength]
-  simp
-  simp +instances only [circuit_norm]
-  rfl
+    Vector.mapRange_zero, Vector.mapRange_succ]
+  dsimp only [Gadgets.Equality.circuit, FormalCircuitBase.localLength,
+    ElaboratedCircuit.localLength, Gadgets.Equality.elaborated]
+  apply Array.toList_inj.mp
+  dsimp only [Vector.toList, Vector.toArray, Vector.append,
+    HAppend.hAppend, Append.append, Vector.mapRange]
+  exact update_assignment _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := recursiveRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env;
@@ -160,8 +172,8 @@ lemma fib_constraints (curr next : Row (F p) RowType) (aux_env : ProverEnvironme
   set env := recursiveRelation.windowEnv  ⟨<+> +> curr +> next, rfl⟩ aux_env
   simp only [table_norm, circuit_norm, recursiveRelation,
     assignU32, Gadgets.Addition32.circuit]
-  simp +instances only [table_norm, circuit_norm, Gadgets.Equality.circuit,
-    RowType.fromComponents_cons]
+  simp +instances only [table_norm, circuit_norm, List.append, pure, Gadgets.Equality.circuit,
+    RowType.fromComponents_cons, Operations.forAllNoOffset, ConditionNoOffset.witness, ConditionNoOffset.assert, ConditionNoOffset.lookup, ConditionNoOffset.subcircuit, true_and, and_true]
   rintro ⟨ h_add, h_eq ⟩
   simp only [circuit_norm] at hcurr_x hcurr_y hnext_x hnext_y
   rw [hcurr_x, hcurr_y, hnext_y] at h_add
@@ -180,8 +192,8 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
     #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨0, 2⟩, .input ⟨0, 3⟩, .input ⟨0, 4⟩, .input ⟨0, 5⟩, .input ⟨0, 6⟩,
        .input ⟨0, 7⟩] := by
   dsimp only [table_assignment_norm, circuit_norm, boundary]
-  simp only [circuit_norm, FormalCircuitBase.localLength]
-  dsimp only [table_assignment_norm, circuit_norm, MonadLift.monadLift]
+  simp only [circuit_norm, Gadgets.Equality.localLength_eq]
+  dsimp only [table_assignment_norm, circuit_norm, MonadLift.monadLift, pure]
   simp +instances only [circuit_norm]
   with_unfolding_all rfl
 
@@ -206,8 +218,8 @@ lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvi
   := by
   set env := boundary.windowEnv ⟨<+> +> first_row, rfl⟩ aux_env
   simp only [table_norm, boundary, circuit_norm]
-  dsimp only [table_norm, table_assignment_norm, circuit_norm, MonadLift.monadLift]
-  simp +instances only [circuit_norm, table_norm, RowType.fromComponents_cons, and_imp]
+  dsimp only [table_norm, table_assignment_norm, circuit_norm, MonadLift.monadLift, pure]
+  simp +instances only [circuit_norm, table_norm, RowType.fromComponents_cons, Operations.forAllNoOffset, ConditionNoOffset.witness, ConditionNoOffset.assert, ConditionNoOffset.lookup, ConditionNoOffset.subcircuit, and_imp]
   have ⟨hx, hy⟩ := boundary_vars first_row aux_env
   simp only [circuit_norm] at hx hy
   rw [hx, hy]

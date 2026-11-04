@@ -231,7 +231,7 @@ theorem spec_of_valid {px py qx qy : Fp}
   have hrow := Ecc.Add.rowValue_spec
     (input := { p := { x := px, y := py }, q := { x := qx, y := qy } }) hp hq
   rw [spec_toGateInput]
-  convert hrow using 2
+  convert hrow using 2 <;> rfl
 
 /-!
 ## Witness-program evaluation lemmas
@@ -463,12 +463,18 @@ def add : FormalRegionCircuit Fp
   completeness := by
     circuit_proof_start2 [gate, lambdaProgram, rXProgram, rYProgram]
     obtain ⟨hpValid, hqValid⟩ := assumptions
-    -- substitute the copied/witnessed cells, with the R/λ programs in closed form
-    -- (one simp call: the closed-form ite lemmas must fire as the programs are exposed,
-    -- before ite-congruence can rewrite inside their branches)
-    simp only [and_true, region_0, region_1, region_2, region_3, region_4, region_5,
-      region_6, region_7, region_8, region_9, region_10,
-      ite_rXProgram_eq, ite_rYProgram_eq, ite_lambdaProgram_eq]
+    -- Normalize witness conditions and substitute the bound input cells first.
+    simp_all only [and_true,
+      HAnd.hAnd, AndOp.and, Witgen.EqCond.eqCond, Witgen.BExprOver.eval, Witgen.FExprOver.eval,
+      circuit_norm, Bool.and_eq_true, decide_eq_true_eq,
+      ite_lambdaProgram_eq]
+    -- The closed-form bridges use the same equalities inside conditional branches.
+    have hx := ite_rXProgram_eq input_p_x input_p_y input_q_x input_q_y
+      (d1 := inferInstance) (d2 := inferInstance) (d3 := inferInstance) (d4 := inferInstance)
+    have hy := ite_rYProgram_eq input_p_x input_p_y input_q_x input_q_y
+      (d1 := inferInstance) (d2 := inferInstance) (d3 := inferInstance) (d4 := inferInstance)
+    simp (config := { contextual := true }) only [] at hx hy
+    rw [hx, hy]
     exact polysZero_of_spec (spec_of_valid hpValid hqValid)
 
 @[keygen_norm]
@@ -592,6 +598,7 @@ theorem addFormal_lookups_eq_nil {config : Config}
   rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
   cases outputEq
   simpa only [FormalCircuit.Configured.lookups,
+    FormalRegionCircuit.Configured.lookups,
     FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
     addFormal, FormalRegionCircuit.toFormal] using
     (Configured.lookups_eq_nil

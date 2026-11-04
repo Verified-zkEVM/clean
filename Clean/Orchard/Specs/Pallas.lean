@@ -139,8 +139,10 @@ theorem add_comm {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
 
 theorem valid_neg {p : Point Fp} (hp : p.Valid) :
     (-p).Valid := by
-  exact (valid_iff (-p)).mpr
-    (ShortWeierstrass.valid_neg ((valid_iff p).mp hp))
+  apply (valid_iff (-p)).mpr
+  rw [neg_def, ofCoords_coords]
+  exact ShortWeierstrass.valid_neg (a := pallasA) (b := pallasB)
+    (p := p.coords) ((valid_iff p).mp hp)
 
 instance : Sub (Point Fp) where
   sub p q := add p (neg q)
@@ -168,8 +170,8 @@ theorem nondegenerateAdd_eq_add {p q : Point Fp}
   simp only [nondegenerateAdd, zero_def, add_def, ofCoords, coords, ShortWeierstrass.add] at *
   have hp0 : ¬(px, py) = (0, 0) := by grind
   have hq0 : ¬(qx, qy) = (0, 0) := by grind
-  rw [if_neg hp0, if_neg hq0]
-  rw [if_neg hx, mk.injEq]
+  rw [ite_eq_right hp0, ite_eq_right hq0]
+  rw [ite_eq_right hx, mk.injEq]
   constructor <;> ring
 
 theorem nondegenerateAdd_onCurve {p q : Point Fp}
@@ -326,7 +328,10 @@ theorem add_coords_eq {P Q R : Point Fp} (h : P + Q = R) :
 
 theorem nsmul_add_one {P : Point Fp} (hP : P.OnCurve) (m : ℕ) :
     m • P + P = (m + 1) • P := by
-  simpa using nsmul_add_nsmul hP m 1
+  have hone : (1 : ℕ) • P = P := by
+    apply (ext_toSW_iff (valid_nsmul (.inl hP) 1) (.inl hP)).mpr
+    rw [toSW_nsmul (.inl hP) 1, one_nsmul]
+  simpa only [hone] using nsmul_add_nsmul hP m 1
 
 theorem nsmul_add_neg_one {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (h2 : 2 ≤ m) :
     m • P + -P = (m - 1) • P := by
@@ -367,7 +372,7 @@ lemma incompleteAdd_def (p q : Point Fp) :
 theorem incompleteAdd_some {p q : Point Fp}
     (hX : p ≠ 0) (hY : q ≠ 0) (hxy : p.x ≠ q.x) :
     p ⸭ q = some (p + q) := by
-  rw [incompleteAdd_def, if_neg]
+  rw [incompleteAdd_def, ite_eq_right]
   push Not
   exact ⟨hX, hY, hxy⟩
 

@@ -139,7 +139,7 @@ def permuteElaborated :
             pure ()).operations region).FixedAssignmentsAgree := by
         apply RegionCircuit.forRange'_fixedAssignmentsAgree
         · intro i
-          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+          simpa only [FormalRegionCircuit.call_operations, fullRound, partialRound, Configure.output_pure,
               RegionCircuit.operations_bind, RegionCircuit.operations_pure,
               List.append_nil]
             using (fullRound i.val).elaborated.fixedAssignmentsAgree
@@ -155,7 +155,7 @@ def permuteElaborated :
             pure ()).operations region).FixedAssignmentsAgree := by
         apply RegionCircuit.forRange'_fixedAssignmentsAgree
         · intro i
-          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+          simpa only [FormalRegionCircuit.call_operations, fullRound, partialRound, Configure.output_pure,
               RegionCircuit.operations_bind, RegionCircuit.operations_pure,
               List.append_nil]
             using (partialRound (4 + 2 * i.val)).elaborated.fixedAssignmentsAgree
@@ -171,7 +171,7 @@ def permuteElaborated :
             pure ()).operations region).FixedAssignmentsAgree := by
         apply RegionCircuit.forRange'_fixedAssignmentsAgree
         · intro i
-          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+          simpa only [FormalRegionCircuit.call_operations, fullRound, partialRound, Configure.output_pure,
               RegionCircuit.operations_bind, RegionCircuit.operations_pure,
               List.append_nil]
             using (fullRound (60 + i.val)).elaborated.fixedAssignmentsAgree
@@ -490,12 +490,21 @@ theorem permuteRegion_output_cells_assigned (cfg : Config) (offset : ℕ)
     have h := fullRound_output_cells_assigned 63 cfg (offset + 35) () self []
     simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at h
     first
-      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.1
-      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.2.1
-      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.2.2
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+          Nat.mul_one, Nat.add_assoc, Fin.val_succ, Fin.val_zero, Nat.reduceAdd,
+          fullRound_output_eq, RegionOperations.assignedCells, RegionCircuit.operations,
+          FormalRegionCircuit.call, Bind.bind, Pure.pure, Var, CircuitTypeOver.Var,
+          ProvableType.Halo2.toCircuitType, explicit_provable_type] using h.1
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+          Nat.mul_one, Nat.add_assoc, Fin.val_succ, Fin.val_zero, Nat.reduceAdd,
+          fullRound_output_eq, RegionOperations.assignedCells, RegionCircuit.operations,
+          FormalRegionCircuit.call, Bind.bind, Pure.pure, Var, CircuitTypeOver.Var,
+          ProvableType.Halo2.toCircuitType, explicit_provable_type] using h.2.1
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+          Nat.mul_one, Nat.add_assoc, Fin.val_succ, Fin.val_zero, Nat.reduceAdd,
+          fullRound_output_eq, RegionOperations.assignedCells, RegionCircuit.operations,
+          FormalRegionCircuit.call, Bind.bind, Pure.pure, Var, CircuitTypeOver.Var,
+          ProvableType.Halo2.toCircuitType, explicit_provable_type] using h.2.2
 
 derive_contract_bridges permuteRegion := permuteRegion
 

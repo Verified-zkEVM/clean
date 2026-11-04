@@ -1038,7 +1038,8 @@ theorem constantColumn_index_lt_numFixedColumns
     hlawful.fixedQueries_fst_lt_numFixedColumns
       (column, 0) hfixedQuery
   simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-    program, Configure.finalCounts] using hbound
+    program, Configure.run_numFixedColumns,
+    ConfigureCounts.ofConstraintSystem_empty] using hbound
 
 /-- Every V1 constant allocation uses an equality-enabled constants column. -/
 theorem constantAssignmentColumn_mem_permutationColumns
@@ -1369,7 +1370,7 @@ theorem adviceColumnCount_eq_constraintSystem
     (self : TopLevelCircuit F Config PublicInput)
     [TopLevelShape self] :
     self.adviceColumnCount = self.constraintSystem.numAdviceColumns := by
-  simpa only [adviceColumnCount,
+  simpa only [adviceColumnCount, constraintSystem,
     TopLevelCompilation.circuitShape_numAdviceColumns] using
       congrArg CircuitShape.numAdviceColumns self.shape_eq
 
@@ -1378,7 +1379,7 @@ theorem instanceColumnCount_eq_constraintSystem
     (self : TopLevelCircuit F Config PublicInput)
     [TopLevelShape self] :
     self.instanceColumnCount = self.constraintSystem.numInstanceColumns := by
-  simpa only [instanceColumnCount,
+  simpa only [instanceColumnCount, constraintSystem,
     TopLevelCompilation.circuitShape_numInstanceColumns] using
       congrArg CircuitShape.numInstanceColumns self.shape_eq
 
@@ -1387,7 +1388,7 @@ theorem lookupCount_eq_constraintSystem
     (self : TopLevelCircuit F Config PublicInput)
     [TopLevelShape self] :
     self.lookupCount = self.constraintSystem.lookups.length := by
-  simpa only [lookupCount, TopLevelCompilation.circuitShape_numLookups] using
+  simpa only [lookupCount, constraintSystem, TopLevelCompilation.circuitShape_numLookups] using
     congrArg CircuitShape.numLookups self.shape_eq
 
 /-- The configured lookup selected by a published circuit-shape index. -/
@@ -1550,7 +1551,7 @@ theorem permutationColumn_mem_queryLayout
         have hrun :=
           (Configure.mem_adviceQueries_run_iff
             program {} (⟨index⟩, 0)).mpr
-              (Or.inr (by simpa only [delta] using hdeltaQuery))
+              (Or.inr (by simpa only [delta, ConfigureCounts.ofConstraintSystem_empty] using hdeltaQuery))
         simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
           program] using hrun
       rw [adviceQueryLayout_eq_constraintSystem]
@@ -1562,11 +1563,11 @@ theorem permutationColumn_mem_queryLayout
         have hrun :=
           (Configure.mem_fixedQueries_run_iff
             program {} (⟨index⟩, 0)).mpr
-              (Or.inr (by simpa only [delta] using hdeltaQuery))
+              (Or.inr (by simpa only [delta, ConfigureCounts.ofConstraintSystem_empty] using hdeltaQuery))
         simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
           program] using hrun
       rw [fixedQueryLayout_eq_gateQueryState]
-      simpa [QueryState.ResolvesQuery, gateQueryState] using
+      simpa [QueryState.ResolvesQuery, gateQueryState, constraintSystem] using
         queryWalkInit_resolves_fixed_of_mem self.selectorMap hquery
   | «instance» =>
       have hdeltaQuery : (⟨index⟩, 0) ∈ delta.instanceQueries := by
@@ -1575,7 +1576,7 @@ theorem permutationColumn_mem_queryLayout
         have hrun :=
           (Configure.mem_instanceQueries_run_iff
             program {} (⟨index⟩, 0)).mpr
-              (Or.inr (by simpa only [delta] using hdeltaQuery))
+              (Or.inr (by simpa only [delta, ConfigureCounts.ofConstraintSystem_empty] using hdeltaQuery))
         simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
           program] using hrun
       rw [instanceQueryLayout_eq_constraintSystem]
@@ -1719,7 +1720,7 @@ theorem exists_rotation_mem_fixedQueryLayout_of_lt
       self.exists_rotation_mem_fixedQueries_of_lt column horiginal
     refine ⟨rotation, ?_⟩
     rw [fixedQueryLayout_eq_gateQueryState]
-    simpa [QueryState.ResolvesQuery, gateQueryState] using
+    simpa [QueryState.ResolvesQuery, gateQueryState, constraintSystem] using
       queryWalkInit_resolves_fixed_of_mem self.selectorMap hquery
   · let index := column - self.constraintSystem.numFixedColumns
     have hindex : index < self.selectorMap.newFixedCols := by
@@ -1730,7 +1731,7 @@ theorem exists_rotation_mem_fixedQueryLayout_of_lt
     refine ⟨0, ?_⟩
     rw [fixedQueryLayout_eq_gateQueryState]
     rw [← hcolumnEq]
-    simpa [QueryState.ResolvesQuery, gateQueryState] using
+    simpa [QueryState.ResolvesQuery, gateQueryState, constraintSystem] using
       queryWalkInit_resolves_packedColumn
         self.constraintSystem self.selectorMap hindex
 
@@ -1781,7 +1782,7 @@ theorem adviceQueryLayout_columns_lt
   have hlt := List.forall_iff_forall_mem.mp
     hlawful.adviceQueries_fst_lt_numAdviceColumns query hdelta
   simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-    program, counts, Configure.run_numAdviceColumns,
+    program, counts, Function.comp_def, Configure.run_numAdviceColumns,
     ConfigureCounts.ofConstraintSystem_empty] using hlt
 
 /-- Every instance-query slot names a column allocated by the closed configure
@@ -1806,7 +1807,7 @@ theorem instanceQueryLayout_columns_lt
   have hlt := List.forall_iff_forall_mem.mp
     hlawful.instanceQueries_fst_lt_numInstanceColumns query hdelta
   simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-    program, counts, Configure.run_numInstanceColumns,
+    program, counts, Function.comp_def, Configure.run_numInstanceColumns,
     ConfigureCounts.ofConstraintSystem_empty] using hlt
 
 /-- All circuit-derived fixed-cell assignments, before dense row expansion. -/
@@ -2027,6 +2028,7 @@ theorem mem_fixedAssignments_of_mem_raw
   · simpa only [selectorMap, TopLevelCompilation.selectorMap,
       selectorActivations, TopLevelCompilation.selectorActivations,
       regionStarts, TopLevelCompilation.regionStarts,
+      constraintSystem, operations, blindingFactors,
       fixedAssignments, TopLevelCompilation.fixedAssignments,
       usableRowsAt, n] using hassignment
 
@@ -2045,7 +2047,7 @@ theorem fixedAssignment_cell_mem_raw_of_mem
   apply Layout.cell_mem_raw_of_mem_compileFixed
   simpa only [fixedAssignments, TopLevelCompilation.fixedAssignments,
     usableRowsAt, domainExponent, selectorMap, constraintSystem,
-    operations] using hassignment
+    operations, TopLevelCompilation.fixedAssignmentsAt, n, blindingFactors] using hassignment
 
 /-- Every raw fixed write emitted by a lawful top-level circuit lies within its
 canonical fixed-column and evaluation-domain bounds. -/
@@ -2088,10 +2090,14 @@ theorem fixedAssignment_bounds_of_mem_raw
       simpa only [selectorMap, TopLevelCompilation.selectorMap,
         selectorActivations, TopLevelCompilation.selectorActivations,
         regionStarts, TopLevelCompilation.regionStarts,
+        TopLevelCompilation.selectorMapAt, TopLevelCompilation.selectorActivations,
+        TopLevelCompilation.regionStarts, constraintSystem, operations,
         usableRowsAt, n] using hassignment)
   exact ⟨by
     simpa only [fixedColumnCount_eq, selectorMap,
-      TopLevelCompilation.selectorMap] using hbounds.1, hbounds.2⟩
+      TopLevelCompilation.selectorMap, TopLevelCompilation.selectorMapAt,
+      TopLevelCompilation.selectorActivations, TopLevelCompilation.regionStarts,
+      constraintSystem, operations] using hbounds.1, hbounds.2⟩
 
 /-- Every raw fixed write emitted by a lawful top-level circuit is realized at the
 same cell and value in its canonical dense fixed columns. -/
@@ -2140,8 +2146,10 @@ theorem lookupSelectorsCompatible
   have hcompatible := self.formalCircuit.lookupSelectorsCompatible
     () counts self.selectorRequirements
   simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-    program, counts, Configure.run, ConfigureCounts.ofConstraintSystem,
-    ConfigureDelta.apply, List.nil_append] using hcompatible
+    program, counts, Configure.run, Configure.delta, Configure.finalCounts, Configure.countDelta,
+      Configure.plan, ConfigureCounts.ofConstraintSystem,
+    ConfigureDelta.apply, ConfigureDelta.LookupSelectorsCompatible,
+    List.nil_append] using hcompatible
 
 /-- Every configured gate's activation selector is allocated. -/
 theorem gateSelectorsAllocated
@@ -2155,7 +2163,8 @@ theorem gateSelectorsAllocated
     (self.formalCircuit.selectorsAllocated
       () counts self.selectorRequirements).gates
   simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-    program, counts, Configure.run, ConfigureCounts.ofConstraintSystem,
+    program, counts, Configure.run, Configure.delta, Configure.finalCounts, Configure.countDelta,
+      Configure.plan, ConfigureCounts.ofConstraintSystem,
     ConfigureDelta.apply, List.nil_append] using hallocated
 
 /-- Every selector atom in a top-level circuit's lookup inputs is allocated. -/
@@ -2319,7 +2328,9 @@ theorem lookupInputSelectorFixedValue
               self.selectorMap self.selectorActivations :=
         Layout.mem_selectorAssignments_of_activation
           self.selectorMap self.selectorActivations hactivation hmap
-      simpa only [TopLevelCircuit.selectorActivations] using hselectorAssignment
+      simpa only [TopLevelCircuit.selectorActivations,
+        TopLevelCompilation.selectorActivations, TopLevelCompilation.regionStarts,
+        operations] using hselectorAssignment
     have hvalue := self.fixedRows_getD_getD_eq_of_mem_raw _ hraw
     have hone : (FiniteField.fromNat 1 : F) = 1 := by
       apply FiniteField.ext
@@ -2572,7 +2583,8 @@ theorem gateQueriesResolved
     List.mem_map.mp hexpression
   have hgateDelta : gate ∈ delta.gates := by
     simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-      program, delta, Configure.run, ConfigureCounts.ofConstraintSystem,
+      program, delta, Configure.run, Configure.delta, Configure.finalCounts, Configure.countDelta,
+      Configure.plan, ConfigureCounts.ofConstraintSystem,
       ConfigureDelta.apply, List.nil_append] using hgate
   have hgateRegistered : gate.QueriesRegistered delta :=
     List.forall_iff_forall_mem.mp hlawful.gates_queriesRegistered
@@ -2583,7 +2595,8 @@ theorem gateQueriesResolved
   have hsource : constraint.poly.QueriesResolved self.gateQueryState := by
     simpa only [gateQueryState, constraintSystem,
       TopLevelCompilation.constraintSystem, program, delta, counts,
-      Configure.run, ConfigureCounts.ofConstraintSystem,
+      Configure.run, Configure.delta, Configure.finalCounts, Configure.countDelta,
+      Configure.plan, ConfigureCounts.ofConstraintSystem,
       ConfigureDelta.apply, List.nil_append] using
       hregistered.queriesResolved_queryWalkInit_apply
         (initial := {}) (counts := counts) self.selectorMap
@@ -2612,7 +2625,8 @@ theorem lookupQueriesResolved
   intro argument hargument
   have hargumentDelta : argument ∈ delta.lookups := by
     simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-      program, delta, Configure.run, ConfigureCounts.ofConstraintSystem,
+      program, delta, Configure.run, Configure.delta, Configure.finalCounts, Configure.countDelta,
+      Configure.plan, ConfigureCounts.ofConstraintSystem,
       ConfigureDelta.apply, List.nil_append] using hargument
   have hregistered : argument.QueriesRegistered delta :=
     List.forall_iff_forall_mem.mp hlawful.lookups_queriesRegistered
@@ -2624,7 +2638,8 @@ theorem lookupQueriesResolved
     have hsource : expression.QueriesResolved self.gateQueryState := by
       simpa only [gateQueryState, constraintSystem,
         TopLevelCompilation.constraintSystem, program, delta, counts,
-        Configure.run, ConfigureCounts.ofConstraintSystem,
+        Configure.run, Configure.delta, Configure.finalCounts, Configure.countDelta,
+      Configure.plan, ConfigureCounts.ofConstraintSystem,
         ConfigureDelta.apply, List.nil_append] using
         hexpression.queriesResolved_queryWalkInit_apply
           (initial := {}) (counts := counts) self.selectorMap
@@ -2687,7 +2702,9 @@ theorem soundness
   · exact self.closesEnvironment assignment
   · rw [self.assumptions_eq]
     trivial
-  · simpa [env] using hconstraints
+  · simpa only [env, operations, TopLevelCompilation.operations, config,
+      TopLevelCompilation.config, placedEnvironment, TopLevelCompilation.placedEnvironment,
+      placement, environment] using hconstraints
 
 /-- A satisfying assignment establishes the external statement for its public input. -/
 theorem statement_soundness
@@ -2731,11 +2748,16 @@ theorem completeness
         hint := by
   let env := self.placedProverEnvironment assignment hint
   apply self.formalCircuit.completeness self.config 0 env ()
-  · simpa [env, placedProverEnvironment] using hwitnesses
+  · simpa only [env, placedProverEnvironment,
+      TopLevelCompilation.placedProverEnvironment, placement, proverEnvironment,
+      operations, TopLevelCompilation.operations, config] using hwitnesses
   · exact self.closesEnvironment assignment
   · rw [self.assumptions_eq]
     trivial
-  · simpa [env, placedProverEnvironment, proverEnvironment] using hprover
+  · simpa only [env, placedProverEnvironment, proverEnvironment,
+      TopLevelCompilation.placedProverEnvironment, TopLevelCompilation.proverEnvironment,
+      placedEnvironment, TopLevelCompilation.placedEnvironment, Placed.toEnvironment]
+      using hprover
 
 end TopLevelCircuit
 

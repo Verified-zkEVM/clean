@@ -1283,7 +1283,7 @@ private theorem cycle_set_perm
   apply cycle_set_loop_perm nexts a hole a[hole]! a hhole hnexts
   rw [show a.set! hole a[hole]! = a by
     apply Array.toList_inj.mp
-    simpa [Array.set!, hhole] using
+    simpa only [Array.set!, Array.toList_setIfInBounds, getElem!_pos a hole hhole, ← Array.getElem_toList hhole] using
       (List.set_getElem_self (as := a.toList) (i := hole)
         (by simpa using hhole))]
 
@@ -1644,7 +1644,7 @@ private theorem block_cycle_classifies
     (by simp) (by simpa [afterFirst] using hinitial)
   have hloopResult : CycleStateInvariant array.size left right sl sr count
       (count - 1) leftGood rightGood result := by
-    simpa only [result, Nat.zero_add, List.length_range'] using hloop
+    simpa only [result, Nat.zero_add, Nat.add_zero, List.length_range'] using hloop
   rcases hloopResult with
     ⟨hresultLeft, hresultRight, hresultSize,
       hleftDone, hrightDone, hleftFuture, hrightFuture⟩
@@ -1813,11 +1813,11 @@ private theorem block_cycle_outside
     (List.range' 0 (count - 1)) 0 afterFirst
     (by simp) (by simp [afterFirst]) hafterFirst
   have hresultValue : result.2.2[position]! = array[position]! := by
-    simpa only [result, Nat.zero_add] using hloop
+    simpa only [result, Nat.zero_add, Nat.add_zero] using hloop
   have hshape := cycle_loop_shape (T := T) left right sl sr
     (List.range' 0 (count - 1)) 0 afterFirst
   have hresultRight : result.2.1 = sr + (count - 1) := by
-    simpa only [result, Nat.zero_add, List.length_range'] using hshape.2.1
+    simpa only [result, Nat.zero_add, Nat.add_zero, List.length_range'] using hshape.2.1
   have hresultSize : result.2.2.size = array.size := by
     simpa [result, afterFirst] using hshape.2.2
   have htarget : right result.2.1 < result.2.2.size := by
@@ -1865,7 +1865,7 @@ private theorem block_cycle_perm
       hleftStart hrightStart]
     have hself : a.set! (left sl) tmp = a := by
       apply Array.toList_inj.mp
-      simpa [tmp, Array.set!, hleftStart] using
+      simpa only [tmp, Array.set!, Array.toList_setIfInBounds, getElem!_pos a (left sl) hleftStart, ← Array.getElem_toList hleftStart] using
         (List.set_getElem_self (as := a.toList) (i := left sl)
           (by simpa using hleftStart))
     rw [hself]
@@ -1903,8 +1903,8 @@ private theorem scan_offsets_aux
       simp only [List.forIn_cons]
       have hend : endIdx < offsets.size := by
         have : endIdx + 1 ≤ endIdx + (indices.length + 1) := by omega
-        simpa only [List.length_cons] using
-          this.trans hcapacity
+        have := this.trans hcapacity
+        omega
       let offsets' := offsets.set! endIdx i
       let endIdx' :=
         if keep i = true then endIdx + 1 else endIdx
@@ -2674,7 +2674,7 @@ private theorem blockCycleOutput_size
     (List.range' 0 (count - 1)) 0 afterFirst
   have hresultSize : result.2.2.size = array.size := by
     simpa [result, afterFirst] using hshape.2.2
-  simpa [blockCycleOutput, left, right, result, Array.set!]
+  simpa [blockCycleOutput, left, right, result, afterFirst, Array.set!]
     using hresultSize
 
 private theorem scanned_block_cycle_classifies

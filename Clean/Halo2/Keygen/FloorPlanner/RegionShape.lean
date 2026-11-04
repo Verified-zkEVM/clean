@@ -151,10 +151,12 @@ theorem activations_eq_placeSelectorActivations
           rw [regionActivationsAt_eq_map_selectorActivations,
             inductionHypothesis]
       | constrainInstance cell column row =>
-          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
+            FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
             inductionHypothesis initial
       | loadTable column values =>
-          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
+            FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
             inductionHypothesis initial
 
 /-- Membership in the selector-activation stream retains its source region,
@@ -554,10 +556,12 @@ theorem measureRegions_eq_synthesisSummary_regionShapes
             simpa only [measureRegion_eq_measureRegionSummary] using
               inductionHypothesis (initial + 1)
         | constrainInstance cell column row =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, SynthesisSummary.ofTableValues, List.nil_append] using
               inductionHypothesis initial
         | loadTable column values =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, SynthesisSummary.ofTableValues, List.nil_append] using
               inductionHypothesis initial
   exact general ops 0
 

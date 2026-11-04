@@ -68,6 +68,20 @@ end HashPaddedBlock
 
 namespace ConstantLength
 
+/-- Keep the loop argument abstract so its proof never expands the permutation. -/
+private theorem fold_chain {α : Type} (step : Nat → α → α)
+    (initial : α) (state : Nat → α) (n : Nat)
+    (first : step 0 initial = state 0)
+    (next : ∀ i, i < n → step (i + 1) (state i) = state (i + 1)) :
+    Fin.foldl (n + 1) (fun a i => step i.val a) initial = state n := by
+  induction n with
+  | zero => simpa only [Fin.foldl_succ, Fin.foldl_zero, Fin.val_zero] using first
+  | succ n ih =>
+    rw [Fin.foldl_succ_last]
+    have previous : Fin.foldl (n + 1) (fun a i => step i.castSucc.val a) initial = state n :=
+      ih (fun i hi => next i (Nat.lt_succ_of_lt hi))
+    simpa only [previous, Fin.val_last] using next n (Nat.lt_succ_self n)
+
 /-- Number of rate-2 blocks after padding a constant-length message of length `L` with
 zeroes to a multiple of the rate.  This is `(L + RATE - 1) / RATE` for `RATE = 2`. -/
 def blockCount (L : Nat) : Nat :=
@@ -123,10 +137,22 @@ def circuit : FormalCircuit Fp Sponge.AddInputInput Permute.State where
   soundness := by
     circuit_proof_start [main, Spec, absorbPermuteValue, Sponge.AddInput.circuit,
       Permute.mainP128ConcreteCircuit]
+    have outputEta :
+        let output := (Permute.mainP128Circuit Permute.P128Pow5T3.roundConstants).output
+          {x0 := var ⟨i₀ + 5⟩, x1 := var ⟨i₀ + 6⟩, x2 := var ⟨i₀ + 7⟩} (i₀ + 8)
+        output = { x0 := output.x0, x1 := output.x1, x2 := output.x2 } := rfl
+    simp only [List.sum_cons, List.sum_nil, Nat.add_zero,
+      Nat.add_assoc, Nat.reduceAdd] at h_holds ⊢
+    rw [outputEta] at h_holds
+    dsimp only [FormalCircuitBase.output] at outputEta
+    rw [outputEta]
+    simp only [circuit_norm, explicit_provable_type] at *
     rcases h_holds with ⟨habsorb, hpermute⟩
     rw [habsorb] at hpermute
     constructor
-    · simpa using hpermute trivial
+    · have hp := hpermute trivial
+      change _ = Permute.value Permute.P128Pow5T3.roundConstants _ at hp
+      simpa only [absorbPermuteValue, Permute.concreteValue, FormalCircuitBase.output] using hp
     · simp [Permute.mainP128Circuit]
   completeness := by
     circuit_proof_start [main, Spec, absorbPermuteValue, Sponge.AddInput.circuit,
@@ -210,7 +236,14 @@ def circuit (L : ℕ) [NeZero L] : FormalCircuit Fp (fields L) field where
     simp only at h_final
     rw [h_final]; clear h_final
     congr 2
+    have h_blocks (i : Nat) : eval env (blockVar input_var i) = blockValue input i := by
+      simpa only [blockVar, circuit_norm, explicit_provable_type] using
+        (evalBlock_blockVar h_input i)
+    simp only [circuit_norm, explicit_provable_type] at h_blocks
+    simp only [h_blocks] at h_init h_fold
+    clear h_blocks
     replace h_input := evalBlock_blockVar h_input
+    simp only [blockVar, circuit_norm, explicit_provable_type] at h_init h_fold h_input
     simp_all only; clear h_input
     set init : Permute.State Fp := ⟨ 0, 0, capacity L ⟩
     let state (i : ℕ) : Permute.State Fp := {
@@ -221,23 +254,16 @@ def circuit (L : ℕ) [NeZero L] : FormalCircuit Fp (fields L) field where
     change ∀ i, i + 1 < blockCount L →
       state (i + 1) = absorbPermuteValue ⟨ state i, _ ⟩ at h_fold
     suffices (Fin.foldl (blockCount L) (stepValueAt input) init) = state (blockCount L - 1) by
-      simp_all [state]
-    obtain ⟨ n, hn ⟩ : ∃ n, blockCount L = n + 1 := by simp_all
-    generalize blockCount L = m at *
-    subst m
-    clear bc_pos
-    simp at h_fold
-    induction n with
-    | zero =>
-      simp [Fin.foldl_succ, stepValueAt, h_init]
-    | succ m ih =>
-      rw [Fin.foldl_succ_last]
-      have prev : (Fin.foldl (m + 1) (fun x1 x2 ↦ stepValueAt input x1 x2.castSucc) init) = state m := by
-        apply ih
-        grind
-      simp [prev]
-      simp only [stepValueAt]
-      grind
+      simpa only [state, Nat.add_assoc, Nat.reduceAdd] using this.symm
+    obtain ⟨ n, hn ⟩ : ∃ n, blockCount L = n + 1 :=
+      Nat.exists_eq_succ_of_ne_zero (Nat.ne_of_gt bc_pos)
+    rw [hn, Nat.add_sub_cancel]
+    change Fin.foldl (n + 1)
+      (fun s i => absorbPermuteValue ⟨s, blockValue input i.val⟩) init = state n
+    exact
+      (fold_chain (fun i s => absorbPermuteValue ⟨s, blockValue input i⟩)
+        init state n h_init.symm (fun i hi =>
+          (h_fold i (by rw [hn]; exact Nat.succ_lt_succ hi)).symm))
   completeness := by
     circuit_proof_start [Sponge.InitialState.circuit, stepCircuitAt,
       Permute.mainP128Circuit, AbsorbPermute.circuit, Sponge.GetOutput.circuit

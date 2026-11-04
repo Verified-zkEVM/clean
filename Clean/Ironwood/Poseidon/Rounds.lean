@@ -335,15 +335,15 @@ def partialRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State whe
     · have happ := Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
         ⟨0, by norm_num⟩ output_x0 output_x1 output_x2
       rw [hInv0, hInv1, hInv2] at happ
-      simpa using happ.symm
+      convert happ.symm using 1 <;> rfl
     · have happ := Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
         ⟨1, by norm_num⟩ output_x0 output_x1 output_x2
       rw [hInv0, hInv1, hInv2] at happ
-      simpa using happ.symm
+      convert happ.symm using 1 <;> rfl
     · have happ := Poseidon.Permute.P128Pow5T3.mds_mul_mdsInv_apply
         ⟨2, by norm_num⟩ output_x0 output_x1 output_x2
       rw [hInv0, hInv1, hInv2] at happ
-      simpa using happ.symm
+      convert happ.symm using 1 <;> rfl
 
   completeness := by
     circuit_proof_start [partialRoundElaborated, partialRoundSynthesize,

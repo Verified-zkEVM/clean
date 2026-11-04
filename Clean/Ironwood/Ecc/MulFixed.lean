@@ -933,15 +933,23 @@ theorem windowChain_copyCellsAssignedFrom
   have haddOutput := AddIncomplete.add_output_cells_assigned
     cfg.addIncompleteConfig (offset + 1) input self
       ((op0 ++ op1).assignedCellsAfter self available)
+  have outputEq : AddIncomplete.add.output cfg.addIncompleteConfig
+      (offset + 1) input self =
+      { x := AssignedCell.of self (offset + 2) cfg.addIncompleteConfig.xQR,
+        y := AssignedCell.of self (offset + 2) cfg.addIncompleteConfig.yQR } := by
+    simp only [FormalRegionCircuit.output]
+    rw [AddIncomplete.add.elaborated.output_eq]
+    simp only [AddIncomplete.add, circuit_norm]
+  rw [outputEq] at haddOutput
   have hloop := windowChainLoop_copyCellsAssignedFrom cfg hconfigured self
     processW hprocess hprocessOutput offset (numWindows - 3)
     (((op0 ++ op1) ++ addOps).assignedCellsAfter self available)
     (by
       rw [RegionOperations.assignedCellsAfter_append]
-      simpa only [Nat.add_assoc] using haddOutput.1)
+      simpa only [addOps, AssignedCell.of_cell] using haddOutput.1)
     (by
       rw [RegionOperations.assignedCellsAfter_append]
-      simpa only [Nat.add_assoc] using haddOutput.2)
+      simpa only [addOps, AssignedCell.of_cell] using haddOutput.2)
   have hprefix : (((op0 ++ op1) ++ addOps) ++ loopOps)
       |>.CopyCellsAssignedFrom self available := by
     rw [RegionOperations.copyCellsAssignedFrom_append_iff]

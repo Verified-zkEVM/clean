@@ -501,7 +501,6 @@ theorem heapsort_step_heap
   have hread (index : ℕ) (hindex : index < boundary) :
       next[index]! = repaired[index]! := by
     have hlistRead := congrArg (fun items : List T => items[index]!) hprefixList
-    dsimp only at hlistRead
     rw [← arrayToList_getElem! next index,
       ← arrayToList_getElem! repaired index]
     have htake : (next.toList.take boundary)[index]! =

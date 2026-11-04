@@ -58,10 +58,9 @@ theorem soundness : Soundness (Input:=ProvablePair α α) (Output:=field) F (mai
       Expression.eval env (diffs input_var.1 input_var.2)[i] =
       (toElements input.1)[i] - (toElements input.2)[i] := by
     intro i hi
-    simp only [diffs, Vector.getElem_mapFinRange, Expression.eval, neg_one_mul]
+    simp only [diffs, Vector.getElem_mapFinRange, Expression.eval_sub, Expression.eval, neg_one_mul]
     erw [ProvableType.Clean.getElem_eval_toElements input_var.1 i, ProvableType.Clean.getElem_eval_toElements input_var.2 i,
       h_x, h_y]
-    ring
   -- Helper: (toElements 0)[i] = 0
   have h_zero_elem : ∀ (i : ℕ) (_ : i < size α), (toElements (0 : α F))[i] = (0 : F) := by
     intro i _

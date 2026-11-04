@@ -216,11 +216,13 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
             · exact Or.inl (Or.inl (by simp))
             · rw [hregion]
               exact Or.inr (by
-                simpa only [LookupRangeCheck.witnessCheck_nextRegionIndex]
+                simpa only [LookupRangeCheck.witnessCheck_nextRegionIndex
+                  10 13 false synth._proof_2 configInput.2 (aPrimeWit input.a) i]
                   using hb.1)
             · rw [hregion]
               exact Or.inr (by
-                simpa only [LookupRangeCheck.witnessCheck_nextRegionIndex]
+                simpa only [LookupRangeCheck.witnessCheck_nextRegionIndex
+                  10 13 false synth._proof_2 configInput.2 (aPrimeWit input.a) i]
                   using hb.2)
       lookupActivationsWellFormed := by
         intro cfg input i

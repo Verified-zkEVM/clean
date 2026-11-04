@@ -80,11 +80,11 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
 
   soundness := by
     intro n env input_var input h_input h_assumptions h_holds
-    simp_all only [circuit_norm, toTable]
+    simp_all only [circuit_norm, toTable, Witnessable.witnessIR]
 
   completeness := by
     intro n env input_var h_env input h_input h_assumptions
-    simp only [circuit_norm, toTable] at *
+    simp only [circuit_norm, toTable, Witnessable.witnessIR] at *
     simp only [h_input] at h_env ⊢
     use h_assumptions
 

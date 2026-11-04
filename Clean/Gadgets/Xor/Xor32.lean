@@ -1,3 +1,4 @@
+import Clean.Gadgets.WitnessEvaluation
 import Clean.Circuit
 import Clean.Utils.Primes
 import Clean.Utils.Field
@@ -84,6 +85,7 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
 
 theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env input_var h_env input h_input as
+  rcases input_var with ⟨⟨vx0, vx1, vx2, vx3⟩, ⟨vy0, vy1, vy2, vy3⟩⟩
   let ⟨⟨ x0, x1, x2, x3 ⟩,
        ⟨ y0, y1, y2, y3 ⟩⟩ := input
   simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
@@ -95,7 +97,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
   simp only [h_input, circuit_norm, main, ByteXorTable] at h_env ⊢
   simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_env ⊢
-  simp_all [circuit_norm, xor_val]
+  simp_all [Witgen.eval_xor, circuit_norm, xor_val]
 
 def circuit : FormalCircuit (F p) Inputs U32 where
   main

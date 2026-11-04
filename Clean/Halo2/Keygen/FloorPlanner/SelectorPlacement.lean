@@ -108,7 +108,7 @@ theorem SummarySelectorsAnchoredBy.combine
   rw [RegionSynthesisSummary.toRegionShapeSummary_columns,
     RegionSynthesisSummary.combine_columns, mem_unionColumns_iff] at hselector
   rcases hselector with hselector | hselector
-  · have hanchor := hleft selector (by simpa using hselector)
+  · have hanchor := hleft selector (by simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hselector)
     have hanchor' : anchor selector ∈ physicalColumns left.columns := by
       simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hanchor
     obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hanchor
@@ -119,7 +119,7 @@ theorem SummarySelectorsAnchoredBy.combine
       mem_unionColumns_iff]
     exact Or.inl
       ((column_mem_physicalColumns_iff kind index left.columns).mp hphysical)
-  · have hanchor := hright selector (by simpa using hselector)
+  · have hanchor := hright selector (by simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hselector)
     have hanchor' : anchor selector ∈ physicalColumns right.columns := by
       simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hanchor
     obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hanchor
@@ -156,7 +156,7 @@ theorem SelectorAnchoredBy.ofRegion
     {summary : RegionSynthesisSummary} {anchor : ℕ → RegionColumn}
     (hsummary : SummarySelectorsAnchoredBy summary.toRegionShapeSummary anchor) :
     SelectorAnchoredBy (SynthesisSummary.ofRegion summary).regionShapes anchor := by
-  simpa [SelectorAnchoredBy] using hsummary
+  simpa [SelectorAnchoredBy, SynthesisSummary.ofRegion] using hsummary
 
 theorem SelectorAnchoredBy.combine
     {left right : SynthesisSummary} {anchor : ℕ → RegionColumn}

@@ -199,7 +199,7 @@ theorem generatorLookup_auxiliarySelectorIndices (G : Generators) (cfg : Config)
     (generatorLookup G cfg).auxiliarySelectorIndices = [] := by
   simp [keygen_norm, generatorLookup,
     LookupArgument.auxiliarySelectorIndices,
-    yPExpr, yAExpr, xRExpr, qS3Expr]
+    yPExpr, yAExpr, xRExpr, qS3Expr, Expression.sub_def, Expression.selectorIndices]
 
 /-! ## Configure
 

@@ -39,6 +39,7 @@ def Spec (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
     | 3 => ⟨ x3, x0, x1, x2 ⟩
 
   subcircuitsConsistent x i0 := by
+    cases x
     simp only [main]
     fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
   channelsLawful := by

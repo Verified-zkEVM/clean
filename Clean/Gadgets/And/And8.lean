@@ -109,7 +109,7 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
+  simp_all only [HAnd.hAnd, AndOp.and, Witgen.NExprOver.eval, circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
@@ -131,6 +131,7 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
     rw [two_and_val, x_y_val]
     exact two_and_le_add hx_byte hy_byte
 
+  change (x + y - 2*w).val = x.val ^^^ y.val
   rw [ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 

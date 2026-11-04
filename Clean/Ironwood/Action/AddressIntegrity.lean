@@ -136,14 +136,16 @@ theorem synthesize_copyCellsAssignedFrom
         List.mem_append_right _ hpointOutput.1⟩,
       ⟨List.mem_append_left _ (List.mem_append_right _ hmulOutput.2),
         List.mem_append_right _ hpointOutput.2⟩⟩
+  have point_regionCount (input : Var (Unconstrained Point) Fp) :
+      Ecc.WitnessPoint.pointNonIdFormal.regionCount input = 1 := rfl
   have hright := hpoint.append (by
-    simpa only [pointOps, FormalCircuit.call_regionCount', Nat.add_zero] using hequality)
+    simpa only [pointOps, FormalCircuit.call_regionCount', point_regionCount, Nat.add_zero] using hequality)
   have hall := hmul.append (by
     simpa only [mulOps, pointRegion, FormalCircuit.call_regionCount'] using hright)
   simpa only [mulOps, mulOutput, pointRegion, pointOps, pointOutput,
     Circuit.operations_bind, Circuit.operations_pure,
     FormalCircuit.nextRegionIndex_call', FormalCircuit.output_call',
-    FormalCircuit.call_regionCount', Nat.add_zero] using hall
+    FormalCircuit.call_regionCount', point_regionCount, Nat.add_zero, List.append_nil] using hall
 
 /-- Rust `Circuit::synthesize`'s diversified-address-integrity block (post-`commit_ivk`):
 `ivk • g_d_old` (variable-base `Ecc.Mul`), the witnessed `pk_d_old`, and the equality

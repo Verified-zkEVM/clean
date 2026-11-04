@@ -468,7 +468,7 @@ theorem Expression.selectorIndices_neg [Field F]
 theorem Expression.selectorIndices_sub
     [Field F] (left right : Expression F Query) :
     (left - right).selectorIndices = left.selectorIndices ++ right.selectorIndices := by
-  simp [Expression.selectorIndices]
+  rfl
 
 /-- Selector indices used by a lookup input other than its distinguished master
 selector. Multiplicity is harmless and keeps this a direct structural projection. -/

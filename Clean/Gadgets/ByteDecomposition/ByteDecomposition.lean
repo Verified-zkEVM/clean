@@ -97,7 +97,7 @@ theorem soundness (offset : Fin 8) : Soundness (Input:=field) (Output:=Outputs) 
 theorem completeness (offset : Fin 8) : Completeness (Input:=field) (Output:=Outputs) (F p) (main offset) Assumptions := by
   rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [circuit_norm] at h_input
-  simp only [circuit_norm, main, h_input, ByteTable] at henv ⊢
+  simp only [HDiv.hDiv, Div.div, Witgen.NExprOver.eval, circuit_norm, main, h_input, ByteTable] at henv ⊢
   simp only [henv]
   have pow_8_nat : 2^8 = 2^(8-offset.val) * 2^offset.val := by simp [←pow_add]
   have lt : (2^offset.val : ℕ+) < p := by simp [two_pow_lt]

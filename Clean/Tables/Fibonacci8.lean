@@ -85,14 +85,47 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
   -- simplify constraints
   simp only [boundaryFib]
   simp_assign_row
-  simp only [circuit_norm, table_norm, Nat.reduceAdd, Nat.reduceMod, zero_add, neg_eq_zero]
+  simp +instances only [circuit_norm, table_norm, pure, Operations.forAllNoOffset, table_assignment_norm,
+    true_and, and_true, Nat.reduceAdd, Nat.reduceMod, zero_add]
   intro ⟨ boundary1, boundary2 ⟩
 
   have hx : first_row.x = env.get 0 := by rfl
   have hy : first_row.y = env.get 1 := by rfl
+  replace boundary1 : env.get 0 = 0 := (sub_eq_zero.mp boundary1).symm
   replace boundary2 : env.get 1 = 1 := (sub_eq_zero.mp boundary2).symm
   rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
   trivial
+
+/-- Evaluate only the finite update pattern, keeping cells abstract. -/
+private theorem update_assignment {α : Type} (a b c d e x y : α) :
+    ((([] ++ [a,b] ++ [c] ++ [d,e]).set 2 x).set 3 y) = [a,b,x,y,e] := rfl
+
+/-- The assignment shape is independent of field-value computation. -/
+private theorem fib_offset : (fibRelation (p := p)).finalAssignment.offset = 5 := by
+  dsimp only [fibRelation, table_assignment_norm, circuit_norm, copyToVar,
+    Gadgets.Addition8.circuit, Gadgets.Addition8Full.circuit,
+    Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.main,
+    MonadLift.monadLift, pure, explicit_provable_type]
+
+private theorem fib_assignment : (fibRelation (p := p)).finalAssignment.vars.toArray =
+    #[.input ⟨0,0⟩, .input ⟨0,1⟩, .input ⟨1,0⟩, .input ⟨1,1⟩, .aux 2] := by
+  dsimp only [fibRelation, table_assignment_norm, circuit_norm, copyToVar,
+    Gadgets.Addition8.circuit, Gadgets.Addition8Full.circuit,
+    Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.main,
+    MonadLift.monadLift, pure, explicit_provable_type]
+  simp only [Vector.mapFinRange_zero, Vector.mapFinRange_succ]
+  apply Array.toList_inj.mp
+  dsimp only [Vector.toList, Vector.toArray, Vector.append,
+    HAppend.hAppend, Append.append, Vector.mapRange]
+  exact update_assignment _ _ _ _ _ _ _
+
+private theorem fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
+    let env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env
+    env.get 0 = curr.x ∧ env.get 1 = curr.y ∧ env.get 2 = next.x ∧ env.get 3 = next.y := by
+  dsimp only [windowEnv]
+  simp +instances only [fib_offset, Nat.reduceLT, ↓reduceDIte,
+    Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, fib_assignment]
+  and_intros <;> rfl
 
 -- TODO(4.30 bump): scoped legacy defeq (still needed after the elaborate_circuit fix:
 -- heavyweight offset_consistent autoParam / windowEnv defeq on the concrete table)
@@ -100,6 +133,13 @@ set_option backward.isDefEq.respectTransparency false in
 def formalFibTable : FormalTable (F p) RowType := {
   constraints := fibTable
   Spec
+
+  offset_consistent := by
+    simp only [fibTable, List.Forall]
+    constructor
+    · rfl
+    · rw [TableConstraint.OffsetConsistent, fib_offset]
+      rfl
 
   soundness := by
     intro N trace envs _
@@ -135,24 +175,17 @@ def formalFibTable : FormalTable (F p) RowType := {
       set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs.toEnvironment 1 (rest.len + 1))
 
       simp only [fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
-          Gadgets.Addition8.circuit] at ConstraintsHold
-      simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
+          Gadgets.Addition8.circuit, Gadgets.Addition8Full.circuit,
+      Gadgets.Addition8FullCarry.circuit, pure, MonadLift.monadLift, explicit_provable_type,
+          Operations.forAllNoOffset,
+          true_and, and_true] at ConstraintsHold
 
       -- NOTE: In Lean 4.25.0-rc2, Vector/List indexing doesn't reduce definitionally
       -- as it did in v4.24.0. We use explicit simp lemmas to reduce the expressions.
       -- See: https://github.com/leanprover/lean4/issues/10736 for related issues.
       have env_simp : env.get 0 = curr.x ∧ env.get 1 = curr.y ∧
                       env.get 2 = next.x ∧ env.get (2 + 1) = next.y := by
-        simp only [env, windowEnv, fibRelation, table_assignment_norm, table_norm, circuit_norm,
-          copyToVar, Gadgets.Addition8.circuit, varFromOffset, Pure.pure]
-        refine ⟨?_, ?_, ?_, ?_⟩
-        all_goals simp only [Vector.toList_mk, List.getElem_set, ite_true,
-          Vector.mapFinRange_zero, Vector.mapFinRange_succ,
-          Vector.mapRange_zero, Vector.mapRange_succ]
-        · simp only [dif_pos (by omega : 0 < 5)]; rfl
-        · simp only [dif_pos (by omega : 1 < 5)]; rfl
-        · simp only [dif_pos (by omega : 2 < 5)]; rfl
-        · simp only [dif_pos (by omega : 2 + 1 < 5)]; rfl
+        exact fib_vars curr next (envs.toEnvironment 1 (rest.len + 1))
       rw [env_simp.1, env_simp.2.1, env_simp.2.2.1, env_simp.2.2.2] at ConstraintsHold
       clear env_simp
 

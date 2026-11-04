@@ -5,7 +5,7 @@ namespace Halo2
 
 variable {F : Type}
 
-attribute [query_correct] Expression.mulConstant
+attribute [query_correct] Expression.mulConstant Expression.sub_def Expression.neg_def
 
 /-- A declaration accepted by Halo 2's query-registration interface. -/
 @[query_correct]

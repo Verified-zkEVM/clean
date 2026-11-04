@@ -1,3 +1,4 @@
+import Clean.Gadgets.WitnessEvaluation
 import Clean.Gadgets.SHA256.BitwiseOps
 import Clean.Specs.SHA256
 
@@ -200,7 +201,10 @@ theorem completeness : Completeness (F p) main Assumptions := by
     intro i; have := Vector.ext_iff.mp h_input_g i i.isLt; simp [Vector.getElem_map] at this; exact this
   intro i
   replace h_env := h_env i
-  simp only [circuit_norm, Fin.isLt, reduceDIte] at h_env
+  have h_read (v : Vector (Expression (F p)) 32) :
+      (v[(Witgen.NExprOver.idx : NExpr (F p))]).eval {env, idx := i.val} = Expression.eval env.toEnvironment v[i.val] :=
+    Witgen.eval_vector_read {env, idx := i.val} v (Witgen.NExprOver.idx : NExpr (F p)) i.isLt
+  simp only [h_read, circuit_norm] at h_env
   rw [h_ei i, h_fi i, h_gi i] at h_env
   rw [h_env, h_gi i, h_ei i, h_fi i]; ring
 

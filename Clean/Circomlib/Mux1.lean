@@ -120,7 +120,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
     rw [h_env_i]
-    ring
+    simp only [Expression.eval_sub]
 
 end MultiMux1
 

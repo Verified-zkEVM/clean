@@ -577,7 +577,9 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hcolumn
       rcases hcolumn with hcolumn | hcolumn
-      · exact List.mem_append_left _ (by simpa [gateInput] using hcolumn)
+      · apply List.mem_append_left
+        change column ∈ Gate.permutationColumns gateInput at hcolumn
+        simpa [gateInput] using hcolumn
       · apply List.mem_append_right
         unfold configure
         apply Configure.mem_permutationRequests_delta_bind_right
@@ -1596,10 +1598,10 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
               configInput.1.sinsemilla.witnessPieces.toAny := by
             rw [List.mem_iff_getElem] at hfound
             obtain ⟨j, hj, hvalue⟩ := hfound
-            have hj' : j < 3 := by simpa using hj
+            have hj' : j < 3 := by change j < 3 at hj; exact hj
             have hjcases : j = 0 ∨ j = 1 ∨ j = 2 := by omega
             rcases hjcases with rfl | rfl | rfl <;>
-              simp at hvalue <;> subst found <;> rfl
+              subst found <;> rfl
           rw [hfoundColumn]
           simp [HashLayer.keygenRequirements]
         · constructor
@@ -1742,7 +1744,9 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                       simp only [List.mem_append]
                       apply Or.inl
                       apply Or.inr
-                      simpa using
+                      simpa only [HashToPoint.witnessMessagePiece_regionCount,
+                        LookupRangeCheck.witnessShortCheck_regionCount,
+                        Nat.add_assoc, Nat.reduceAdd] using
                         HashToPoint.witnessMessagePiece_output_cell_assigned
                           configInput.1.sinsemilla
                             (wbWit input.left input.right) (i + 1 + 2)
@@ -1750,7 +1754,9 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                       subst assigned
                       simp only [List.mem_append]
                       apply Or.inr
-                      simpa using
+                      simpa only [HashToPoint.witnessMessagePiece_regionCount,
+                        LookupRangeCheck.witnessShortCheck_regionCount,
+                        Nat.add_assoc, Nat.reduceAdd] using
                         HashToPoint.witnessMessagePiece_output_cell_assigned
                           configInput.1.sinsemilla (wcWit input.right) (i + 2 + 2)
                   · simp only [Operations.copyCellsAssignedFrom_region_iff,
@@ -1858,7 +1864,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         constructor
         · keygen_registration [HashToPoint.witnessMessagePiece]
         constructor
-        · simpa only [HashToPoint.hashMessage] using
+        · simpa only [HashToPoint.hashMessage, Operations.LookupActivationsWellFormed] using
             (HashToPoint.hashCircuit G merkleNs Q hQ HashLayer.synthesize._proof_1)
               |>.call_lookupActivationsWellFormed config.1.sinsemilla _ _
         · constructor
@@ -1973,11 +1979,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
            env.advice cfg.1.sinsemilla.witnessPieces
              ((place (i₀ + 2 + 2) + 0 : ℕ) : ℤ)] from by
         with_unfolding_all rfl] at hpAval hpBval hpCval
-    simp only [show ∀ (a b c : Fp), (#v[a, b, c] : Vector Fp 3)[0] = a from fun _ _ _ => rfl,
-      show ∀ (a b c : Fp), (Vector.tail (#v[a, b, c] : Vector Fp 3))[0] = b
-        from fun _ _ _ => rfl,
-      show ∀ (a b c : Fp), (Vector.tail (Vector.tail (#v[a, b, c] : Vector Fp 3)))[0] = c
-        from fun _ _ _ => rfl] at hpAval hpBval hpCval
+
     -- the z_1 values off the running-sum vectors, chunk-indexed through the append shape
     have hz1Aval := congrArg (fun v : Vector Fp 25 => v[1]'(by norm_num)) hzA
     have hz1Bval := congrArg (fun v : Vector Fp 2 => v[1]'(by norm_num)) hzB'
@@ -3065,7 +3067,7 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         · exact (HashLayer.circuit G Q hQ l hl)
             |>.call_lookupSelectorsAnchoredBy (cfg.2.1, cfg.2.2) hconfig.2 _
               (self + 1) anchor (by
-                simpa only [HashLayer.circuit_lookupSelectorAnchorRequirements]
+                simpa only [Configure.output_pure, HashLayer.circuit_lookupSelectorAnchorRequirements]
                   using hanchor)
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
@@ -3102,7 +3104,7 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           intro cell hcell
           simpa only [FormalRegionCircuit.Configured.inputCells,
             CondSwap.swap, FormalRegionCircuit.keygenRequirements,
-            ElaboratedRegionCircuit.keygenRequirements] using hcell
+            ElaboratedRegionCircuit.keygenRequirements, Layer.keygenRequirements] using hcell
         · apply (HashLayer.circuit G Q hQ l hl).call_copyCellsAssignedFrom
             (cfg.2.1, cfg.2.2) hconfig.2 _ (self + 1)
           intro cell hcell
@@ -3335,7 +3337,8 @@ theorem Layer.circuit_call_output_cell_assigned
   rw [FormalCircuit.call_operations]
   simp only [Layer.circuit, Circuit.operations_bind, operations_assignRegion]
   apply Operations.mem_assignedCellsFrom_append_right
-  simpa only [circuit_norm] using
+  simpa only [circuit_norm, HashLayer.circuit_output_cell_eq, AssignedCell.of_cell,
+    Operations.regionCount, Nat.add_assoc, Nat.reduceAdd] using
     HashLayer.circuit_call_output_cell_assigned
       G Q hQ l hl cfg.2.1 cfg.2.2 _ (self + 1)
 
@@ -4000,7 +4003,7 @@ def circuit :
           (fun i => layerAtConfigured G Q hQ l₀ wsib wswap hconfig i)
           anchor
         intro i
-        simpa only [layerAt,
+        simpa only [layerAt, Configure.output_pure,
           Layer.circuit_lookupSelectorAnchorRequirements] using hanchor
       fixedWritesLawful := by
         intro cfg _ hconfig input region

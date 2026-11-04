@@ -207,11 +207,13 @@ def circuit : FormalAssertion (F p) U64 where
   soundness := by
     rintro i0 env x_var
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
+    cases x_var
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
     rintro i0 env x_var _hint
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
+    cases x_var
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
 end U64.AssertNormalized

@@ -230,6 +230,11 @@ theorem Internal.actionCircuit_eq_impl :
     actionCircuit = Internal.actionCircuitImpl :=
   actionCircuitPacked.property
 
+private theorem configure_run_numSelectors {α : Type}
+    (program : Configure Fp α) (initial : ConstraintSystem Fp) :
+    (program.run initial).2.numSelectors =
+      (program.finalCounts (ConfigureCounts.ofConstraintSystem initial)).numSelectors := rfl
+
 /-- Action's configured primary column witnesses that its permutation family is
 nonempty. -/
 theorem actionCircuit_permutationColumns_nonempty :
@@ -242,7 +247,7 @@ theorem actionCircuit_permutationColumns_nonempty :
   have hprimary : primary ∈ (program.run {}).2.permutationColumns :=
     (Configure.mem_permutationColumns_run_iff program {} primary).mpr
       (Or.inr (by
-        simpa only [program, primary] using
+        simpa only [program, primary, ConfigureCounts.ofConstraintSystem] using
           Circuit.configure_output_primary_mem_permutationRequests
             Specs.Sinsemilla.orchardGenerators {}))
   exact List.ne_nil_of_mem hprimary
@@ -252,7 +257,8 @@ theorem actionCircuit_numAdviceColumns_eq :
     actionCircuit.constraintSystem.numAdviceColumns = 10 := by
   rw [Internal.actionCircuit_eq_impl]
   simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
-    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+    TopLevelCompilation.constraintSystem, Circuit.circuit, Configure.run_numAdviceColumns,
+    ConfigureCounts.ofConstraintSystem] using
       Circuit.configure_finalCounts_numAdviceColumns
         Specs.Sinsemilla.orchardGenerators
 
@@ -261,7 +267,8 @@ theorem actionCircuit_numFixedColumns_eq :
     actionCircuit.constraintSystem.numFixedColumns = 14 := by
   rw [Internal.actionCircuit_eq_impl]
   simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
-    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+    TopLevelCompilation.constraintSystem, Circuit.circuit, Configure.run_numFixedColumns,
+    ConfigureCounts.ofConstraintSystem] using
       Circuit.configure_finalCounts_numFixedColumns
         Specs.Sinsemilla.orchardGenerators
 
@@ -271,7 +278,8 @@ theorem actionCircuit_selectorCount_eq :
   rw [Internal.actionCircuit_eq_impl]
   simpa only [Internal.actionCircuitImpl, TopLevelCircuit.selectorCount,
     TopLevelCircuit.constraintSystem, TopLevelCompilation.constraintSystem,
-    Circuit.circuit] using
+    Circuit.circuit, configure_run_numSelectors,
+    ConfigureCounts.ofConstraintSystem] using
       Circuit.configure_finalCounts_numSelectors
         Specs.Sinsemilla.orchardGenerators
 
@@ -280,7 +288,8 @@ theorem actionCircuit_numInstanceColumns_eq :
     actionCircuit.constraintSystem.numInstanceColumns = 1 := by
   rw [Internal.actionCircuit_eq_impl]
   simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
-    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+    TopLevelCompilation.constraintSystem, Circuit.circuit, Configure.run_numInstanceColumns,
+    ConfigureCounts.ofConstraintSystem] using
       Circuit.configure_finalCounts_numInstanceColumns
         Specs.Sinsemilla.orchardGenerators
 

@@ -58,6 +58,7 @@ deriving ProvableStruct
 
 theorem eval_zs {F : Type} [FiniteField F] (env : Environment F) (ns : List ℕ) (out : Var (Output ns) F) :
     (eval env out).zs = eval env out.zs := by
+  cases out
   simp only [circuit_norm]
 
 def main (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -110,6 +111,9 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
   circuit_proof_start [HashToPoint.circuit, HashToPoint.Spec,
     MulFixed.FullWidth.circuit, MulFixed.FullWidth.Spec,
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
+  generalize hout : (HashToPoint.main G Q n₀ ns _ _).1 = hashOut at *
+  rcases hashOut with ⟨hashPoint, hashZs⟩
+  simp only [circuit_norm, explicit_provable_type] at *
   obtain ⟨h_fw, h_entry, h_add⟩ := h_holds
   obtain ⟨s, hblind⟩ := h_fw
   obtain ⟨chunks, hPC, hZs, hfun⟩ := h_entry
@@ -136,6 +140,9 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     MulFixed.FullWidth.circuit, MulFixed.FullWidth.ProverAssumptions,
     MulFixed.FullWidth.ProverSpec,
     Ecc.Add.circuit, Ecc.Add.Spec, Ecc.Add.Assumptions]
+  generalize hout : (HashToPoint.main G Q n₀ ns _ _).1 = hashOut at *
+  rcases hashOut with ⟨hashPoint, hashZs⟩
+  simp only [circuit_norm, explicit_provable_type] at *
   obtain ⟨h_fw_env, h_entry_env, h_add_env⟩ := h_env
   obtain ⟨hbounds, ⟨B, hchain⟩, hr⟩ := h_assumptions
   obtain ⟨-, hblind⟩ := h_fw_env hr

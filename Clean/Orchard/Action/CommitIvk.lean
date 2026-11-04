@@ -145,13 +145,13 @@ private theorem copyCheck_telescope {n : ℕ} (zs : Vector Fp (n + 1))
     intro i hi
     obtain ⟨word, hword, heq⟩ := hstep ⟨i, hi⟩
     refine ⟨word, hword, ?_⟩
-    simp only [dif_pos (Nat.lt_succ_of_lt hi), dif_pos (Nat.succ_lt_succ hi)]
+    simp only [dite_eq_left (Nat.lt_succ_of_lt hi), dite_eq_left (Nat.succ_lt_succ hi)]
     push_cast
     rw [heq]; ring
   obtain ⟨lo, hlo, hz0⟩ := running_sum_telescope K
     (fun j => if hj : j < n + 1 then zs[j]'hj else 0) n hz
   refine ⟨lo, hlo, ?_⟩
-  simp only [dif_pos (Nat.succ_pos n), dif_pos (Nat.lt_succ_self n)] at hz0
+  simp only [dite_eq_left (Nat.succ_pos n), dite_eq_left (Nat.lt_succ_self n)] at hz0
   push_cast at hz0 ⊢
   convert hz0 using 2
 
@@ -609,12 +609,14 @@ theorem OutputGen.fromComponents_cons (ns : List ℕ) {F : Type}
 
 theorem eval_cells (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
     (eval env out).cells = eval env out.cells := by
+  rcases out with ⟨cells, zs⟩
   rw [ProvableStruct.Clean.eval_eq_eval]
   unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 theorem eval_zs (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
     (eval env out).zs = eval env out.zs := by
+  rcases out with ⟨cells, zs⟩
   rw [ProvableStruct.Clean.eval_eq_eval]
   unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
@@ -632,12 +634,14 @@ theorem eval_cells_leaves (env : Environment Fp) (c : Var Cells Fp) :
     (eval env c).b2 = Expression.eval env c.b2 ∧
     (eval env c).d0 = Expression.eval env c.d0 ∧
     (eval env c).d1 = Expression.eval env c.d1 := by
+  rcases c with ⟨point, a, b, c, d, b0, b1, b2, d0, d1⟩
   rw [ProvableStruct.Clean.eval_eq_eval]
   unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 theorem eval_cells_point (env : Environment Fp) (c : Var Cells Fp) :
     (eval env c).point = eval env c.point := by
+  rcases c with ⟨point, a, b, c, d, b0, b1, b2, d0, d1⟩
   rw [ProvableStruct.Clean.eval_eq_eval]
   unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
@@ -645,6 +649,7 @@ theorem eval_cells_point (env : Environment Fp) (c : Var Cells Fp) :
 theorem withZs_eval_point (env : Environment Fp) (ns : List ℕ)
     (out : Var (CommitDomain.Output ns) Fp) :
     (eval env out).point = eval env out.point := by
+  rcases out with ⟨point, zs⟩
   rw [ProvableStruct.Clean.eval_eq_eval]
   unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
@@ -1007,7 +1012,8 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
           exact hB)
         rw [CircuitType.eval_var_prover_to_verifier, Commit.eval_cells, Commit.eval_cells_point, hO]
         rw [CircuitType.eval_var_prover_to_verifier, Commit.withZs_eval_point] at hpt
-        simpa only [← h_input, circuit_norm] using hpt
+        simpa +instances only [← h_input, Utilities.LookupRangeCheck.WitnessShort.circuit,
+          circuit_norm] using hpt
     clear_value O
     unfold ProverSpec
     simp only [show (input.ak : Fp) = Expression.eval env.toEnvironment input_var.ak from hak_eq.symm,
@@ -1239,7 +1245,8 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     have hpt := hHash B (by rw [hchunks]; exact hB)
     have hx := congrArg Point.x hpt
     rw [hO] at hx
-    simpa [Point.add, Point.coords, circuit_norm] using hx
+    simpa [Point.add, Point.coords, Commit.circuit, Commit.main,
+      Utilities.LookupRangeCheck.WitnessShort.circuit, circuit_norm] using hx
   · exact ⟨Or.inl rfl, Or.inl rfl, trivial⟩
 
 theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)

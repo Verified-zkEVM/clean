@@ -597,8 +597,8 @@ theorem copyDecompose_synthesisSummary_constantSiteCount
     (input : Inputs (AssignedCell Fp)) (region : RegionIndex) :
     ((copyDecompose W numWindows).elaborated.synthesisSummary
       config offset input region).constantSiteCount = 1 := by
-  simpa only [copyDecompose] using
-    copyDecomposeSynthesisSummary_constantSiteCount numWindows config offset
+  rw [copyDecompose_synthesisSummary_eq]
+  exact copyDecomposeSynthesisSummary_constantSiteCount numWindows config offset
 
 /-- Strict decomposition never writes a fixed column. -/
 @[synthesis_summary_norm]
@@ -637,7 +637,7 @@ theorem copyDecompose_configured_permutationColumns_eq
   cases outputEq
   simp only [keygen_norm, FormalRegionCircuit.Configured.permutationColumns,
     FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
-    copyDecompose, configure, permutationColumns, List.singleton_append]
+    copyDecompose, elaborated, configure, permutationColumns, List.singleton_append]
 
 /-- The strict decomposition's only input copy comes from `alpha`. -/
 @[keygen_norm]

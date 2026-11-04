@@ -106,7 +106,6 @@ theorem overwrite_get!
         array[index]! := by
   have heq := congrArg (fun values : List T => values[index]!)
     (overwrite_toList array start sub hfit)
-  dsimp only at heq
   rw [arrayToList_getElem!] at heq
   rw [heq]
   by_cases hinside : start ≤ index ∧ index < start + sub.size
@@ -120,9 +119,9 @@ theorem overwrite_get!
           start + sub.size := by simp [htake]
     rw [if_pos (by rw [hprefix]; omega), htake,
       if_neg (by omega)]
-    rw [List.getElem?_eq_getElem (by simp; omega), Option.getD_some]
+    rw [List.getElem?_eq_getElem (by simp only [List.length_append, htake, Array.length_toList]; omega), Option.getD_some]
     rw [getElem!_pos sub (index - start) (by omega)]
-    exact Array.getElem_toList (xs := sub) (by omega)
+    exact Array.getElem_toList (xs := sub) (by simpa only [Array.length_toList] using (show index - start < sub.size by omega))
   · rw [if_neg hinside]
     by_cases hbefore : index < start
     · simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
@@ -135,10 +134,10 @@ theorem overwrite_get!
       rw [if_pos (by rw [hprefix]; omega),
         if_pos (by rw [htake]; omega)]
       rw [List.getElem?_eq_getElem (by
-        simp only [List.length_take, Array.length_toList]
+        simp only [List.length_take, Array.length_toList, List.length_append, htake]
         omega), Option.getD_some, List.getElem_take]
       rw [getElem!_pos array index (by omega)]
-      exact Array.getElem_toList (xs := array) (by omega)
+      exact Array.getElem_toList (xs := array) (by simp only [Array.length_toList]; omega)
     · have hafter : start + sub.size ≤ index := by omega
       simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
       have htake : (array.toList.take start).length = start := by
@@ -1356,7 +1355,7 @@ theorem breakPatterns_perm (v : Array T) :
     have hmain := state_forIn_body_result_perm
       (List.range' 0 3) body ⟨v.size.toUInt32, v⟩ v
       hbody (List.Perm.refl _)
-    simpa only [body] using hmain
+    simpa only [body, Id.run, pure, bind, apply_ite, Std.Legacy.Range.size, Nat.reduceSub, Nat.reduceAdd, Nat.reduceDiv] using hmain
   · simp
 
 private theorem partialInsertionMutation_perm
@@ -1426,14 +1425,14 @@ private theorem list_forIn_invariant
       cases b with
       | done s =>
           exact hbody i (by simp) initial s hinit
-            (Or.inl (by simpa using congrArg Id.run hb))
+            (Or.inl (by simpa only [Id.run] using congrArg Id.run hb))
       | yield s =>
           apply ih
           · intro j hj t t' ht hstep
             exact hbody j (by simp [hj]) t t' ht hstep
           ·
             exact hbody i (by simp) initial s hinit
-              (Or.inr (by simpa using congrArg Id.run hb))
+              (Or.inr (by simpa only [Id.run] using congrArg Id.run hb))
 
 private theorem bounded_scan
     (indices : List ℕ) (len i0 : ℕ)
@@ -1622,7 +1621,7 @@ theorem partialInsertionSort_perm (v : Array T)
       · rw [hstep] at h
         exact h)
     hinit
-  simpa only [body, Inv] using hloop.1
+  simpa only [body, Inv, Id.run, pure, bind] using hloop.1
 
 private theorem KeySorted.take_succ
     (array : Array T) (key : T → ℕ) (index : ℕ)
@@ -1641,13 +1640,13 @@ private theorem KeySorted.take_succ
     simp only [List.length_take, Array.length_toList]
     omega
   have hprefixBound := KeySorted.keysLE_last key
-    (array.toList.take index) hsorted (by omega)
+    (array.toList.take index) hsorted (by rw [hlength]; exact hpositive)
   have hleftLast := hprefixBound left hleft
   have hlast : (array.toList.take index)[index - 1]! =
       array[index - 1]! := by
     rw [getElem!_pos _ _ (by rw [hlength]; omega),
       List.getElem_take]
-    rw [Array.getElem_toList (by omega)]
+    rw [Array.getElem_toList (by simpa only [Array.length_toList] using (show index - 1 < array.size by omega))]
     rw [getElem!_pos array (index - 1) (by omega)]
   rw [hlength, hlast] at hleftLast
   exact hleftLast.trans hnext
@@ -1700,7 +1699,7 @@ private theorem swp_toList_take_before
       have := hindexRight
       simp only [List.length_take, Array.length_toList] at this
       omega
-    rw [Array.getElem_toList (by simpa only [swp_size] using hindex),
+    rw [Array.getElem_toList (by simpa only [Array.length_toList, swp_size] using hindex),
       Array.getElem_toList hindex,
       ← getElem!_pos (swp array left right) index
         (by simpa only [swp_size] using hindex),
@@ -3222,7 +3221,7 @@ private theorem partitionEqualStep_progress
           swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩)) |>.run).2.1 <
             right - left
         rw [if_neg hfinished]
-        simp only [ForInStep.run]
+        simp only [ForInStep.run, Id.run, pure]
         omega
 
 private theorem partitionEqualLoop_done_of_done

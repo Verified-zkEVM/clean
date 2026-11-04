@@ -72,7 +72,7 @@ theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumpt
   intro i hi
   rw [ProvableType.Clean.eval_fromElements]
   rw [ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
-  simp only [Expression.eval, ProvableType.Clean.getElem_eval_toElements, h_selector, h_ifTrue, h_ifFalse]
+  simp only [Expression.eval_sub, Expression.eval, ProvableType.Clean.getElem_eval_toElements, h_selector, h_ifTrue, h_ifFalse]
 
   -- Case split on the selector value
   cases h_assumptions with
