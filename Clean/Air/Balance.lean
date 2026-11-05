@@ -174,14 +174,27 @@ structure Balance (F : Type) [FiniteField F] where
     Balanced interactions → BalancedInteractions interactions
   /-- The largest pull multiplicity that the check matches with a push. -/
   pullBound : ℕ := 1
+  /--
+  Pulls of multiplicity up to `pullBound` are matched by a push.
+
+  For the default `pullBound := 1` this is `BalancedInteractions.matchedUpTo_one`, so a check that
+  matches nothing beyond unit pulls does not have to provide it. That is why the conclusion of
+  `balancedInteractions_of_balanced` is a premise here: a structure's default value is either
+  elaborated once with `pullBound` still abstract (a term default, which then cannot be
+  `matchedUpTo_one`) or elaborated per instance but without the earlier fields in scope (a tactic
+  default). Passing the weaker balance in makes the second form work. A check that sets
+  `pullBound := N` for `N > 1` and omits this field gets a type error, not a wrong default.
+  -/
   matchedUpTo_of_balanced : ∀ interactions, fits interactions.length →
-    Balanced interactions → MatchedUpTo pullBound interactions
+    Balanced interactions → BalancedInteractions interactions →
+      MatchedUpTo pullBound interactions := by
+    exact fun _ _ _ h_weak => h_weak.matchedUpTo_one
 
 lemma Balance.balancedUpTo_of_balanced (balance : Balance F) {interactions : List (Interaction F)}
     (fits : balance.fits interactions.length) (balanced : balance.Balanced interactions) :
     BalancedUpTo balance.pullBound interactions :=
-  ⟨ balance.balancedInteractions_of_balanced _ fits balanced,
-    balance.matchedUpTo_of_balanced _ fits balanced ⟩
+  have weak := balance.balancedInteractions_of_balanced _ fits balanced
+  ⟨ weak, balance.matchedUpTo_of_balanced _ fits balanced weak ⟩
 
 /-
 ## LogUp: field-sum balance
@@ -340,7 +353,7 @@ def Balance.logUp [ComputableRingChar F] : Balance F where
     have length_lt := ComputableRingChar.char_eq (R := F) ▸ of_decide_eq_true fits
     ⟨ balanced.exists_push_of_pull length_lt,
       balanced.activeCount_push_eq_activeCount_pull_of_isBool length_lt ⟩
-  matchedUpTo_of_balanced _ fits balanced :=
+  matchedUpTo_of_balanced _ fits balanced _ :=
     have length_lt := ComputableRingChar.char_eq (R := F) ▸ of_decide_eq_true fits
     balanced.matchedUpTo (by simpa using length_lt)
 
@@ -363,7 +376,7 @@ def Balance.logUpUpTo [ComputableRingChar F] (N : ℕ) : Balance F where
     ⟨ balanced.exists_push_of_pull length_lt,
       balanced.activeCount_push_eq_activeCount_pull_of_isBool length_lt ⟩
   pullBound := N
-  matchedUpTo_of_balanced _ fits balanced :=
+  matchedUpTo_of_balanced _ fits balanced _ :=
     have length_mul_lt := ComputableRingChar.char_eq (R := F) ▸
       (of_decide_eq_true (Bool.and_eq_true_iff.mp fits).2)
     balanced.matchedUpTo length_mul_lt
@@ -410,7 +423,7 @@ def Balance.multiset : Balance F where
   Balanced := MultisetBalanced
   fits _ := true
   balancedInteractions_of_balanced _ _ h_check := h_check.balancedInteractions
-  matchedUpTo_of_balanced _ _ h_check := h_check.balancedInteractions.matchedUpTo_one
+  -- `matchedUpTo_of_balanced` is the default: `pullBound` is `1`.
 
 /-- `Balance.multiset` matches pulls of multiplicity `1` only. -/
 @[simp, circuit_norm] lemma Balance.multiset_pullBound :
