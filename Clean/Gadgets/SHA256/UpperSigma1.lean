@@ -214,9 +214,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rw [hxor3, hxor1]; ring
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
-  main; elaborated; Assumptions; Spec
+  main; elaborated; Assumptions; Spec; soundness; completeness
   computableWitnesses := by computable_witnesses [rotr32, Vector.getElem_rotate]
-  soundness; completeness
 
 end UpperSigma1
 end Gadgets.SHA256

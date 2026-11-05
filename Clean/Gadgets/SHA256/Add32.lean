@@ -404,9 +404,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
     exact hF
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
-  main; elaborated; Assumptions; Spec
+  main; elaborated; Assumptions; Spec; soundness; completeness
   computableWitnesses := by computable_witnesses [bitsVal_eval, evalBitsNat]
-  soundness; completeness
 
 end Add32
 end Gadgets.SHA256

@@ -336,10 +336,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact h_sched_norm i
 
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
-  main, elaborated, Assumptions, Spec
-  computableWitnesses := by computable_witnesses [constWord32]
-  soundness
+  main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
+  computableWitnesses := by computable_witnesses [constWord32]
 }
 
 end SHA256Rounds
