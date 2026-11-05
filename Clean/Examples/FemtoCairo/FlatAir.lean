@@ -418,12 +418,16 @@ structure PublicInput (F : Type) where
   finalFp : F
 deriving ProvableStruct
 
-/-- A state is reachable from the public initial state. -/
-def stateChannel (program : Array (F p)) : Channel (F p) State where
+/-- The state reached after `k` steps from the public initial state. -/
+def Reached (program : Array (F p)) (k : ℕ) (state : State (F p)) (data : ProverData (F p)) :
+    Prop :=
+  Spec.femtoCairoMachineBoundedExecution program (memory data)
+    (some (data.getPublicInput PublicInput).initialState) k = some state
+
+/-- The states of the VM, which `Reached` describes. -/
+def stateChannel : Channel (F p) State where
   name := "state"
-  Guarantees state data := ∃ steps,
-    Spec.femtoCairoMachineBoundedExecution program (memory data)
-      (some (data.getPublicInput PublicInput).initialState) steps = some state
+  Guarantees _ _ := True
 
 structure ExecutionInput (F : Type) where
   enabled : F
@@ -433,54 +437,53 @@ deriving ProvableStruct
 /-- One execution row: when enabled, it pulls a state and pushes the state after it. Disabled rows
 pad the execution table. -/
 def executeStep (program : Array (F p)) (h_program : ValidProgram program) :
-    GeneralFormalCircuit (F p) ExecutionInput unit where
+    GeneralFormalCircuit (F p) ExecutionInput State where
   name := "execution"
   main input := do
     -- has to be inline, channels with requirements proof doesn't handle subcircuits
     assertZero (input.enabled * (input.enabled - 1))
-    (stateChannel program).pullIf input.enabled input.state
+    stateChannel.pullIf input.enabled input.state
     let nextState ← femtoCairoStep program h_program input.state
-    (stateChannel program).pushIf input.enabled nextState
+    stateChannel.pushIf input.enabled nextState
+    return nextState
 
   exposedChannels input i₀ :=
     let nextState := (femtoCairoStep program h_program).output input.state i₀
-    expose (stateChannel program)
-      [pulledIf input.enabled input.state, pushedIf input.enabled nextState]
+    expose stateChannel [pulledIf input.enabled input.state, pushedIf input.enabled nextState]
   exposedChannels_eq input i₀ := by
     simp [circuit_norm, femtoCairoStep, stateChannel]
 
   ProverAssumptions input data hint :=
-    (input.enabled = 0 ∨
-      input.enabled = 1 ∧ (stateChannel program).Guarantees input.state data) ∧
+    (input.enabled = 0 ∨ input.enabled = 1 ∧ ∃ k, Reached program k input.state data) ∧
     (femtoCairoStep program h_program).ProverAssumptions input.state data hint
 
-  Spec _ _ _ := True
-  channelsWithRequirements := [(stateChannel program).toRaw]
+  -- an enabled step takes the state after `k` steps to the state after `k + 1` steps
+  Spec input nextState data := input.enabled = 1 →
+    ∀ k, Reached program k input.state data → Reached program (k + 1) nextState data
+  channelsWithRequirements := [stateChannel.toRaw]
 
   soundness := by
-    circuit_proof_start [stateChannel, femtoCairoStep, FemtoCairoStepSpec,
+    circuit_proof_start [stateChannel, femtoCairoStep, FemtoCairoStepSpec, Reached,
       Spec.femtoCairoMachineBoundedExecution]
-    obtain ⟨h_bool, h_pull, h_step⟩ := h_holds
+    obtain ⟨h_bool, h_step⟩ := h_holds
     rw [mul_eq_zero, sub_eq_zero] at h_bool
-    rcases h_bool with rfl | rfl
-    · simp
-    obtain ⟨steps, hsteps⟩ := h_pull rfl
-    refine ⟨by simp, fun _ => ⟨steps + 1, ?_⟩⟩
-    simp only [Spec.femtoCairoMachineBoundedExecution, hsteps]
+    refine ⟨?_, h_bool⟩
+    rintro rfl k hk
+    simp only [hk]
     exact h_step
 
   completeness := by
     circuit_proof_start [stateChannel, femtoCairoStep]
     obtain ⟨rfl | ⟨rfl, h_state⟩, h_step⟩ := h_assumptions
     · simp [h_step]
-    · simp [h_state, h_step]
+    · simp [h_step]
 
 /-- One execution row per state pushed to the state channel. Padding rows are disabled. -/
 abbrev executionComponent (program : Array (F p)) (h_program : ValidProgram program) :
     Component (F p) where
   circuit := executeStep program h_program
   generation := .demand {
-    channel := stateChannel program
+    channel := stateChannel
     trigger := .push
     input state := pure { enabled := 1, state }
   }
@@ -494,23 +497,21 @@ def haltedState (programSize : ℕ) (ap fp : F p) : State (F p) :=
 initial state. -/
 def verifier (program : Array (F p)) : Verifier.Program (F p) PublicInput where
   main | { initialState, finalAp, finalFp } => do
-    Verifier.pull (stateChannel program)
-      { pc := .const (program.size : F p), ap := finalAp, fp := finalFp }
-    Verifier.push (stateChannel program) initialState
-  Spec
-  | { finalAp, finalFp, .. }, data =>
-      (stateChannel program).Guarantees (haltedState program.size finalAp finalFp) data
-  soundness := by simp_all [circuit_norm, explicit_provable_type, stateChannel, haltedState]
+    Verifier.pull stateChannel { pc := .const (program.size : F p), ap := finalAp, fp := finalFp }
+    Verifier.push stateChannel initialState
 
 def vm (program : Array (F p)) (h_program : ValidProgram program) : VmTables (F p) PublicInput where
-  channel := stateChannel program
+  channel := stateChannel
+  Reached := Reached program
+  guarantees_of_reached := by simp [stateChannel]
   tables := [executionComponent program h_program]
   verifier := verifier program
-  tables_channel := by simp [circuit_norm, executeStep, sub_eq_zero]
-  verifier_channel := by simp [circuit_norm, verifier]
-  verifier_requirements data := by
-    simp only [verifier, stateChannel, ProverData.getPublicInput_eq_eval, circuit_norm]
-    exact ⟨0, rfl⟩
+  final | { finalAp, finalFp, .. } => haltedState program.size finalAp finalFp
+  tables_channel := by
+    simp [circuit_norm, explicit_provable_type, executeStep, femtoCairoStep, sub_eq_zero]
+  verifier_channel := by
+    simp [circuit_norm, explicit_provable_type, verifier, Reached, haltedState,
+      Spec.femtoCairoMachineBoundedExecution, ProverData.getPublicInput_eq_eval]
 
 def soundEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) :=
@@ -552,17 +553,15 @@ def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : Va
     (Spec program memorySize)
     (by simp [circuit_norm, soundEnsemble, vm, memoryComponent])
     (by
-      rintro witness - spec
+      rintro witness - - ⟨ steps, -, -, -, h_halted ⟩
       have hsize := witness.getRows_size_of_preallocated
         (component := memoryComponent memorySize h_memorySize)
         (by simp [soundEnsemble, circuit_norm]) rfl
-      rw [Ensemble.VerifierSpec, witness.data_getPublicInput] at spec
-      have h_halted : (stateChannel program).Guarantees
-          (haltedState program.size witness.publicInput.finalAp witness.publicInput.finalFp)
-          witness.data := spec
-      simp only [stateChannel, witness.data_getPublicInput] at h_halted
-      obtain ⟨steps, hsteps⟩ := h_halted
-      refine ⟨ memory witness.data, ?_, steps, hsteps ⟩
+      have h_input := witness.data_getPublicInput
+      generalize witness.data = data at h_halted hsize h_input
+      generalize witness.publicInput = publicInput at h_halted h_input ⊢
+      simp only [vm, Reached, h_input] at h_halted
+      refine ⟨ memory data, ?_, steps, h_halted ⟩
       rw [memory, Array.size_map]
       exact hsize)
     (ProverAssumptions program memorySize)
