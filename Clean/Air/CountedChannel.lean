@@ -158,4 +158,69 @@ theorem counted_consistentUpTo_of_le {M N : ℕ} (h : N ≤ M) (channel : Channe
     RawChannel.ConsistentUpTo.consistent (N := N) interactions data
       ⟨ balanced.toBalancedInteractions, balanced.matchedUpTo.mono h ⟩
 
+/--
+Why `ConsistentUpTo` is needed: for `2 ≤ N` the counted channel is **not**
+`RawChannel.Consistent`, so it could not be finished in a `SoundEnsemble` under Clean's unmodified
+balance premise `BalancedInteractions`.
+
+The counterexample is two pulls of a message the channel does not guarantee, one of multiplicity
+`N` and one of multiplicity `1`, with nothing pushed. `BalancedInteractions` is satisfied:
+`exists_push_of_pull` only has to match pulls of multiplicity `1`, and it counts the pull of `N` as
+an `Interaction.Push` of the message, so the pull of `1` is matched; the count condition is vacuous
+because `N` is neither `0` nor `1`. The counted channel, in contrast, reads both as pulls and hands
+the guarantee to the pull of `1`, which is false.
+
+This is exactly the gap that `MatchedUpTo N` / `BalancedUpTo N` and `Balance.pullBound` close, and
+the reason `Channel.counted` carries a `RawChannel.ConsistentUpTo N` instance instead of a
+`RawChannel.Consistent` one.
+
+The hypothesis `N < ringChar F` is what makes `N` distinct from both `0` and `1` in `F`; together
+with `2 ≤ N` it is all the counterexample needs.
+-/
+theorem counted_not_consistent {N : ℕ} (hN : 2 ≤ N) (h_char : N < ringChar F)
+    (channel : Channel F Message) (m : Message F) (data : ProverData F)
+    (h_m : ¬ channel.Guarantees m data) : ¬ (channel.counted N).Consistent := by
+  rintro ⟨ consistent ⟩
+  have cast_inj {a b : ℕ} (ha : a < ringChar F) (hb : b < ringChar F) :
+      (a : F) = (b : F) → a = b :=
+    fun h => (Lean.Grind.IsCharP.natCast_eq_iff_of_lt (α := F) _ ha hb).mp h
+  have hN0 : (N : F) ≠ 0 := fun h => by
+    have := cast_inj h_char (b := 0) (by omega) (by simpa using h); omega
+  have hN1 : (N : F) ≠ 1 := fun h => by
+    have := cast_inj h_char (b := 1) (by omega) (by simpa using h); omega
+  let mk : F → Interaction F :=
+    fun mult => ⟨ channel.counted N, .pull, mult, (toElements m).toArray, by simp [counted] ⟩
+  let l := [mk (N : F), mk 1]
+  have h_bal : BalancedInteractions l := by
+    constructor
+    · -- the pull of `1` is matched by the pull of `N`, which `Interaction.Push` counts as a push
+      intro a a_mem _
+      refine ⟨ mk (N : F), by simp [l], ?_, hN0, fun _ => hN1 ⟩
+      simp only [l, List.mem_cons, List.not_mem_nil, or_false] at a_mem
+      rcases a_mem with rfl | rfl <;> rfl
+    · -- the multiplicity `N` is neither `0` nor `1`, so only untouched messages qualify
+      intro msg is_bool
+      by_cases h_msg : (toElements m).toArray = msg
+      · exfalso
+        rcases is_bool (mk (N : F)) (by simp [l]) h_msg with h | h
+        · exact hN0 h
+        · exact hN1 h
+      · simp [activeCount, l, mk, h_msg]
+  have h_reqs : ∀ i ∈ l, i.channel = channel.counted N ∧ i.Requirements data := by
+    intro i h_i
+    simp only [l, List.mem_cons, List.not_mem_nil, or_false] at h_i
+    rcases h_i with rfl | rfl
+    · refine ⟨ rfl, ?_ ⟩
+      simp only [Interaction.Requirements, mk, counted, Interaction.msgVector]
+      exact .inr ⟨ N, by omega, le_rfl, rfl ⟩
+    · refine ⟨ rfl, ?_ ⟩
+      simp only [Interaction.Requirements, mk, counted, Interaction.msgVector]
+      exact .inr ⟨ 1, le_rfl, by omega, by simp ⟩
+  have h_g := consistent l data h_bal h_reqs (mk 1) (by simp [l])
+  simp only [Interaction.Guarantees, mk, counted, Interaction.msgVector] at h_g
+  apply h_m
+  have h := h_g trivial ⟨ 1, le_rfl, by omega, by simp ⟩
+  convert h
+  simp [ProvableType.fromElements_toElements]
+
 end Channel
