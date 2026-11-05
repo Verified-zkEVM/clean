@@ -154,7 +154,16 @@ run_benchmark() {
     -v "$xdg_cache:/workspace/xdg-cache" \
     -v "$BENCH_OUTPUT_DIR:/bench-output" \
     "$IMAGE" \
-    bash -lc 'status=0; scripts/bench/build/run || status=$?; cp measurements.jsonl "$BENCH_OUTPUT_FILE" 2>/dev/null || true; exit "$status"'
+    bash -lc '
+      set -e
+      # The checkout and shared package cache are owned by the host runner user.
+      # Trust their repositories only inside this disposable root container.
+      git config --global --add safe.directory "*"
+      status=0
+      scripts/bench/build/run || status=$?
+      cp measurements.jsonl "$BENCH_OUTPUT_FILE" 2>/dev/null || true
+      exit "$status"
+    '
 }
 
 baseline_cache_path() {
