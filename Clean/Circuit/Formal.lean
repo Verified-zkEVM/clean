@@ -27,8 +27,8 @@ namespace FormalCircuitBase
 variable {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
 /--
 Formulation of `Circuit.ComputableWitnesses` that includes an assumption on the circuit input,
-used later for formal circuit bundles: every witness generator and every subcircuit input reads
-only the input and earlier witnesses, and so does the output.
+used later for formal circuit bundles: every witness generator, including those of subcircuits,
+reads only the input and earlier witnesses, and so does the output.
 -/
 @[circuit_norm]
 def ComputableWitnesses (main : Var Input F → Circuit F (Var Output F)) : Prop :=
