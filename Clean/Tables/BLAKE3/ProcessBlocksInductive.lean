@@ -408,6 +408,5 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   completeness
   subcircuitsConsistent := by
     simp only [step, circuit_norm]
-    omega
 end
 end Tables.BLAKE3.ProcessBlocksInductive

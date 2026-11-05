@@ -365,6 +365,7 @@ def femtoCairoStep (program : Array (F p)) (h_program : ValidProgram program) :
   main := femtoCairoStepMain program h_program
   ProverAssumptions := FemtoCairoStepAssumptions program
   Spec := FemtoCairoStepSpec program
+  computableWitnesses := by computable_witnesses [fetchInstruction]
   soundness := femtoCairoStepSoundness program h_program
   completeness := femtoCairoStepCompleteness program h_program
 

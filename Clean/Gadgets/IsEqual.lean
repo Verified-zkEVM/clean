@@ -91,6 +91,7 @@ def circuit : FormalCircuit F (ProvablePair α α) field where
   elaborated
   Assumptions
   Spec
+  computableWitnesses := by computable_witnesses [diffs]
   soundness
   completeness
 

@@ -435,6 +435,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
       | some nextState => output = nextState
       | none => False -- impossible, constraints ensure that the transition is valid
 
+  computableWitnesses := by computable_witnesses [varFromOffset, explicit_provable_type]
   soundness := by
     circuit_proof_start [DecodedInstructionType.IsEncodedCorrectly, Spec.computeNextState,
       DecodedInstructionType.val]
@@ -732,6 +733,7 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   main := femtoCairoStepMain program h_program
   ProverAssumptions := FemtoCairoStepAssumptions program
   Spec := FemtoCairoStepSpec program
+  computableWitnesses := by computable_witnesses [fetchInstruction]
   soundness := femtoCairoStepSoundness program h_program
   completeness := femtoCairoStepCompleteness program h_program
 

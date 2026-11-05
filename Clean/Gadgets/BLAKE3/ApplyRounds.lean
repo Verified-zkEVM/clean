@@ -633,6 +633,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
+  computableWitnesses := by computable_witnesses [initializeStateVector]
 }
 
 end Gadgets.BLAKE3.ApplyRounds

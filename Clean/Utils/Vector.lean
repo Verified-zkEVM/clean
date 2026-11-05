@@ -438,4 +438,39 @@ theorem map_cast {f : α → β} {xs : Vector α n} (h : n = m) :
   ext i hi
   simp only [getElem_map, getElem_cast]
 
+theorem get_eq_getElem (v : Vector α n) (i : Fin n) : v.get i = v[i.val] := rfl
+
+theorem append_eq_hAppend {m : ℕ} (v : Vector α n) (w : Vector α m) : v.append w = v ++ w := rfl
+
+/-! Congruence with the index bound in context: rewriting the body of an index binder may use
+`i < n`. -/
+
+theorem mapRange_congr {n : ℕ} {f g : ℕ → α} (h : ∀ i, i < n → f i = g i) :
+    mapRange n f = mapRange n g := by
+  ext i hi
+  simp only [getElem_mapRange, h i hi]
+
+theorem ofFn_congr {n : ℕ} {f g : Fin n → α} (h : ∀ i : Fin n, i.val < n → f i = g i) :
+    ofFn f = ofFn g := by
+  ext i hi
+  simp only [getElem_ofFn, h ⟨i, hi⟩ hi]
+
+theorem mapFinRange_congr {n : ℕ} {f g : Fin n → α} (h : ∀ i : Fin n, i.val < n → f i = g i) :
+    mapFinRange n f = mapFinRange n g := by
+  ext i hi
+  simp only [getElem_mapFinRange, h ⟨i, hi⟩ hi]
+
+theorem mapIdx_congr {n : ℕ} {v w : Vector α n} {f g : ℕ → α → β} (hv : v = w)
+    (h : ∀ i a, i < n → f i a = g i a) : v.mapIdx f = w.mapIdx g := by
+  subst hv
+  ext i hi
+  simp only [getElem_mapIdx, h i _ hi]
+
 end Vector
+
+theorem Fin.foldl_congr_lt {n : ℕ} {f g : α → Fin n → α} {x y : α} (hx : x = y)
+    (h : ∀ a (i : Fin n), i.val < n → f a i = g a i) : Fin.foldl n f x = Fin.foldl n g y := by
+  subst hx
+  congr 1
+  funext a i
+  exact h a i i.isLt

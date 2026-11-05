@@ -111,6 +111,14 @@ def valueNat (x : U64 ℕ) :=
 omit [Fact (Nat.Prime p)] p_large_enough in
 lemma vals_valueNat (x : U64 (F p)) : x.vals.valueNat = x.value := rfl
 
+omit p_large_enough in
+@[circuit_norm]
+lemma eval_of_literal (env : Environment (F p)) (a0 a1 a2 a3 a4 a5 a6 a7 : Expression (F p)) :
+    eval env (U64.mk a0 a1 a2 a3 a4 a5 a6 a7) =
+    U64.mk (a0.eval env) (a1.eval env) (a2.eval env) (a3.eval env) (a4.eval env) (a5.eval env)
+      (a6.eval env) (a7.eval env) := by
+  simp only [explicit_provable_type, circuit_norm]
+
 /--
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.

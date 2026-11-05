@@ -50,6 +50,22 @@ private def proveEvalEq (lhs rhs : Expr) : MetaM (Option Expr) := do
     return none
   return some (← mkEqTrans (← lhsResult.getProof) (← mkEqSymm (← rhsResult.getProof)))
 
+/-- `proveEvalEq` for a rewrite of a projection of `base`. When `base` is opaque, the projected
+component is the field of its evaluation only by the structure's eta law: the equation is proved
+for a destructured variable in place of `base`, then instantiated. -/
+private def proveProjectionEvalEq (base lhs rhs : Expr) : MetaM (Option Expr) := do
+  if let some proof ← proveEvalEq lhs rhs then return some proof
+  let goal ← kabstract (← mkEq lhs rhs) base
+  unless goal.hasLooseBVars do return none
+  -- the type spelled through `Var` is the structure only up to instance unfolding
+  withLocalDeclD `x (← withTransparency .instances <| whnf (← inferType base)) fun x => do
+    let g ← mkFreshExprSyntheticOpaqueMVar (goal.instantiate1 x)
+    let #[sub] ← try g.mvarId!.cases x.fvarId! catch _ => return none | return none
+    let some (_, l, r) := (← instantiateMVars (← sub.mvarId.getType)).eq? | return none
+    let some proof ← sub.mvarId.withContext (proveEvalEq l r) | return none
+    sub.mvarId.assign proof
+    return some (mkApp (← mkLambdaFVars #[x] (← instantiateMVars g)) base)
+
 /-- View an expression as a structure projection `base.field`, returning the base and a
 function that rebuilds the same projection on a new base. Handles both `.proj` nodes and
 projection-function applications (same logic as the witgen `evalProjection` simproc). -/
@@ -119,7 +135,7 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
       -- Compose the indexing lemma with a proof that evaluating the field is the
       -- corresponding projection of the evaluated row.
       let rhs := mkAppN rhs0.getAppFn (rhs0.getAppArgs.set! 5 projEval)
-      let some projectionProof ← proveEvalEq rhs0 rhs | return .continue
+      let some projectionProof ← proveProjectionEvalEq base rhs0 rhs | return .continue
       return .visit { expr := rhs, proof? := some (← mkEqTrans proof projectionProof) }
     catch _ => return .continue
   let some (base, mkRhs) ← projectionView? projected | return .continue
@@ -131,7 +147,7 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
     catch _ =>
       return .continue
   let rhs ← mkRhs evalBase
-  let some proof ← proveEvalEq e rhs | return .continue
+  let some proof ← proveProjectionEvalEq base e rhs | return .continue
   return .done { expr := rhs, proof? := some proof }
 
 /-- `evalProjectionLiftCore` registered on scalar evaluation. -/
@@ -254,12 +270,18 @@ private def liftLemmas (evalHead : Name) : List Name :=
   else if evalHead == ``Eval.eval then [``getElem_eval_vector, ``getElem_eval_pairVector]
   else [``ProvableStruct.eval_getElem_vector]
 
+/-- The values a circuit proof treats as black boxes: free variables (inputs), child outputs and
+loop accumulators (folds). -/
+private def isAtomRoot (e : Expr) : Bool :=
+  e.isFVar || e.isAppOfArity `FormalCircuitBase.output 9 || e.isAppOfArity ``Fin.foldl 4
+
 /-- Outward side of the vector normal form: evaluations of an element access whose chain is
-rooted in a free variable fold toward the whole-atom eval. Chains rooted in an application stay
-element-wise, so per-element lemmas about that function keep applying. -/
+rooted in a black-box value (`isAtomRoot`) fold toward the whole-atom eval, the spelling facts
+about that value are stated at. Chains rooted in any other application stay element-wise, so
+per-element lemmas about that function keep applying. -/
 private def vectorAtomLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Step := do
   unless e.getAppFn.isConstOf evalHead && e.getAppNumArgs ≥ 2 do return .continue
-  unless (chainRoot e.appArg!).isFVar do return .continue
+  unless isAtomRoot (chainRoot e.appArg!) do return .continue
   let some result ← rewriteRoot? (liftLemmas evalHead) false e | return .continue
   return .visit result
 

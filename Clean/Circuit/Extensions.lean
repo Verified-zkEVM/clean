@@ -8,7 +8,7 @@ public import Clean.Circuit.Subcircuit
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 instance {M : TypeMap} [ProvableType M] : Inhabited (Circuit F (Var M F)) where
-  default := witnessIR M (.ofFExprs default)
+  default := witnessIR M (.ofCompositeFExpr default)
 
 def copyToVar (x : Expression F) : Circuit F (Variable F) := do
   let x' ← witnessVar (.ofFExpr (.expr x))

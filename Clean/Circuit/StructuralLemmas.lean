@@ -50,7 +50,6 @@ def concat
   completeness := by
     simp only [circuit_norm]
     aesop
-
 @[circuit_norm]
 lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
@@ -109,6 +108,7 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
   requirementsChannelsLawful := circuit.requirementsChannelsLawful
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
+  computableWitnesses := circuit.computableWitnesses
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
     -- Use the original circuit's soundness
@@ -180,6 +180,7 @@ def weakenSpec (circuit : GeneralFormalCircuit F Input Output)
   Spec := WeakerSpec
   ProverAssumptions := circuit.ProverAssumptions
   ProverSpec := circuit.ProverSpec
+  computableWitnesses := circuit.computableWitnesses
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
     have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds

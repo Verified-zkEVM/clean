@@ -85,6 +85,8 @@ def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 where
     fin_cases off <;> simp only [circuit_norm, main, Fin.reduceFinMk, Fin.reduceEq]
   Assumptions
   Spec := Spec off
+  computableWitnesses := by
+    fin_cases off <;> computable_witnesses [reduceIte, Fin.reduceFinMk, Fin.reduceEq]
   soundness := soundness off
   completeness := completeness off
 

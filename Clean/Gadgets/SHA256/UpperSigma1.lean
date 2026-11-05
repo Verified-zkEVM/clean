@@ -164,7 +164,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [upperSigma1, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
+  obtain ⟨h_env1, h_env2⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr6 := eval_rotr32 env.toEnvironment input_var input h_input 6 i
     have hr11 := eval_rotr32 env.toEnvironment input_var input h_input 11 i
@@ -187,7 +187,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hr25 := eval_rotr32 env.toEnvironment input_var input h_input 25 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [circuit_norm, mul_zero, zero_add] at h2
+    simp only [circuit_norm, mul_zero] at h2
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr6, hr11, hr25]
     have b6 : input[(i + 6).val] = (0 : F p) ∨ input[(i + 6).val] = 1 := h_assumptions (i + 6)
     have b11 : input[(i + 11).val] = (0 : F p) ∨ input[(i + 11).val] = 1 := h_assumptions (i + 11)
@@ -215,6 +215,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by computable_witnesses [rotr32, Vector.getElem_rotate]
 
 end UpperSigma1
 end Gadgets.SHA256

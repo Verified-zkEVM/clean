@@ -4,3 +4,4 @@ module
 public import Clean.Utils.Tactics.SpecializeAuto
 public import Clean.Utils.Tactics.ProvableStructSimp
 public import Clean.Utils.Tactics.CircuitProofStart
+public import Clean.Utils.Tactics.ComputableWitnesses

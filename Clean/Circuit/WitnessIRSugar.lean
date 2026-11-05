@@ -434,6 +434,7 @@ def toIRLiteral (program : M F (value (FExpr F))) : WitgenIR F (size value) :=
   let (out, steps) := program #[]
   .ir steps.toList (.lit (toElements out))
 
+@[computable_witnesses]
 theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironment F) :
     program.toIRLiteral.eval env = toElements (program.eval env) := by
   simp [toIRLiteral, eval, WitgenIR.eval, Witgen.eval, ProvableType.toElements_fromElements, VExpr.eval]
@@ -441,6 +442,22 @@ theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironm
 instance {α : Type} [Inhabited α] : Inhabited (M F α) where
   default := pure default
 end M
+
+namespace WitgenIR
+variable [FiniteField F] {value : TypeMap} [ProvableType value]
+
+/-- Evaluation of a composite witness program: the elements of the witnessed value's evaluation.
+Not in `circuit_norm`, whose normal form keeps the folded program, the left-hand side of
+`ProverEnvironment.extendsVector_ofCompositeFExpr` that completeness proofs rewrite with. -/
+@[computable_witnesses]
+theorem eval_ofCompositeFExpr {value : TypeMap} [ProvableType value]
+    (e : value (FExpr F)) (env : ProverEnvironment F) :
+    (ofCompositeFExpr e).eval env = toElements (Witgen.eval { env } e) := by
+  change (M.toIRLiteral (pure e)).eval env = _
+  rw [M.eval_toIRLiteral]
+  rfl
+
+end WitgenIR
 end Witgen
 
 /--

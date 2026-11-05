@@ -887,6 +887,44 @@ theorem completeness {p : ℕ} [Fact p.Prime] (n : ℕ) :
             · exact h_rest.1
             · exact h_comp2
 
+/-- `main` is recursive, so its obligation is proved by induction: the halves are called inline,
+and their inputs are parts of the input. -/
+theorem computableWitnesses : ∀ n, FormalCircuitBase.ComputableWitnesses (Input := fields n)
+    (Output := field) (main (p := p) (n := n))
+  | 0 | 1 | 2 => by computable_witnesses
+  | m + 3 => by
+    intro k input env env'
+    simp only [main, circuit_norm]
+    set x1 : Var (fields ((m + 3) / 2)) (F p) := (input.take ((m + 3) / 2)).cast (by omega)
+    set x2 : Var (fields (m + 3 - (m + 3) / 2)) (F p) := (input.drop ((m + 3) / 2)).cast (by omega)
+    have hx1 : eval env input = eval env' input → eval env x1 = eval env' x1 := by
+      simp only [Vector.ext_iff, circuit_norm]
+      simp only [← ProvableType.getElem_eval_fields]
+      intro h i hi
+      simp only [x1, Vector.getElem_cast, Vector.getElem_take]
+      exact h i (by omega)
+    have hx2 : eval env input = eval env' input → eval env x2 = eval env' x2 := by
+      simp only [Vector.ext_iff, circuit_norm]
+      simp only [← ProvableType.getElem_eval_fields]
+      intro h i hi
+      simp only [x2, Vector.getElem_cast, Vector.getElem_drop]
+      exact h ((m + 3) / 2 + i) (by omega)
+    have ih1 := (computableWitnesses _).inline (n := k) hx1
+    have ih2 := (computableWitnesses _).inline (n := k + (main x1).localLength k) hx2
+    simp only [circuit_norm] at ih1 ih2
+    refine ⟨⟨ih1.1, ih2.1, fun h => ?_⟩, fun h hab => ?_⟩
+    · apply FormalCircuit.toSubcircuit_computableWitnesses _ rfl
+      intro hab
+      have o1 := ih1.2 h (hab.of_le (by omega))
+      have o2 := ih2.2 h hab
+      beta_reduce at o1 o2
+      simp only [circuit_norm, o1, o2]
+    · have o1 := ih1.2 h (hab.of_le (by omega))
+      have o2 := ih2.2 h (hab.of_le (by omega))
+      beta_reduce at o1 o2
+      exact FormalCircuitBase.eval_output_congr_field _ (hab.of_le (by omega))
+        (by simp only [circuit_norm, o1, o2])
+
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
   elaborated := {
@@ -910,6 +948,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
 
   Assumptions := Assumptions n
   Spec := Spec n
+  computableWitnesses := computableWitnesses n
 
   soundness := by
     intro offset env input_var input h_env h_assumptions h_hold

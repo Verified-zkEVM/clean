@@ -178,6 +178,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
         Fin.foldl ops (fun sum (j : Fin ops) =>
           sum + fieldFromBits input[j]) (0 : F p)
 
+  computableWitnesses := by computable_witnesses [inputLinearSum]
   soundness := by
     intros offset env input_var input h_input_eval h_assumptions h_constraints_hold
 
