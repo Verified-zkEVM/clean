@@ -151,6 +151,15 @@ instance (N : ℕ) (channel : Channel F Message) : (channel.counted N).Consisten
     | push => exact b_reqs b_ne_zero
     | pull => exact absurd (b_reqs.resolve_left b_ne_zero) (b_not_pull rfl)
 
+/-- The instance is found for the `pullBound` of a concrete balance check, without the user
+having to `show (channel.counted N).ConsistentUpTo N` first. That needs
+`Balance.logUpUpTo_pullBound`: instance search runs at reducible transparency and cannot project
+`pullBound` out of the plain `def` `Balance.logUpUpTo`. -/
+example [ComputableRingChar F] (N : ℕ) (channel : Channel F Message) :
+    (channel.counted N).ConsistentUpTo (Balance.logUpUpTo (F := F) N).pullBound := by
+  simp only [Balance.logUpUpTo_pullBound]
+  infer_instance
+
 /-- The counted channel is also consistent for balance checks with a larger bound. -/
 theorem counted_consistentUpTo_of_le {M N : ℕ} (h : N ≤ M) (channel : Channel F Message) :
     (channel.counted N).ConsistentUpTo M where

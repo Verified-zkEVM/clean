@@ -344,6 +344,12 @@ def Balance.logUp [ComputableRingChar F] : Balance F where
     have length_lt := ComputableRingChar.char_eq (R := F) ▸ of_decide_eq_true fits
     balanced.matchedUpTo (by simpa using length_lt)
 
+/-- `Balance.logUp` matches pulls of multiplicity `1` only. Stated so that `simp`/`circuit_norm`
+can reduce a `ConsistentUpTo (Balance.logUp).pullBound` goal, which instance search cannot do on
+its own: `Balance.logUp` is a plain `def`, so the projection is not reducible. -/
+@[simp, circuit_norm] lemma Balance.logUp_pullBound [ComputableRingChar F] :
+    (Balance.logUp : Balance F).pullBound = 1 := rfl
+
 /--
 LogUp with counted pulls: field sums, sound for interaction counts whose product with `N` is below
 the characteristic, so that pulls of multiplicity up to `N` are matched by a push.
@@ -361,6 +367,13 @@ def Balance.logUpUpTo [ComputableRingChar F] (N : ℕ) : Balance F where
     have length_mul_lt := ComputableRingChar.char_eq (R := F) ▸
       (of_decide_eq_true (Bool.and_eq_true_iff.mp fits).2)
     balanced.matchedUpTo length_mul_lt
+
+/-- `Balance.logUpUpTo N` matches pulls of multiplicity up to `N`. Without this lemma a user of a
+`SoundEnsemble` over `Balance.logUpUpTo N` has to write `show channel.ConsistentUpTo N` by hand,
+because instance search works at reducible transparency and cannot project `pullBound` out of the
+plain `def`. -/
+@[simp, circuit_norm] lemma Balance.logUpUpTo_pullBound [ComputableRingChar F] (N : ℕ) :
+    (Balance.logUpUpTo N : Balance F).pullBound = N := rfl
 
 /-
 ## Multiset balance with `0`/`1` activations
@@ -398,6 +411,10 @@ def Balance.multiset : Balance F where
   fits _ := true
   balancedInteractions_of_balanced _ _ h_check := h_check.balancedInteractions
   matchedUpTo_of_balanced _ _ h_check := h_check.balancedInteractions.matchedUpTo_one
+
+/-- `Balance.multiset` matches pulls of multiplicity `1` only. -/
+@[simp, circuit_norm] lemma Balance.multiset_pullBound :
+    (Balance.multiset : Balance F).pullBound = 1 := rfl
 
 /- ## Conditions on channels that strengthen the implications of interaction balance. -/
 
