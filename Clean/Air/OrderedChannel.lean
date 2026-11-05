@@ -460,14 +460,14 @@ Note: In the presence of "VM-like" channels, where a circuit both pushes and pul
 However, in that scenario, it is still useful to establish `SoundChannels` on the subset of non-VM tables.
 -/
 @[circuit_norm]
-def SoundChannels (N : ℕ) (tables : List α) (finished : List (RawChannel F)) : Prop :=
+def SoundChannels (tables : List α) (N : ℕ) (finished : List (RawChannel F)) : Prop :=
   (∀ table ∈ tables, channelsWithGuarantees table ⊆ finished) ∧
   (∀ channel ∈ finished, OrderedChannel channel tables) ∧
   ∀ channel ∈ finished, channel.ConsistentUpTo N
 
 /-- `SoundChannels` lets us prove a soundness theorem. -/
 theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : List (RawChannel F)} :
-  SoundChannels N (witness.tables.map (·.component)) finished →
+  SoundChannels (witness.tables.map (·.component)) N finished →
   -- constraints + partial balance
   witness.Assumptions →
   witness.Constraints →
@@ -517,10 +517,10 @@ theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : Li
 /-- `SoundChannels` is strictly increasing: you can make the finished list bigger by any consistent channels -/
 lemma soundChannels_of_soundChannels_subset {tables : List α}
     {finished finished' : List (RawChannel F)} :
-  SoundChannels N tables finished →
+  SoundChannels tables N finished →
   finished ⊆ finished' →
   (∀ channel ∈ finished', channel.ConsistentUpTo N) →
-    SoundChannels N tables finished' := by
+    SoundChannels tables N finished' := by
   rintro ⟨ subset_finished, ordered_channels, consistent_channels ⟩ finished'_subset finished'_consistent
   constructor
   · intro table h_table
@@ -539,8 +539,8 @@ lemma soundChannels_of_soundChannels_subset {tables : List α}
 /-- You can add one channel to the finished list and preserve `SoundChannels` -/
 lemma soundChannels_cons_of_soundChannels {tables : List α}
   {finished : List (RawChannel F)} {channel : RawChannel F} [channel.ConsistentUpTo N] :
-  SoundChannels N tables finished →
-    SoundChannels N tables (channel :: finished) := by
+  SoundChannels tables N finished →
+    SoundChannels tables N (channel :: finished) := by
   intro sound_channels
   apply soundChannels_of_soundChannels_subset sound_channels
   · simp

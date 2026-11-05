@@ -876,7 +876,7 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
       (witness.oldContext_constraints_of_constraints constraints) old_partial_balance
       table table_mem
       |>.right channel channel_mem |>.right
-    have old_sound_channels : _root_.SoundChannels balance.pullBound ens.tables finished := ⟨
+    have old_sound_channels : _root_.SoundChannels ens.tables balance.pullBound finished := ⟨
       ens.channelsWithGuarantees_subset_iff.mp soundChannels.left |>.right,
       fun channel h_channel => (soundChannels.right.left channel h_channel).right.left,
       soundChannels.right.right⟩
