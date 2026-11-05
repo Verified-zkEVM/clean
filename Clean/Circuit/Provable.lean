@@ -270,6 +270,7 @@ instance (priority := high) : ProvableType (fields n) where
   fromElements v := v
 
 /-- The element view of `fields` is the identity (definitionally, but through the instance). -/
+@[computable_witnesses]
 theorem ProvableType.toElements_fields {F : Type} {n : ℕ} (v : Vector F n) :
     toElements (M := fields n) v = v := rfl
 
@@ -729,9 +730,11 @@ lemma fromElements_eq_iff' {F} {B : Vector F (size M)} {A : M F} :
   · intro h
     rw [← h, fromElements_toElements]
 
+@[computable_witnesses]
 lemma toElements_inj_iff {F} {A B : M F} : toElements A = toElements B ↔ A = B :=
   ⟨fun h => by rw [← fromElements_toElements A, ← fromElements_toElements B, h], congrArg _⟩
 
+@[computable_witnesses]
 lemma fromElements_inj_iff {F} {A B : Vector F (size M)} :
     fromElements (M := M) A = fromElements B ↔ A = B :=
   ⟨fun h => by rw [← toElements_fromElements A, ← toElements_fromElements B, h], congrArg _⟩
@@ -781,6 +784,7 @@ theorem ext_iff {F} (x y : α F) :
   simp only [fromElements_toElements] at h'
   exact h'
 
+@[computable_witnesses]
 theorem eval_fromElements (env : Environment F)
   (xs : Vector (Expression F) (size α)) :
     Eval.eval env (fromElements (F:=Expression F) xs : α (Expression F)) = fromElements (xs.map env) := by

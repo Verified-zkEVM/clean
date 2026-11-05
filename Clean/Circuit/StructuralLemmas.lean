@@ -106,9 +106,9 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
   elaborated := circuit.elaborated
   channelsWithRequirements := circuit.channelsWithRequirements
   requirementsChannelsLawful := circuit.requirementsChannelsLawful
-  computableWitnesses := circuit.computableWitnesses
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
+  computableWitnesses := circuit.computableWitnesses
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
     -- Use the original circuit's soundness
@@ -176,11 +176,11 @@ def weakenSpec (circuit : GeneralFormalCircuit F Input Output)
   elaborated := circuit.elaborated
   channelsWithRequirements := circuit.channelsWithRequirements
   requirementsChannelsLawful := circuit.requirementsChannelsLawful
-  computableWitnesses := circuit.computableWitnesses
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   ProverAssumptions := circuit.ProverAssumptions
   ProverSpec := circuit.ProverSpec
+  computableWitnesses := circuit.computableWitnesses
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
     have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds

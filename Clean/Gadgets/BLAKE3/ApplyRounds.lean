@@ -632,8 +632,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
-  main, elaborated, Assumptions, Spec, soundness, completeness
+  main, elaborated, Assumptions, Spec
   computableWitnesses := by computable_witnesses [initializeStateVector]
+  soundness, completeness
 }
 
 end Gadgets.BLAKE3.ApplyRounds

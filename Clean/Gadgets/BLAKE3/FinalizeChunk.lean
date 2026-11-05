@@ -266,8 +266,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
       · exact h_or2.2
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
-  main, elaborated, Assumptions, Spec, soundness, completeness
+  main, elaborated, Assumptions, Spec
   computableWitnesses := by computable_witnesses [bytesToWords]
+  soundness, completeness
 }
 
 end Gadgets.BLAKE3.FinalizeChunk

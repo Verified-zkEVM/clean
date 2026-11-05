@@ -132,7 +132,7 @@ def reduceLocalLengthCore : Simp.DSimproc := fun e => do
   if w == e || stuck.isSome then return .continue
   return .visit w
 
-dsimproc_decl reduceLocalLength (_) := reduceLocalLengthCore
+dsimproc [computable_witnesses] reduceLocalLength (_) := reduceLocalLengthCore
 
 /-- Rewrite `e` with the equation or equivalence `thm`, instantiated by matching its left-hand side
 against `e`. -/
@@ -162,7 +162,7 @@ def ctorEqSplitCore : Simp.Simproc := fun e => do
   let some r ← rewriteWith? (mkInjectiveEqTheoremNameFor ctor.name) e | return .continue
   return .visit r
 
-simproc_decl ctorEqSplit (_ = _) := ctorEqSplitCore
+simproc [computable_witnesses] ctorEqSplit (_ = _) := ctorEqSplitCore
 
 /-- The evaluation of a value the obligation treats as a black box: an input variable, a child
 output or a loop accumulator. Its whole-vector equation is a rewrite rule (or a law) as it
@@ -198,7 +198,7 @@ def boolEqSplitCore : Simp.Simproc := fun e => do
   let some r ← rewriteWith? ``Bool.eq_iff_iff e | return .continue
   return .visit r
 
-simproc_decl boolEqSplit (_ = _) := boolEqSplitCore
+simproc [computable_witnesses] boolEqSplit (_ = _) := boolEqSplitCore
 
 /-- `decide p` whose `Decidable` instance is typed by `p` before a definitional unfolding (simp
 does not rewrite inside instance arguments) gets its instance annotated with `Decidable p`, so
@@ -210,7 +210,7 @@ def refreshDecideCore : Simp.DSimproc := fun e => do
   let inst ← mkExpectedTypeHint inst (mkApp (mkConst ``Decidable) p)
   return .done (mkApp2 (mkConst ``decide) p inst)
 
-dsimproc_decl refreshDecide (decide _) := refreshDecideCore
+dsimproc [computable_witnesses] refreshDecide (decide _) := refreshDecideCore
 
 /-- Add one hint to the pass: a simp set contributes all its lemmas, a simproc runs in the pass,
 a theorem is a rewrite rule, a definition is unfolded, and any other term (local hypotheses
@@ -272,61 +272,36 @@ def plainCircuitDefs (e : Expr) : MetaM (Array Name) := do
     todo := todo ++ info.value.getUsedConstants
   return found
 
-/-- What the pass adds to `circuit_norm`, besides the laws. -/
-def passLemmas : List Name := [
-  -- equations between values are taken apart down to atoms
-  ``ProvableType.toElements_inj_iff, ``ProvableType.fromElements_inj_iff,
-  -- witness programs that compute a provable value evaluate to the value's elements, so that
-  -- they are compared as values (and split by constructor), not elementwise
-  ``Witgen.WitgenIR.eval_ofCompositeFExpr, ``Witgen.M.eval_toIRLiteral,
-  ``Witgen.WitgenIR.eval_nativeValue,
-  -- evaluation and element access through constructions that `circuit_norm` keeps folded
-  ``ProvableType.toElements_fields, ``ProvableType.eval_fromElements, ``Vector.get_eq_getElem,
-  ``Vector.append_eq_hAppend, ``List.getElem_singleton,
-  ``Vector.getElem_mapIdx, ``Vector.getElem_zip, ``eval_ite, ``eval_dite, ``eval_vector_sum,
-  ``eval_foldl_add, ``eval_foldl_mul, ``eval_foldl,
-  -- Boolean equations, decided as propositions (`boolEqSplit`)
-  ``Bool.and_eq_true, ``Bool.or_eq_true, ``Bool.not_eq_true', ``decide_eq_true_eq]
-
-/-- Congruence for index binders with the bound in context, so that the cells an index
-addresses are transported. -/
-def passCongr : List Name := [``Vector.mapRange_congr, ``Vector.ofFn_congr,
-  ``Vector.mapFinRange_congr, ``Vector.mapIdx_congr, ``Fin.foldl_congr_lt]
-
-/-- The transport pass: `circuit_norm`, `passLemmas` and the laws at `env`, `env'`, with the plain
-circuit definitions of the goal unfolded and the hints added. Contextual, so that premises of
-the laws' side conditions are rewrite rules too, with `discharge` for side conditions. Equations
-are taken apart down to atoms (`passLemmas`, `ctorEqSplit`, `boolEqSplit`, and `vectorExt` in
-the leaf pass), so that premises are rewrite rules on atoms and conclusions compare atoms. -/
+/-- The transport pass: the simp sets `circuit_norm` and `computable_witnesses`, and the laws at
+`env`, `env'`, with the plain circuit definitions of the goal unfolded and the hints added.
+Contextual, so that premises of the laws' side conditions are rewrite rules too, with `discharge`
+for side conditions. Equations are taken apart down to atoms (`computable_witnesses`, and
+`vectorExt` in the leaf pass), so that premises are rewrite rules on atoms and conclusions compare
+atoms. -/
 def transportContext (hints : Array Term) (env env' : Expr) :
     TacticM (Simp.Context × Simp.SimprocsArray) := withMainContext do
   let mut thms ← simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
-  thms ← thms.addDeclToUnfold ``ProverEnvironment.OnlyAccessedBelow
-  -- a loop's accumulator is a fold of the steps' outputs, transported by `foldl_congr`
-  -- (the loop library is downstream of this tactic)
-  if (← getEnv).contains `Circuit.FoldlM.foldlAcc then
-    thms ← thms.addDeclToUnfold `Circuit.FoldlM.foldlAcc
-  for thm in passLemmas do
-    thms ← thms.addConst thm
   for c in ← plainCircuitDefs (← instantiateMVars (← getMainTarget)) do
     thms ← thms.addDeclToUnfold c
   for law in ← labelled `computable_witnesses_law do
     thms ← thms.add (.decl law) #[] (← instantiateLaw law env env')
   let mut sets := #[]
+  let mut procs : Simp.SimprocsArray := #[]
+  for set in [`computable_witnesses, `circuit_norm] do
+    let some ext ← getSimpExtension? set | throwError "unknown simp set {set}"
+    let some procExt ← Simp.getSimprocExtension? set | throwError "unknown simproc set {set}"
+    sets := sets.push (← ext.getTheorems)
+    procs := procs.push (← procExt.getSimprocs)
   let mut procNames := #[]
   for t in hints do
     (thms, sets, procNames) ← addHint thms sets procNames t
-  let some normExt ← getSimpExtension? `circuit_norm | throwError "unknown simp set circuit_norm"
-  let some normProcs ← Simp.getSimprocExtension? `circuit_norm
-    | throwError "unknown simproc set circuit_norm"
-  let mut procs : Simp.SimprocsArray := #[← normProcs.getSimprocs]
-  for p in procNames ++ #[``reduceLocalLength, ``refreshDecide, ``ctorEqSplit, ``boolEqSplit] do
+  for p in procNames do
     procs ← procs.add p (post := true)
   let mut congr ← getSimpCongrTheorems
-  for c in passCongr do
+  for c in ← labelled `computable_witnesses_congr do
     congr := addSimpCongrTheoremEntry congr (← mkSimpCongrTheorem c (eval_prio default))
   let ctx ← Simp.mkContext { contextual := true, maxDischargeDepth := 64, failIfUnchanged := false }
-    (simpTheorems := #[thms, ← normExt.getTheorems] ++ sets) congr
+    (simpTheorems := #[thms] ++ sets) congr
   return (ctx, procs)
 
 /-- Run `simp` with `ctx` on the main goal, rewriting with the given hypotheses as well. -/
@@ -460,6 +435,12 @@ def run (hints : Array Term) : TacticM Unit := do
   setGoals remaining.toList
 
 end ComputableWitnesses
+
+attribute [computable_witnesses] Vector.get_eq_getElem Vector.append_eq_hAppend
+  List.getElem_singleton Vector.getElem_mapIdx Vector.getElem_zip Bool.and_eq_true Bool.or_eq_true Bool.not_eq_true' decide_eq_true_eq
+
+attribute [computable_witnesses_congr] Vector.mapRange_congr Vector.ofFn_congr
+  Vector.mapFinRange_congr Vector.mapIdx_congr Fin.foldl_congr_lt
 
 /-- Prove `FormalCircuitBase.ComputableWitnesses`, the default tactic of the `computableWitnesses`
 field. Hints are added to the pass: lemmas, definitions to unfold, simp sets, simprocs or terms.

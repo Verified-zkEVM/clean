@@ -927,7 +927,6 @@ theorem computableWitnesses : ∀ n, FormalCircuitBase.ComputableWitnesses (Inpu
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main
-  computableWitnesses := computableWitnesses n
   elaborated := {
     localLength _ := n - 1
     localLength_eq := localLength_eq n
@@ -949,6 +948,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
 
   Assumptions := Assumptions n
   Spec := Spec n
+  computableWitnesses := computableWitnesses n
 
   soundness := by
     intro offset env input_var input h_env h_assumptions h_hold

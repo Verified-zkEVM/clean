@@ -93,9 +93,9 @@ def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
     fin_cases off <;> simp only [circuit_norm, main, Fin.reduceFinMk, Fin.reduceEq]
   Assumptions
   Spec := Spec off
-  soundness := soundness off
-  completeness := completeness off
   computableWitnesses := by
     fin_cases off <;> computable_witnesses [reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+  soundness := soundness off
+  completeness := completeness off
 }
 end Gadgets.Rotation64Bytes

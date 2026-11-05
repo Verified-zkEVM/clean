@@ -117,8 +117,8 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 where
   elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
+  computableWitnesses := by computable_witnesses [U32.toLimbs, U32.fromLimbs, Vector.getElem_rotate]
   soundness := soundness offset
   completeness := completeness offset
-  computableWitnesses := by computable_witnesses [U32.toLimbs, U32.fromLimbs, Vector.getElem_rotate]
 
 end Gadgets.Rotation32Bits

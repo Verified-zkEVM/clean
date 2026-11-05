@@ -566,6 +566,7 @@ theorem ProverEnvironment.agreesBelow_rfl (n : ℕ) (env : ProverEnvironment F) 
     env.AgreesBelow n env :=
   ⟨fun _ _ => rfl, rfl, rfl⟩
 
+@[computable_witnesses]
 def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=
   env.AgreesBelow n env' → f env = f env'
 

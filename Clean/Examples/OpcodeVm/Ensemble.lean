@@ -201,6 +201,7 @@ def step (program : Program) (h_program : program.length < p) (opcode : Opcode) 
     intro env h_bool
     rcases mul_eq_zero.mp h_bool with h | h <;> simp_all [sub_eq_zero]
 
+  computableWitnesses := by computable_witnesses [programCell]
   soundness := by
     circuit_proof_start
     obtain ⟨h_bool, h_state, h_instruction⟩ := h_holds
@@ -213,7 +214,6 @@ def step (program : Program) (h_program : program.length < p) (opcode : Opcode) 
   completeness := by
     circuit_proof_start [programCell, programCellIn]
     rcases h_assumptions with h | ⟨h, h_state, h_contains⟩ <;> simp_all
-  computableWitnesses := by computable_witnesses [programCell]
 
 /-- The table of `opcode`: one row per state whose `pc` holds `opcode`. -/
 abbrev stepComponent (program : Program) (h_program : program.length < p) (opcode : Opcode) :

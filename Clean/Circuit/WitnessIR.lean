@@ -393,6 +393,7 @@ def WitgenIR.nativeValue {value : TypeMap} [ProvableType value]
     (compute : ProverEnvironment F → value F) : WitgenIR F (size value) :=
   .native fun env => compute env |> toElements
 
+@[computable_witnesses]
 theorem WitgenIR.eval_nativeValue [FiniteField F] {value : TypeMap} [ProvableType value]
     (compute : ProverEnvironment F → value F) (env : ProverEnvironment F) :
     (WitgenIR.nativeValue compute).eval env = toElements (compute env) := rfl
