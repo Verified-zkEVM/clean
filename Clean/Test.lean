@@ -10,6 +10,7 @@ public import Clean.Utils.Test.TestCircuitStructDeriving
 public import Clean.Utils.Test.TestMixedCircuitType
 public import Clean.Utils.Test.ResourceHistory
 public import Clean.Utils.Test.ResourceGrounding
+public import Clean.Utils.Test.ResourceFrontiers
 public import Clean.Backends.Circom.TestWasmCompile
 public import Clean.Backends.Circom.TestWasmSemantics
 public import Clean.Utils.Test.TestExpressionPolynomial
