@@ -77,6 +77,7 @@ The regression modules are included in `CleanTests`:
 
 - `Clean.Utils.Test.ResourceHistory` exercises ordering, replay, cycle exclusion, and refreshes.
 - `Clean.Utils.Test.ResourceGrounding` connects multiple accesses to an independent state machine.
+- `Clean.Utils.Test.ResourceFrontiers` checks composite keys, arbitrary nonzero frontiers, untouched participating resources, and the complete refresh-elimination correspondence.
 
 To check these modules:
 
