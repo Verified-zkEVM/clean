@@ -16,4 +16,3 @@ public import Clean.Examples.FibonacciVm.WitnessGenerationTest
 public import Clean.Examples.FemtoCairo.FlatAirTest
 public import Clean.Examples.OpcodeVm.WitnessGenerationTest
 public import Clean.Examples.BinaryFibonacci.WitnessGenerationTest
-public import Clean.Utils.Test.TestProvableOptional
