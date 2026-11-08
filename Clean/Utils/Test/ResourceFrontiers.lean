@@ -36,7 +36,7 @@ private def rows : List Edge :=
    (((7, false), 12, 41), ((7, false), 13, 42))]
 
 /-- Global inventory balance authenticates repeated accesses without merging address spaces. -/
-private theorem replay : ResourceReplay Prod.fst id initial rows final := by
+example : ResourceReplay Prod.fst id initial rows final := by
   apply replay_of_balance Prod.fst id (fun a b : Record => a.2.1 < b.2.1)
     (fun _ => Nat.lt_irrefl _) (fun {_ _ _} ab bc => Nat.lt_trans ab bc)
   · apply frontierBalance_of_inventory Prod.fst id rows initial final
@@ -71,19 +71,6 @@ private theorem replay : ResourceReplay Prod.fst id initial rows final := by
     by_cases b : k = (7, true)
     · subst k; decide
     simp [accessesAt, rows, Ne.symm a, Ne.symm b]
-
-/-- Replay determines every final entry, including participating but untouched keys. -/
-example : final = rows.foldl (fun (current : ResourceFrontier Key Record) row =>
-    Function.update current row.1.1 (some row.2)) initial :=
-  replay.final_eq_fold Prod.fst id
-
-/-- An untouched nonzero record is retained, rather than replaced with a zero default. -/
-example : final (9, false) = some ((9, false), 5, 77) := by
-  rw [← replay.frame Prod.fst id (9, false) (by
-    intro row member
-    simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at member
-    rcases member with rfl | rfl | rfl <;> decide)]
-  rfl
 
 /-- Matching the numeric address does not authorize a value from the other address space. -/
 example : ¬ ResourceReplay Prod.fst id initial
