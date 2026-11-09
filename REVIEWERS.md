@@ -5,7 +5,8 @@
 - Types, structures and Prop-valued definitions and classes are `UpperCamelCase` (`FormalCircuit`, `SelectorFree`).
 - Functions and other terms are `lowerCamelCase` (`localLength`, `fieldFromBits`).
 - Theorems and proofs are `snake_case`, named after their statement: `_of_` separates the conclusion from the hypotheses, in order (`lt_of_succ_le`), and standard property names are used (`comm`, `assoc`, `inj`, `congr`, `ext`, `iff`, `mono`). Names of other declarations inside a theorem name are spelled as usual, e.g. `lowerCamelCase` (`eval_fromElements`).
-- Each underscore-separated part of a theorem name should correspond to a declaration in its statement or a standard logical/property name (`iff`, `of`, `mem`, `comm`, …), not an invented English description. Spell namespace-qualified names as one lowerCamelCase component: `RegionOperation.Constraints` becomes `regionOperationConstraints`, not `regionOperation_constraints`.
+- Each underscore-separated part of a theorem name should correspond to a declaration in its statement or a standard logical/property name (`iff`, `of`, `mem`, `comm`, …), not an invented English description.
+- Spell namespace-qualified names in theorem names as one lowerCamelCase component: `RegionOperation.Constraints` becomes `regionOperationConstraints`, not `regionOperation_constraints`.
 - Acronyms are treated as words (`HtmlParser`, not `HTMLParser`), and names use American English.
 - Related declarations are grouped in namespaces that enable dot notation (`List.map`, then `l.map f`).
 
