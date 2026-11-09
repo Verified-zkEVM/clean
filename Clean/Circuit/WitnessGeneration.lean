@@ -17,8 +17,8 @@ builds is list-backed, so every `env.get` inside a witness program walks the lis
 array-backed environment (O(1) reads). It also takes the prover data that witness programs read,
 like the rows of a memory component. Ensemble witness generation uses it to complete rows.
 
-The theorem `witgen_eq_dynamicWitnesses` proves that, on empty prover data, it computes exactly the
-same witnesses as the reference. Corollaries transfer `UsesLocalWitnesses`, so `Circuit.witgen` is
+The theorem `witgen_eq_dynamicWitnesses` proves that it computes exactly the same witnesses as the
+reference. Corollaries transfer `UsesLocalWitnesses`, so `Circuit.witgen` is
 honest witness generation.
 -/
 
@@ -32,9 +32,9 @@ def ProverEnvironment.fromArray (witnesses : Array F) (data : ProverData F)
   data
   hint
 
-theorem ProverEnvironment.fromArray_eq_fromList (witnesses : Array F) (hint : ProverHint F) :
-    ProverEnvironment.fromArray witnesses (.empty F) hint
-      = .fromList witnesses.toList hint := by
+theorem ProverEnvironment.fromArray_eq_fromList (witnesses : Array F) (data : ProverData F)
+    (hint : ProverHint F) :
+    ProverEnvironment.fromArray witnesses data hint = .fromList witnesses.toList data hint := by
   simp only [ProverEnvironment.fromArray, ProverEnvironment.fromList, Array.getElem?_toList]
 
 namespace FlatOperation
@@ -56,16 +56,17 @@ def witgen (data : ProverData F) (hint : ProverHint F) (ops : List (FlatOperatio
     (init : Array F) : Array F :=
   ops.foldl (witgenStep data hint) init
 
-lemma witgenStep_toList (hint : ProverHint F) (acc : Array F) (op : FlatOperation F) :
-    (witgenStep (.empty F) hint acc op).toList
-      = acc.toList ++ op.dynamicWitness hint acc.toList := by
+lemma witgenStep_toList (data : ProverData F) (hint : ProverHint F) (acc : Array F)
+    (op : FlatOperation F) :
+    (witgenStep data hint acc op).toList
+      = acc.toList ++ op.dynamicWitness data hint acc.toList := by
   cases op <;>
     simp [witgenStep, dynamicWitness, ProverEnvironment.fromArray_eq_fromList, Vector.toList]
 
 /-- The array-backed interpreter agrees with the list-backed reference semantics. -/
-theorem witgen_eq_dynamicWitnesses (hint : ProverHint F) (ops : List (FlatOperation F))
-    (init : Array F) :
-    witgen (.empty F) hint ops init = (dynamicWitnesses ops hint init.toList).toArray := by
+theorem witgen_eq_dynamicWitnesses (data : ProverData F) (hint : ProverHint F)
+    (ops : List (FlatOperation F)) (init : Array F) :
+    witgen data hint ops init = (dynamicWitnesses ops data hint init.toList).toArray := by
   induction ops generalizing init with
   | nil => simp [witgen, dynamicWitnesses]
   | cons op ops ih =>
@@ -82,14 +83,15 @@ Fast witness generation for a circuit: array-backed, single linear pass.
 `init` provides the witnesses below the circuit's starting offset (typically the
 inputs); the result extends it with all witnesses created by the circuit.
 -/
-def witgen (circuit : Circuit F α) (hint : ProverHint F) (init : Array F := #[]) : Array F :=
-  FlatOperation.witgen (.empty F) hint (circuit.operations init.size).toFlat init
+def witgen (circuit : Circuit F α) (data : ProverData F) (hint : ProverHint F)
+    (init : Array F := #[]) : Array F :=
+  FlatOperation.witgen data hint (circuit.operations init.size).toFlat init
 
 /-- `Circuit.witgen` builds exactly the environment of `Circuit.proverEnvironment`. -/
-theorem witgen_proverEnvironment (circuit : Circuit F α) (hint : ProverHint F)
-    (init : Array F) :
-    ProverEnvironment.fromArray (circuit.witgen hint init) (.empty F) hint
-      = circuit.proverEnvironment hint init.toList := by
+theorem witgen_proverEnvironment (circuit : Circuit F α) (data : ProverData F)
+    (hint : ProverHint F) (init : Array F) :
+    ProverEnvironment.fromArray (circuit.witgen data hint init) data hint
+      = circuit.proverEnvironment data hint init.toList := by
   rw [proverEnvironment, witgen, ProverEnvironment.fromArray_eq_fromList,
     FlatOperation.witgen_eq_dynamicWitnesses]
   simp
@@ -98,12 +100,13 @@ theorem witgen_proverEnvironment (circuit : Circuit F α) (hint : ProverHint F)
 If a circuit has computable witnesses, the environment built from `Circuit.witgen`
 uses the circuit's local witnesses — i.e., array-backed witness generation is honest.
 -/
-theorem witgen_usesLocalWitnesses (circuit : Circuit F α) (hint : ProverHint F)
-    (init : Array F) (h_computable : ∀ env env', circuit.ComputableWitnesses init.size env env') :
-    (ProverEnvironment.fromArray (circuit.witgen hint init) (.empty F) hint)
+theorem witgen_usesLocalWitnesses (circuit : Circuit F α) (data : ProverData F)
+    (hint : ProverHint F) (init : Array F)
+    (h_computable : ∀ env env', circuit.ComputableWitnesses init.size env env') :
+    (ProverEnvironment.fromArray (circuit.witgen data hint init) data hint)
       |>.UsesLocalWitnesses init.size (circuit.operations init.size) := by
   rw [witgen_proverEnvironment]
-  have h := circuit.proverEnvironment_usesLocalWitnesses hint init.toList
+  have h := circuit.proverEnvironment_usesLocalWitnesses data hint init.toList
   simp only [Array.length_toList] at h
   exact h h_computable
 

@@ -27,7 +27,7 @@ instance (circuit : LookupCircuit F α β) : ElaboratedCircuit F α β circuit.m
 
 def proverEnvironment (circuit : LookupCircuit F α β)
     (input : α F) (hint : ProverHint F) : ProverEnvironment F :=
-  circuit.main (const input) |>.proverEnvironment hint
+  circuit.main (const input) |>.proverEnvironment (.empty F) hint
 
 theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β)
     (input : α F) (hint : ProverHint F) :
@@ -61,7 +61,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (P
   imply_soundness := by
     intro _ (input, output) ⟨n, env, h_holds, h_guarantees, h_output⟩ h_assumptions
     simp only [h_output]
-    exact (circuit.original_soundness n env (const input) input ProvableType.eval_const
+    exact (circuit.spec_of_constraintsHold n env (const input) input ProvableType.eval_const
       h_assumptions h_holds h_guarantees).1
 
   implied_by_completeness := by
@@ -69,7 +69,8 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (P
     use 0, circuit.proverEnvironment input hint
     simp only [h_output, LookupCircuit.constantOutput, circuit_norm,and_true]
     set env := circuit.proverEnvironment input hint
-    exact circuit.original_completeness 0 env (const input) input ProvableType.eval_const_prover
+    exact circuit.constraintsHold_of_usesLocalWitnesses 0 env (const input) input
+      ProvableType.eval_const_prover
       h_assumptions (circuit.proverEnvironment_usesLocalWitnesses input hint)
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit

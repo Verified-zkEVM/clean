@@ -177,7 +177,7 @@ theorem weakSoundness {component : Component F} {env : Environment F} :
   have h_assumptions' : component.circuit.Assumptions (eval env inputVar) env.data := by
     simpa only [CircuitAssumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset]
       using h_assumptions
-  convert component.circuit.original_full_soundness _ _ _ h_assumptions' h_constraints h_guarantees
+  convert component.circuit.spec_of_constraintsHold _ _ _ h_assumptions' h_constraints h_guarantees
   simp only [rowInput, inputVar, eval_varFromOffset_valueFromOffset]
   rfl
 end Component
