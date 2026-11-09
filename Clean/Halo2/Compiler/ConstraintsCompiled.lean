@@ -46,7 +46,7 @@ structure ConstraintsCompiled (assignment : ProofAssignment F) : Prop where
 theorem constraints_of_compiled [FieldDomainParams F] [CircuitFieldSupport top]
     (assignment : ProofAssignment F) (h : top.ConstraintsCompiled assignment) :
     Constraints top.placement (top.environment assignment) top.operations 0 := by
-  rw [CircuitConstraintFamily.operations_constraints_iff]
+  rw [CircuitConstraintFamily.constraints_iff_families]
   exact ⟨top.gate_constraints_of_compiled assignment h.gates,
     top.copy_constraints_of_compiled assignment h.copies,
     top.lookup_constraints_of_compiled assignment h.lookups,

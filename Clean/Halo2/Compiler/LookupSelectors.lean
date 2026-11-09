@@ -11,26 +11,28 @@ namespace Halo2
 variable {Config : Type} {PublicInput : TypeMap} [ProvableType PublicInput]
   {top : TopLevelCircuit F Config PublicInput} [TopLevelShape top]
 
+namespace EnabledLookup
+
 /-- A synthesis-enabled lookup routed to its configured lookup index. -/
-structure EnabledLookup.TopLevelRoute
+structure TopLevelRoute
     (top : TopLevelCircuit F Config PublicInput)
     [TopLevelShape top]
     (lookup : EnabledLookup F) where
   index : Fin top.lookupCount
-  argument : top.lookupAt index = lookup.argument
+  lookupAt_eq : top.lookupAt index = lookup.argument
 
 /--
 Configure/synthesis closure selects a configured lookup index for every enabled
 lookup operation.
 -/
-def EnabledLookup.topLevelRoute
+def topLevelRoute
     (lookup : EnabledLookup F)
     (henabled :
       lookup ∈ operationEnabledLookups (top.operations) 0) :
     lookup.TopLevelRoute top := by
   have hargument :
       lookup.argument ∈ top.constraintSystem.lookups :=
-    OperationsKeygenCoherent.lookup top.keygenCoherent henabled
+    OperationsKeygenCoherent.mem_lookups_of_mem_operationEnabledLookups top.keygenCoherent henabled
   let index := top.constraintSystem.lookups.idxOf lookup.argument
   have hindex : index < top.constraintSystem.lookups.length :=
     List.idxOf_lt_length_iff.mpr hargument
@@ -38,7 +40,7 @@ def EnabledLookup.topLevelRoute
     List.getElem_idxOf hindex
   refine
     { index := ⟨index, ?_⟩
-      argument := ?_ }
+      lookupAt_eq := ?_ }
   · rw [top.lookupCount_eq_constraintSystem]
     exact hindex
   · unfold TopLevelCircuit.lookupAt
@@ -49,7 +51,7 @@ omit [TopLevelShape top] in
 Every extracted lookup activation lies inside the top-level circuit's keygen row
 footprint.
 -/
-theorem EnabledLookup.activationRow_lt_usedRows
+theorem activationRow_lt_usedRows
     (lookup : EnabledLookup F)
     (henabled :
       lookup ∈ operationEnabledLookups (top.operations) 0) :
@@ -66,7 +68,7 @@ theorem EnabledLookup.activationRow_lt_usedRows
 A fitting circuit-derived domain places every lookup activation in the usable-row
 prefix.
 -/
-theorem EnabledLookup.activationRow_lt_usableRows
+theorem activationRow_lt_usableRows
     (lookup : EnabledLookup F)
     (henabled :
       lookup ∈ operationEnabledLookups (top.operations) 0) :
@@ -75,13 +77,15 @@ theorem EnabledLookup.activationRow_lt_usableRows
   (lookup.activationRow_lt_usedRows henabled).trans_le
     top.usedRows_le_usableRowsAt_domainExponent
 
+end EnabledLookup
+
 /--
 Selector compression covers every configured lookup input of a top-level circuit.
 
 The formal circuit's registration laws bound selector indices, and the generic
 selector compiler turns that bound into coverage by the compression map.
 -/
-theorem topLevelLookupInputs_selectorsCovered
+theorem TopLevelCircuit.selectorsCovered_of_mem_lookup_inputs
     (top : TopLevelCircuit F Config PublicInput)
     [TopLevelShape top]
     (argument : LookupArgument F)
@@ -124,10 +128,10 @@ theorem Expression.eval_substValuation_eq_queryEval_of_selectorFree
       expression.eval (Query.eval environment selectors row) := by
   apply expression.eval_eq_of_selectorFree hfree <;> intros <;> rfl
 
-namespace TopLevelLookup
+namespace LookupArgument
 
 /-- Selector-free lookup tables are covered by every compression map. -/
-theorem tablesCovered
+theorem selectorsCovered_of_mem_tables
     (argument : LookupArgument F)
     (expression : Expression F Query)
     (hexpression : expression ∈ argument.tables) :
@@ -140,7 +144,7 @@ theorem tablesCovered
     expression
     (argument.tablesFree expression hexpression)
 
-end TopLevelLookup
+end LookupArgument
 
 /-- Substitution only needs to agree on selector indices occurring in the expression. -/
 theorem Expression.eval_substValuation_eq_of_selectorIndices
@@ -174,7 +178,8 @@ theorem EnabledLookup.inputValues_eq
       lookup.inputValues top.placement (top.environment assignment) := by
   obtain ⟨body, hregion, hlookup⟩ :=
     (mem_operationEnabledLookups_iff lookup top.operations 0).mp henabled
-  have hargument := OperationsKeygenCoherent.lookup top.keygenCoherent henabled
+  have hargument := OperationsKeygenCoherent.mem_lookups_of_mem_operationEnabledLookups
+    top.keygenCoherent henabled
   apply List.map_congr_left
   intro expression hexpression
   apply Expression.eval_substValuation_eq_of_selectorIndices

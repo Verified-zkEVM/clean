@@ -474,7 +474,7 @@ theorem deriveSelCompressMap_lookup_degreeZero_of_lt
 The circuit-derived compression map covers every selector atom of every configured
 gate once the configure phase certifies that those atoms name allocated selectors.
 -/
-theorem gateSelectorsCovered_deriveSelCompressMap
+theorem selectorsCovered_of_mem_flatGates_deriveSelCompressMap
     {F : Type} (cs : ConstraintSystem F) (n : ℕ)
     (activations : List (ℕ × ℕ))
     (hallocated : cs.gates.Forall fun gate =>
@@ -507,7 +507,7 @@ end Halo2
 
 namespace Halo2
 
-open Halo2.Layout
+open Layout
 
 set_option maxHeartbeats 20000
 
@@ -515,11 +515,11 @@ set_option maxHeartbeats 20000
 The selector packer assigns valid roots whenever its compression degree fits below
 the field characteristic.
 -/
-theorem selectorRootsWellFormed_process
+theorem hasWellFormedSelectorRoots_process
     (selectors : List SelectorDescription) (maxDegree : ℕ)
     (hpositive : 1 ≤ maxDegree)
     (hdegree : maxDegree < ringChar F) :
-    SelectorRootsWellFormed F (process selectors maxDegree) := by
+    HasWellFormedSelectorRoots F (process selectors maxDegree) := by
   intro selector compressed hlookup
   obtain ⟨entry, hentry, hcompressed⟩ :=
     SelCompressMap.exists_mem_entries_of_lookup
@@ -535,22 +535,22 @@ theorem selectorRootsWellFormed_process
 The circuit-derived selector map has valid roots under the minimal generic size
 condition: the constraint-system degree is below the field characteristic.
 -/
-theorem selectorRootsWellFormed_deriveSelCompressMap
+theorem hasWellFormedSelectorRoots_deriveSelCompressMap
     {F : Type} [FiniteField F] (cs : ConstraintSystem F) (n : ℕ)
     (activations : List (ℕ × ℕ))
     (hdegree : csDegree cs < ringChar F) :
-    SelectorRootsWellFormed F
+    HasWellFormedSelectorRoots F
       (deriveSelCompressMap cs n activations) := by
   intro selector compressed hlookup
   rw [deriveSelCompressMap_lookup_eq] at hlookup
   obtain ⟨source, hsource, rfl⟩ := Option.map_eq_some_iff.mp hlookup
-  have hroots := selectorRootsWellFormed_process _ (csDegree cs)
+  have hroots := hasWellFormedSelectorRoots_process _ (csDegree cs)
     (by unfold csDegree; exact le_trans (by omega) (Nat.le_max_left _ _)) hdegree hsource
   exact hroots
 
 /-- It is enough to realize the packed assignments emitted by the canonical fixed
 compiler to realize every selector activation expected by the gate resolver. -/
-theorem selectorActivationsRealized_of_selectorAssignments
+theorem realizesSelectorActivations_of_selectorAssignments
     (map : SelCompressMap) (activationRows : List (ℕ × ℕ))
     (environment : Environment F)
     (hfixed :
@@ -558,7 +558,7 @@ theorem selectorActivationsRealized_of_selectorAssignments
         assignment ∈ Layout.selectorAssignments map activationRows →
           environment.fixed ⟨assignment.1⟩ assignment.2.1 =
             assignment.2.2) :
-    SelectorActivationsRealized map activationRows environment := by
+    RealizesSelectorActivations map activationRows environment := by
   intro selector row compressed hactivation hlookup
   exact hfixed
     (Layout.mem_selectorAssignments_of_activation (F := F) map activationRows

@@ -17,15 +17,15 @@ namespace Halo2.Layout.Asm
 open Equiv
 
 /-- The rectangular shape invariant of the assembly's cell arrays. -/
-def Shaped (numCols n : ℕ) (a : Array (Array (ℕ × ℕ))) : Prop :=
+def IsShaped (numCols n : ℕ) (a : Array (Array (ℕ × ℕ))) : Prop :=
   a.size = numCols ∧ ∀ i, (h : i < a.size) → a[i].size = n
 
 /-- Simulation between an assembly state and an abstract cell permutation: the shape of
 both cell arrays, `mapping` acting as the permutation, every `aux` entry an in-cycle,
 self-rooted representative, and `aux` entries agreeing exactly on cycles. -/
 structure Sim {numCols n : ℕ} (a : Asm) (π : Perm (FlatCell numCols n)) : Prop where
-  map_shape : Shaped numCols n a.mapping
-  aux_shape : Shaped numCols n a.aux
+  map_shape : IsShaped numCols n a.mapping
+  aux_shape : IsShaped numCols n a.aux
   map_eq : ∀ c : FlatCell numCols n,
     getPair a.mapping c.pair = (π c).pair
   aux_rep : ∀ c : FlatCell numCols n, ∃ r : FlatCell numCols n,
@@ -56,57 +56,57 @@ theorem repoint_sizes (a : Asm) (fuel : ℕ) (i tgt stop : ℕ × ℕ) :
       · rfl
       · exact ih _ _
 
-theorem Shaped.setPair {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
-    (h : Shaped numCols n a) (p : ℕ × ℕ) (v : ℕ × ℕ) :
-    Shaped numCols n (setPair a p v) := by
+theorem IsShaped.setPair {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
+    (h : IsShaped numCols n a) (p : ℕ × ℕ) (v : ℕ × ℕ) :
+    IsShaped numCols n (setPair a p v) := by
   obtain ⟨hsize, hrow⟩ := h
-  refine ⟨by simpa [Halo2.Layout.Asm.setPair] using hsize, ?_⟩
+  refine ⟨by simpa [Asm.setPair] using hsize, ?_⟩
   intro i hi
-  simp only [Halo2.Layout.Asm.setPair, Array.size_modify] at hi
+  simp only [Asm.setPair, Array.size_modify] at hi
   by_cases hip : p.1 = i
   · subst hip
-    simp [Halo2.Layout.Asm.setPair, Array.getElem_modify_self, hrow]
-  · simp [Halo2.Layout.Asm.setPair, Array.getElem_modify_of_ne hip, hrow]
+    simp [Asm.setPair, Array.getElem_modify_self, hrow]
+  · simp [Asm.setPair, Array.getElem_modify_of_ne hip, hrow]
 
 /-- Reading back the just-written cell (the write position must be in shape). -/
 theorem getPair_setPair_self {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
-    (h : Shaped numCols n a) {p : ℕ × ℕ} (hp1 : p.1 < numCols) (hp2 : p.2 < n)
+    (h : IsShaped numCols n a) {p : ℕ × ℕ} (hp1 : p.1 < numCols) (hp2 : p.2 < n)
     (v : ℕ × ℕ) :
     getPair (setPair a p v) p = v := by
   obtain ⟨hsize, hrow⟩ := h
   have hp1' : p.1 < a.size := hsize ▸ hp1
-  simp [Halo2.Layout.Asm.getPair, Halo2.Layout.Asm.setPair,
+  simp [getPair, setPair,
     Array.size_modify, hp1', Array.getElem_modify_self,
     Array.set!, Array.getElem_setIfInBounds_self, hrow _ hp1', hp2]
 
 /-- Reading any other cell is unaffected by the write. -/
 theorem getPair_setPair_ne {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
-    (h : Shaped numCols n a) {p q : ℕ × ℕ} (hpq : q ≠ p) (v : ℕ × ℕ) :
+    (h : IsShaped numCols n a) {p q : ℕ × ℕ} (hpq : q ≠ p) (v : ℕ × ℕ) :
     getPair (setPair a p v) q = getPair a q := by
   obtain ⟨hsize, hrow⟩ := h
   by_cases h1 : q.1 = p.1
   · have h2 : q.2 ≠ p.2 := fun h2 => hpq (Prod.ext_iff.mpr ⟨h1, h2⟩)
     by_cases hq1 : q.1 < a.size
     · have hp1 : p.1 < a.size := h1 ▸ hq1
-      simp [Halo2.Layout.Asm.getPair, Halo2.Layout.Asm.setPair, Array.getElem!_eq_getD, Array.getD,
+      simp [getPair, setPair, Array.getElem!_eq_getD, Array.getD,
         Array.size_modify, h1, Array.getElem_modify_self,
         Array.set!, Array.size_setIfInBounds, hp1]
       split
       · exact Array.getElem_setIfInBounds_ne (by assumption) (Ne.symm h2)
       · rfl
-    · simp [Halo2.Layout.Asm.getPair, Halo2.Layout.Asm.setPair, Array.getElem!_eq_getD, Array.getD,
+    · simp [getPair, setPair, Array.getElem!_eq_getD, Array.getD,
         Array.size_modify, hq1]
-  · simp [Halo2.Layout.Asm.getPair, Halo2.Layout.Asm.setPair, Array.getElem!_eq_getD, Array.getD,
+  · simp [getPair, setPair, Array.getElem!_eq_getD, Array.getD,
       Array.size_modify, Array.getElem_modify_of_ne (fun h => h1 h.symm)]
 
 /-- `repoint` preserves the aux shape. -/
-theorem Shaped.repoint {numCols n : ℕ} {a : Asm}
-    (h : Shaped numCols n a.aux) (fuel : ℕ) (i tgt stop : ℕ × ℕ) :
-    Shaped numCols n (Halo2.Layout.Asm.repoint a fuel i tgt stop).aux := by
+theorem IsShaped.repoint {numCols n : ℕ} {a : Asm}
+    (h : IsShaped numCols n a.aux) (fuel : ℕ) (i tgt stop : ℕ × ℕ) :
+    IsShaped numCols n (Asm.repoint a fuel i tgt stop).aux := by
   induction fuel generalizing a i with
   | zero => exact h
   | succ fuel ih =>
-      simp only [Halo2.Layout.Asm.repoint]
+      simp only [Asm.repoint]
       split
       · exact h.setPair i tgt
       · exact ih (h.setPair i tgt) _
@@ -115,14 +115,14 @@ theorem Shaped.repoint {numCols n : ℕ} {a : Asm}
 `start` (with stop `stop`, the first later return of the orbit) re-points exactly the
 orbit segment `π ^ t · start, t < s`, and leaves every other `aux` entry unchanged. -/
 theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
-    (hshape : Shaped numCols n a.aux)
+    (hshape : IsShaped numCols n a.aux)
     (hmap : ∀ c : FlatCell numCols n, getPair a.mapping c.pair = (π c).pair)
     (s : ℕ) (start stop : FlatCell numCols n) (tgt : ℕ × ℕ)
     (hs : (π ^ s) start = stop) (hs1 : 1 ≤ s)
     (hmin : ∀ t, 0 < t → t < s → (π ^ t) start ≠ stop)
     (fuel : ℕ) (hfuel : s ≤ fuel)
     (d : FlatCell numCols n) :
-    getPair (Halo2.Layout.Asm.repoint a fuel start.pair tgt stop.pair).aux d.pair =
+    getPair (repoint a fuel start.pair tgt stop.pair).aux d.pair =
       if ∃ t, t < s ∧ (π ^ t) start = d then tgt else getPair a.aux d.pair := by
   induction s generalizing a start fuel with
   | zero => exact absurd hs1 (by omega)
@@ -135,7 +135,7 @@ theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell num
         subst hzero
         have hstop : π start = stop := by
           simpa [pow_one] using hs
-        simp only [Halo2.Layout.Asm.repoint, hnext, hstop]
+        simp only [repoint, hnext, hstop]
         rw [if_pos (by simp)]
         by_cases hd : d = start
         · subst hd
@@ -153,7 +153,7 @@ theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell num
         have hnepair : ((π start).pair == stop.pair) = false := by
           simp only [beq_eq_false_iff_ne]
           exact fun h => hne (FlatCell.pair_injective h)
-        simp only [Halo2.Layout.Asm.repoint, hnext, hnepair]
+        simp only [repoint, hnext, hnepair]
         rw [if_neg (by simp)]
         have hs'' : (π ^ s') (π start) = stop := by
           rw [← Equiv.Perm.mul_apply, ← pow_succ]
@@ -198,43 +198,42 @@ theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell num
 away. -/
 theorem repoint_aux_sizes {a : Asm} (sz : Array (Array ℕ)) (fuel : ℕ)
     (i tgt stop : ℕ × ℕ) :
-    (Halo2.Layout.Asm.repoint { a with sizes := sz }
+    (repoint { a with sizes := sz }
         fuel i tgt stop).aux =
-      (Halo2.Layout.Asm.repoint a fuel i tgt stop).aux := by
+      (repoint a fuel i tgt stop).aux := by
   induction fuel generalizing a i with
   | zero => rfl
   | succ fuel ih =>
-      simp only [Halo2.Layout.Asm.repoint]
+      simp only [repoint]
       split
       · rfl
       · exact ih (a := { a with aux := setPair a.aux i tgt }) _
 
 /-- The mapping component of a merge: the two-entry swap over the untouched mapping. -/
 theorem merge_mapping (a : Asm) (fuel : ℕ) (lp rp : ℕ × ℕ) :
-    (Halo2.Layout.Asm.merge a fuel lp rp).mapping =
+    (merge a fuel lp rp).mapping =
       setPair (setPair a.mapping lp (getPair a.mapping rp)) rp
         (getPair a.mapping lp) := by
-  simp only [Halo2.Layout.Asm.merge, repoint_mapping]
+  simp only [merge, repoint_mapping]
 
 /-- The aux component of a merge: the re-pointing walk over the untouched aux, from and
 to the absorbed representative, targeting the surviving one. -/
 theorem merge_aux (a : Asm) (fuel : ℕ) (lp rp : ℕ × ℕ) :
-    (Halo2.Layout.Asm.merge a fuel lp rp).aux =
-      (Halo2.Layout.Asm.repoint a fuel
+    (merge a fuel lp rp).aux =
+      (repoint a fuel
         (if getNat a.sizes (getPair a.aux lp) < getNat a.sizes (getPair a.aux rp)
           then getPair a.aux lp else getPair a.aux rp)
         (if getNat a.sizes (getPair a.aux lp) < getNat a.sizes (getPair a.aux rp)
           then getPair a.aux rp else getPair a.aux lp)
         (if getNat a.sizes (getPair a.aux lp) < getNat a.sizes (getPair a.aux rp)
           then getPair a.aux lp else getPair a.aux rp)).aux := by
-  simp only [Halo2.Layout.Asm.merge, repoint_aux_sizes]
+  simp only [merge, repoint_aux_sizes]
 
-open Halo2.Layout.Asm in
 /-- One assembly `copy` simulates one abstract merge step, with walk fuel covering any
 cycle length. -/
 theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
     (sim : Sim a π) (l r : FlatCell numCols n) :
-    Sim (Halo2.Layout.Asm.copy a (n * numCols)
+    Sim (Asm.copy a (n * numCols)
         l.pair.1 l.pair.2 r.pair.1 r.pair.2)
       (PermConstruction.step π (l, r)) := by
   classical
@@ -242,7 +241,7 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
   obtain ⟨R, hR, hRcyc, hRroot⟩ := sim.aux_rep r
   have hpl : ((l.pair.1, l.pair.2) : ℕ × ℕ) = l.pair := rfl
   have hpr : ((r.pair.1, r.pair.2) : ℕ × ℕ) = r.pair := rfl
-  rw [Halo2.Layout.Asm.copy, PermConstruction.step]
+  rw [Asm.copy, PermConstruction.step]
   by_cases hsame : π.SameCycle l r
   · have heq : getPair a.aux l.pair = getPair a.aux r.pair :=
       (sim.aux_eq_iff l r).mpr hsame
@@ -296,7 +295,7 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
       simpa only [Fintype.card_prod, Fintype.card_fin] using hsle
     -- the aux component after the merge, cycle by cycle
     have haux2 : ∀ d : FlatCell numCols n,
-        getPair (Halo2.Layout.Asm.merge a (n * numCols)
+        getPair (merge a (n * numCols)
             (l.pair.1, l.pair.2) (r.pair.1, r.pair.2)).aux d.pair =
           if π.SameCycle RC d then LC.pair else getPair a.aux d.pair := by
       intro d
@@ -349,7 +348,7 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
       exact (sim.map_shape.setPair _ _).setPair _ _
     · -- aux shape: one walk over the untouched aux
       rw [merge_aux]
-      exact Shaped.repoint sim.aux_shape _ _ _ _
+      exact IsShaped.repoint sim.aux_shape _ _ _ _
     · -- the mapping acts as the merged permutation
       intro c
       rw [merge_mapping, hpl, hpr]
@@ -426,25 +425,25 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
 /-- The fresh assembly simulates the identity permutation. -/
 theorem Sim.new (numCols n : ℕ) :
     Sim (numCols := numCols) (n := n)
-      (Halo2.Layout.Asm.new n numCols) 1 := by
+      (Asm.new n numCols) 1 := by
   have hget : ∀ c : FlatCell numCols n,
       getPair ((Array.range numCols).map
-        (fun i => Halo2.Layout.Asm.initCol i n)) c.pair = c.pair := by
+        (fun i => initCol i n)) c.pair = c.pair := by
     intro c
-    simp [Halo2.Layout.Asm.getPair,
-      Halo2.Layout.Asm.initCol,
+    simp [getPair,
+      initCol,
       FlatCell.pair, c.1.isLt, c.2.isLt]
-  have hshape : Shaped numCols n ((Array.range numCols).map
-      (fun i => Halo2.Layout.Asm.initCol i n)) := by
+  have hshape : IsShaped numCols n ((Array.range numCols).map
+      (fun i => initCol i n)) := by
     refine ⟨by simp, ?_⟩
     intro i hi
     simp only [Array.size_map, Array.size_range] at hi
-    simp [Halo2.Layout.Asm.initCol]
+    simp [initCol]
   have hgetm : ∀ c : FlatCell numCols n,
-      getPair (Halo2.Layout.Asm.new n numCols).mapping c.pair =
+      getPair (Asm.new n numCols).mapping c.pair =
         c.pair := fun c => hget c
   have hgeta : ∀ c : FlatCell numCols n,
-      getPair (Halo2.Layout.Asm.new n numCols).aux c.pair =
+      getPair (Asm.new n numCols).aux c.pair =
         c.pair := fun c => hget c
   refine ⟨hshape, hshape, ?_, ?_, ?_⟩
   · intro c
@@ -466,7 +465,7 @@ theorem Sim.foldl {numCols n : ℕ}
     (copies : List (FlatCell numCols n × FlatCell numCols n))
     {a : Asm} {π : Perm (FlatCell numCols n)} (sim : Sim a π) :
     Sim (copies.foldl (fun st p =>
-        Halo2.Layout.Asm.copy st (n * numCols)
+        Asm.copy st (n * numCols)
           p.1.pair.1 p.1.pair.2 p.2.pair.1 p.2.pair.2) a)
       (copies.foldl PermConstruction.step π) := by
   induction copies generalizing a π with
@@ -474,16 +473,16 @@ theorem Sim.foldl {numCols n : ℕ}
   | cons p rest ih => exact ih (sim.copy p.1 p.2)
 
 /-- **The executable keygen assembly is the abstract replay**: on every cell, the final
-`mapping` is the action of `replayKeygenPermutation` over the same copies. -/
+`mapping` is the action of `PermConstruction.replay` over the same copies. -/
 theorem runAssembly_getPair {numCols n : ℕ}
     (copies : List (FlatCell numCols n × FlatCell numCols n))
     (c : FlatCell numCols n) :
-    getPair (Halo2.Layout.runAssembly n numCols
+    getPair (runAssembly n numCols
         (copies.map fun p => (p.1.pair.1, p.1.pair.2, p.2.pair.1, p.2.pair.2))) c.pair =
-      ((replayKeygenPermutation copies) c).pair := by
-  rw [Halo2.Layout.runAssembly]
+      ((PermConstruction.replay copies) c).pair := by
+  rw [runAssembly]
   rw [List.foldl_map]
-  rw [replayKeygenPermutation_eq_foldl]
+  rw [PermConstruction.replay_eq_foldl]
   exact (Sim.foldl copies (Sim.new numCols n)).map_eq c
 
 variable [FieldDomainParams F]
@@ -492,31 +491,31 @@ variable [FieldDomainParams F]
 the executable pipeline reads the assembly mapping at `(column, row)`, and the mapping's
 action is the abstract replay. -/
 theorem permutationRows_getD_eq {k numCols n : ℕ} (cs : ConstraintSystem F) (ops : Operations F)
-    (hcount : numCols = (Halo2.Layout.permColsOf cs).length) (hsize : n = 2 ^ k)
+    (hcount : numCols = (permColsOf cs).length) (hsize : n = 2 ^ k)
     (copies' : List (FlatCell numCols n × FlatCell numCols n))
-    (hcopies : Halo2.Layout.V1.copyList (Halo2.Layout.permColsOf cs)
-        (Halo2.FloorPlanner.V1.starts ops) ops
-        (Halo2.Layout.constantCopyEntries cs ops) =
+    (hcopies : V1.copyList (permColsOf cs)
+        (FloorPlanner.V1.starts ops) ops
+        (constantCopyEntries cs ops) =
       copies'.map fun p => (p.1.pair.1, p.1.pair.2, p.2.pair.1, p.2.pair.2))
     (g : Fin numCols) (j : Fin n) :
-    ((Halo2.Layout.permutationRows k cs ops).getD (g : ℕ) []).getD (j : ℕ) 0 =
-      FieldDomainParams.delta ^ ((replayKeygenPermutation copies' (g, j)).1 : ℕ) *
-        FieldDomainParams.omega k ^ ((replayKeygenPermutation copies' (g, j)).2 : ℕ) := by
+    ((permutationRows k cs ops).getD (g : ℕ) []).getD (j : ℕ) 0 =
+      FieldDomainParams.delta ^ ((PermConstruction.replay copies' (g, j)).1 : ℕ) *
+        FieldDomainParams.omega k ^ ((PermConstruction.replay copies' (g, j)).2 : ℕ) := by
   subst numCols n
-  have hmap' : ((Halo2.Layout.runAssembly (2 ^ k)
-      (Halo2.Layout.permColsOf cs).length (copies'.map fun p =>
+  have hmap' : ((runAssembly (2 ^ k)
+      (permColsOf cs).length (copies'.map fun p =>
         (p.1.pair.1, p.1.pair.2, p.2.pair.1, p.2.pair.2)))[(g : ℕ)]!)[(j : ℕ)]! =
-      (replayKeygenPermutation copies' (g, j)).pair :=
-    Halo2.Layout.Asm.runAssembly_getPair copies' (g, j)
-  simp only [Halo2.Layout.permutationRows]
+      (PermConstruction.replay copies' (g, j)).pair :=
+    runAssembly_getPair copies' (g, j)
+  simp only [permutationRows]
   simp only [List.getD_eq_getElem?_getD, List.getElem?_map,
     List.getElem?_range g.isLt, List.getElem?_range j.isLt,
     Option.map_some, Option.getD_some]
   rw [hcopies, hmap']
   simp only [FlatCell.pair]
-  rw [Halo2.Layout.deltaPowersArr_getElem! _
-      (replayKeygenPermutation copies' (g, j)).1.isLt,
-    Halo2.Layout.omegaPowersArr_getElem! _
-      (replayKeygenPermutation copies' (g, j)).2.isLt]
+  rw [deltaPowersArr_getElem! _
+      (PermConstruction.replay copies' (g, j)).1.isLt,
+    omegaPowersArr_getElem! _
+      (PermConstruction.replay copies' (g, j)).2.isLt]
 
 end Halo2.Layout.Asm

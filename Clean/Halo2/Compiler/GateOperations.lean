@@ -16,7 +16,7 @@ namespace EnabledGate
 variable {F : Type} [FiniteField F]
 
 /-- Clean's semantic relation for one enabled gate. -/
-def Satisfied (place : RegionIndex → ℕ) (env : Environment F)
+def IsSatisfied (place : RegionIndex → ℕ) (env : Environment F)
     (enabled : EnabledGate F) : Prop :=
   enabled.gate.constraints.Forall fun constraint =>
     constraint.poly.eval
@@ -51,33 +51,33 @@ variable {F : Type} [FiniteField F]
 theorem region_gate_constraints_iff
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment F)
     (ops : RegionOperations F) :
-    regionConstraints .gate place self env ops ↔
-      (regionEnabledGates self ops).Forall (EnabledGate.Satisfied place env) := by
+    RegionConstraints .gate place self env ops ↔
+      (regionEnabledGates self ops).Forall (EnabledGate.IsSatisfied place env) := by
   induction ops with
-  | nil => simp [regionConstraints, regionEnabledGates]
+  | nil => simp [RegionConstraints, regionEnabledGates]
   | cons op rest ih =>
       cases op <;>
-        simp_all [regionConstraints, regionConstraint, RegionOperation.Constraints,
-          regionEnabledGates, EnabledGate.Satisfied]
+        simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
+          regionEnabledGates, EnabledGate.IsSatisfied]
 
 /-- The complete gate-family projection is satisfaction of all extracted activations. -/
 theorem gate_constraints_iff_enabledGates
     (place : RegionIndex → ℕ) (env : Environment F)
     (ops : Operations F) (i : RegionIndex) :
-    constraints .gate place env ops i ↔
-      (operationEnabledGates ops i).Forall (EnabledGate.Satisfied place env) := by
+    Constraints .gate place env ops i ↔
+      (operationEnabledGates ops i).Forall (EnabledGate.IsSatisfied place env) := by
   induction ops generalizing i with
-  | nil => simp [constraints, operationEnabledGates]
+  | nil => simp [Constraints, operationEnabledGates]
   | cons op rest ih =>
       cases op with
       | region name body =>
-          rw [constraints, ih, region_gate_constraints_iff]
+          rw [Constraints, ih, region_gate_constraints_iff]
           simp [operationEnabledGates, List.forall_append]
       | constrainInstance cell col row =>
-          rw [constraints, ih]
+          rw [Constraints, ih]
           simp [operationEnabledGates]
       | loadTable table values =>
-          rw [constraints, ih]
+          rw [Constraints, ih]
           simp [operationEnabledGates]
 
 end CircuitConstraintFamily
@@ -85,7 +85,7 @@ end CircuitConstraintFamily
 namespace OperationsKeygenCoherent
 
 /-- A coherent region registers every extracted enabled gate. -/
-theorem region_gate
+theorem mem_gates_of_mem_regionEnabledGates
     {F : Type} {cs : ConstraintSystem F}
     {self : RegionIndex} {body : RegionOperations F}
     (hcoherent :
@@ -118,7 +118,7 @@ theorem region_gate
           exact ih hcoherent.2 henabled
 
 /-- A coherent operation stream registers every extracted enabled gate. -/
-theorem gate
+theorem mem_gates_of_mem_operationEnabledGates
     {F : Type} {cs : ConstraintSystem F}
     {operations : Operations F} {i : RegionIndex}
     (hcoherent : OperationsKeygenCoherent cs operations)
@@ -130,19 +130,19 @@ theorem gate
   | cons operation rest ih =>
       cases operation with
       | region name body =>
-          rcases (OperationsKeygenCoherent.region_cons
+          rcases (region_cons
             cs name body rest).mp hcoherent with
             ⟨hoperation, hrest⟩
           simp only [operationEnabledGates, List.mem_append] at henabled
           rcases henabled with henabled | henabled
-          · exact region_gate hoperation henabled
+          · exact mem_gates_of_mem_regionEnabledGates hoperation henabled
           · exact ih hrest henabled
       | constrainInstance cell column row =>
-          have hrest := (OperationsKeygenCoherent.constrainInstance_cons
+          have hrest := (constrainInstance_cons
             cs cell column row rest).mp hcoherent
           exact ih hrest.2.2 henabled
       | loadTable table values =>
-          have hrest := (OperationsKeygenCoherent.loadTable_cons
+          have hrest := (loadTable_cons
             cs table values rest).mp hcoherent
           exact ih hrest.2 henabled
 

@@ -51,7 +51,7 @@ def tableValues (env : Environment F) (lookup : EnabledLookup F)
         (tableRow : ℤ)))
 
 /-- Clean's semantic lookup relation for one extracted activation. -/
-def Satisfied (place : RegionIndex → ℕ) (env : Environment F)
+def IsSatisfied (place : RegionIndex → ℕ) (env : Environment F)
     (lookup : EnabledLookup F) : Prop :=
   ∃ tableRow : ℕ, tableRow < env.usableRows ∧
     lookup.inputValues place env = lookup.tableValues env tableRow
@@ -67,7 +67,7 @@ def regionEnabledLookups {F : Type} (self : RegionIndex) :
   | _ :: rest => regionEnabledLookups self rest
 
 /-- Lookup activations in a complete layouter stream, with region indices threaded exactly as in
-`Halo2.Constraints`. -/
+`Constraints`. -/
 def operationEnabledLookups {F : Type} :
     Operations F → RegionIndex → List (EnabledLookup F)
   | [], _ => []
@@ -160,14 +160,14 @@ activations. -/
 theorem region_lookup_constraints_iff
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment F)
     (ops : RegionOperations F) :
-    regionConstraints .lookup place self env ops ↔
-      (regionEnabledLookups self ops).Forall (EnabledLookup.Satisfied place env) := by
+    RegionConstraints .lookup place self env ops ↔
+      (regionEnabledLookups self ops).Forall (EnabledLookup.IsSatisfied place env) := by
   induction ops with
-  | nil => simp [regionConstraints, regionEnabledLookups]
+  | nil => simp [RegionConstraints, regionEnabledLookups]
   | cons op rest ih =>
       cases op <;>
-        simp_all [regionConstraints, regionConstraint, RegionOperation.Constraints,
-          regionEnabledLookups, EnabledLookup.Satisfied, EnabledLookup.inputValues,
+        simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
+          regionEnabledLookups, EnabledLookup.IsSatisfied, EnabledLookup.inputValues,
           EnabledLookup.tableValues]
 
 /-- The complete lookup-family projection is exactly satisfaction of all lookup activations in the
@@ -175,20 +175,20 @@ placed operation stream. -/
 theorem lookup_constraints_iff_enabledLookups
     (place : RegionIndex → ℕ) (env : Environment F)
     (ops : Operations F) (i : RegionIndex) :
-    constraints .lookup place env ops i ↔
-      (operationEnabledLookups ops i).Forall (EnabledLookup.Satisfied place env) := by
+    Constraints .lookup place env ops i ↔
+      (operationEnabledLookups ops i).Forall (EnabledLookup.IsSatisfied place env) := by
   induction ops generalizing i with
-  | nil => simp [constraints, operationEnabledLookups]
+  | nil => simp [Constraints, operationEnabledLookups]
   | cons op rest ih =>
       cases op with
       | region name body =>
-          rw [constraints, ih, region_lookup_constraints_iff]
+          rw [Constraints, ih, region_lookup_constraints_iff]
           simp [operationEnabledLookups, List.forall_append]
       | constrainInstance cell col row =>
-          rw [constraints, ih]
+          rw [Constraints, ih]
           simp [operationEnabledLookups]
       | loadTable table values =>
-          rw [constraints, ih]
+          rw [Constraints, ih]
           simp [operationEnabledLookups]
 
 end CircuitConstraintFamily
@@ -196,7 +196,7 @@ end CircuitConstraintFamily
 namespace OperationsKeygenCoherent
 
 /-- A coherent region registers every extracted enabled lookup. -/
-theorem region_lookup
+theorem mem_lookups_of_mem_regionEnabledLookups
     {F : Type} {cs : ConstraintSystem F}
     {self : RegionIndex} {body : RegionOperations F}
     (hcoherent :
@@ -229,7 +229,7 @@ theorem region_lookup
           exact ih hcoherent.2 henabled
 
 /-- A coherent operation stream registers every extracted enabled lookup. -/
-theorem lookup
+theorem mem_lookups_of_mem_operationEnabledLookups
     {F : Type} {cs : ConstraintSystem F}
     {operations : Operations F} {i : RegionIndex}
     (hcoherent : OperationsKeygenCoherent cs operations)
@@ -241,19 +241,19 @@ theorem lookup
   | cons operation rest ih =>
       cases operation with
       | region name body =>
-          rcases (OperationsKeygenCoherent.region_cons
+          rcases (region_cons
             cs name body rest).mp hcoherent with
             ⟨hoperation, hrest⟩
           simp only [operationEnabledLookups, List.mem_append] at henabled
           rcases henabled with henabled | henabled
-          · exact region_lookup hoperation henabled
+          · exact mem_lookups_of_mem_regionEnabledLookups hoperation henabled
           · exact ih hrest henabled
       | constrainInstance cell column row =>
-          have hrest := (OperationsKeygenCoherent.constrainInstance_cons
+          have hrest := (constrainInstance_cons
             cs cell column row rest).mp hcoherent
           exact ih hrest.2.2 henabled
       | loadTable table values =>
-          have hrest := (OperationsKeygenCoherent.loadTable_cons
+          have hrest := (loadTable_cons
             cs table values rest).mp hcoherent
           exact ih hrest.2 henabled
 

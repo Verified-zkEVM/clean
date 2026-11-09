@@ -89,7 +89,7 @@ theorem PinnedConstraintSystem.derive_lookup_eval
       htableCoverage htableResolved hinterpretsQueries⟩
 
 /-- Project one lookup directly through a top-level circuit's owned compilation. -/
-theorem _root_.Halo2.TopLevelCircuit.lookup_eval
+theorem TopLevelCircuit.lookup_eval
     {F : Type} [FiniteField F]
     {Config : Type} {PublicInput : TypeMap} [ProvableType PublicInput]
     (top : TopLevelCircuit F Config PublicInput)

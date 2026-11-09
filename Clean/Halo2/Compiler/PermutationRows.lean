@@ -38,14 +38,14 @@ variable [FieldDomainParams F]
 /-- The per-column permutation polynomials in Lagrange form:
 `p_i[j] = deltaomega[i'][j'] = δ^{i'} · ω^{j'}` where `(i', j') = mapping[i][j]`
 (`build_vk`, `permutation/keygen.rs:135-146`), over the keygen `Assembly` mapping
-(`Assembly::copy` replay, `Layout.runAssembly`) of the derived V1 copy list. -/
+(`Assembly::copy` replay, `runAssembly`) of the derived V1 copy list. -/
 def permutationRows (k : ℕ) (cs : ConstraintSystem F) (ops : Operations F) :
     List (List F) :=
   let n := 2 ^ k
   let permCols := permColsOf cs
-  let copyList := Layout.V1.copyList permCols (FloorPlanner.V1.starts ops) ops
+  let copyList := V1.copyList permCols (FloorPlanner.V1.starts ops) ops
     (constantCopyEntries cs ops)
-  let mapping := Layout.runAssembly n permCols.length copyList
+  let mapping := runAssembly n permCols.length copyList
   let omegaPows := omegaPowersArr (FieldDomainParams.omega k) n
   let deltaPows := deltaPowersArr FieldDomainParams.delta permCols.length
   (List.range permCols.length).map fun i =>
@@ -61,13 +61,13 @@ theorem permutationRows_mem_length (k : ℕ) (cs : ConstraintSystem F) (ops : Op
   obtain ⟨i, -, rfl⟩ := hl
   simp
 
-theorem permutationRows_length (k : ℕ) (cs : Halo2.ConstraintSystem F)
-    (ops : Halo2.Operations F) :
+theorem permutationRows_length (k : ℕ) (cs : ConstraintSystem F)
+    (ops : Operations F) :
     (permutationRows k cs ops).length = (permColsOf cs).length := by
   simp [permutationRows]
 
-theorem permutationRows_getD_length (k : ℕ) (cs : Halo2.ConstraintSystem F)
-    (ops : Halo2.Operations F) (c : ℕ) (hc : c < (permColsOf cs).length) :
+theorem permutationRows_getD_length (k : ℕ) (cs : ConstraintSystem F)
+    (ops : Operations F) (c : ℕ) (hc : c < (permColsOf cs).length) :
     ((permutationRows k cs ops).getD c []).length = 2 ^ k := by
   have hcl : c < (permutationRows k cs ops).length := by
     rw [permutationRows_length]; exact hc

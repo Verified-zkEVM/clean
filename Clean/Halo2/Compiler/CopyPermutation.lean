@@ -13,7 +13,7 @@ variable {F : Type} [FiniteField F]
 
 namespace Halo2.TopLevelCircuit
 
-open Halo2.Layout
+open Layout
 
 variable {Config : Type} {PublicInput : TypeMap} [ProvableType PublicInput]
   (top : TopLevelCircuit F Config PublicInput) [TopLevelShape top]
@@ -25,11 +25,11 @@ def permutationLayout : List ColRef :=
 /-- The copy compiler and the published shape use the same column count. -/
 theorem permutationLayout_length : (top.permutationLayout).length = top.permutationColumnCount := by
   rw [top.permutationColumnCount_eq_permutationColumns_length]
-  simp only [permutationLayout, Halo2.Layout.permColsOf, List.length_map, TopLevelCircuit.permutationColumns]
+  simp only [permutationLayout, Layout.permColsOf, List.length_map, permutationColumns]
 
 /-- Fixed cells allocated by V1 for constant copies. -/
 def constantCopyEntries : List (ℕ × ℕ × ℕ) :=
-  Halo2.Layout.constantCopyEntries top.constraintSystem top.operations
+  Layout.constantCopyEntries top.constraintSystem top.operations
 
 theorem usedRows_le_domainSize :
     Halo2.usedRows top.operations ≤ top.n :=
@@ -43,7 +43,7 @@ theorem const_column_mem_permutationColumns
     (entry : ℕ × ℕ × ℕ) (hentry : entry ∈ (top.constantCopyEntries)) :
     (AnyColumn.mk .fixed entry.2.1) ∈
       top.constraintSystem.permutationColumns := by
-  rw [constantCopyEntries, Halo2.Layout.constantCopyEntries, List.mem_map] at hentry
+  rw [constantCopyEntries, Layout.constantCopyEntries, List.mem_map] at hentry
   obtain ⟨⟨value, column, row⟩, hassignment, rfl⟩ := hentry
   exact top.constantAssignmentColumn_mem_permutationColumns
     hassignment
@@ -57,7 +57,7 @@ theorem copyPairs_columns_lt : ∀ t ∈ top.copyPairs,
     top.operations top.keygenCoherent
     top.regionStarts (top.constantCopyEntries)
     (const_column_mem_permutationColumns top) tuple
-  simpa only [TopLevelCircuit.copyPairs, permutationLayout] using htuple
+  simpa only [copyPairs, permutationLayout] using htuple
 
 omit [TopLevelShape top] in
 /-- Every V1 circuit constant allocation lies below the compiler-derived operation
@@ -65,7 +65,7 @@ footprint. -/
 theorem const_row_lt_usedRows
     (entry : ℕ × ℕ × ℕ) (hentry : entry ∈ (top.constantCopyEntries)) :
     entry.2.2 < Halo2.usedRows top.operations := by
-  rw [constantCopyEntries, Halo2.Layout.constantCopyEntries, List.mem_map] at hentry
+  rw [constantCopyEntries, Layout.constantCopyEntries, List.mem_map] at hentry
   obtain ⟨⟨value, column, row⟩, hassignment, rfl⟩ := hentry
   exact V1_constantAssignments_row_lt_usedRows
     top.operations
@@ -82,7 +82,7 @@ theorem copyPairs_rows_lt_usedRows
   apply V1_copyList_rows_lt_usedRows top.operations
     (top.permutationLayout) (top.constantCopyEntries)
     (const_row_lt_usedRows top) tuple
-  simpa only [TopLevelCircuit.copyPairs, TopLevelCircuit.regionStarts,
+  simpa only [copyPairs, regionStarts,
     TopLevelCompilation.regionStarts] using htuple
 
 /-- Registration and the compiler footprint bound both coordinates of each copy. -/
@@ -124,7 +124,7 @@ theorem boundedCopyPairs_rows_lt
 
 /-- The compiled permutation, in global column/row coordinates. -/
 def copyPermutation : Equiv.Perm (FlatCell top.permutationColumnCount top.n) :=
-  replayKeygenPermutation (top.boundedCopyPairs)
+  PermConstruction.replay (top.boundedCopyPairs)
 
 /-- Circuit keygen replays preserve the usable-row prefix. -/
 theorem copyPermutation_preserves_usableRows
@@ -132,7 +132,7 @@ theorem copyPermutation_preserves_usableRows
     (hcell : (cell.2 : ℕ) < (top.usableRowsAt top.domainExponent)) :
     ((top.copyPermutation cell).2 : ℕ) <
       (top.usableRowsAt top.domainExponent) := by
-  apply replayKeygenPermutation_preserves (top.boundedCopyPairs)
+  apply PermConstruction.replay_preserves (top.boundedCopyPairs)
     (fun candidate => (candidate.2 : ℕ) < (top.usableRowsAt top.domainExponent))
   · intro pair hpair
     exact (top.boundedCopyPairs_rows_lt) pair hpair
@@ -178,7 +178,7 @@ theorem copiesCompiled_of_permutation
   obtain ⟨pair, hpair, hleft, hright⟩ := top.exists_pair_of_raw htuple
   have hrows := top.boundedCopyPairs_rows_lt pair hpair
   have heq := hvalues pair.1 pair.2 hrows.1 hrows.2
-    (replayKeygenPermutation_pair_linked top.boundedCopyPairs hpair)
+    (PermConstruction.sameCycle_replay_of_mem top.boundedCopyPairs hpair)
   simp only [FlatCell.pair, Prod.mk.injEq] at hleft hright
   simpa only [permutationValue, rawCopyValue, permutationLayout,
     hleft.1, hleft.2, hright.1, hright.2] using heq
@@ -197,6 +197,6 @@ theorem permutationRows_getD [FieldDomainParams F]
   have h := Layout.Asm.permutationRows_getD_eq top.constraintSystem top.operations
     hcount top.n_eq_two_pow_domainExponent top.boundedCopyPairs
     (by simpa only [copyPairs, regionStarts] using hcopies) cell.1 cell.2
-  simpa only [permutationRows, copyPermutation, TopLevelCircuit.omega] using h
+  simpa only [permutationRows, copyPermutation, omega] using h
 
 end Halo2.TopLevelCircuit

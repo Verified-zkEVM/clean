@@ -10,7 +10,7 @@ namespace Halo2
 set_option maxHeartbeats 20000
 
 /-- Every selector-compression entry uses a valid, field-distinct root. -/
-def SelectorRootsWellFormed (F : Type) [Field F] (map : SelCompressMap) : Prop :=
+def HasWellFormedSelectorRoots (F : Type) [Field F] (map : SelCompressMap) : Prop :=
   ∀ {selector : ℕ} {compressed : SelCompress},
     map.lookup selector = some compressed →
       1 ≤ compressed.assignedRoot ∧
@@ -21,7 +21,7 @@ def SelectorRootsWellFormed (F : Type) [Field F] (map : SelCompressMap) : Prop :
 The packed fixed columns realize the compression map on every selector activation
 derived from synthesis and placement.
 -/
-def SelectorActivationsRealized
+def RealizesSelectorActivations
     (map : SelCompressMap) (activationRows : List (ℕ × ℕ))
     (environment : Environment F) : Prop :=
   ∀ {selector row : ℕ} {compressed : SelCompress},
@@ -81,8 +81,8 @@ theorem selectorScale_ne_zero_of_enabledGate
     (map : SelCompressMap) (starts : List ℕ)
     (operations : Operations F) (i : RegionIndex)
     (environment : Environment F) (selectors : ℕ → F)
-    (hroots : SelectorRootsWellFormed F map)
-    (hfixed : SelectorActivationsRealized map
+    (hroots : HasWellFormedSelectorRoots F map)
+    (hfixed : RealizesSelectorActivations map
       (activations starts (indexedRegions operations i).1) environment)
     {enabled : EnabledGate F}
     (henabled : enabled ∈ operationEnabledGates operations i)

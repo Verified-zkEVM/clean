@@ -89,12 +89,12 @@ theorem pinnedCS_lookup_eval_of_interprets
         (RichExpression.eval fixed advice instanceFeed) =
       (top.pinnedCS.lookupTableExprs.getD index []).map
         ((pinnedQueryState top.pinnedCS).eval env row)) := by
-  have hcoverage := topLevelLookupInputs_selectorsCovered top (top.lookupAt index)
+  have hcoverage := selectorsCovered_of_mem_lookup_inputs top (top.lookupAt index)
     (top.lookupAt_mem_constraintSystem index)
-  have htables := TopLevelLookup.tablesCovered (top := top) (top.lookupAt index)
+  have htables := LookupArgument.selectorsCovered_of_mem_tables (top := top) (top.lookupAt index)
   have hfeed := top.lookup_eval fixed advice instanceFeed _ index hcoverage htables hinterprets
   have hrow := top.lookup_eval _ _ _ _ index hcoverage htables
-    ((pinnedQueryState top.pinnedCS).interprets env row)
+    ((pinnedQueryState top.pinnedCS).queryValues_interprets env row)
   exact ⟨hfeed.1.trans hrow.1.symm, hfeed.2.trans hrow.2.symm⟩
 
 /-- At a synthesized activation, compiled tuples are the source input/table tuples.
@@ -113,16 +113,16 @@ theorem lookup_values_eq (assignment : ProofAssignment F)
         lookup.tableValues (top.environment assignment) row) := by
   let route := lookup.topLevelRoute henabled
   have project (row : ℤ) := top.lookup_eval _ _ _ _ route.index
-    (topLevelLookupInputs_selectorsCovered top _ (top.lookupAt_mem_constraintSystem route.index))
-    (TopLevelLookup.tablesCovered (top := top) _)
-    ((pinnedQueryState top.pinnedCS).interprets (top.environment assignment) row)
+    (selectorsCovered_of_mem_lookup_inputs top _ (top.lookupAt_mem_constraintSystem route.index))
+    (LookupArgument.selectorsCovered_of_mem_tables (top := top) _)
+    ((pinnedQueryState top.pinnedCS).queryValues_interprets (top.environment assignment) row)
   constructor
   · have hinput := (project (top.placement lookup.region + lookup.row : ℕ)).1
-    rw [route.argument] at hinput
+    rw [route.lookupAt_eq] at hinput
     exact hinput.trans (lookup.inputValues_eq henabled assignment)
   · intro row hrow
     have htable := (project row).2
-    rw [route.argument] at htable
+    rw [route.lookupAt_eq] at htable
     apply htable.trans
     apply List.map_congr_left
     intro expression hexpression
@@ -133,7 +133,7 @@ theorem lookup_values_eq (assignment : ProofAssignment F)
 /-- Compiled tuple membership recovers every source lookup constraint. -/
 theorem lookup_constraints_of_compiled
     (assignment : ProofAssignment F) (hlookups : top.LookupsCompiled assignment) :
-    CircuitConstraintFamily.constraints .lookup top.placement
+    CircuitConstraintFamily.Constraints .lookup top.placement
       (top.environment assignment) top.operations 0 := by
   rw [CircuitConstraintFamily.lookup_constraints_iff_enabledLookups,
     List.forall_iff_forall_mem]

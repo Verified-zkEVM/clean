@@ -29,7 +29,7 @@ namespace FixedRequirement
 variable {F : Type} [FiniteField F]
 
 /-- The exact Clean semantics of one extracted fixed-data obligation. -/
-def Satisfied (place : RegionIndex → ℕ) (env : Environment F) :
+def IsSatisfied (place : RegionIndex → ℕ) (env : Environment F) :
     FixedRequirement F → Prop
   | .assignment region column row value =>
       env.fixed column (place region + row : ℕ) = value
@@ -67,36 +67,36 @@ variable {F : Type} [FiniteField F]
 theorem region_fixed_constraints_iff
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment F)
     (ops : RegionOperations F) :
-    regionConstraints .fixed place self env ops ↔
+    RegionConstraints .fixed place self env ops ↔
       (regionFixedRequirements self ops).Forall
-        (FixedRequirement.Satisfied place env) := by
+        (FixedRequirement.IsSatisfied place env) := by
   induction ops with
-  | nil => simp [regionConstraints, regionFixedRequirements]
+  | nil => simp [RegionConstraints, regionFixedRequirements]
   | cons op rest ih =>
       cases op <;>
-        simp_all [regionConstraints, regionConstraint, RegionOperation.Constraints,
-          regionFixedRequirements, FixedRequirement.Satisfied, Environment.get_fixed]
+        simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
+          regionFixedRequirements, FixedRequirement.IsSatisfied, Environment.get_fixed]
 
 /-- The complete fixed-family projection is satisfaction of every extracted requirement. -/
 theorem fixed_constraints_iff_requirements
     (place : RegionIndex → ℕ) (env : Environment F)
     (ops : Operations F) (i : RegionIndex) :
-    constraints .fixed place env ops i ↔
+    Constraints .fixed place env ops i ↔
       (operationFixedRequirements ops i).Forall
-        (FixedRequirement.Satisfied place env) := by
+        (FixedRequirement.IsSatisfied place env) := by
   induction ops generalizing i with
-  | nil => simp [constraints, operationFixedRequirements]
+  | nil => simp [Constraints, operationFixedRequirements]
   | cons op rest ih =>
       cases op with
       | region name body =>
-          rw [constraints, ih, region_fixed_constraints_iff]
+          rw [Constraints, ih, region_fixed_constraints_iff]
           simp [operationFixedRequirements, List.forall_append]
       | constrainInstance cell col row =>
-          rw [constraints, ih]
+          rw [Constraints, ih]
           simp [operationFixedRequirements]
       | loadTable column values =>
-          rw [constraints, ih]
-          simp [operationFixedRequirements, FixedRequirement.Satisfied]
+          rw [Constraints, ih]
+          simp [operationFixedRequirements, FixedRequirement.IsSatisfied]
 
 end CircuitConstraintFamily
 
@@ -351,10 +351,10 @@ theorem requirement_satisfied_of_entries
     (requirement : FixedRequirement F)
     (hrequirement :
       requirement ∈ operationFixedRequirements ops i) :
-    requirement.Satisfied (Layout.place starts) env := by
+    requirement.IsSatisfied (Layout.place starts) env := by
   cases requirement with
   | assignment region column row value =>
-      simp only [FixedRequirement.Satisfied]
+      simp only [FixedRequirement.IsSatisfied]
       have hentry := hentries column.index
         (Layout.place starts region + row) value
         (List.mem_append_right _
@@ -362,7 +362,7 @@ theorem requirement_satisfied_of_entries
             starts ops i region column row value hrequirement))
       simpa using hentry
   | table column values =>
-      simp only [FixedRequirement.Satisfied]
+      simp only [FixedRequirement.IsSatisfied]
       have hload :=
         loadTable_mem_of_requirement ops i column values hrequirement
       constructor
@@ -395,7 +395,7 @@ theorem constraints_of_entries
           Layout.regionAssignments starts
             (indexedRegions ops i).1) →
       env.fixed ⟨column⟩ (row : ℤ) = value) :
-    CircuitConstraintFamily.constraints .fixed
+    CircuitConstraintFamily.Constraints .fixed
       (Layout.place starts) env ops i := by
   rw [CircuitConstraintFamily.fixed_constraints_iff_requirements,
     List.forall_iff_forall_mem]
@@ -444,7 +444,7 @@ variable {Config : Type} {PublicInput : TypeMap} [ProvableType PublicInput]
 /-- Fixed assignments and table contents require no proof-varying hypothesis:
 the compiler supplies them when constructing the environment. -/
 theorem fixed_constraints (assignment : ProofAssignment F) :
-    CircuitConstraintFamily.constraints .fixed top.placement
+    CircuitConstraintFamily.Constraints .fixed top.placement
       (top.environment assignment) top.operations 0 := by
   have hplace : Layout.place top.regionStarts = top.placement := by
     funext region

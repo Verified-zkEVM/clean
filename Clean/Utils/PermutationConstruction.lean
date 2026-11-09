@@ -101,7 +101,7 @@ as we stay strictly inside the first `p` steps of `b`'s orbit — where `π^k b`
 `b`'s orbit, disjoint from `a`'s, hypothesis `hnotA`) and `b` itself (not yet returned, hypothesis
 `hltb`) — the transposition is invisible and `g^[k+1] a = π^[k+1] b`. Pure orbit arithmetic; no
 finiteness needed. -/
-theorem walk {π : Perm α} {a b : α} {p : ℕ}
+theorem iterate_mul_swap_apply_eq_of_lt {π : Perm α} {a b : α} {p : ℕ}
     (hnotA : ∀ k : ℕ, (⇑π)^[k] b ≠ a)
     (hltb : ∀ k : ℕ, 0 < k → k < p → (⇑π)^[k] b ≠ b) :
     ∀ k : ℕ, k < p → (⇑(π * swap a b))^[k + 1] a = (⇑π)^[k + 1] b := by
@@ -127,7 +127,8 @@ theorem walk {π : Perm α} {a b : α} {p : ℕ}
 
 /-- **The merge witness (the one finiteness-using fact).** If `a` and `b` lie in different cycles of
 `π`, then composing with the transposition `(a b)` puts them in the same cycle. We walk `b`'s `π`-cycle
-(`walk`) for its full period `p = minimalPeriod π b`, reaching `π^[p] b = b` from `a` in `p` steps. -/
+(`iterate_mul_swap_apply_eq_of_lt`) for its full period `p = minimalPeriod π b`, reaching
+`π^[p] b = b` from `a` in `p` steps. -/
 theorem sameCycle_mul_swap_self [Fintype α] {π : Perm α} {a b : α} (hab : ¬ π.SameCycle a b) :
     (π * swap a b).SameCycle a b := by
   -- `π^[k] b` is never `a` (same cycle as `b`, which differs from `a`'s cycle)
@@ -147,7 +148,7 @@ theorem sameCycle_mul_swap_self [Fintype α] {π : Perm α} {a b : α} (hab : ¬
     exact Function.not_isPeriodicPt_of_pos_of_lt_minimalPeriod hk0.ne' hkp h0
   -- walk `b`'s cycle for a full period: `g^[p] a = π^[p] b = b`
   have hreach : (⇑(π * swap a b))^[p] a = b := by
-    have hw := walk hnotA hltb (p - 1) (by omega)
+    have hw := iterate_mul_swap_apply_eq_of_lt hnotA hltb (p - 1) (by omega)
     have hp1 : p - 1 + 1 = p := by omega
     rw [hp1] at hw
     rw [hw, hpb]
@@ -193,14 +194,14 @@ def step (π : Perm α) (ab : α × α) : Perm α :=
 
 /-- Run the algorithm over a list of copy constraints, starting from the identity permutation (every
 cell its own 1-cycle). Constraint order does not affect the final cycle *partition* — it is the
-equivalence closure either way (`build_correct`) — though it does affect the exact permutation. -/
+equivalence closure either way (`sameCycle_build_iff`) — though it does affect the exact permutation. -/
 def build : List (α × α) → Perm α
   | [] => 1
   | ab :: rest => step (build rest) ab
 
 /-- **Every declared copy constraint ends up in one cycle.** (The soundness-relevant direction: each
 `a ≡ b` the circuit asked for is enforced by `σ`.) -/
-theorem pair_linked (cs : List (α × α)) : ∀ p ∈ cs, (build cs).SameCycle p.1 p.2 := by
+theorem sameCycle_build_of_mem (cs : List (α × α)) : ∀ p ∈ cs, (build cs).SameCycle p.1 p.2 := by
   induction cs with
   | nil => intro p hp; simp at hp
   | cons ab rest ih =>
@@ -218,7 +219,7 @@ theorem pair_linked (cs : List (α × α)) : ∀ p ∈ cs, (build cs).SameCycle 
         · rw [if_neg hsc]; exact sameCycle_mul_swap_mono hsc hp'
 
 /-- **No spurious merges.** Two cells share a `build cs` cycle only if the copy constraints force it. -/
-theorem build_subset : ∀ (cs : List (α × α)) {x y : α},
+theorem eqvGen_of_sameCycle_build : ∀ (cs : List (α × α)) {x y : α},
     (build cs).SameCycle x y → Relation.EqvGen (fun u v => (u, v) ∈ cs) x y := by
   intro cs
   induction cs with
@@ -252,59 +253,57 @@ theorem build_subset : ∀ (cs : List (α × α)) {x y : α},
 /-- **Correctness of the construction.** The cycles of the permutation built from a list of copy
 constraints are exactly the equality-constraint classes: two cells are in the same cycle iff the
 constraints (reflexively, symmetrically, transitively) force them equal. -/
-theorem build_correct (cs : List (α × α)) (x y : α) :
+theorem sameCycle_build_iff (cs : List (α × α)) (x y : α) :
     (build cs).SameCycle x y ↔ Relation.EqvGen (fun u v => (u, v) ∈ cs) x y := by
-  refine ⟨build_subset cs, fun h => ?_⟩
-  -- `SameCycle (build cs)` is an equivalence containing every constraint pair (`pair_linked`), and
-  -- `EqvGen` is the least such, so it is contained in `SameCycle (build cs)`.
+  refine ⟨eqvGen_of_sameCycle_build cs, fun h => ?_⟩
+  -- `SameCycle (build cs)` contains every constraint pair (`sameCycle_build_of_mem`), and `EqvGen`
+  -- is the least such equivalence, so it is contained in `SameCycle (build cs)`.
   induction h with
-  | rel u v huv => exact pair_linked cs (u, v) huv
+  | rel u v huv => exact sameCycle_build_of_mem cs (u, v) huv
   | refl u => exact SameCycle.refl _ u
   | symm u v _ ih => exact ih.symm
   | trans u v w _ _ ih1 ih2 => exact ih1.trans ih2
 
-end PermConstruction
-
 /-- Replay the mathematical keygen permutation in the source copy-list order.
 
-`PermConstruction.build` consumes its list from right to left, so reversing here makes the first
+`build` consumes its list from right to left, so reversing here makes the first
 declared copy the first cycle merge.  The concrete array/union-find replay can be compared with
 this permutation once its finite cell decoding is available. -/
-def replayKeygenPermutation
+def replay
     {cell : Type*} [DecidableEq cell] [Fintype cell]
     (copies : List (cell × cell)) : Equiv.Perm cell :=
-  PermConstruction.build copies.reverse
+  build copies.reverse
 
 /-- Every copy processed by the generic keygen replay belongs to one resulting permutation cycle. -/
-theorem replayKeygenPermutation_pair_linked
+theorem sameCycle_replay_of_mem
     {cell : Type*} [DecidableEq cell] [Fintype cell]
     (copies : List (cell × cell)) {left right : cell}
     (hcopy : (left, right) ∈ copies) :
-    (replayKeygenPermutation copies).SameCycle left right :=
-  PermConstruction.pair_linked copies.reverse (left, right)
+    (replay copies).SameCycle left right :=
+  sameCycle_build_of_mem copies.reverse (left, right)
     (List.mem_reverse.mpr hcopy)
 
 /-- The replayed cycles are exactly the equivalence closure of the declared copies. -/
-theorem replayKeygenPermutation_sameCycle_iff
+theorem sameCycle_replay_iff
     {cell : Type*} [DecidableEq cell] [Fintype cell]
     (copies : List (cell × cell)) (left right : cell) :
-    (replayKeygenPermutation copies).SameCycle left right ↔
+    (replay copies).SameCycle left right ↔
       Relation.EqvGen (fun a b => (a, b) ∈ copies) left right := by
-  simpa only [replayKeygenPermutation, List.mem_reverse] using
-    PermConstruction.build_correct copies.reverse left right
+  simpa only [replay, List.mem_reverse] using
+    sameCycle_build_iff copies.reverse left right
 
 /--
 A predicate containing both endpoints of every replayed copy is preserved by
 the resulting permutation. This supplies the generic active-row closure fact
 needed when restricting a full-domain keygen permutation.
 -/
-theorem replayKeygenPermutation_preserves
+theorem replay_preserves
     {cell : Type*} [DecidableEq cell] [Fintype cell]
     (copies : List (cell × cell)) (predicate : cell → Prop)
     (hcopies : ∀ pair ∈ copies,
       predicate pair.1 ∧ predicate pair.2)
     (cell : cell) (hcell : predicate cell) :
-    predicate (replayKeygenPermutation copies cell) := by
+    predicate (replay copies cell) := by
   have hedge : ∀ {left right},
       (left, right) ∈ copies →
         (predicate left ↔ predicate right) := by
@@ -325,25 +324,27 @@ theorem replayKeygenPermutation_preserves
     | trans left middle right _ _ ih₁ ih₂ =>
         exact ih₁.trans ih₂
   have hsame :
-      (replayKeygenPermutation copies).SameCycle cell
-        (replayKeygenPermutation copies cell) := by
+      (replay copies).SameCycle cell
+        (replay copies cell) := by
     exact ⟨(1 : ℤ), by simp⟩
   exact
     (hclosure
-      ((replayKeygenPermutation_sameCycle_iff copies _ _).mp hsame)).mp
+      ((sameCycle_replay_iff copies _ _).mp hsame)).mp
         hcell
 
 /-- The abstract replay is the copy-order fold of the merge step. -/
-theorem replayKeygenPermutation_eq_foldl {cell : Type*} [DecidableEq cell] [Fintype cell]
+theorem replay_eq_foldl {cell : Type*} [DecidableEq cell] [Fintype cell]
     (copies : List (cell × cell)) :
-    replayKeygenPermutation copies = copies.foldl PermConstruction.step 1 := by
+    replay copies = copies.foldl step 1 := by
   have hbuild : ∀ l : List (cell × cell),
-      PermConstruction.build l = l.foldr (fun ab π => PermConstruction.step π ab) 1 := by
+      build l = l.foldr (fun ab π => step π ab) 1 := by
     intro l
     induction l with
     | nil => rfl
-    | cons ab rest ih => simp [PermConstruction.build, ih]
-  rw [replayKeygenPermutation, hbuild, List.foldr_reverse]
+    | cons ab rest ih => simp [build, ih]
+  rw [replay, hbuild, List.foldr_reverse]
+
+end PermConstruction
 
 namespace Equiv.Perm
 
@@ -373,14 +374,14 @@ theorem exists_minimal_return {α : Type*} [Fintype α] (π : Perm α)
     rcases Nat.lt_or_ge x y with hlt | hge
     · have : (π ^ (y - x)) rep = rep := by
         apply (Equiv.injective (π ^ x))
-        rw [← Equiv.Perm.mul_apply, ← pow_add]
+        rw [← mul_apply, ← pow_add]
         rw [Nat.add_sub_cancel' (Nat.le_of_lt hlt)]
         exact hxy.symm
       exact hmin (y - x) (by omega) (by omega) this
     · have hlt' : y < x := by omega
       have : (π ^ (x - y)) rep = rep := by
         apply (Equiv.injective (π ^ y))
-        rw [← Equiv.Perm.mul_apply, ← pow_add]
+        rw [← mul_apply, ← pow_add]
         rw [Nat.add_sub_cancel' (Nat.le_of_lt hlt')]
         exact hxy
       exact hmin (x - y) (by omega) (by omega) this
@@ -402,11 +403,11 @@ theorem sameCycle_iff_exists_pow_lt {α : Type*} [Fintype α] {π : Perm α}
       induction q with
       | zero => rfl
       | succ q ih =>
-          rw [Nat.mul_succ, pow_add, Equiv.Perm.mul_apply, hs]
+          rw [Nat.mul_succ, pow_add, mul_apply, hs]
           exact ih
     refine ⟨i % s, Nat.mod_lt _ (by omega), ?_⟩
     conv_rhs => rw [← hi, ← Nat.mod_add_div i s]
-    rw [pow_add, Equiv.Perm.mul_apply, hq]
+    rw [pow_add, mul_apply, hq]
   · rintro ⟨t, _, rfl⟩
     exact ⟨(t : ℤ), by simp⟩
 
