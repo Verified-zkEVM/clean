@@ -2,7 +2,7 @@
 
 **Uses Mathlib naming convention**. Names follow the [Mathlib naming conventions](https://leanprover-community.github.io/contribute/naming.html). In short:
 
-- Types, structures and Prop-valued definitions and classes are `UpperCamelCase` (`FormalCircuit`, `IsBool`); adjective-like Props take an `Is` prefix.
+- Types, structures and Prop-valued definitions and classes are `UpperCamelCase` (`FormalCircuit`, `SelectorFree`).
 - Functions and other terms are `lowerCamelCase` (`localLength`, `fieldFromBits`).
 - Theorems and proofs are `snake_case`, named after their statement: `_of_` separates the conclusion from the hypotheses, in order (`lt_of_succ_le`), and standard property names are used (`comm`, `assoc`, `inj`, `congr`, `ext`, `iff`, `mono`). Names of other declarations inside a theorem name are spelled as usual, e.g. `lowerCamelCase` (`eval_fromElements`).
 - Acronyms are treated as words (`HtmlParser`, not `HTMLParser`), and names use American English.
