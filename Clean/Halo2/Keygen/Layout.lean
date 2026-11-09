@@ -940,8 +940,8 @@ private theorem constantAssignments_regionAssignments_cells_disjoint
 Packed-selector assignments in the circuit field.
 
 `assignedRoot` is a combinatorial natural-number output of selector compression.
-`FiniteField.fromNat` is the canonical interpretation in an arbitrary finite field;
-in particular this does not incorrectly use `Nat.cast` for binary extension fields.
+Its field value uses the natural-number cast, matching the constants in
+`selReplacement`. Selector soundness bounds the roots by the field characteristic.
 -/
 def selectorAssignments [FiniteField F]
     (selectorMap : SelCompressMap) (selectorActivations : List (ℕ × ℕ)) :
@@ -950,7 +950,7 @@ def selectorAssignments [FiniteField F]
     selectorActivations.foldl (·.insert ·) ∅
   unique.toList.filterMap fun (selector, row) =>
     (selectorMap.entries.find? (·.1 = selector)).map fun (_, compressed) =>
-      (compressed.packedCol, row, FiniteField.fromNat compressed.assignedRoot)
+      (compressed.packedCol, row, (compressed.assignedRoot : F))
 
 private theorem mem_foldl_hashSet_insert_iff
     (item : ℕ × ℕ) (items : List (ℕ × ℕ))
@@ -972,7 +972,7 @@ theorem mem_selectorAssignments_of_activation [FiniteField F]
     (hactivation : (selector, row) ∈ selectorActivations)
     (hlookup : selectorMap.lookup selector = some compressed) :
     (compressed.packedCol, row,
-      (FiniteField.fromNat compressed.assignedRoot : F)) ∈
+      (compressed.assignedRoot : F)) ∈
         selectorAssignments selectorMap selectorActivations := by
   simp only [SelCompressMap.lookup, Option.map_eq_some_iff] at hlookup
   obtain ⟨entry, hfind, hcompressed⟩ := hlookup
@@ -994,7 +994,7 @@ theorem exists_activation_lookup_of_mem_selectorAssignments [FiniteField F]
       (selector, row) ∈ selectorActivations ∧
         selectorMap.lookup selector = some compressed ∧
         assignment = (compressed.packedCol, row,
-          FiniteField.fromNat compressed.assignedRoot) := by
+          (compressed.assignedRoot : F)) := by
   unfold selectorAssignments at hassignment
   rw [List.mem_filterMap] at hassignment
   obtain ⟨⟨selector, row⟩, hunique, hmapped⟩ := hassignment
@@ -1041,7 +1041,7 @@ theorem selectorAssignments_agree_deriveSelCompressMap [FiniteField F]
     constraintSystem n selectorActivations hrow hleftActivation
       (by simpa [hcell.2] using hrightActivation)
       hleftLookup hrightLookup hcell.1
-  exact congrArg FiniteField.fromNat hroots
+  exact congrArg (fun root : ℕ => (root : F)) hroots
 
 private theorem tableAssignment_column_lt_numFixedColumns
     (usable : ℕ) (constraintSystem : ConstraintSystem F)
@@ -1672,7 +1672,7 @@ theorem exists_selectorActivation_of_mem_rawAssignments_of_column_ge
           (indexedRegions operations 0).1 ∧
         selectorMap.lookup selector = some compressed ∧
         assignment = (compressed.packedCol, row,
-          FiniteField.fromNat compressed.assignedRoot) := by
+          (compressed.assignedRoot : F)) := by
   simp only [rawAssignments] at hassignment
   rcases List.mem_append.mp hassignment with hprefix | hregion
   rcases List.mem_append.mp hprefix with hprefix | hselector
