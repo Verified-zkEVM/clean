@@ -51,7 +51,7 @@ def tableValues (env : Environment F) (lookup : EnabledLookup F)
         (tableRow : ℤ)))
 
 /-- Clean's semantic lookup relation for one extracted activation. -/
-def IsSatisfied (place : RegionIndex → ℕ) (env : Environment F)
+def Satisfied (place : RegionIndex → ℕ) (env : Environment F)
     (lookup : EnabledLookup F) : Prop :=
   ∃ tableRow : ℕ, tableRow < env.usableRows ∧
     lookup.inputValues place env = lookup.tableValues env tableRow
@@ -161,13 +161,13 @@ theorem region_lookup_constraints_iff
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment F)
     (ops : RegionOperations F) :
     RegionConstraints .lookup place self env ops ↔
-      (regionEnabledLookups self ops).Forall (EnabledLookup.IsSatisfied place env) := by
+      (regionEnabledLookups self ops).Forall (EnabledLookup.Satisfied place env) := by
   induction ops with
   | nil => simp [RegionConstraints, regionEnabledLookups]
   | cons op rest ih =>
       cases op <;>
         simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
-          regionEnabledLookups, EnabledLookup.IsSatisfied, EnabledLookup.inputValues,
+          regionEnabledLookups, EnabledLookup.Satisfied, EnabledLookup.inputValues,
           EnabledLookup.tableValues]
 
 /-- The complete lookup-family projection is exactly satisfaction of all lookup activations in the
@@ -176,7 +176,7 @@ theorem lookup_constraints_iff_enabledLookups
     (place : RegionIndex → ℕ) (env : Environment F)
     (ops : Operations F) (i : RegionIndex) :
     Constraints .lookup place env ops i ↔
-      (operationEnabledLookups ops i).Forall (EnabledLookup.IsSatisfied place env) := by
+      (operationEnabledLookups ops i).Forall (EnabledLookup.Satisfied place env) := by
   induction ops generalizing i with
   | nil => simp [Constraints, operationEnabledLookups]
   | cons op rest ih =>

@@ -16,7 +16,7 @@ namespace EnabledGate
 variable {F : Type} [FiniteField F]
 
 /-- Clean's semantic relation for one enabled gate. -/
-def IsSatisfied (place : RegionIndex → ℕ) (env : Environment F)
+def Satisfied (place : RegionIndex → ℕ) (env : Environment F)
     (enabled : EnabledGate F) : Prop :=
   enabled.gate.constraints.Forall fun constraint =>
     constraint.poly.eval
@@ -52,20 +52,20 @@ theorem region_gate_constraints_iff
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment F)
     (ops : RegionOperations F) :
     RegionConstraints .gate place self env ops ↔
-      (regionEnabledGates self ops).Forall (EnabledGate.IsSatisfied place env) := by
+      (regionEnabledGates self ops).Forall (EnabledGate.Satisfied place env) := by
   induction ops with
   | nil => simp [RegionConstraints, regionEnabledGates]
   | cons op rest ih =>
       cases op <;>
         simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
-          regionEnabledGates, EnabledGate.IsSatisfied]
+          regionEnabledGates, EnabledGate.Satisfied]
 
 /-- The complete gate-family projection is satisfaction of all extracted activations. -/
 theorem gate_constraints_iff_enabledGates
     (place : RegionIndex → ℕ) (env : Environment F)
     (ops : Operations F) (i : RegionIndex) :
     Constraints .gate place env ops i ↔
-      (operationEnabledGates ops i).Forall (EnabledGate.IsSatisfied place env) := by
+      (operationEnabledGates ops i).Forall (EnabledGate.Satisfied place env) := by
   induction ops generalizing i with
   | nil => simp [Constraints, operationEnabledGates]
   | cons op rest ih =>

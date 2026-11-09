@@ -45,7 +45,7 @@ namespace DeclaredCopy
 variable {F : Type} [FiniteField F]
 
 /-- The equality denoted by one declared copy. -/
-def IsSatisfied (place : RegionIndex → ℕ) (env : Environment F)
+def Satisfied (place : RegionIndex → ℕ) (env : Environment F)
     (copy : DeclaredCopy F) : Prop :=
   copy.1.eval place env = copy.2.eval place env
 
@@ -79,14 +79,14 @@ theorem region_copy_constraints_iff
     (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment F)
     (ops : RegionOperations F) :
     RegionConstraints .copy place self env ops ↔
-      (regionDeclaredCopies ops).Forall (DeclaredCopy.IsSatisfied place env) := by
+      (regionDeclaredCopies ops).Forall (DeclaredCopy.Satisfied place env) := by
   induction ops with
   | nil => simp [RegionConstraints, regionDeclaredCopies]
   | cons op rest ih =>
       cases op <;>
         simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
           regionDeclaredCopies, regionOperationDeclaredCopy?,
-          DeclaredCopy.IsSatisfied, CopyEndpoint.eval]
+          DeclaredCopy.Satisfied, CopyEndpoint.eval]
 
 /-- The complete copy-family projection is exactly satisfaction of the copies extracted from the
 whole operation stream. -/
@@ -94,7 +94,7 @@ theorem copy_constraints_iff_declaredCopies
     (place : RegionIndex → ℕ) (env : Environment F)
     (ops : Operations F) (i : RegionIndex) :
     Constraints .copy place env ops i ↔
-      (operationDeclaredCopies ops).Forall (DeclaredCopy.IsSatisfied place env) := by
+      (operationDeclaredCopies ops).Forall (DeclaredCopy.Satisfied place env) := by
   induction ops generalizing i with
   | nil => simp [Constraints, operationDeclaredCopies]
   | cons op rest ih =>
@@ -104,7 +104,7 @@ theorem copy_constraints_iff_declaredCopies
           simp [operationDeclaredCopies, List.forall_append]
       | constrainInstance cell col row =>
           rw [Constraints, ih]
-          simp [operationDeclaredCopies, DeclaredCopy.IsSatisfied, CopyEndpoint.eval]
+          simp [operationDeclaredCopies, DeclaredCopy.Satisfied, CopyEndpoint.eval]
       | loadTable table values =>
           rw [Constraints, ih]
           simp [operationDeclaredCopies]
@@ -192,7 +192,7 @@ namespace CopyEndpoint
 
 /-- The column requirement carried by a declared copy endpoint. Constants acquire
 their concrete column later from the floor planner's allocation. -/
-def IsPermutationColumnRegistered
+def PermutationColumnRegistered
     (cs : ConstraintSystem F) : CopyEndpoint F → Prop
   | .cell c => c.column ∈ cs.permutationColumns
   | .instance column _ => column.toAny ∈ cs.permutationColumns
@@ -200,7 +200,7 @@ def IsPermutationColumnRegistered
 
 /-- The row requirement carried by a declared copy endpoint. Constants acquire
 their concrete row later from the floor planner's allocation. -/
-def IsWithinRows
+def WithinRows
     (starts : List ℕ) (bound : ℕ) : CopyEndpoint F → Prop
   | .cell c =>
       starts.getD c.regionIndex 0 + c.rowOffset < bound
@@ -214,14 +214,14 @@ theorem regionDeclaredCopies_permutationColumns
     (cs : ConstraintSystem F) (body : RegionOperations F)
     (hcoherent : body.Forall (RegionOperation.KeygenCoherent cs))
     (copy : DeclaredCopy F) (hcopy : copy ∈ regionDeclaredCopies body) :
-    copy.1.IsPermutationColumnRegistered cs ∧
-      copy.2.IsPermutationColumnRegistered cs := by
+    copy.1.PermutationColumnRegistered cs ∧
+      copy.2.PermutationColumnRegistered cs := by
   rw [regionDeclaredCopies, List.mem_filterMap] at hcopy
   obtain ⟨op, hOp, hCopy⟩ := hcopy
   have hRegistered := List.forall_iff_forall_mem.mp hcoherent op hOp
   cases op <;> simp only [regionOperationDeclaredCopy?, reduceCtorEq] at hCopy
   all_goals obtain rfl := Option.some.inj hCopy
-  all_goals simpa [CopyEndpoint.IsPermutationColumnRegistered,
+  all_goals simpa [CopyEndpoint.PermutationColumnRegistered,
     RegionOperation.KeygenCoherent] using hRegistered
 
 /-- Both endpoints of every coherent layouter copy use registered permutation
@@ -230,8 +230,8 @@ theorem operationDeclaredCopies_permutationColumns
     (cs : ConstraintSystem F) (operations : Operations F)
     (hcoherent : OperationsKeygenCoherent cs operations)
     (copy : DeclaredCopy F) (hcopy : copy ∈ operationDeclaredCopies operations) :
-    copy.1.IsPermutationColumnRegistered cs ∧
-      copy.2.IsPermutationColumnRegistered cs := by
+    copy.1.PermutationColumnRegistered cs ∧
+      copy.2.PermutationColumnRegistered cs := by
   rw [operationDeclaredCopies, List.mem_flatMap] at hcopy
   obtain ⟨op, hOp, hCopy⟩ := hcopy
   have hRegistered := List.forall_iff_forall_mem.mp hcoherent op hOp
@@ -247,8 +247,8 @@ theorem regionDeclaredCopies_rows
     (root : Operations F) (name : String) (body : RegionOperations F)
     (hregion : Operation.region name body ∈ root)
     (copy : DeclaredCopy F) (hcopy : copy ∈ regionDeclaredCopies body) :
-    copy.1.IsWithinRows (FloorPlanner.V1.starts root) (usedRows root) ∧
-      copy.2.IsWithinRows (FloorPlanner.V1.starts root) (usedRows root) := by
+    copy.1.WithinRows (FloorPlanner.V1.starts root) (usedRows root) ∧
+      copy.2.WithinRows (FloorPlanner.V1.starts root) (usedRows root) := by
   rw [regionDeclaredCopies, List.mem_filterMap] at hcopy
   obtain ⟨operation, hoperation, hcopy⟩ := hcopy
   cases operation with
@@ -277,8 +277,8 @@ footprint. -/
 theorem operationDeclaredCopies_rows
     (operations : Operations F) (copy : DeclaredCopy F)
     (hcopy : copy ∈ operationDeclaredCopies operations) :
-    copy.1.IsWithinRows (FloorPlanner.V1.starts operations) (usedRows operations) ∧
-      copy.2.IsWithinRows (FloorPlanner.V1.starts operations) (usedRows operations) := by
+    copy.1.WithinRows (FloorPlanner.V1.starts operations) (usedRows operations) ∧
+      copy.2.WithinRows (FloorPlanner.V1.starts operations) (usedRows operations) := by
   rw [operationDeclaredCopies, List.mem_flatMap] at hcopy
   obtain ⟨op, hOp, hCopy⟩ := hcopy
   cases op with
@@ -314,8 +314,8 @@ theorem V1_go_fst_eq (columns : List ColRef) (starts : List ℕ)
 theorem resolveDeclared_columns_lt (cs : ConstraintSystem F) (starts : List ℕ)
     (copy : DeclaredCopy F) (tuple : ℕ × ℕ × ℕ × ℕ)
     (hResolve : resolveDeclared (permColsOf cs) starts copy = some tuple)
-    (hColumns : copy.1.IsPermutationColumnRegistered cs ∧
-      copy.2.IsPermutationColumnRegistered cs) :
+    (hColumns : copy.1.PermutationColumnRegistered cs ∧
+      copy.2.PermutationColumnRegistered cs) :
     tuple.1 < (permColsOf cs).length ∧ tuple.2.2.1 < (permColsOf cs).length := by
   rcases copy with ⟨left, right⟩
   cases left <;> cases right <;> simp only [resolveDeclared, reduceCtorEq] at hResolve
@@ -327,12 +327,12 @@ theorem resolveDeclared_columns_lt (cs : ConstraintSystem F) (starts : List ℕ)
 theorem resolveDeclared_rows_lt (columns : List ColRef) (starts : List ℕ)
     (bound : ℕ) (copy : DeclaredCopy F) (tuple : ℕ × ℕ × ℕ × ℕ)
     (hResolve : resolveDeclared columns starts copy = some tuple)
-    (hRows : copy.1.IsWithinRows starts bound ∧ copy.2.IsWithinRows starts bound) :
+    (hRows : copy.1.WithinRows starts bound ∧ copy.2.WithinRows starts bound) :
     tuple.2.1 < bound ∧ tuple.2.2.2 < bound := by
   rcases copy with ⟨left, right⟩
   cases left <;> cases right <;> simp only [resolveDeclared, reduceCtorEq] at hResolve
   all_goals obtain rfl := Option.some.inj hResolve
-  all_goals simpa only [CopyEndpoint.IsWithinRows, resolveCell, place] using hRows
+  all_goals simpa only [CopyEndpoint.WithinRows, resolveCell, place] using hRows
 
 /-- **Every resolvable declared copy is in the V1 copy list**: region-local copies land
 in their region's extracted stream, layouter-level instance copies inline, and the
@@ -686,22 +686,22 @@ theorem resolveDeclared_satisfied_iff
     (cs : ConstraintSystem F) (starts : List ℕ) (env : Environment F)
     (copy : DeclaredCopy F) (tuple : ℕ × ℕ × ℕ × ℕ)
     (hResolve : resolveDeclared (permColsOf cs) starts copy = some tuple)
-    (hColumns : copy.1.IsPermutationColumnRegistered cs ∧
-      copy.2.IsPermutationColumnRegistered cs) :
-    DeclaredCopy.IsSatisfied (fun region => starts.getD region 0) env copy ↔
+    (hColumns : copy.1.PermutationColumnRegistered cs ∧
+      copy.2.PermutationColumnRegistered cs) :
+    DeclaredCopy.Satisfied (fun region => starts.getD region 0) env copy ↔
       rawCopyValue (permColsOf cs) env (tuple.1, tuple.2.1) =
         rawCopyValue (permColsOf cs) env (tuple.2.2.1, tuple.2.2.2) := by
   rcases copy with ⟨left, right⟩
   cases left <;> cases right <;> simp only [resolveDeclared, reduceCtorEq] at hResolve
   all_goals obtain rfl := Option.some.inj hResolve
-  · simp only [DeclaredCopy.IsSatisfied, CopyEndpoint.eval,
+  · simp only [DeclaredCopy.Satisfied, CopyEndpoint.eval,
       rawCopyValue_resolveCell cs starts env _ hColumns.1,
       rawCopyValue_resolveCell cs starts env _ hColumns.2]
   · rename_i cell column row
-    simp only [DeclaredCopy.IsSatisfied, CopyEndpoint.eval,
+    simp only [DeclaredCopy.Satisfied, CopyEndpoint.eval,
       rawCopyValue_resolveCell cs starts env _ hColumns.1,
       rawCopyValue_permIndex (permColsOf cs) env column.toAny row
-        (by simpa only [permColsOf_map_toAny, CopyEndpoint.IsPermutationColumnRegistered]
+        (by simpa only [permColsOf_map_toAny, CopyEndpoint.PermutationColumnRegistered]
           using hColumns.2)]
 
 /-- A declared constant copy occurs in the positional allocation part of the
@@ -768,7 +768,7 @@ theorem copy_constraints_of_rawPairValues [FiniteField F]
     have hRead := rawCopyValue_permIndex (permColsOf cs) env
       (AnyColumn.mk .fixed entry.2.1) entry.2.2 hColumn
     have hEqual := (pairValues _ hMem).symm.trans (hRead.trans (constantValues entry hEntry))
-    simpa only [DeclaredCopy.IsSatisfied, CopyEndpoint.eval,
+    simpa only [DeclaredCopy.Satisfied, CopyEndpoint.eval,
       rawCopyValue_resolveCell cs starts env cell hregisteredCopy.1, hValue,
       FiniteField.fromNat_val] using hEqual
 

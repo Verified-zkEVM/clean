@@ -515,11 +515,11 @@ set_option maxHeartbeats 20000
 The selector packer assigns valid roots whenever its compression degree fits below
 the field characteristic.
 -/
-theorem hasWellFormedSelectorRoots_process
+theorem selectorRootsWellFormed_process
     (selectors : List SelectorDescription) (maxDegree : ℕ)
     (hpositive : 1 ≤ maxDegree)
     (hdegree : maxDegree < ringChar F) :
-    HasWellFormedSelectorRoots F (process selectors maxDegree) := by
+    SelectorRootsWellFormed F (process selectors maxDegree) := by
   intro selector compressed hlookup
   obtain ⟨entry, hentry, hcompressed⟩ :=
     SelCompressMap.exists_mem_entries_of_lookup
@@ -535,16 +535,16 @@ theorem hasWellFormedSelectorRoots_process
 The circuit-derived selector map has valid roots under the minimal generic size
 condition: the constraint-system degree is below the field characteristic.
 -/
-theorem hasWellFormedSelectorRoots_deriveSelCompressMap
+theorem selectorRootsWellFormed_deriveSelCompressMap
     {F : Type} [FiniteField F] (cs : ConstraintSystem F) (n : ℕ)
     (activations : List (ℕ × ℕ))
     (hdegree : csDegree cs < ringChar F) :
-    HasWellFormedSelectorRoots F
+    SelectorRootsWellFormed F
       (deriveSelCompressMap cs n activations) := by
   intro selector compressed hlookup
   rw [deriveSelCompressMap_lookup_eq] at hlookup
   obtain ⟨source, hsource, rfl⟩ := Option.map_eq_some_iff.mp hlookup
-  have hroots := hasWellFormedSelectorRoots_process _ (csDegree cs)
+  have hroots := selectorRootsWellFormed_process _ (csDegree cs)
     (by unfold csDegree; exact le_trans (by omega) (Nat.le_max_left _ _)) hdegree hsource
   exact hroots
 

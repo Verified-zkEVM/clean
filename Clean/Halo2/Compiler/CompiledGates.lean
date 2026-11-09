@@ -15,11 +15,11 @@ variable {Config : Type} {PublicInput : TypeMap} [ProvableType PublicInput]
     (top : TopLevelCircuit F Config PublicInput) [TopLevelShape top]
 
 /-- The circuit-derived selector map has the roots required by gate scaling. -/
-theorem hasWellFormedSelectorRoots_selectorMap
+theorem selectorRootsWellFormed_selectorMap
     [FieldDomainParams F] [CircuitFieldSupport top] :
-    HasWellFormedSelectorRoots F top.selectorMap := by
+    SelectorRootsWellFormed F top.selectorMap := by
   simp only [selectorMap]
-  exact hasWellFormedSelectorRoots_deriveSelCompressMap
+  exact selectorRootsWellFormed_deriveSelCompressMap
     top.constraintSystem
     top.n
     top.selectorActivations (CircuitFieldSupport.csDegree_lt_ringChar top)
@@ -88,7 +88,7 @@ theorem gate_constraints_of_compiled [FieldDomainParams F] [CircuitFieldSupport 
     top.selectorMap top.selectorActivations hactivation hcompressed
   have hrow := (top.fixedAssignment_bounds_of_mem_raw _
     (top.selectorAssignment_mem_raw hentry)).2
-  rw [EnabledGate.IsSatisfied, List.forall_iff_forall_mem]
+  rw [EnabledGate.Satisfied, List.forall_iff_forall_mem]
   intro constraint hconstraint
   have hflat : constraint.poly ∈ flatGates top.constraintSystem := by
     rw [flatGates, List.mem_flatMap]
@@ -110,7 +110,7 @@ theorem gate_constraints_of_compiled [FieldDomainParams F] [CircuitFieldSupport 
     (enabled.gate.wellFormed.compressionSound constraint hconstraint) hcompressed
   · simpa only [placement_apply] using
       selectorScale_ne_zero_of_enabledGate top.selectorMap top.regionStarts top.operations 0
-        (top.environment assignment) (fun _ => 0) top.hasWellFormedSelectorRoots_selectorMap
+        (top.environment assignment) (fun _ => 0) top.selectorRootsWellFormed_selectorMap
         (top.realizesSelectorActivations_environment assignment) henabled hcompressed
   · intros; rfl
   · intros; rfl

@@ -17,15 +17,15 @@ namespace Halo2.Layout.Asm
 open Equiv
 
 /-- The rectangular shape invariant of the assembly's cell arrays. -/
-def IsShaped (numCols n : ℕ) (a : Array (Array (ℕ × ℕ))) : Prop :=
+def Shaped (numCols n : ℕ) (a : Array (Array (ℕ × ℕ))) : Prop :=
   a.size = numCols ∧ ∀ i, (h : i < a.size) → a[i].size = n
 
 /-- Simulation between an assembly state and an abstract cell permutation: the shape of
 both cell arrays, `mapping` acting as the permutation, every `aux` entry an in-cycle,
 self-rooted representative, and `aux` entries agreeing exactly on cycles. -/
 structure Sim {numCols n : ℕ} (a : Asm) (π : Perm (FlatCell numCols n)) : Prop where
-  map_shape : IsShaped numCols n a.mapping
-  aux_shape : IsShaped numCols n a.aux
+  map_shape : Shaped numCols n a.mapping
+  aux_shape : Shaped numCols n a.aux
   map_eq : ∀ c : FlatCell numCols n,
     getPair a.mapping c.pair = (π c).pair
   aux_rep : ∀ c : FlatCell numCols n, ∃ r : FlatCell numCols n,
@@ -56,9 +56,9 @@ theorem repoint_sizes (a : Asm) (fuel : ℕ) (i tgt stop : ℕ × ℕ) :
       · rfl
       · exact ih _ _
 
-theorem IsShaped.setPair {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
-    (h : IsShaped numCols n a) (p : ℕ × ℕ) (v : ℕ × ℕ) :
-    IsShaped numCols n (setPair a p v) := by
+theorem Shaped.setPair {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
+    (h : Shaped numCols n a) (p : ℕ × ℕ) (v : ℕ × ℕ) :
+    Shaped numCols n (setPair a p v) := by
   obtain ⟨hsize, hrow⟩ := h
   refine ⟨by simpa [Asm.setPair] using hsize, ?_⟩
   intro i hi
@@ -70,7 +70,7 @@ theorem IsShaped.setPair {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
 
 /-- Reading back the just-written cell (the write position must be in shape). -/
 theorem getPair_setPair_self {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
-    (h : IsShaped numCols n a) {p : ℕ × ℕ} (hp1 : p.1 < numCols) (hp2 : p.2 < n)
+    (h : Shaped numCols n a) {p : ℕ × ℕ} (hp1 : p.1 < numCols) (hp2 : p.2 < n)
     (v : ℕ × ℕ) :
     getPair (setPair a p v) p = v := by
   obtain ⟨hsize, hrow⟩ := h
@@ -81,7 +81,7 @@ theorem getPair_setPair_self {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
 
 /-- Reading any other cell is unaffected by the write. -/
 theorem getPair_setPair_ne {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
-    (h : IsShaped numCols n a) {p q : ℕ × ℕ} (hpq : q ≠ p) (v : ℕ × ℕ) :
+    (h : Shaped numCols n a) {p q : ℕ × ℕ} (hpq : q ≠ p) (v : ℕ × ℕ) :
     getPair (setPair a p v) q = getPair a q := by
   obtain ⟨hsize, hrow⟩ := h
   by_cases h1 : q.1 = p.1
@@ -100,9 +100,9 @@ theorem getPair_setPair_ne {numCols n : ℕ} {a : Array (Array (ℕ × ℕ))}
       Array.size_modify, Array.getElem_modify_of_ne (fun h => h1 h.symm)]
 
 /-- `repoint` preserves the aux shape. -/
-theorem IsShaped.repoint {numCols n : ℕ} {a : Asm}
-    (h : IsShaped numCols n a.aux) (fuel : ℕ) (i tgt stop : ℕ × ℕ) :
-    IsShaped numCols n (Asm.repoint a fuel i tgt stop).aux := by
+theorem Shaped.repoint {numCols n : ℕ} {a : Asm}
+    (h : Shaped numCols n a.aux) (fuel : ℕ) (i tgt stop : ℕ × ℕ) :
+    Shaped numCols n (Asm.repoint a fuel i tgt stop).aux := by
   induction fuel generalizing a i with
   | zero => exact h
   | succ fuel ih =>
@@ -115,7 +115,7 @@ theorem IsShaped.repoint {numCols n : ℕ} {a : Asm}
 `start` (with stop `stop`, the first later return of the orbit) re-points exactly the
 orbit segment `π ^ t · start, t < s`, and leaves every other `aux` entry unchanged. -/
 theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
-    (hshape : IsShaped numCols n a.aux)
+    (hshape : Shaped numCols n a.aux)
     (hmap : ∀ c : FlatCell numCols n, getPair a.mapping c.pair = (π c).pair)
     (s : ℕ) (start stop : FlatCell numCols n) (tgt : ℕ × ℕ)
     (hs : (π ^ s) start = stop) (hs1 : 1 ≤ s)
@@ -348,7 +348,7 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
       exact (sim.map_shape.setPair _ _).setPair _ _
     · -- aux shape: one walk over the untouched aux
       rw [merge_aux]
-      exact IsShaped.repoint sim.aux_shape _ _ _ _
+      exact Shaped.repoint sim.aux_shape _ _ _ _
     · -- the mapping acts as the merged permutation
       intro c
       rw [merge_mapping, hpl, hpr]
@@ -433,7 +433,7 @@ theorem Sim.new (numCols n : ℕ) :
     simp [getPair,
       initCol,
       FlatCell.pair, c.1.isLt, c.2.isLt]
-  have hshape : IsShaped numCols n ((Array.range numCols).map
+  have hshape : Shaped numCols n ((Array.range numCols).map
       (fun i => initCol i n)) := by
     refine ⟨by simp, ?_⟩
     intro i hi

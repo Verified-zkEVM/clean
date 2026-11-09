@@ -29,7 +29,7 @@ namespace FixedRequirement
 variable {F : Type} [FiniteField F]
 
 /-- The exact Clean semantics of one extracted fixed-data obligation. -/
-def IsSatisfied (place : RegionIndex → ℕ) (env : Environment F) :
+def Satisfied (place : RegionIndex → ℕ) (env : Environment F) :
     FixedRequirement F → Prop
   | .assignment region column row value =>
       env.fixed column (place region + row : ℕ) = value
@@ -69,13 +69,13 @@ theorem region_fixed_constraints_iff
     (ops : RegionOperations F) :
     RegionConstraints .fixed place self env ops ↔
       (regionFixedRequirements self ops).Forall
-        (FixedRequirement.IsSatisfied place env) := by
+        (FixedRequirement.Satisfied place env) := by
   induction ops with
   | nil => simp [RegionConstraints, regionFixedRequirements]
   | cons op rest ih =>
       cases op <;>
         simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
-          regionFixedRequirements, FixedRequirement.IsSatisfied, Environment.get_fixed]
+          regionFixedRequirements, FixedRequirement.Satisfied, Environment.get_fixed]
 
 /-- The complete fixed-family projection is satisfaction of every extracted requirement. -/
 theorem fixed_constraints_iff_requirements
@@ -83,7 +83,7 @@ theorem fixed_constraints_iff_requirements
     (ops : Operations F) (i : RegionIndex) :
     Constraints .fixed place env ops i ↔
       (operationFixedRequirements ops i).Forall
-        (FixedRequirement.IsSatisfied place env) := by
+        (FixedRequirement.Satisfied place env) := by
   induction ops generalizing i with
   | nil => simp [Constraints, operationFixedRequirements]
   | cons op rest ih =>
@@ -96,7 +96,7 @@ theorem fixed_constraints_iff_requirements
           simp [operationFixedRequirements]
       | loadTable column values =>
           rw [Constraints, ih]
-          simp [operationFixedRequirements, FixedRequirement.IsSatisfied]
+          simp [operationFixedRequirements, FixedRequirement.Satisfied]
 
 end CircuitConstraintFamily
 
@@ -351,10 +351,10 @@ theorem requirement_satisfied_of_entries
     (requirement : FixedRequirement F)
     (hrequirement :
       requirement ∈ operationFixedRequirements ops i) :
-    requirement.IsSatisfied (Layout.place starts) env := by
+    requirement.Satisfied (Layout.place starts) env := by
   cases requirement with
   | assignment region column row value =>
-      simp only [FixedRequirement.IsSatisfied]
+      simp only [FixedRequirement.Satisfied]
       have hentry := hentries column.index
         (Layout.place starts region + row) value
         (List.mem_append_right _
@@ -362,7 +362,7 @@ theorem requirement_satisfied_of_entries
             starts ops i region column row value hrequirement))
       simpa using hentry
   | table column values =>
-      simp only [FixedRequirement.IsSatisfied]
+      simp only [FixedRequirement.Satisfied]
       have hload :=
         loadTable_mem_of_requirement ops i column values hrequirement
       constructor
