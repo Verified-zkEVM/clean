@@ -223,6 +223,8 @@ parent proof.
 - `doc/proving-guide.md` — tips for user-facing circuit formalization proofs
 - `doc/witgen-authoring.md` — how to write circuit witnesses in the witness IR
 
+Whenever reviewing code in this repo, read REVIEWERS.md for guidelines.
+
 ## Key Files to Understand
 
 1. `Clean/Circuit/Basic.lean` - Circuit monad and FormalCircuit
