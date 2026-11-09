@@ -3,6 +3,8 @@ import Clean.Utils.Field
 import Clean.Utils.Tactics.CircuitProofStart
 import Mathlib.Data.Nat.Bitwise
 
+open Clean
+
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
 def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
 
@@ -195,7 +197,7 @@ inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
-def witness (e : Witgen.FExpr (F p)) := do
+def witness (e : FExpr (F p)) := do
   let x ← witnessVar (.ofFExpr e)
   assertZero (var x * (var x - 1))
   return Boolean.mk x

@@ -3,6 +3,8 @@ import Clean.Types.U32
 import Clean.Gadgets.Addition32.Theorems
 import Clean.Utils.Primes
 
+open Clean
+
 namespace Gadgets.Addition32
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

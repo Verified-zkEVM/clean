@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
+open Clean
+
 /-!
 # Orchard action checks
 

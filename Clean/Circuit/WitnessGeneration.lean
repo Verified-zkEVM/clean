@@ -1,5 +1,7 @@
 import Clean.Circuit.Theorems
 
+namespace Clean
+
 /-!
 # Array-backed witness generation (witgen IR plan, phase 3)
 
@@ -105,3 +107,5 @@ theorem witgen_usesLocalWitnesses (circuit : Circuit F α) (hint : ProverHint F)
   exact h h_computable
 
 end Circuit
+
+end Clean

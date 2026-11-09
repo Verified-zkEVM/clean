@@ -2,6 +2,8 @@ import Batteries.Data.Vector.Lemmas
 import Clean.Orchard.Sinsemilla.HashToPoint
 import Clean.Orchard.Utilities
 
+open Clean
+
 /-!
 Reference:
 `halo2@halo2_gadgets-0.5.0/halo2_gadgets/src/sinsemilla/merkle/chip.rs`
@@ -1153,7 +1155,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
             (Layer.main G Q hQ j (by omega)
               { node := default,
                 sibling := fun s => ((input_var.path s).1[j], (input_var.path s).2),
-                posBit := fun s => ((input_var.pos s).1.testBit (Witgen.NExpr.const j) =? 1,
+                posBit := fun s => ((input_var.pos s).1.testBit (NExpr.const j) =? 1,
                   (input_var.pos s).2) } (i₀ + j * 274)).1 = acc (j + 1) :=
           bridge j (by omega) _ _ _ rfl
         have spec := (hLstep j hk' ⟨B, by rw [hbe]; exact hB⟩).2 B (by rw [hbe]; exact hB)
@@ -1187,7 +1189,7 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
         (Layer.main G Q hQ i (by omega)
           { node := default,
             sibling := fun s => ((input_var.path s).1[i], (input_var.path s).2),
-            posBit := fun s => ((input_var.pos s).1.testBit (Witgen.NExpr.const i) =? 1,
+            posBit := fun s => ((input_var.pos s).1.testBit (NExpr.const i) =? 1,
               (input_var.pos s).2) } (i₀ + i * 274)).1 = acc (i + 1) :=
       bridge i (by omega) _ _ _ rfl
     rw [hbe]

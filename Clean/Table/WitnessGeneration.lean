@@ -1,5 +1,7 @@
 import Clean.Table.Basic
 
+open Clean
+
 variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [FiniteField F]
 
 /--

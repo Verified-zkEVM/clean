@@ -4,6 +4,8 @@ import Clean.Circuit.Provable
 import Clean.Utils.Tactics.ProvableTacticUtils
 import Clean.Utils.Tactics.ProvableStructNaming
 
+open Clean
+
 open Lean.Elab.Tactic
 open Lean.Meta
 open Lean
@@ -208,6 +210,20 @@ def splitProvableStructEq : TacticM Unit := do
               for side in #[lhs, rhs] do
                 if let some mkInjEqName ← mkInjEqNameFromConstructor? side then
                   lemmasToApply ← addIdentLemmaIfMissing lemmasToApply mkInjEqName
+
+      -- The GOAL's equalities contribute their `mk.injEq` lemmas too: a `mk … = mk …`
+      -- target — e.g. a bundle ProverSpec value equation over a destructured output —
+      -- splits into field equations by the same `simp only [.. ] at *` below.
+      let target ← instantiateMVars (← getMainTarget)
+      for (eqExpr, lhs, rhs) in (← extractEqualities target) do
+        if let some typeExpr := eqExpr.getArg? 0 then
+          if let some mkInjEqName ← mkInjEqNameFromType? typeExpr then
+            if (← hasProvableStructInstance typeExpr) || (← hasDerivedCircuitTypeValueType typeExpr) then
+              lemmasToApply ← addIdentLemmaIfMissing lemmasToApply mkInjEqName
+          if ← hasDerivedCircuitTypeValueType typeExpr then
+            for side in #[lhs, rhs] do
+              if let some mkInjEqName ← mkInjEqNameFromConstructor? side then
+                lemmasToApply ← addIdentLemmaIfMissing lemmasToApply mkInjEqName
 
       -- Apply all the lemmas we found
       if !lemmasToApply.isEmpty then

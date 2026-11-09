@@ -5,6 +5,8 @@ and smoothly simplifies to an equality statement under `circuit_norm`.
 import Clean.Circuit.Loops
 import Clean.Circuit.Explicit
 
+open Clean
+
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 namespace Gadgets
@@ -53,7 +55,7 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     simp only [circuit_norm, Prod.mk.injEq] at h_input
     obtain ⟨ hx, hy ⟩ := h_input
     rw [←hx, ←hy]
-    simp only [CircuitType.eval_expression, ProvableType.eval]
+    simp only [CircuitType.eval_expression, ProvableType.Clean.eval]
     congr 1
     ext i hi
     simp only [Vector.getElem_map]
@@ -77,7 +79,7 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     rw [←hx, ←hy] at h_spec
     clear hx hy
     apply_fun toElements at h_spec
-    simp only [CircuitType.eval_expression, ProvableType.eval,
+    simp only [CircuitType.eval_expression, ProvableType.Clean.eval,
       ProvableType.toElements_fromElements] at h_spec
     rw [Vector.ext_iff] at h_spec
 

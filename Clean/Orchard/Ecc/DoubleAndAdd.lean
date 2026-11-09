@@ -3,6 +3,8 @@ import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 import Clean.Orchard.Specs.Pallas
 
+open Clean
+
 /-!
 # Double-and-add row (incomplete addition)
 

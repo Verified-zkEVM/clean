@@ -1,5 +1,7 @@
 import Clean.Circuit.Explicit
 
+namespace Clean
+
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
 section
@@ -444,3 +446,5 @@ def channels (circuit : FormalCircuitBase F Input Output) :=
   circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
 end FormalCircuitBase
 end
+
+end Clean

@@ -2,7 +2,10 @@ import Clean.Orchard.Action.Canonicity
 import Clean.Orchard.Action.Decompose
 import Clean.Orchard.Sinsemilla.CommitDomain
 import Clean.Orchard.Specs.Bitrange
+import Clean.Orchard.Specs.SinsemillaBreak
 import Clean.Orchard.Utilities
+
+open Clean
 
 /-!
 # `gadgets::note_commit` synthesis-level entry
@@ -25,6 +28,7 @@ open Orchard.Specs.Sinsemilla (Generators)
 open Orchard.Ecc
 open Orchard.Sinsemilla
 open Orchard.Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
+open Orchard.Specs.Sinsemilla (hashToPointB ValidBreak SpecOrBreak breaksOfGuarded chunksOf_mem_lt)
 open Orchard.Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq noteCommitMessage noteCommitChunks
   noteCommitChunks_tiling hashToPoint sum_head_shift sum_digits_lt digit_of_sum
   chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum
@@ -539,8 +543,8 @@ def main (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
   let k2 ← Utilities.LookupRangeCheck.WitnessShort.circuit 250 4 (by norm_num [K])
     (unconstrained do return input.y)
   let k3 ← witness (input.y.val.bitrange 254 1).toField
-  let j ← witness ((input.lsb + k0 * (2 : Fp) : Expression Fp)
-    + (input.y.val.bitrange 10 240).toField * Witgen.FExpr.const (2 ^ 10 : Fp))
+  let j ← witness (((input.lsb + k0 * (2 : Fp) : Expression Fp)
+    + (input.y.val.bitrange 10 240).toField * FExpr.const (2 ^ 10 : Fp) : FExpr Fp))
   let jReads ← Utilities.LookupRangeCheck.CopyCheck.Decomposed.circuit j
   let j'Zs ← Utilities.LookupRangeCheck.CopyCheck.Telescoped.circuit 13
     (j + Expression.const ((2 ^ 130 : ℕ) : Fp) - Expression.const tP)
@@ -856,12 +860,19 @@ def ProverMessagePiecesEncode (input : ProverValue Input Fp)
   Chain.honestChunks messagePieceRounds (messagePieces cells) =
     (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks
 
+/-- Breaks-as-data note-commitment relation (zcash/ironwood#45): either the honest
+Sinsemilla chain is defined and `cm` is the commitment `B + [rcm]R`, or the chain
+escaped and the break is exhibited (`ValidBreak`: the honest prefix chain plus the
+resolved incomplete-addition collision equation — a discrete-log relation among the
+domain generators with coefficients read off the break datum). Projecting the break
+branch to `⊥` recovers the protocol specification's `NoteCommit(…) ∈ {cm, ⊥}`
+(§4.17.4), via `getLeft?_hashToPointB`. -/
 def NoteCommitRelation (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (input : Value Input Fp) (cm : Point Fp) : Prop :=
-  ∃ rcm : Fq, ∀ B : Point Fp,
-    hashToPoint G.S Q
-        (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks = some B →
-      cm = B + rcm • R
+  ∃ rcm : Fq,
+    SpecOrBreak G.S Q (fun B => cm = B + rcm • R)
+      (hashToPointB G.S Q
+        (noteScalars input.gd input.pkd input.value input.rho input.psi).chunks)
 
 def ProverNoteCommitRelation (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (input : ProverValue Input Fp) (cm : Point Fp) : Prop :=
@@ -909,12 +920,12 @@ def main (input : Var Input Fp) : Circuit Fp (Var MessageCells Fp) := do
   let a ← witness (gdX.val.bitrange 0 250).toField
   let b ← witness (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp) + b3 * (2 ^ 6 : Fp) : Expression Fp)
   let c ← witness (pkdX.val.bitrange 4 250).toField
-  let d ← witness ((d0 + d1 * (2 : Fp) + d2 * (2 ^ 2 : Fp) : Expression Fp)
-    + (v.val.bitrange 8 50).toField * Witgen.FExpr.const (2 ^ 10 : Fp))
+  let d ← witness (((d0 + d1 * (2 : Fp) + d2 * (2 ^ 2 : Fp) : Expression Fp)
+    + (v.val.bitrange 8 50).toField * FExpr.const (2 ^ 10 : Fp) : FExpr Fp))
   let e ← witness (e0 + e1 * (2 ^ 6 : Fp) : Expression Fp)
   let f ← witness (rho.val.bitrange 4 250).toField
-  let g ← witness ((g0 + g1 * (2 : Fp) : Expression Fp)
-    + (psi.val.bitrange 9 240).toField * Witgen.FExpr.const (2 ^ 10 : Fp))
+  let g ← witness (((g0 + g1 * (2 : Fp) : Expression Fp)
+    + (psi.val.bitrange 9 240).toField * FExpr.const (2 ^ 10 : Fp) : FExpr Fp))
   let h ← witness (h0 + h1 * (2 ^ 5 : Fp) : Expression Fp)
   return {
     a, b, c, d, e, f, g, h,
@@ -1877,7 +1888,7 @@ def ProverSpec (G : Generators) (Q : Point Fp) (R : MulFixed.FixedBase)
     (_ : ProverHint Fp) : Prop :=
   ProverNoteCommitRelation G Q R input cm
 
-private theorem z13G_tail_of_decompose_g {g g0 g1 g2 z13G : Fp}
+theorem z13G_tail_of_decompose_g {g g0 g1 g2 z13G : Fp}
     (hg0_bool : IsBool g0)
     (hg1_lt : g1.val < 2 ^ 9)
     (hg2_lt : g2.val < 2 ^ 240)
@@ -2232,7 +2243,9 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       hgdX hgdY hpkdX hpkdY hv hrho hpsi
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · simp only [Spec, NoteCommitRelation]
-    refine ⟨rcm, ?_⟩
+    refine ⟨rcm, breaksOfGuarded (Or.inl hQ) (fun m hm => G.S_onCurve
+      (chunksOf_mem_lt (by
+        simpa [NoteCommitScalars.chunks, noteCommitChunks] using hm))) ?_⟩
     intro B hBhash
     have hHashB := hHash B (by simpa [hchunks] using hBhash)
     have hCOutPoint :

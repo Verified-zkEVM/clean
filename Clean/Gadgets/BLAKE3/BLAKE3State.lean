@@ -2,6 +2,8 @@ import Clean.Types.U32
 import Clean.Circuit.Provable
 import Clean.Specs.BLAKE3
 
+open Clean
+
 namespace Gadgets.BLAKE3
 open Specs.BLAKE3
 

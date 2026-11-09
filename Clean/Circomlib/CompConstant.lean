@@ -3,6 +3,8 @@ import Clean.Utils.Bits
 import Clean.Circomlib.Bitify
 import Clean.Circomlib.CompConstantLemmas
 
+open Clean
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/compconstant.circom

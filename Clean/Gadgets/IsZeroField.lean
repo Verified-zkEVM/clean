@@ -4,6 +4,8 @@ import Clean.Gadgets.Equality
 import Clean.Utils.Field
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace Gadgets.IsZeroField
 variable {F : Type} [FiniteField F] [DecidableEq F]
 

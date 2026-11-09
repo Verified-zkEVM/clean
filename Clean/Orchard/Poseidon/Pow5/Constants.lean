@@ -1,6 +1,8 @@
 import Clean.Circuit
 import Clean.Orchard.Ecc
 
+open Clean
+
 /-!
 # P128Pow5T3 constants for Orchard Poseidon
 

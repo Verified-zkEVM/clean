@@ -4,6 +4,8 @@ import Clean.Utils.Field
 import Clean.Types.U64
 import Clean.Gadgets.Xor.ByteXorTable
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

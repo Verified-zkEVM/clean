@@ -3,6 +3,8 @@ import Lean.Elab.Exception
 import Clean.Circuit.Provable
 import Clean.Utils.Tactics.ProvableStructNaming
 
+open Clean
+
 open Lean.Elab.Tactic
 open Lean.Meta
 open Lean
@@ -86,10 +88,9 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
         -- typeCtor is `Inputs n`
         try
           let instType ← mkAppM ``ProvableStruct #[typeCtor]
-          if let .some _ ← trySynthInstance instType then
-            return true
-          else
-            return false
+          match ← trySynthInstance instType with
+          | .some _ => return true
+          | _ => return false
         catch _ => return false
       | _ => return false
 

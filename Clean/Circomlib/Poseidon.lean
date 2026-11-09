@@ -3,6 +3,8 @@ import Clean.Specs.Poseidon
 import Clean.Specs.PoseidonOptimized
 import Clean.Utils.Tactics.CircuitProofStart
 
+open Clean
+
 /-
 Poseidon Hash Circuit Implementation
 

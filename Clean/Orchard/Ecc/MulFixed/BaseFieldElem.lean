@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Utilities
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`.
 
@@ -223,7 +225,7 @@ of the committed base-field element (`k = α.val / 8^w % 8`, matching `windowVal
 definitionally), witness the next running-sum value, and read the three window-table
 columns at `k`. -/
 def rowProgram (B : MulFixed.FixedBase) (alpha : Expression Fp) (w : ℕ) :
-    Witgen.M Fp (RowTail (Witgen.FExpr Fp)) := do
+    Witgen.M Fp (RowTail (FExpr Fp)) := do
   let xs := Vector.ofFn fun k : Fin 8 => (MulFixed.windowPoint B.point w k.val).x
   let ys := Vector.ofFn fun k : Fin 8 => (MulFixed.windowPoint B.point w k.val).y
   let us := Vector.ofFn fun k : Fin 8 => B.u w k.val
@@ -319,7 +321,7 @@ private theorem exists_lt_of_inRange {x : Fp}
   · exact ⟨7, by norm_num, by rw [h]; norm_num⟩
 
 /-- Casts of naturals below `8` are injective in `Fp`. -/
-private theorem natCast_inj_of_lt_8 {j k : ℕ} (hj : j < 8) (hk : k < 8)
+theorem natCast_inj_of_lt_8 {j k : ℕ} (hj : j < 8) (hk : k < 8)
     (h : (j : Fp) = (k : Fp)) : j = k := by
   have hcard : (8 : ℕ) < PALLAS_BASE_CARD := by norm_num [PALLAS_BASE_CARD]
   have := congrArg ZMod.val h
@@ -354,7 +356,7 @@ private theorem chain_eq_sum (z : ℕ → Fp) (ks : ℕ → ℕ)
   exact h85
 
 /-- Weighted base-8 digit sums are bounded by `8^n`. -/
-private theorem sum_lt_of_windows {ks : ℕ → ℕ} {n : ℕ} (hk : ∀ j < n, ks j < 8) :
+theorem sum_lt_of_windows {ks : ℕ → ℕ} {n : ℕ} (hk : ∀ j < n, ks j < 8) :
     ∑ j ∈ Finset.range n, ks j * 8 ^ j < 8 ^ n := by
   induction n with
   | zero => simp
@@ -368,7 +370,7 @@ private theorem sum_lt_of_windows {ks : ℕ → ℕ} {n : ℕ} (hk : ∀ j < n, 
 
 /-- The window decomposition recombines to the decomposed value: the `+2` offsets of the
 lower 84 windows cancel against `offset_acc` in the most significant window. -/
-private theorem windowScalar_partialSum (ks : ℕ → ℕ) :
+theorem windowScalar_partialSum (ks : ℕ → ℕ) :
     MulFixed.windowScalar 84 (ks 84) + (MulFixed.partialSum ks 83 : Fq)
       = ((∑ j ∈ Finset.range 85, ks j * 8 ^ j : ℕ) : Fq) := by
   have hoffset : MulFixed.offsetAcc = ∑ j ∈ Finset.range 84, 2 * 8 ^ j := by
@@ -388,13 +390,13 @@ private theorem windowScalar_partialSum (ks : ℕ → ℕ) :
   push_cast
   ring
 
-private theorem inv_lt_card {S j : ℕ} (hS : S < 2 * 8 ^ (j + 1)) (hj : j ≤ 83) :
+theorem inv_lt_card {S j : ℕ} (hS : S < 2 * 8 ^ (j + 1)) (hj : j ≤ 83) :
     S < PALLAS_SCALAR_CARD := by
   have hpow : (8 : ℕ) ^ (j + 1) ≤ 8 ^ 84 := Nat.pow_le_pow_right (by norm_num) (by omega)
   have hcard : 2 * 8 ^ 84 < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
   omega
 
-private theorem step_sum_lt {S t j : ℕ} (hS : S < 2 * 8 ^ (j + 1))
+theorem step_sum_lt {S t j : ℕ} (hS : S < 2 * 8 ^ (j + 1))
     (ht : t ≤ 9 * 8 ^ (j + 1)) (hj : j ≤ 82) : S + t < PALLAS_SCALAR_CARD := by
   have hpow : (8 : ℕ) ^ (j + 1) ≤ 8 ^ 83 := Nat.pow_le_pow_right (by norm_num) (by omega)
   have hcard : 11 * 8 ^ 83 < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
@@ -494,7 +496,7 @@ private theorem accPt_pos {j : ℕ} (env : Environment Fp) (i₀ : ℕ) (hj : 1 
   rw [accPt_succ, Nat.add_sub_cancel]
 
 /-- The cast `(↑V).val • B.point = V • B.point` (the value spec uses the raw `ℕ`-smul). -/
-private theorem natCast_val_nsmul (B : MulFixed.FixedBase) (V : ℕ) :
+theorem natCast_val_nsmul (B : MulFixed.FixedBase) (V : ℕ) :
     ((V : Fq).val) • B.point = V • B.point := by
   apply B.nsmul_congr
   rw [ZMod.val_natCast]
@@ -886,7 +888,7 @@ private theorem coordsRow_spec (B : MulFixed.FixedBase) (α : Fp) {w : ℕ} (hw 
     linear_combination zValue_step α w
   refine ⟨?_, ?_, ?_⟩
   · rw [show (MulFixed.RunningSumCoords.coordsRow row).xP = row.xP from rfl, hx,
-      MulFixed.interpolatedX, hwin, B.interpolate_eq w hw _ (windowVal_lt α w)]
+      hwin, B.interpolate_eq w hw _ (windowVal_lt α w)]
   · rw [show (MulFixed.RunningSumCoords.coordsRow row).u = row.u from rfl,
       show (MulFixed.RunningSumCoords.coordsRow row).yP = row.yP from rfl, hu, hy]
     exact B.u_mul_u w hw _ (windowVal_lt α w)
@@ -1347,8 +1349,8 @@ def main (B : MulFixed.FixedBase) (alpha : Var field Fp) :
   -- α_0 = α - z_84 · 2^252, the low 252 bits.
   -- α_0_prime = α_0 + 2^130 - t_p; 13 ten-bit lookups give z_13_alpha_0_prime.
   let alpha0Prime ← witness <|
-    (Witgen.FExpr.expr alpha - Witgen.FExpr.expr m.z84 * Witgen.FExpr.const (2 ^ 252 : Fp))
-      + Witgen.FExpr.const (2 ^ 130 : Fp) - Witgen.FExpr.const (tPNat : Fp)
+    ((FExpr.expr alpha : FExpr Fp) - FExpr.expr m.z84 * FExpr.const (2 ^ 252 : Fp))
+      + FExpr.const (2 ^ 130 : Fp) - FExpr.const (tPNat : Fp)
   let zsDecomp ← Utilities.LookupRangeCheck.CopyCheck.circuit 13 alpha0Prime
   let z13Alpha0Prime := zsDecomp[13]
   -- the 2-bit / 1-bit pieces of the top window, and the canonicity gate
@@ -1377,13 +1379,13 @@ def Spec (B : MulFixed.FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
   output = (alpha.val : Fq) • B
 
 /-- `p = 2^254 + t_p` for the Pallas base field. -/
-private theorem base_card_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
+theorem base_card_eq : PALLAS_BASE_CARD = 2 ^ 254 + tPNat := by
   norm_num [PALLAS_BASE_CARD, tPNat]
 
 /-- From the lookup digit sum `S < 2^130` and the field equation `S = α0 + 2^130 - t_p`
 (with `α0 < 2^132` ruling out wraparound), conclude `α0 < t_p`. Factored so the heavy
 `ZMod.val` reasoning is kernel-checked in isolation. -/
-private theorem alpha0_lt_tp {S α0 : ℕ} (hSlt : S < 2 ^ 130) (hα0lt : α0 < 2 ^ 132)
+theorem alpha0_lt_tp {S α0 : ℕ} (hSlt : S < 2 ^ 130) (hα0lt : α0 < 2 ^ 132)
     (heq : (S : Fp) = (α0 : Fp) + (2 : Fp) ^ 130 - (tPNat : Fp)) : α0 < tPNat := by
   -- additive form (no `Nat.cast_sub`): `↑(S + t_p) = ↑(α0 + 2^130)`
   have hadd : ((S + tPNat : ℕ) : Fp) = ((α0 + 2 ^ 130 : ℕ) : Fp) := by
@@ -1405,7 +1407,7 @@ exactly the honest cell values: `d := α.val / 8^84` is the top window, `α1 = d
 `α2 = d / 4`, `α0' = α - d·2²⁵² + 2¹³⁰ - t_p`, and the running-sum cells `z₄₄`, `z₄₃`,
 plus the lookup output `z₁₃ = ⌊α0'.val / 2¹³⁰⌋`. Canonicity (`α.val < p`) forces the high
 window to `4` and `α0 < t_p` in the `α2 = 1` branch. -/
-private theorem honest_canon_spec {row : Input Fp} {α : Fp}
+theorem honest_canon_spec {row : Input Fp} {α : Fp}
     (hcanon : α.val < PALLAS_BASE_CARD)
     (ha : row.alpha = α)
     (hz84 : row.z84Alpha = ((α.val / 8 ^ 84 : ℕ) : Fp))

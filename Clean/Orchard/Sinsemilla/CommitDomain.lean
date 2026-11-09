@@ -2,6 +2,8 @@ import Clean.Orchard.Sinsemilla.HashToPoint
 import Clean.Orchard.Ecc.MulFixed.FullWidth
 import Clean.Orchard.Ecc.Add
 
+open Clean
+
 /-!
 # Sinsemilla commit domain
 

@@ -3,6 +3,8 @@ import Clean.Gadgets.SHA256.LowerSigma1
 import Clean.Gadgets.SHA256.Add32
 import Clean.Specs.SHA256
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^33)]
 
@@ -356,7 +358,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
               (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
             (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
             from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
+          simp [varFromOffset, fromElements, size]]
         rw [CircuitType.eval_var_fields, v_wj, v_sum1, v_sig0, v_sum0, v_sig1,
           ih_val (k + 16 - 7) (by omega), ih_val (k + 16 - 16) (by omega),
           ih_val (k + 16 - 2) (by omega), ih_val (k + 16 - 15) (by omega)]
@@ -380,7 +382,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
               (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
             (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
             from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
+          simp [varFromOffset, fromElements, size]]
         rw [CircuitType.eval_var_fields]
         exact n_wj
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
@@ -501,7 +503,7 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
               (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
             (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
             from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
+          simp [varFromOffset, fromElements, size]]
         rw [CircuitType.eval_var_fields]
         exact n_wj
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]

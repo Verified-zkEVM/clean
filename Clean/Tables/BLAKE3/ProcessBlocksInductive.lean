@@ -12,6 +12,8 @@ import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Conditional
 import Clean.Gadgets.IsZero
 
+open Clean
+
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
 open Specs.BLAKE3

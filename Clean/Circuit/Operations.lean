@@ -5,6 +5,8 @@ import Clean.Circuit.Provable
 import Clean.Circuit.Channel
 import Clean.Circuit.SimpGadget
 
+namespace Clean
+
 variable {F : Type} [FiniteField F] {α : Type} {n : ℕ}
 
 /--
@@ -756,7 +758,7 @@ def singleLocalLength : FlatOperation F → ℕ
   | .lookup _ => 0
   | .interact _ => 0
 
-def forAll (offset : ℕ) (condition : _root_.Condition F) : List (FlatOperation F) → Prop
+def forAll (offset : ℕ) (condition : Clean.Condition F) : List (FlatOperation F) → Prop
   | [] => True
   | .witness m c :: ops => condition.witness offset m c ∧ forAll (m + offset) condition ops
   | .assert e :: ops => condition.assert offset e ∧ forAll offset condition ops
@@ -1311,3 +1313,5 @@ theorem forAll_cons {condition : Condition F} {offset : ℕ} {op : Operation F} 
   cases op <;> simp [forAll, Operation.localLength, Condition.apply]
 
 end Operations
+
+end Clean

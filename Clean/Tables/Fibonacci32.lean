@@ -5,6 +5,8 @@ import Clean.Gadgets.Addition32.Addition32
 import Clean.Gadgets.Equality
 import Clean.Types.U32
 
+open Clean
+
 namespace Tables.Fibonacci32
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

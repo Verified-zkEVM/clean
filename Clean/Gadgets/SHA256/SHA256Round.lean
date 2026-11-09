@@ -5,6 +5,8 @@ import Clean.Gadgets.SHA256.UpperSigma0
 import Clean.Gadgets.SHA256.UpperSigma1
 import Clean.Specs.SHA256
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

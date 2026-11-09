@@ -7,6 +7,8 @@ import Clean.Utils.Vector
 import Clean.Circuit.Expression
 import Clean.Utils.Fin
 
+open Clean
+
 namespace Utils.Bits
 /--
   Convert a natural number to a vector of bits.

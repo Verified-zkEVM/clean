@@ -12,6 +12,8 @@ import Clean.Orchard.Action.ValueCommit
 import Clean.Orchard.Ecc.WitnessPoint
 import Clean.Orchard.Sinsemilla.Merkle
 
+open Clean
+
 /-!
 # Orchard action circuit (final assembly)
 

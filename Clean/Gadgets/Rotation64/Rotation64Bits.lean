@@ -4,6 +4,8 @@ import Clean.Gadgets.Rotation64.Theorems
 import Clean.Circuit.Provable
 import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 
+open Clean
+
 namespace Gadgets.Rotation64Bits
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]

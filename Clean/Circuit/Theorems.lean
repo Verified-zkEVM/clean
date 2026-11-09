@@ -7,6 +7,8 @@ such as `Circuit.Subcircuit` which focuses on establishing the foundation for su
 import Clean.Circuit.Formal
 import Clean.Circuit.Provable
 
+namespace Clean
+
 variable {F : Type} [FiniteField F] {α β : Type}
 
 namespace Circuit
@@ -138,14 +140,14 @@ lemma localLength_append {F} {a b: List (FlatOperation F)} :
   | case3 _ _ ih | case4 _ _ ih | case5 _ _ ih =>
     simp only [List.cons_append, localLength, ih]
 
-theorem forAll_empty {condition : _root_.Condition F} {n : ℕ} : forAll n condition [] = True := rfl
+theorem forAll_empty {condition : Clean.Condition F} {n : ℕ} : forAll n condition [] = True := rfl
 
-theorem forAll_cons {condition : _root_.Condition F} {offset : ℕ} {op : FlatOperation F} {ops : List (FlatOperation F)} :
+theorem forAll_cons {condition : Clean.Condition F} {offset : ℕ} {op : FlatOperation F} {ops : List (FlatOperation F)} :
   forAll offset condition (op :: ops) ↔
     condition.applyFlat offset op ∧ forAll (op.singleLocalLength + offset) condition ops := by
   cases op <;> simp [forAll, Condition.applyFlat, singleLocalLength]
 
-lemma forAll_append {condition : _root_.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
+lemma forAll_append {condition : Clean.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
   forAll n condition (ops ++ ops') ↔
     forAll n condition ops ∧ forAll (localLength ops + n) condition ops' := by
   induction ops generalizing n with
@@ -387,7 +389,7 @@ end Circuit
 -- more theorems about forAll / forAllFlat
 
 namespace FlatOperation
-theorem forAll_implies {c c' : _root_.Condition F} (n : ℕ) {ops : List (FlatOperation F)} :
+theorem forAll_implies {c c' : Clean.Condition F} (n : ℕ) {ops : List (FlatOperation F)} :
     (forAll n (c.implies c').ignoreSubcircuit ops) → (forAll n c ops → forAll n c' ops) := by
   simp only [Condition.implies, Condition.ignoreSubcircuit]
   intro h
@@ -773,3 +775,5 @@ theorem FormalCircuitBase.channels_subset
   simp only [List.subset_def, List.mem_append]
   tauto
 end
+
+end Clean

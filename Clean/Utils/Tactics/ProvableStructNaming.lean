@@ -51,4 +51,25 @@ def generateStructFieldNames (fvarId : FVarId) : MetaM AltVarNames := do
   -- Create AltVarNames for the single constructor case
   return { varNames := customNames.toList }
 
+/--
+  Like `generateStructFieldNames`, but reads the structure name off the application *head* so it
+  also handles provable types whose type constructor carries parameters BEFORE the field type
+  (e.g. `Output numBits F`, `fields n F`). The single-parameter `generateStructFieldNames` matches
+  only `S F` (`.app (.const S) F`) and throws on `S a F`; some main-Clean gadgets rely on that throw
+  to leave a multi-parameter input destructured *manually*, so this variant is kept separate and
+  is used only by halo2's `provable_type_simp`, whose composite outputs (`Output numBits F`) must
+  destructure automatically.
+-/
+def generateStructFieldNamesMulti (fvarId : FVarId) : MetaM AltVarNames := do
+  let localDecl ← fvarId.getDecl
+  let userName := localDecl.userName
+  let varType ← inferType (.fvar fvarId)
+  let varType' ← whnf varType
+  let structName ← match varType'.getAppFn with
+    | .const name _ => pure name
+    | _ => throwError "Cannot extract structure name from type: {varType'}"
+  let fieldNames ← getStructureFieldNames structName
+  let customNames := generateFieldBasedNames userName fieldNames
+  return { varNames := customNames.toList }
+
 end ProvableStructNaming

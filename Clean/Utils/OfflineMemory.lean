@@ -6,6 +6,8 @@ import Clean.Utils.Primes
 import Clean.Utils.Tactics
 import Mathlib.Data.List.Sort
 
+open Clean
+
 /-
 The purpose of this file is to define a memory model that can be checked using the Memory in the Head paradigm,
 often also called "offline memory checking". [Blu+91]

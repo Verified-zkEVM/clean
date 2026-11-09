@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc.Mul.Incomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Specs.CompElliptic.CurveForms.ShortWeierstrass
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.
 -/

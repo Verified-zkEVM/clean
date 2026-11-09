@@ -1,6 +1,8 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
 
+open Clean
+
 namespace Gadgets.Xor
 open ByteUtils
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]

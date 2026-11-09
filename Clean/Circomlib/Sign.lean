@@ -3,6 +3,8 @@ import Clean.Utils.Field
 import Clean.Utils.Bits
 import Clean.Circomlib.CompConstant
 
+open Clean
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/sign.circom

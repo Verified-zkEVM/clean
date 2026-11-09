@@ -2,7 +2,10 @@ import Clean.Orchard.Action.CommitIvkGate
 import Clean.Orchard.Action.CommitIvkChunks
 import Clean.Orchard.Sinsemilla.CommitDomain
 import Clean.Orchard.Specs.Sinsemilla
+import Clean.Orchard.Specs.SinsemillaBreak
 import Clean.Orchard.Utilities
+
+open Clean
 
 /-!
 # Orchard incoming viewing key commitment
@@ -47,7 +50,8 @@ instance : Inhabited (Var Input Fp) :=
   ⟨{ ak := default, nk := default, rivk := default }⟩
 
 open Orchard.Specs (bitrange bitrange_lt cast_bitrange_val)
-open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope)
+open Orchard.Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope
+  hashToPointB SpecOrBreak breaksOfGuarded chunksOf_mem_lt)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 open Orchard.Action.NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
   shifted_high_zero)
@@ -583,7 +587,7 @@ deriving ProvableStruct
 /-- The output, parametrized over the running-sum list `ns` so its `eval` projection
 lemmas (`eval_cells`/`eval_zs`) are proved *generically* — stuck on the symbolic `ns` —
 and merely instantiated at the concrete `[24, 0, 23, 0]`. Proving them at the concrete list
-forces `ProvableStruct.eval`'s 51-element `HVec` flattening, which whnf-times out. -/
+forces `ProvableStruct.Clean.eval`'s 51-element `HVec` flattening, which whnf-times out. -/
 structure OutputGen (ns : List ℕ) (F : Type) where
   cells : Cells F
   zs : HVec (Orchard.Sinsemilla.Chain.zLengths ns) F
@@ -605,14 +609,14 @@ theorem OutputGen.fromComponents_cons (ns : List ℕ) {F : Type}
 
 theorem eval_cells (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
     (eval env out).cells = eval env out.cells := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 theorem eval_zs (ns : List ℕ) (env : Environment Fp) (out : Var (OutputGen ns) Fp) :
     (eval env out).zs = eval env out.zs := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 /-- Single-leaf projections of an evaluated `Cells`. Proved generically (stuck on the
@@ -628,21 +632,21 @@ theorem eval_cells_leaves (env : Environment Fp) (c : Var Cells Fp) :
     (eval env c).b2 = Expression.eval env c.b2 ∧
     (eval env c).d0 = Expression.eval env c.d0 ∧
     (eval env c).d1 = Expression.eval env c.d1 := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 theorem eval_cells_point (env : Environment Fp) (c : Var Cells Fp) :
     (eval env c).point = eval env c.point := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 theorem withZs_eval_point (env : Environment Fp) (ns : List ℕ)
     (out : Var (CommitDomain.Output ns) Fp) :
     (eval env out).point = eval env out.point := by
-  rw [ProvableStruct.eval_eq_eval]
-  unfold ProvableStruct.eval
+  rw [ProvableStruct.Clean.eval_eq_eval]
+  unfold ProvableStruct.Clean.eval
   simp only [circuit_norm]
 
 @[reducible] def Output : TypeMap := OutputGen [24, 0, 23, 0]
@@ -797,7 +801,7 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 `PieceBounds` and their honest chunks are `commitIvkChunks ak.val nk.val`. Stated over the
 abstract piece cells (with their honest-slice values) so the heavy WithZs offsets never enter
 the kernel-checked term. -/
-private theorem honest_pieces_facts (ak nk a b c d : Fp)
+theorem honest_pieces_facts (ak nk a b c d : Fp)
     (ha : a = ((bitrange ak.val 0 250 : ℕ) : Fp))
     (hb : b = ((bitrange ak.val 250 4 : ℕ) : Fp) + ((bitrange ak.val 254 1 : ℕ) : Fp) * 2 ^ 4
             + ((bitrange nk.val 0 5 : ℕ) : Fp) * 2 ^ 5)
@@ -1069,13 +1073,15 @@ instance elaborated (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (R : MulFixed.FixedBase) : ElaboratedCircuit Fp Input field (main G Q hQ R) := by
   elaborate_circuit
 
-/-- The committed `ivk` is the `x`-coordinate of the Sinsemilla short commitment of the
-canonical message `I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)`, blinded by `[rivk] CommitIvkR`. -/
+/-- Breaks-as-data `Commit^ivk` relation (zcash/ironwood#45): either the Sinsemilla
+chain over the canonical `commit_ivk` chunks is defined and `ivk` is the extracted
+short commitment, or the incomplete-addition escape is exhibited as a valid break.
+Projecting the break branch to `⊥` recovers `ivk ∈ {…, ⊥}` (§4.17.4). -/
 def Spec (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (ak nk ivk : Fp) : Prop :=
-  ∃ rivk : Fq, ∀ B : Point Fp,
-    hashToPoint G.S Q (commitIvkChunks ak.val nk.val) = some B →
-      ivk = (B + rivk • R).x
+  ∃ rivk : Fq,
+    SpecOrBreak G.S Q (fun B => ivk = (B + rivk • R).x)
+      (hashToPointB G.S Q (commitIvkChunks ak.val nk.val))
 
 /-- Honest-prover version of `Spec`, for the prover's concrete `rivk`. -/
 def ProverSpec (G : Generators) (Q : Point Fp)
@@ -1158,7 +1164,7 @@ private theorem canonicity_assumptions_of_commit
   -- Project the `Canonicity.Input` eval field-by-field (cheap: 13 single-field projections),
   -- without ever forcing `eval env O.zs` (the 51-leaf flatten that `circuit_norm` triggers).
   -- Project the evaluated `Canonicity.Input` field-by-field. Crucially this is done with
-  -- `ProvableStruct.eval_eq_eval` + the single-field projection only, so the running-sum
+  -- `ProvableStruct.Clean.eval_eq_eval` + the single-field projection only, so the running-sum
   -- fields stay as `Expression.eval env (… O.zs …)[13]` (one var lookup) and the 51-leaf
   -- `O.zs` heterogeneous vector is never flattened (unlike a full `circuit_norm`).
   rw [show Canonicity.circuit.Assumptions = Canonicity.Assumptions from rfl]
@@ -1227,7 +1233,9 @@ theorem soundness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       (by simp only [circuit_norm]; simpa [bitrange] using hPVd) hak hnk
   -- assemble the entry spec
   refine ⟨?_, ?_⟩
-  · refine ⟨rivk, fun B hB => ?_⟩
+  · refine ⟨rivk, breaksOfGuarded (Or.inl hQ) (fun m hm => G.S_onCurve
+      (chunksOf_mem_lt (by
+        simpa [Orchard.Specs.Sinsemilla.commitIvkChunks] using hm))) fun B hB => ?_⟩
     have hpt := hHash B (by rw [hchunks]; exact hB)
     have hx := congrArg Point.x hpt
     rw [hO] at hx

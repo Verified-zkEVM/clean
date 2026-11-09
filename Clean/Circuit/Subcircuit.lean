@@ -1,6 +1,8 @@
 import Clean.Circuit.Formal
 import Clean.Circuit.Theorems
 
+namespace Clean
+
 variable {F : Type} [FiniteField F]
 
 namespace FlatOperation
@@ -354,7 +356,7 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
 /--
 Theorem and implementation that allows us to take a pure general formal circuit
 and use it as a subcircuit. The implementation delegates to the hint-aware
-variant through the default `ProvableType.toCircuitType` instance.
+variant through the default `ProvableType.Clean.toCircuitType` instance.
 -/
 def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
@@ -890,3 +892,5 @@ theorem FormalAssertion.toSubcircuit_interactions (circuit : FormalAssertion F I
   rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 
 end
+
+end Clean

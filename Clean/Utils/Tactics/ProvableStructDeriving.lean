@@ -2,6 +2,8 @@ import Lean
 import Lean.Elab.Deriving.Util
 import Clean.Circuit.Provable
 
+open Clean
+
 /-!
   # Deriving handlers for ProvableStruct and CircuitType
 
@@ -478,11 +480,30 @@ def provableStructDerivingHandler (declNames : Array Name) : CommandElabM Bool :
 -- Register the deriving handler
 initialize registerDerivingHandler ``ProvableStruct provableStructDerivingHandler
 
+/-- Environment profile for `CircuitType` deriving: the names the generated code
+references. Main Clean and Halo2 instantiate `CircuitTypeOver` at different
+environment pairs, with their own `CircuitType` abbrevs, `Var`/`Value`/`ProverValue`
+views and `DerivedCircuitType` marker — the generator is shared. -/
+structure CircuitTypeProfile where
+  classConst : Name
+  varConst : Name
+  valueConst : Name
+  proverValueConst : Name
+  derivedConst : Name
+
+/-- Main Clean's profile (`Environment`/`ProverEnvironment`). -/
+def mainCircuitTypeProfile : CircuitTypeProfile where
+  classConst := ``CircuitType
+  varConst := ``CircuitType.Var
+  valueConst := ``CircuitType.Value
+  proverValueConst := ``CircuitType.ProverValue
+  derivedConst := ``DerivedCircuitType
+
 /--
   Generate a companion structure for one of the `CircuitType` views of a
   derived `CircuitType`.
 -/
-def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
+def mkCircuitViewStruct (profile : CircuitTypeProfile) (viewName : Name) (paramInfos : Array ParamInfo)
     (fieldNameIdents : Array (TSyntax `ident)) (fieldTypes : Array (TSyntax `term))
     (viewType : TSyntax `term → CommandElabM (TSyntax `term)) : CommandElabM Unit := do
   let mut binderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
@@ -495,7 +516,7 @@ def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
     | .typeMap m =>
       let mIdent := mkIdent m
       let typeBinder ← `(bracketedBinderF| ($mIdent : TypeMap))
-      let instBinder ← `(bracketedBinderF| [CircuitType $mIdent])
+      let instBinder ← `(bracketedBinderF| [$(mkCIdent profile.classConst):term $mIdent])
       binderSyntaxes := binderSyntaxes.push typeBinder
       binderSyntaxes := binderSyntaxes.push instBinder
     | .other n ty =>
@@ -523,6 +544,37 @@ def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
   )
   elabCommand cmd
 
+  -- mark the view as decomposable for the struct-decomposition tactics (mixed records
+  -- have no `ProvableStruct`, but the view is a plain structure `cases` can split)
+  let mut instBinderSyntaxes : Array (TSyntax ``bracketedBinder) := #[]
+  for info in paramInfos do
+    match info with
+    | .natural n =>
+      instBinderSyntaxes := instBinderSyntaxes.push
+        (← `(bracketedBinderF| {$(mkIdent n) : ℕ}))
+    | .typeMap m =>
+      instBinderSyntaxes := instBinderSyntaxes.push
+        (← `(bracketedBinderF| {$(mkIdent m) : TypeMap}))
+      instBinderSyntaxes := instBinderSyntaxes.push
+        (← `(bracketedBinderF| [$(mkCIdent profile.classConst):term $(mkIdent m)]))
+    | .other n ty =>
+      let tySyntax ← liftTermElabM <| PrettyPrinter.delab ty
+      instBinderSyntaxes := instBinderSyntaxes.push
+        (← `(bracketedBinderF| {$(mkIdent n) : $tySyntax}))
+  let appliedView : TSyntax `term ←
+    if paramInfos.isEmpty then
+      `($viewIdent)
+    else
+      (paramInfos.map (fun p => mkIdent p.name)).foldlM
+        (init := (viewIdent : TSyntax `term)) fun acc paramIdent => `($acc $paramIdent)
+  let instCmd ←
+    if instBinderSyntaxes.isEmpty then
+      `(instance : DecomposableStruct $appliedView := ⟨⟩)
+    else
+      `(instance $instBinderSyntaxes:bracketedBinder* :
+          DecomposableStruct $appliedView := ⟨⟩)
+  elabCommand instCmd
+
 /--
   Generate a `ProvableStruct` instance for the verifier `Value` companion of a
   derived `CircuitType`.
@@ -532,11 +584,12 @@ def mkCircuitViewStruct (viewName : Name) (paramInfos : Array ParamInfo)
   `CircuitType.Value M F`. The latter loses the semantic context that these are
   verifier values and can get stuck on generated typeclass arguments.
 -/
-def mkCircuitValueProvableStructInstance (valueStructName : Name) (paramInfos : Array ParamInfo)
+def mkCircuitValueProvableStructInstance (profile : CircuitTypeProfile)
+    (valueStructName : Name) (paramInfos : Array ParamInfo)
     (fieldNameIdents : Array (TSyntax `ident)) (componentSyntaxes : Array (TSyntax `term)) :
     CommandElabM Unit := do
   let valueComponents ← componentSyntaxes.mapM fun component =>
-    `(CircuitType.Value $component)
+    `($(mkCIdent profile.valueConst) $component)
   let componentsListSyntax ← `([$[$valueComponents],*])
 
   let mut toCompBody : TSyntax `term ← `(.nil)
@@ -577,8 +630,9 @@ def mkCircuitValueProvableStructInstance (valueStructName : Name) (paramInfos : 
     | .typeMap m =>
       let mIdent := mkIdent m
       let typeBinder ← `(bracketedBinderF| {$mIdent : TypeMap})
-      let circuitBinder ← `(bracketedBinderF| [CircuitType $mIdent])
-      let provableValueBinder ← `(bracketedBinderF| [ProvableType (CircuitType.Value $mIdent)])
+      let circuitBinder ← `(bracketedBinderF| [$(mkCIdent profile.classConst):term $mIdent])
+      let provableValueBinder ←
+        `(bracketedBinderF| [ProvableType ($(mkCIdent profile.valueConst) $mIdent)])
       binderSyntaxes := binderSyntaxes.push typeBinder
       binderSyntaxes := binderSyntaxes.push circuitBinder
       binderSyntaxes := binderSyntaxes.push provableValueBinder
@@ -609,7 +663,8 @@ def mkCircuitValueProvableStructInstance (valueStructName : Name) (paramInfos : 
 /--
   Generate the CircuitType instance declaration.
 -/
-def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
+def mkCircuitTypeInstance (profile : CircuitTypeProfile) (structName : Name) :
+    CommandElabM Unit := do
   let env ← getEnv
 
   unless isStructure env structName do
@@ -668,13 +723,14 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
   let proverValueStructName := structName ++ `ProverValue
 
   let fIdent := mkIdent `F
-  mkCircuitViewStruct varStructName paramInfos fieldNameIdents componentSyntaxes
-    (fun component => `(CircuitType.Var $component $fIdent))
-  mkCircuitViewStruct valueStructName paramInfos fieldNameIdents componentSyntaxes
-    (fun component => `(CircuitType.Value $component $fIdent))
-  mkCircuitViewStruct proverValueStructName paramInfos fieldNameIdents componentSyntaxes
-    (fun component => `(CircuitType.ProverValue $component $fIdent))
-  mkCircuitValueProvableStructInstance valueStructName paramInfos fieldNameIdents componentSyntaxes
+  mkCircuitViewStruct profile varStructName paramInfos fieldNameIdents componentSyntaxes
+    (fun component => `($(mkCIdent profile.varConst) $component $fIdent))
+  mkCircuitViewStruct profile valueStructName paramInfos fieldNameIdents componentSyntaxes
+    (fun component => `($(mkCIdent profile.valueConst) $component $fIdent))
+  mkCircuitViewStruct profile proverValueStructName paramInfos fieldNameIdents componentSyntaxes
+    (fun component => `($(mkCIdent profile.proverValueConst) $component $fIdent))
+  mkCircuitValueProvableStructInstance profile valueStructName paramInfos fieldNameIdents
+    componentSyntaxes
 
   let appliedStructType ← mkAppliedInductiveWithoutFieldParam indInfo paramInfos
 
@@ -701,7 +757,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
     | .typeMap m =>
       let mIdent := mkIdent m
       let typeBinder ← `(bracketedBinderF| {$mIdent : TypeMap})
-      let instBinder ← `(bracketedBinderF| [CircuitType $mIdent])
+      let instBinder ← `(bracketedBinderF| [$(mkCIdent profile.classConst):term $mIdent])
       instanceBinders := instanceBinders.push typeBinder
       instanceBinders := instanceBinders.push instBinder
     | .other n ty =>
@@ -729,7 +785,7 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
   let cmd ←
     if instanceBinders.isEmpty then
       `(
-        instance : DerivedCircuitType $appliedStructType where
+        instance : $(mkCIdent profile.derivedConst):term $appliedStructType where
           Var := $varType
           Value := $valueType
           ProverValue := $proverValueType
@@ -738,7 +794,8 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
       )
     else
       `(
-        instance $instanceBinders:bracketedBinder* : DerivedCircuitType $appliedStructType where
+        instance $instanceBinders:bracketedBinder* :
+            $(mkCIdent profile.derivedConst):term $appliedStructType where
           Var := $varType
           Value := $valueType
           ProverValue := $proverValueType
@@ -748,8 +805,11 @@ def mkCircuitTypeInstance (structName : Name) : CommandElabM Unit := do
 
   elabCommand cmd
 
-/-- The deriving handler for record-shaped `CircuitType`s. -/
-def circuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool := do
+/-- The deriving handler for record-shaped `CircuitType`s, generic over the
+environment profile. Frameworks register this at their own `CircuitType` abbrev with
+their profile (main Clean below; Halo2 in `Clean/Halo2/CircuitTypeDeriving.lean`). -/
+def circuitTypeDerivingHandlerWith (profile : CircuitTypeProfile)
+    (declNames : Array Name) : CommandElabM Bool := do
   if declNames.size != 1 then
     return false
   let declName := declNames[0]!
@@ -757,11 +817,15 @@ def circuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool := d
   unless isStructure env declName do
     return false
   try
-    mkCircuitTypeInstance declName
+    mkCircuitTypeInstance profile declName
     return true
   catch e =>
     logError m!"Failed to derive CircuitType for {declName}: {e.toMessageData}"
     return false
+
+/-- Main Clean's `deriving CircuitType`. -/
+def circuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool :=
+  circuitTypeDerivingHandlerWith mainCircuitTypeProfile declNames
 
 initialize registerDerivingHandler ``CircuitType circuitTypeDerivingHandler
 

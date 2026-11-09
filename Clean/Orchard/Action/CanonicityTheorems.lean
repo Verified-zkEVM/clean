@@ -4,6 +4,8 @@ import Clean.Orchard.Ecc
 import Clean.Orchard.Specs.Bitrange
 import Clean.Utils.Tactics
 
+open Clean
+
 /-!
 # NoteCommit canonicity theorems
 

@@ -1,5 +1,7 @@
 import Clean.Orchard.Poseidon.Pow5
 
+open Clean
+
 /-!
 # Orchard Poseidon sponge APIs
 
