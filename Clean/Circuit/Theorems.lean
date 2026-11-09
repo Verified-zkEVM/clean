@@ -451,35 +451,36 @@ lemma ProverEnvironment.usesLocalWitnesses_iff_flat {n : ℕ} {ops : Operations 
 -- theorems about witness generation
 
 namespace FlatOperation
-variable {hint : ProverHint F}
+variable {data : ProverData F} {hint : ProverHint F}
 
 lemma dynamicWitness_length {op : FlatOperation F} {init : List F} :
-    (op.dynamicWitness hint init).length = op.singleLocalLength := by
+    (op.dynamicWitness data hint init).length = op.singleLocalLength := by
   rcases op <;> simp [dynamicWitness, singleLocalLength]
 
 lemma dynamicWitnesses_length {ops : List (FlatOperation F)} (init : List F) :
-    (dynamicWitnesses ops hint init).length = init.length + localLength ops := by
+    (dynamicWitnesses ops data hint init).length = init.length + localLength ops := by
   induction ops generalizing init with
   | nil => rw [dynamicWitnesses, List.foldl_nil, localLength, add_zero]
   | cons op ops ih =>
     simp_all +arith [dynamicWitnesses, localLength_cons, dynamicWitness_length]
 
 lemma dynamicWitnesses_cons {op : FlatOperation F} {ops : List (FlatOperation F)} {acc : List F} :
-    dynamicWitnesses (op :: ops) hint acc = dynamicWitnesses ops hint (acc ++ op.dynamicWitness hint acc) := by
+    dynamicWitnesses (op :: ops) data hint acc =
+      dynamicWitnesses ops data hint (acc ++ op.dynamicWitness data hint acc) := by
   simp only [dynamicWitnesses, List.foldl_cons]
 
 lemma getElem?_dynamicWitnesses_of_lt {ops : List (FlatOperation F)} {acc : List F} {i : ℕ} (hi : i < acc.length) :
-    (dynamicWitnesses ops hint acc)[i]?.getD 0 = acc[i] := by
+    (dynamicWitnesses ops data hint acc)[i]?.getD 0 = acc[i] := by
   simp only [dynamicWitnesses]
   induction ops generalizing acc with
   | nil => simp [hi]
   | cons op ops ih =>
-    have : i < (acc ++ op.dynamicWitness hint acc).length := by rw [List.length_append]; linarith
+    have : i < (acc ++ op.dynamicWitness data hint acc).length := by rw [List.length_append]; linarith
     rw [List.foldl_cons, ih this, List.getElem_append_left]
 
 lemma getElem?_dynamicWitnesses_cons_right {op : FlatOperation F} {ops : List (FlatOperation F)} {init : List F} {i : ℕ} (hi : i < op.singleLocalLength) :
-    (dynamicWitnesses (op :: ops) hint init)[init.length + i]?.getD 0 =
-      (op.dynamicWitness hint init)[i]'(dynamicWitness_length (F:=F) ▸ hi) := by
+    (dynamicWitnesses (op :: ops) data hint init)[init.length + i]?.getD 0 =
+      (op.dynamicWitness data hint init)[i]'(dynamicWitness_length (F:=F) ▸ hi) := by
   rw [dynamicWitnesses_cons, getElem?_dynamicWitnesses_of_lt (by simp [hi, dynamicWitness_length]),
     List.getElem_append_right (by linarith)]
   simp only [add_tsub_cancel_left]
@@ -490,7 +491,7 @@ Flat version of the final theorem in this section, `Circuit.proverEnvironment_us
 theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (init : List F) :
   (∀ (env env' : ProverEnvironment F),
     forAll init.length { witness n _ c := env.AgreesBelow n env' → c.eval env = c.eval env' } ops) →
-    (proverEnvironment ops hint init).UsesLocalWitnessesFlat init.length ops := by
+    (proverEnvironment ops data hint init).UsesLocalWitnessesFlat init.length ops := by
   simp only [proverEnvironment, ProverEnvironment.UsesLocalWitnessesFlat, ProverEnvironment.ExtendsVector]
   intro h_computable
   induction ops generalizing init with
@@ -504,7 +505,7 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       simp_all only [Condition.applyFlat, singleLocalLength, ProverEnvironment.AgreesBelow]
       -- get rid of ih first
       constructor; case right =>
-        specialize ih (init ++ (compute.eval (.fromList init hint)).toList)
+        specialize ih (init ++ (compute.eval (.fromList init data hint)).toList)
         simp only [List.length_append, Vector.length_toList] at ih
         ring_nf at *
         exact ih fun _ _ => (h_computable ..).right
@@ -516,7 +517,7 @@ theorem proverEnvironment_usesLocalWitnesses {ops : List (FlatOperation F)} (ini
       simp only [dynamicWitness, Vector.getElem_toList]
       congr 1
       apply h_computable
-      -- `data` and `hint` are literally shared: every environment here is `.fromList _ hint`.
+      -- `data` and `hint` are literally shared: every environment here is `.fromList _ data hint`.
       refine ⟨?_, rfl, rfl⟩
       intro j hj
       simp [ProverEnvironment.fromList, hj,
@@ -527,9 +528,11 @@ end FlatOperation
 If a circuit satisfies `computableWitnesses`, then the `proverEnvironment` agrees with the
 circuit's witness generators.
 -/
-theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (hint : ProverHint F) (init : List F) :
+theorem Circuit.proverEnvironment_usesLocalWitnesses (circuit : Circuit F α) (data : ProverData F)
+    (hint : ProverHint F) (init : List F) :
   (∀ env env', circuit.ComputableWitnesses init.length env env') →
-    (circuit.proverEnvironment hint init).UsesLocalWitnesses init.length (circuit.operations init.length) := by
+    (circuit.proverEnvironment data hint init).UsesLocalWitnesses init.length
+      (circuit.operations init.length) := by
   intro h_computable
   rw [ProverEnvironment.usesLocalWitnesses_iff_flat]
   apply FlatOperation.proverEnvironment_usesLocalWitnesses

@@ -408,23 +408,27 @@ theorem Witnessable.witnessIR_provableVector {m : ℕ} (α : TypeMap) [NonEmptyP
 
 -- witness generation
 
-/-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/
-def ProverEnvironment.fromList (witnesses : List F) (hint : ProverHint F) : ProverEnvironment F where
+/-- Build a `ProverEnvironment` from a witness list, prover data and a prover hint. -/
+def ProverEnvironment.fromList (witnesses : List F) (data : ProverData F) (hint : ProverHint F) :
+    ProverEnvironment F where
   get i := witnesses[i]?.getD 0
-  data := .empty F
+  data
   hint
 
-def FlatOperation.dynamicWitness (hint : ProverHint F) (op : FlatOperation F) (acc : List F) : List F := match op with
-  | .witness _ compute => (compute.eval (.fromList acc hint)).toList
+def FlatOperation.dynamicWitness (data : ProverData F) (hint : ProverHint F) (op : FlatOperation F)
+    (acc : List F) : List F := match op with
+  | .witness _ compute => (compute.eval (.fromList acc data hint)).toList
   | .assert _ => []
   | .lookup _ => []
   | .interact _ => []
 
-def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) : List F :=
-  ops.foldl (fun acc op => acc ++ op.dynamicWitness hint acc) init
+def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (data : ProverData F)
+    (hint : ProverHint F) (init : List F) : List F :=
+  ops.foldl (fun acc op => acc ++ op.dynamicWitness data hint acc) init
 
-def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) :=
-  ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
+def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (data : ProverData F)
+    (hint : ProverHint F) (init : List F) :=
+  ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops data hint init) data hint
 
 /--
 Two prover environments are indistinguishable to a witness generator running at offset `n`.
@@ -593,8 +597,10 @@ def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) (env env' : P
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
 that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
 -/
-def Circuit.proverEnvironment (circuit : Circuit F α) (hint : ProverHint F) (init : List F := []) : ProverEnvironment F :=
-  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat hint init) hint
+def Circuit.proverEnvironment (circuit : Circuit F α) (data : ProverData F) (hint : ProverHint F)
+    (init : List F := []) : ProverEnvironment F :=
+  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat data hint init)
+    data hint
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
