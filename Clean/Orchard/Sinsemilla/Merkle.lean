@@ -1150,15 +1150,13 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
         have spec := (hL0 ⟨B, hB⟩).2 B hB
         rw [← spec]
         exact bridge 0 (by norm_num) _ _ _ (by simp)
-      · -- layer j+1: the running node equals the canonical `acc (j+1)` (bridge)
-        have hbe : Expression.eval env.toEnvironment
-            (Layer.main G Q hQ j (by omega)
-              { node := default,
-                sibling := fun s => ((input_var.path s).1[j], (input_var.path s).2),
-                posBit := fun s => ((input_var.pos s).1.testBit (NExpr.const j) =? 1,
-                  (input_var.pos s).2) } (i₀ + j * 274)).1 = acc (j + 1) :=
-          bridge j (by omega) _ _ _ rfl
-        have spec := (hLstep j hk' ⟨B, by rw [hbe]; exact hB⟩).2 B (by rw [hbe]; exact hB)
+      · -- layer j+1: the running node equals the canonical `acc (j+1)` (bridge).
+        -- Inlining `bridge` with a metavar input record lets `rw` unify against whatever
+        -- spelling the node carries (the map form `(· [j]) <$> path`), independent of shape.
+        have brj : ∀ (inp : Var Layer.Input Fp), Expression.eval env.toEnvironment
+            (Layer.main G Q hQ j (by omega) inp (i₀ + j * 274)).1 = acc (j + 1) :=
+          fun inp => bridge j (by omega) inp (i₀ + j * 274) (i₀ + j * 274) rfl
+        have spec := (hLstep j hk' ⟨B, by rw [brj]; exact hB⟩).2 B (by rw [brj]; exact hB)
         rw [← spec]
         exact bridge (j + 1) (by omega) _ _ _ rfl
   -- each layer's hash exists (the running node is the honest one, via `key`)
@@ -1185,14 +1183,12 @@ theorem completeness (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) :
     exact hAsm 0 (by norm_num)
   · -- layer-(i+1) assumptions
     intro i hi
-    have hbe : Expression.eval env.toEnvironment
-        (Layer.main G Q hQ i (by omega)
-          { node := default,
-            sibling := fun s => ((input_var.path s).1[i], (input_var.path s).2),
-            posBit := fun s => ((input_var.pos s).1.testBit (NExpr.const i) =? 1,
-              (input_var.pos s).2) } (i₀ + i * 274)).1 = acc (i + 1) :=
-      bridge i (by omega) _ _ _ rfl
-    rw [hbe]
+    -- `bridge` over an arbitrary input record: `rw` unifies against the node's actual
+    -- spelling (the map form `(· [i]) <$> path`) regardless of its syntactic shape.
+    have bri : ∀ (inp : Var Layer.Input Fp), Expression.eval env.toEnvironment
+        (Layer.main G Q hQ i (by omega) inp (i₀ + i * 274)).1 = acc (i + 1) :=
+      fun inp => bridge i (by omega) inp (i₀ + i * 274) (i₀ + i * 274) rfl
+    rw [bri]
     exact hAsm (i + 1) (by omega)
   · -- the output is the honest root
     intro root hroot

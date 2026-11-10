@@ -51,7 +51,7 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     fail_if_success (exact input)
     guard_hyp h_input :
       input_var.x.eval env.toEnvironment = input_x ∧
-        (Witgen.FExprOver.eval (Env := ProverEnvironment F) (V := Expression F) _ _ : F) = input_inverse
+        Witgen.MOver.eval env input_var.inverse = input_inverse
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 

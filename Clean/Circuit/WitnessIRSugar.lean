@@ -243,15 +243,12 @@ instance {V : Type} : Monad (MOver F V) where
 
 attribute [circuit_norm] Array.size_empty Array.getElem?_push
 
-@[circuit_norm]
 theorem M.pure_def {V : Type} (a : α) :
     (pure a : MOver F V α) = fun s => (a, s) := rfl
 
-@[circuit_norm]
 theorem M.bind_def {V : Type} (m : MOver F V α) (f : α → MOver F V β) :
     (m >>= f) = fun s => let (a, s') := m s; f a s' := rfl
 
-@[circuit_norm]
 theorem M.map_def {V : Type} (f : α → β) (m : MOver F V α) :
     (f <$> m) = fun s => let (a, s') := m s; (f a, s') := rfl
 
@@ -296,24 +293,29 @@ variable {V Env : Type} [WitgenEnv F Env V]
 -- TODO WITGENIR the simp behavior currently takes an ugly low-level path because we were
 -- too lazy to craft a high-level path that works in all cases
 
-@[circuit_norm]
 def eval (env : Env) (program : MOver F V (value (FExprOver F V))) : value F :=
   let (out, steps) := program #[]
   Witgen.eval { env, locals := evalSteps env steps.toList } out
 
-@[circuit_norm]
 def evalBool (env : Env) (program : MOver F V (BExprOver F V)) : Bool :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
 
-@[circuit_norm]
 def evalNat (env : Env) (program : MOver F V (NExprOver F V)) : ℕ :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
 
+@[circuit_norm]
 theorem eval_pure (out : value (FExprOver F V)) (env : Env) :
-    eval env (fun s => (out, s)) = Witgen.eval { env } out := by
-  rfl
+    eval env (pure out) = Witgen.eval { env } out := rfl
+
+@[circuit_norm]
+theorem evalBool_pure (out : BExprOver F V) (env : Env) :
+    evalBool env (pure out) = out.eval { env } := rfl
+
+@[circuit_norm]
+theorem evalNat_pure (out : NExprOver F V) (env : Env) :
+    evalNat env (pure out) = out.eval { env } := rfl
 
 /-- Assemble a witness program from a builder computation returning the output vector. -/
 @[circuit_norm]
@@ -357,7 +359,168 @@ theorem eval_toIRScalar (program : MOver F V (FExprOver F V)) (env : Env) :
 instance {α : Type} [Inhabited α] : Inhabited (MOver F V α) where
   default := pure default
 
+omit [FiniteField F] in
+/-- Bind-then-pure is a map — definitionally, for the concrete `MOver` monad (no
+`LawfulMonad` needed). Normalizes a hint-derived program `do let b ← hint; pure (g b)`
+to the `g <$> hint` shape, so eval pushes through the transform to the hint leaf. -/
+@[circuit_norm]
+theorem bind_pure_comp {α β : Type} (m : MOver F V α) (g : α → β) :
+    (m >>= fun b => pure (g b)) = (g <$> m) := rfl
+
+/-- Map-push (field): eval of a mapped program pushes the transform `g` onto the run;
+`circuit_norm` reduces through `g` and a fold-back lands the leaf at `eval m`. -/
+@[circuit_norm]
+theorem eval_map {α : Type} (env : Env) (m : MOver F V α) (g : α → value (FExprOver F V)) :
+    MOver.eval env (g <$> m)
+      = Witgen.eval { env, locals := evalSteps env (m #[]).2.toList } (g (m #[]).1) := rfl
+
+/-- Map-push (bool). -/
+@[circuit_norm]
+theorem evalBool_map {α : Type} (env : Env) (m : MOver F V α) (g : α → BExprOver F V) :
+    MOver.evalBool env (g <$> m)
+      = (g (m #[]).1).eval { env, locals := evalSteps env (m #[]).2.toList } := rfl
+
+/-- Map-push (nat). -/
+@[circuit_norm]
+theorem evalNat_map {α : Type} (env : Env) (m : MOver F V α) (g : α → NExprOver F V) :
+    MOver.evalNat env (g <$> m)
+      = (g (m #[]).1).eval { env, locals := evalSteps env (m #[]).2.toList } := rfl
+
+/-- Fold-back (field): the stuck run-leaf produced by collapsing a mapped opaque
+program IS the leaf's `eval` atom — the term `h_input` is stated at, so the two meet.
+Stated on the reduced `FExprOver.eval` leaf (`Witgen.eval {field}` collapses to it before
+this lemma would fire). -/
+@[circuit_norm]
+theorem eval_run_fold (env : Env) (m : MOver F V (field (FExprOver F V))) :
+    FExprOver.eval { env, locals := evalSteps env (m #[]).2.toList } (m #[]).1
+      = MOver.eval (value := field) env m := by
+  with_unfolding_all rfl
+
+/-- Fold-back (general provable value): a struct-valued mapped program (e.g. a `Point`
+hint) collapses its run to `Witgen.eval {..} (m #[]).1`, whose head stays `Witgen.eval`
+(unlike `field`, which collapses to `FExprOver.eval`). Fold it back to the `eval` atom so
+projections `(eval m).x` meet the caller's row-level `h_input`. -/
+@[circuit_norm]
+theorem eval_run_fold_provable (env : Env) (m : MOver F V (value (FExprOver F V))) :
+    Witgen.eval { env, locals := evalSteps env (m #[]).2.toList } (m #[]).1
+      = MOver.eval env m := by
+  with_unfolding_all rfl
+
+/-- Fold-back (bool). -/
+@[circuit_norm]
+theorem evalBool_run_fold (env : Env) (m : MOver F V (BExprOver F V)) :
+    (m #[]).1.eval { env, locals := evalSteps env (m #[]).2.toList }
+      = MOver.evalBool env m := rfl
+
+/-- Fold-back (nat). -/
+@[circuit_norm]
+theorem evalNat_run_fold (env : Env) (m : MOver F V (NExprOver F V)) :
+    (m #[]).1.eval { env, locals := evalSteps env (m #[]).2.toList }
+      = MOver.evalNat env m := rfl
+
 end MOver
+
+/-! ## The high-level eval normal form (the discriminating simprocs)
+
+`MOver.eval`/`evalBool`/`evalNat` are NOT `@[circuit_norm]` def-unfolds. Instead two
+simprocs give the intended normal form: a **concrete** program (one whose run
+`program #[]` reduces) is unfolded and `circuit_norm` collapses the run to arithmetic;
+a **hint-derived** program (stuck on a free `Unconstrained` hint, or behind an
+`irreducible_def` like `scalarWindows`) stays the opaque `MOver.eval env p` atom, which
+is where the caller's `h_input` facts live. Projections compose through the atom
+(`evalMapProj`). This is the high-level path the TODO above asked for. -/
+section EvalNormalForm
+open Lean Meta Simp
+
+/-- `MOver.eval env (Point.x <$> p)  ~~>  (MOver.eval env p).x` — a projection composes
+through the program's evaluation, so a projected hint program meets the row-level
+`h_input` facts. A simproc because a lemma cannot quantify over an arbitrary structure
+projection; validated by `.all`-transparency defeq (the kernel re-checks). -/
+private def evalMapProjSimproc (e : Expr) : SimpM Simp.Step := do
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Witgen.MOver.eval && args.size >= 2 do
+    return .continue
+  let env := args[args.size - 2]!
+  let prog ← instantiateMVars args[args.size - 1]!
+  unless prog.getAppFn.isConstOf ``Functor.map do return .continue
+  let pargs := prog.getAppArgs
+  unless pargs.size ≥ 2 do return .continue
+  let f ← instantiateMVars pargs[pargs.size - 2]!
+  let p := pargs[pargs.size - 1]!
+  let fromApp : Expr → MetaM (Option Name) := fun body => do
+    let .const pn _ := body.getAppFn | pure none
+    let some pinfo ← getProjectionFnInfo? pn | pure none
+    let bargs := body.getAppArgs
+    if bargs.size == pinfo.numParams + 1 && bargs.back? == some (.bvar 0) then
+      pure (some pn)
+    else pure none
+  let projName? : Option Name ←
+    match f with
+    | .lam _ _ body _ =>
+      match body with
+      | .proj sName idx (.bvar 0) => do
+        let genv ← getEnv
+        let fields := getStructureFields genv sName
+        if h : idx < fields.size then
+          pure (some (sName ++ fields[idx]))
+        else pure none
+      | _ => fromApp body
+    | _ => fromApp (mkApp f (.bvar 0))
+  let some projName := projName? | return .continue
+  unless pargs.size ≥ 4 do return .continue
+  let tyArg ← instantiateMVars pargs[pargs.size - 4]!
+  let parent := tyArg.getAppFn
+  unless parent.isConst do return .continue
+  try
+    let evalWhole ← withTransparency .all <| mkAppOptM ``Witgen.MOver.eval
+      #[none, none, some parent, none, none, none, none, some env, some p]
+    let rhs ← mkProjection evalWhole (Name.mkSimple projName.getString!)
+    if ← withTransparency .all (isDefEq e rhs) then
+      return .done { expr := rhs, proof? := none }
+    return .continue
+  catch _ => return .continue
+
+/-- The discriminating reduce: unfold `eval env p` only when the program is CONCRETE —
+i.e. its run `p #[]` reduces to a `(out, steps)` pair. A hint-derived program's run is
+stuck (free hint var / irreducible barrier), so `.continue` leaves the atom. Once
+unfolded, `circuit_norm`'s run-collapse lemmas (`bind_def`/`pure_def`/`evalSteps`/
+`Witgen.eval`/…) finish the reduction. -/
+private def evalReduceSimproc (e : Expr) : SimpM Simp.Step := do
+  let fn := e.getAppFn
+  unless fn.isConstOf ``Witgen.MOver.eval || fn.isConstOf ``Witgen.MOver.evalBool
+      || fn.isConstOf ``Witgen.MOver.evalNat do
+    return .continue
+  let args := e.getAppArgs
+  if args.size < 2 then return .continue
+  let program ← instantiateMVars args[args.size - 1]!
+  -- A `<$>`-map is handled by the `eval_map` rewrite (pushes through the transform to
+  -- the leaf); leave it for that lemma.
+  if program.getAppFn.isConstOf ``Functor.map then return .continue
+  -- Discriminate concrete-vs-hint by whether the run reduces: a CONCRETE program's
+  -- `program #[]` whnfs to a `Prod.mk`, and we unfold `eval` (`circuit_norm` then
+  -- collapses the run to arithmetic); a bare hint or an `irreducible_def` barrier
+  -- (`scalarWindows`) is stuck and stays the whole-program `eval env p` atom.
+  -- `.default` transparency (simp's ambient `.reducible` wouldn't even unfold `MOver`
+  -- to its arrow) but NOT `.all` (so the irreducible barrier stays stuck).
+  let programTy ← withTransparency .default (whnf (← inferType program))
+  let .forallE _ domTy _ _ := programTy | return .continue
+  let some elemTy := domTy.getAppArgs.back? | return .continue
+  let empty ← mkAppOptM ``Array.empty #[some elemTy]
+  let w ← withTransparency .default (whnf (mkApp program empty))
+  unless w.isAppOf ``Prod.mk do return .continue
+  -- concrete: unfold `eval` ONE step via `eq_1` (raw `whnf` over-reduces into a stuck
+  -- provable-`match`); `.visit` lets `circuit_norm` finish.
+  let eqName := fn.constName!.str "eq_1"  -- `<head>.eq_1`
+  let some pf ← (try? (mkAppM eqName #[args[args.size - 2]!, program])) | return .continue
+  let some (_, _, rhs) := (← inferType pf).eq? | return .continue
+  return .visit { expr := rhs, proof? := some pf }
+
+simproc evalReduce (Witgen.MOver.eval _ _) := evalReduceSimproc
+simproc evalReduceBool (Witgen.MOver.evalBool _ _) := evalReduceSimproc
+simproc evalReduceNat (Witgen.MOver.evalNat _ _) := evalReduceSimproc
+attribute [circuit_norm] evalReduce evalReduceBool evalReduceNat
+
+end EvalNormalForm
 
 -- Main Clean spellings (`Witgen.M.eval` &c.) — aliases into the `V`-generic
 -- `MOver` namespace, so existing call sites keep working.
