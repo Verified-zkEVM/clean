@@ -101,7 +101,7 @@ variable {N : ℕ} {channel : Channel F Message} {mult : Expression F}
     (pulledUpTo N channel mult msg).Guarantees env ↔
       (CountUpTo N (Expression.eval env mult) → channel.Guarantees (eval env msg) env.data) := by
   simp [pulledUpTo, AbstractInteraction.Guarantees, counted,
-    ProvableType.fromElements_eval_toElements]
+    ProvableType.fromElements_toElements]
 
 @[circuit_norm] lemma pulledUpTo_requirements :
     (pulledUpTo N channel mult msg).Requirements env ↔
@@ -116,7 +116,7 @@ variable {N : ℕ} {channel : Channel F Message} {mult : Expression F}
     (emittedUpTo N channel mult msg).Requirements env ↔
       (Expression.eval env mult ≠ 0 → channel.Guarantees (eval env msg) env.data) := by
   simp [emittedUpTo, AbstractInteraction.Requirements, counted,
-    ProvableType.fromElements_eval_toElements]
+    ProvableType.fromElements_toElements]
 end
 
 omit [FiniteField F] in
