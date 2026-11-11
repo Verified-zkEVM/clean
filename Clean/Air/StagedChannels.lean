@@ -149,8 +149,7 @@ theorem tableSoundness_of_staged {ens : Ensemble F PublicIO} {balance : Balance 
     ens.TableSoundness balance := by
   intro witness assumptions constraints fit balanced
   have guarantees := channelGuarantees_of_staged verifier_empty witness assumptions constraints
-    (fun channel h_channel =>
-      balance.balancedUpTo_of_balanced (fit channel h_channel) (balanced channel h_channel))
+    (witness.balancedChannels_of_balanced fit balanced)
     finished_subset consistent staged
   refine ⟨?_, fun table h_table => ?_⟩
   · apply ens.verifierSpec_of_verifierGuarantees
@@ -333,8 +332,7 @@ theorem tableSoundness_of_stagedOn {ens : Ensemble F PublicIO} {balance : Balanc
     ens.TableSoundness balance := by
   intro witness assumptions constraints fit balanced
   have guarantees := guaranteesOn_of_stagedOn verifier_empty witness assumptions constraints
-    (fun channel h_channel =>
-      balance.balancedUpTo_of_balanced (fit channel h_channel) (balanced channel h_channel))
+    (witness.balancedChannels_of_balanced fit balanced)
     finished_channels consistent staged
   refine ⟨?_, fun table h_table => ?_⟩
   · apply ens.verifierSpec_of_verifierGuarantees
