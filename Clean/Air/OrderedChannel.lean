@@ -628,8 +628,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} {balance : B
     ens.TableSoundness balance := by
   intro ⟨ finished, finished_subset, subset_finished, ordered, consistent ⟩
     witness assumptions constraints fit balanced
-  have balance := fun channel h_channel =>
-    balance.balancedUpTo_of_balanced (fit channel h_channel) (balanced channel h_channel)
+  have balance := witness.balancedChannels_of_balanced fit balanced
   rw [channelsWithGuarantees_subset_iff] at subset_finished
   -- the tables are sound by themselves, given partial balance
   have table_results := spec_and_guarantees_of_soundChannels (witness := witness.toTables)

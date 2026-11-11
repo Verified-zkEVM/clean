@@ -814,8 +814,7 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
     (ens.addVm vm fits).SoundVmChannel balance := by
   intro not_mem_vm_channel grts_subset reqs_disjoint (witness : VmWitness ens vm fits) assumptions
     constraints fit balanced
-  have balance_upTo := fun channel h_channel =>
-    balance.balancedUpTo_of_balanced (fit channel h_channel) (balanced channel h_channel)
+  have balance_upTo := witness.balancedChannels_of_balanced fit balanced
   /-
   the high level plan is to apply
   `verifier_guarantees_of_requirements_of_requirements_of_guarantees`.
