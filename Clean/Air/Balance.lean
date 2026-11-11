@@ -20,6 +20,18 @@ soundness theory uses, and a `Balance` is a check that a verifier performs on th
 with a channel, together with the proof that the check implies these facts.
 -/
 
+/-- A multiplicity of `k` for some `1 ≤ k ≤ N`: what a table that answers `k` identical lookups
+with one row pulls the facts it relies on with. `CountUpTo 1` is multiplicity `1`. -/
+def CountUpTo (N : ℕ) (mult : F) : Prop := ∃ k : ℕ, 1 ≤ k ∧ k ≤ N ∧ mult = k
+
+lemma countUpTo_one_iff {mult : F} : CountUpTo 1 mult ↔ mult = 1 := by
+  constructor
+  · rintro ⟨k, hk1, hk2, h⟩
+    obtain rfl : k = 1 := by omega
+    simpa using h
+  · intro h
+    exact ⟨1, le_rfl, le_rfl, by simp [h]⟩
+
 namespace Interaction
 /-- A pull of multiplicity `1`: the interactions that typed channels give their guarantee. -/
 def Pull (i : Interaction F) : Prop := i.direction = .pull ∧ i.mult = 1
@@ -39,27 +51,18 @@ lemma not_push_iff {i : Interaction F} : ¬i.Push ↔ i.mult = 0 ∨ i.Pull := b
 /-- A pull of multiplicity `k` for some `1 ≤ k ≤ N`: a table that answers `k` identical lookups
 with one row pulls the facts it relies on with the same multiplicity. `Pull` is `PullUpTo 1`. -/
 def PullUpTo (N : ℕ) (i : Interaction F) : Prop :=
-  i.direction = .pull ∧ ∃ k : ℕ, 1 ≤ k ∧ k ≤ N ∧ i.mult = k
+  i.direction = .pull ∧ CountUpTo N i.mult
 
 /-- An interaction that pushes its message when pulls of multiplicity up to `N` are allowed: an
 active push, or a pull of another nonzero multiplicity. `Push` is `PushUpTo 1`. -/
 def PushUpTo (N : ℕ) (i : Interaction F) : Prop :=
-  i.mult ≠ 0 ∧ (i.direction = .pull → ¬∃ k : ℕ, 1 ≤ k ∧ k ≤ N ∧ i.mult = k)
-
-lemma exists_le_one_iff {i : Interaction F} :
-    (∃ k : ℕ, 1 ≤ k ∧ k ≤ 1 ∧ i.mult = k) ↔ i.mult = 1 := by
-  constructor
-  · rintro ⟨k, hk1, hk2, h⟩
-    obtain rfl : k = 1 := by omega
-    simpa using h
-  · intro h
-    exact ⟨1, le_rfl, le_rfl, by simp [h]⟩
+  i.mult ≠ 0 ∧ (i.direction = .pull → ¬CountUpTo N i.mult)
 
 lemma pullUpTo_one_iff {i : Interaction F} : i.PullUpTo 1 ↔ i.Pull := by
-  simp only [PullUpTo, Pull, exists_le_one_iff]
+  simp only [PullUpTo, Pull, countUpTo_one_iff]
 
 lemma pushUpTo_one_iff {i : Interaction F} : i.PushUpTo 1 ↔ i.Push := by
-  simp only [PushUpTo, Push, exists_le_one_iff]
+  simp only [PushUpTo, Push, countUpTo_one_iff]
 
 lemma not_pushUpTo_iff {N : ℕ} {i : Interaction F} : ¬i.PushUpTo N ↔ i.mult = 0 ∨ i.PullUpTo N := by
   simp only [PushUpTo, PullUpTo, not_and, Classical.not_imp, not_not]
@@ -118,8 +121,8 @@ lemma BalancedInteractions.nil : BalancedInteractions ([] : List (Interaction F)
 Every pull of multiplicity up to `N` is matched by an interaction that pushes its message. For
 `N = 1` this is `BalancedInteractions.exists_push_of_pull`. For larger `N` it needs more than balance
 of the counts: under field-sum balance, `(p - 1) / 2` pulls of multiplicity `2` and one pull of
-multiplicity `1` sum to `p ≡ 0` with no push. It holds when there are fewer than `p / N`
-interactions, see `LogUpBalanced.matchedUpTo`.
+multiplicity `1` sum to `p ≡ 0` with no push. It holds when the number of interactions times `N`
+is below the characteristic, see `LogUpBalanced.matchedUpTo`.
 -/
 def MatchedUpTo (N : ℕ) (interactions : List (Interaction F)) : Prop :=
   ∀ a ∈ interactions, a.PullUpTo N → ∃ b ∈ interactions, b.msg = a.msg ∧ b.PushUpTo N
@@ -323,9 +326,9 @@ lemma balanceOf_eq_neg_of_pullsUpTo {N : ℕ} {msg : Array F} (hN : N < ringChar
       ring
 
 /--
-Every pull of multiplicity up to `N` is matched by a push, when there are fewer than
-`ringChar F / N` interactions: otherwise the multiplicities of the pulls of a message could add up
-to a multiple of the characteristic.
+Every pull of multiplicity up to `N` is matched by a push, when the number of interactions times
+`N` is below the characteristic: otherwise the multiplicities of the pulls of a message could add
+up to a multiple of the characteristic.
 -/
 theorem LogUpBalanced.matchedUpTo {N : ℕ} {interactions : List (Interaction F)}
     (balanced : LogUpBalanced interactions) (length_mul_lt : interactions.length * N < ringChar F) :
@@ -398,31 +401,25 @@ permutation of the messages of the active pulls. The permutation gives equal cou
 of interactions; the soundness error of a randomized check of it, like a product argument, is up to
 the proof system.
 -/
-def MultisetBalanced (interactions : List (Interaction F)) : Prop :=
-  (∀ i ∈ interactions, IsBool i.mult) ∧
-    (activeMessages interactions .push).Perm (activeMessages interactions .pull)
-
-theorem MultisetBalanced.balancedInteractions {interactions : List (Interaction F)}
-    (h_check : MultisetBalanced interactions) : BalancedInteractions interactions := by
-  have counts (msg : Array F) :
-      activeCount interactions .push msg = activeCount interactions .pull msg := by
-    rw [← count_activeMessages, ← count_activeMessages]
-    exact h_check.2.count_eq msg
-  refine ⟨ ?_, fun msg _ => counts msg ⟩
-  intro a a_mem a_pull
-  have pull_pos : 0 < activeCount interactions .pull a.msg := by
-    apply List.countP_pos_iff.mpr
-    exact ⟨ a, a_mem, by simp [a_pull.1, a_pull.2] ⟩
-  rw [← counts] at pull_pos
-  obtain ⟨ b, b_mem, h_b ⟩ := List.countP_pos_iff.mp pull_pos
-  simp only [decide_eq_true_eq] at h_b
-  exact ⟨ b, b_mem, h_b.2.1, h_b.2.2, by simp [h_b.1] ⟩
-
-/-- Multiset balance with `0`/`1` activations. -/
 def Balance.multiset : Balance F where
-  Balanced := MultisetBalanced
+  Balanced interactions :=
+    (∀ i ∈ interactions, IsBool i.mult) ∧
+      (activeMessages interactions .push).Perm (activeMessages interactions .pull)
   fits _ := true
-  balancedInteractions_of_balanced _ _ h_check := h_check.balancedInteractions
+  balancedInteractions_of_balanced interactions _ h_check := by
+    have counts (msg : Array F) :
+        activeCount interactions .push msg = activeCount interactions .pull msg := by
+      rw [← count_activeMessages, ← count_activeMessages]
+      exact h_check.2.count_eq msg
+    refine ⟨ ?_, fun msg _ => counts msg ⟩
+    intro a a_mem a_pull
+    have pull_pos : 0 < activeCount interactions .pull a.msg := by
+      apply List.countP_pos_iff.mpr
+      exact ⟨ a, a_mem, by simp [a_pull.1, a_pull.2] ⟩
+    rw [← counts] at pull_pos
+    obtain ⟨ b, b_mem, h_b ⟩ := List.countP_pos_iff.mp pull_pos
+    simp only [decide_eq_true_eq] at h_b
+    exact ⟨ b, b_mem, h_b.2.1, h_b.2.2, by simp [h_b.1] ⟩
   -- `matchedUpTo_of_balanced` is the default: `pullBound` is `1`.
 
 /-- `Balance.multiset` matches pulls of multiplicity `1` only. -/

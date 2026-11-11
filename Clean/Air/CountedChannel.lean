@@ -20,9 +20,6 @@ variable {Message : TypeMap} [ProvableType Message]
 
 namespace Channel
 
-/-- `k` for some `1 ≤ k ≤ N`. -/
-def CountUpTo (N : ℕ) (mult : F) : Prop := ∃ k : ℕ, 1 ≤ k ∧ k ≤ N ∧ mult = k
-
 /-- `channel`, with pulls of multiplicity up to `N`. -/
 def counted (N : ℕ) (channel : Channel F Message) : RawChannel F where
   name := channel.name
