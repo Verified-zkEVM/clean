@@ -205,6 +205,15 @@ def Component.StagedRequirementsOn (component : Component F) : List (Stage F) �
   | stage :: earlier =>
     component.RequirementsAfterOn stage earlier ∧ component.StagedRequirementsOn earlier
 
+@[circuit_norm] lemma Component.stagedRequirementsOn_nil (component : Component F) :
+    component.StagedRequirementsOn [] := trivial
+
+@[circuit_norm] lemma Component.stagedRequirementsOn_cons (component : Component F)
+    (stage : Stage F) (earlier : List (Stage F)) :
+    component.StagedRequirementsOn (stage :: earlier) ↔
+      component.RequirementsAfterOn stage earlier ∧ component.StagedRequirementsOn earlier :=
+  .rfl
+
 /-- Guarantees on stages that cover every pull of a table give all its guarantees. -/
 lemma Table.guarantees_of_guaranteesOn {table : Table F} {stages : List (Stage F)}
     (covered : ∀ c ∈ table.component.circuit.channelsWithGuarantees,
