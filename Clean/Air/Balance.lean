@@ -289,14 +289,14 @@ If every interaction carrying `msg` is inactive or a pull of multiplicity at mos
 of `msg` is minus a natural number at most `length · N`, which is positive if one of them is an
 active pull.
 -/
-lemma balanceOf_eq_neg_of_pullsUpTo {N : ℕ} {msg : Array F} (hN : N < ringChar F) :
+lemma balanceOf_eq_neg_of_pullUpTo {N : ℕ} {msg : Array F} (hN : N < ringChar F) :
     ∀ {interactions : List (Interaction F)},
     (∀ i ∈ interactions, i.msg = msg → i.mult = 0 ∨ i.PullUpTo N) →
     ∃ S : ℕ, balanceOf interactions msg = -(S : F) ∧ S ≤ interactions.length * N ∧
       ∀ a ∈ interactions, a.msg = msg → a.PullUpTo N → 1 ≤ S
   | [], _ => ⟨ 0, by simp [balanceOf], by simp, by simp ⟩
   | i :: is, h => by
-    obtain ⟨ S, hS, hle, hpos ⟩ := balanceOf_eq_neg_of_pullsUpTo hN (interactions := is)
+    obtain ⟨ S, hS, hle, hpos ⟩ := balanceOf_eq_neg_of_pullUpTo hN (interactions := is)
       fun j hj => h j (List.mem_cons_of_mem i hj)
     rw [balanceOf_cons]
     simp only [List.length_cons]
@@ -339,7 +339,7 @@ theorem LogUpBalanced.matchedUpTo {N : ℕ} {interactions : List (Interaction F)
   by_contra! no_push
   have hN : N < ringChar F :=
     lt_of_le_of_lt (Nat.le_mul_of_pos_left N (List.length_pos_of_mem a_mem)) length_mul_lt
-  obtain ⟨ S, hS, hle, hpos ⟩ := balanceOf_eq_neg_of_pullsUpTo hN (msg := a.msg)
+  obtain ⟨ S, hS, hle, hpos ⟩ := balanceOf_eq_neg_of_pullUpTo hN (msg := a.msg)
     (interactions := interactions)
     fun i i_mem i_msg => Interaction.not_pushUpTo_iff.mp (no_push i i_mem i_msg)
   have S_pos := hpos a a_mem rfl a_pull
