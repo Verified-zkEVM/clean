@@ -141,13 +141,6 @@ variable {N : ℕ} {channel : Channel F Message} {mult : Expression F}
     ProvableType.fromElements_toElements]
 end
 
-omit [FiniteField F] in
-/-- A nonzero multiplicity whose value is at most `N`. -/
-lemma countUpTo_of_val {p : ℕ} [Fact p.Prime] {N : ℕ} {mult : ZMod p} (h0 : mult ≠ 0)
-    (hN : mult.val ≤ N) : CountUpTo N mult :=
-  ⟨ mult.val, Nat.one_le_iff_ne_zero.mpr ((ZMod.val_ne_zero mult).mpr h0), hN,
-    (ZMod.natCast_zmod_val mult).symm ⟩
-
 /-- A pull of multiplicity up to `N` is matched by a push, whose requirement gives the
 guarantee. Every other interaction gets no guarantee. -/
 instance (N : ℕ) (channel : Channel F Message) : (channel.counted N).ConsistentUpTo N where

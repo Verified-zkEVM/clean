@@ -32,6 +32,13 @@ lemma countUpTo_one_iff {mult : F} : CountUpTo 1 mult ↔ mult = 1 := by
   · intro h
     exact ⟨1, le_rfl, le_rfl, by simp [h]⟩
 
+omit [FiniteField F] in
+/-- A nonzero multiplicity whose value is at most `N`. -/
+lemma countUpTo_of_val {p : ℕ} [Fact p.Prime] {N : ℕ} {mult : ZMod p} (h0 : mult ≠ 0)
+    (hN : mult.val ≤ N) : CountUpTo N mult :=
+  ⟨ mult.val, Nat.one_le_iff_ne_zero.mpr ((ZMod.val_ne_zero mult).mpr h0), hN,
+    (ZMod.natCast_zmod_val mult).symm ⟩
+
 namespace Interaction
 /-- A pull of multiplicity `1`: the interactions that typed channels give their guarantee. -/
 def Pull (i : Interaction F) : Prop := i.direction = .pull ∧ i.mult = 1
