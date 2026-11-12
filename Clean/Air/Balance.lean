@@ -369,8 +369,14 @@ its own: `Balance.logUp` is a plain `def`, so the projection is not reducible. -
 /--
 LogUp with counted pulls: field sums, sound for interaction counts whose product with `N` is below
 the characteristic, so that pulls of multiplicity up to `N` are matched by a push.
+
+Reducible so that instance search can project `pullBound` out of it.
+`SoundEnsemble.markFinished` takes `[channel.ConsistentUpTo balance.pullBound]` as an instance
+argument, and the counted channel's instance ties that bound to the channel's own `N`, so synthesis
+has to see `(logUpUpTo N).pullBound` as `N`. It cannot unfold a plain `def`, and an instance
+argument leaves no place to `simp` first.
 -/
-def Balance.logUpUpTo [ComputableRingChar F] (N : ℕ) : Balance F where
+@[reducible] def Balance.logUpUpTo [ComputableRingChar F] (N : ℕ) : Balance F where
   Balanced := LogUpBalanced
   fits count := count < ComputableRingChar.char F && count * N < ComputableRingChar.char F
   balancedInteractions_of_balanced _ fits balanced :=
@@ -384,10 +390,9 @@ def Balance.logUpUpTo [ComputableRingChar F] (N : ℕ) : Balance F where
       (of_decide_eq_true (Bool.and_eq_true_iff.mp fits).2)
     balanced.matchedUpTo length_mul_lt
 
-/-- `Balance.logUpUpTo N` matches pulls of multiplicity up to `N`. Without this lemma a user of a
-`SoundEnsemble` over `Balance.logUpUpTo N` has to write `show channel.ConsistentUpTo N` by hand,
-because instance search works at reducible transparency and cannot project `pullBound` out of the
-plain `def`. -/
+/-- `Balance.logUpUpTo N` matches pulls of multiplicity up to `N`, for `simp` and `circuit_norm`.
+Instance search needs the same fact, and gets it from the check being `@[reducible]`: a `simp`
+lemma plays no part in synthesis. -/
 @[simp, circuit_norm] lemma Balance.logUpUpTo_pullBound [ComputableRingChar F] (N : ℕ) :
     (Balance.logUpUpTo N : Balance F).pullBound = N := rfl
 
