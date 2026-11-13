@@ -3,6 +3,7 @@ module
 public import Mathlib.Analysis.Normed.Ring.Lemmas
 public import Mathlib.Combinatorics.Enumerative.Composition
 public import Init.Data.List.Find
+public import Batteries.Data.Vector.Lemmas
 
 @[expose] public section
 
@@ -437,8 +438,6 @@ theorem map_cast {f : α → β} {xs : Vector α n} (h : n = m) :
     (xs.cast h).map f = (xs.map f).cast h := by
   ext i hi
   simp only [getElem_map, getElem_cast]
-
-theorem get_eq_getElem (v : Vector α n) (i : Fin n) : v.get i = v[i.val] := rfl
 
 theorem append_eq_hAppend {m : ℕ} (v : Vector α n) (w : Vector α m) : v.append w = v ++ w := rfl
 
