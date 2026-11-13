@@ -52,7 +52,7 @@ import Clean.Backends.Circom.R1CS
 import Clean.Utils.Field          -- the field type `F p`
 import Clean.Utils.Primes         -- small test primes, e.g. `p1009`
 import Clean.Specs.Poseidon       -- `BN254_PRIME`
-import Clean.Circomlib.Poseidon   -- `Poseidon1`, a full gadget to compile
+import Clean.Circomlib.Poseidon   -- generic verified Poseidon gadget
 open Backends.Circom
 
 -- Witness IR: one input `x`, one witness `w = x + 5`.
@@ -64,14 +64,15 @@ def wasm : Except String ByteArray := compileModule p1009 1 ["x"] [1] addOps 1
 
 -- The operations of a larger circuit, offset by its public inputs (here: 1).
 def ops : List (Operation Specs.Poseidon.F) :=
-  (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
+  ((Circomlib.Poseidon.circuit Specs.PoseidonOptimized.params_t2).main
+    #v[varFromOffset field 0]).operations 1
 
--- Multi-word: BN254 needs 4 64-bit limbs; input "in", output witness 402.
-def wasmBN254 : Except String ByteArray := compileModule BN254_PRIME 1 ["in"] [402] ops 4
+-- Multi-word: BN254 needs 4 64-bit limbs; input "in", output circuit variable 401.
+def wasmBN254 : Except String ByteArray := compileModule BN254_PRIME 1 ["in"] [401] ops 4
 
 -- R1CS constraints for the same circuit, as JSON and as binary .r1cs
-def r1csJson : Except String String := compileR1CS BN254_PRIME 1 ["in"] [402] ops 4
-def r1csBin : Except String ByteArray := compileR1CSBin BN254_PRIME 1 ["in"] [402] ops 4
+def r1csJson : Except String String := compileR1CS BN254_PRIME 1 ["in"] [401] ops 4
+def r1csBin : Except String ByteArray := compileR1CSBin BN254_PRIME 1 ["in"] [401] ops 4
 ```
 
 To use the output, write the bytes to a file and hand them to snarkjs:
@@ -295,4 +296,3 @@ For writing circuit witnesses, see `[doc/witgen-authoring.md](../../../doc/witge
 - [Circom 2 witness-calculator ABI](https://github.com/iden3/circom_runtime/blob/master/js/witness_calculator.js)
 - [WASM binary format](https://webassembly.github.io/spec/core/binary/)
 - [Montgomery multiplication](https://en.wikipedia.org/wiki/Montgomery_modular_multiplication)
-
