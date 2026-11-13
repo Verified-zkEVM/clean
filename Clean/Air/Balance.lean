@@ -172,6 +172,13 @@ lemma BalancedUpTo.of_perm {N : ℕ} {as bs : List (Interaction F)} :
 lemma BalancedUpTo.nil (N : ℕ) : BalancedUpTo N ([] : List (Interaction F)) :=
   ⟨ .nil, .nil N ⟩
 
+/-- At bound `1`, balance with matched pulls is `BalancedInteractions`: a channel that does not
+count keeps the balance premise its soundness proofs had before counted pulls. -/
+lemma balancedUpTo_one_iff {interactions : List (Interaction F)} :
+    BalancedUpTo 1 interactions ↔ BalancedInteractions interactions :=
+  ⟨ fun balanced => balanced.toBalancedInteractions,
+    fun balanced => ⟨ balanced, balanced.matchedUpTo_one ⟩ ⟩
+
 /--
 A balance check: the condition that a verifier checks on the interactions with each channel, the
 numbers of interactions with a channel that the check is sound for, and its proof that the condition
@@ -355,6 +362,48 @@ theorem LogUpBalanced.matchedUpTo {N : ℕ} {interactions : List (Interaction F)
     (lt_of_le_of_lt (Nat.zero_le _) length_mul_lt)).mp (by simpa using hS)
   omega
 
+/--
+The bound of `matchedUpTo` is necessary, not an artifact of its proof: once the number of
+interactions times `N` reaches the characteristic, the multiplicities of the pulls of a message can
+add up to a multiple of it, and the field sums see a balanced list in which nothing was pushed.
+
+Two pulls, of multiplicities `N` and `ringChar F - N`, are such a list whenever `N < ringChar F`
+and `ringChar F ≤ 2 * N`: both multiplicities count up to `N`, they sum to the characteristic, and
+a list of length `2` passes a bound on the length alone, which is all `Balance.logUp` asks. This is
+what `Balance.logUpUpTo N` rules out by asking for `count * N < ringChar F` as well.
+-/
+theorem exists_logUpBalanced_not_matchedUpTo {N : ℕ} (hN : 2 ≤ N) (h_lt : N < ringChar F)
+    (h_le : ringChar F ≤ 2 * N) (channel : RawChannel F) (msg : Array F)
+    (h_size : msg.size = channel.arity) :
+    ∃ interactions : List (Interaction F), LogUpBalanced interactions ∧
+      interactions.length < ringChar F ∧ ¬ MatchedUpTo N interactions := by
+  have h_one_le : 1 ≤ ringChar F - N := by omega
+  have h_le_N : ringChar F - N ≤ N := by omega
+  have h_sum : (N : F) + ((ringChar F - N : ℕ) : F) = 0 := by
+    rw [← Nat.cast_add, show N + (ringChar F - N) = ringChar F by omega]
+    exact (ringChar.spec F _).mpr dvd_rfl
+  have h_count_rest : CountUpTo N ((ringChar F - N : ℕ) : F) :=
+    ⟨ ringChar F - N, h_one_le, h_le_N, rfl ⟩
+  let mk (mult : F) : Interaction F := ⟨ channel, .pull, mult, msg, h_size ⟩
+  refine ⟨ [mk (N : F), mk ((ringChar F - N : ℕ) : F)], fun m => ?_,
+    by simp only [List.length_cons, List.length_nil]; omega, fun matched => ?_ ⟩
+  · -- the two multiplicities sum to the characteristic, so every message balances
+    by_cases h_msg : msg = m
+    · have h_bal : balanceOf [mk (N : F), mk ((ringChar F - N : ℕ) : F)] m
+          = -((N : F) + ((ringChar F - N : ℕ) : F)) := by
+        simp [balanceOf, mk, Interaction.signedMult, h_msg]
+        ring
+      rw [h_bal, h_sum, neg_zero]
+    · simp [balanceOf, mk, h_msg]
+  · -- every interaction of the list is a pull counting up to `N`, so none of them is a push
+    obtain ⟨ b, b_mem, -, b_push ⟩ :=
+      matched (mk ((ringChar F - N : ℕ) : F)) (by simp) ⟨ rfl, h_count_rest ⟩
+    obtain ⟨ -, h_not ⟩ := b_push
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at b_mem
+    rcases b_mem with rfl | rfl
+    · exact h_not rfl ⟨ N, by omega, le_rfl, rfl ⟩
+    · exact h_not rfl h_count_rest
+
 /-- LogUp: field sums, sound for fewer interactions than the characteristic. -/
 def Balance.logUp [ComputableRingChar F] : Balance F where
   Balanced := LogUpBalanced
@@ -402,6 +451,15 @@ Instance search needs the same fact, and gets it from the check being `@[reducib
 lemma plays no part in synthesis. -/
 @[simp, circuit_norm] lemma Balance.logUpUpTo_pullBound [ComputableRingChar F] (N : ℕ) :
     (Balance.logUpUpTo N : Balance F).pullBound = N := rfl
+
+/-- At bound `1`, the counted check is `Balance.logUp` itself, so an ensemble that does not count
+keeps the check it already had, down to the proposition its witness has to satisfy. -/
+theorem Balance.logUpUpTo_one [ComputableRingChar F] :
+    (Balance.logUpUpTo 1 : Balance F) = Balance.logUp := by
+  unfold Balance.logUpUpTo Balance.logUp
+  congr 1
+  funext n
+  simp
 
 /-
 ## Multiset balance with `0`/`1` activations
@@ -514,6 +572,18 @@ class ConsistentUpTo (N : ℕ) (channel : RawChannel F) : Prop where
 instance (N : ℕ) (channel : RawChannel F) [channel.Consistent] : channel.ConsistentUpTo N where
   consistent interactions data balanced :=
     Consistent.consistent interactions data balanced.toBalancedInteractions
+
+/-- At bound `1`, consistency under counted pulls is `Consistent`: `ConsistentUpTo` generalizes
+that class rather than replacing it. -/
+lemma consistentUpTo_one_iff (channel : RawChannel F) :
+    channel.ConsistentUpTo 1 ↔ channel.Consistent := by
+  constructor
+  · intro h
+    exact ⟨ fun interactions data balanced reqs =>
+      h.consistent interactions data (balancedUpTo_one_iff.mpr balanced) reqs ⟩
+  · intro h
+    have := h
+    infer_instance
 end RawChannel
 
 /-

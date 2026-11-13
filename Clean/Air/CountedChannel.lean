@@ -45,16 +45,16 @@ from the other channels of a circuit without unfolding them. -/
 
 /-- `counted 1` gives what the plain typed channel gives: only a pull of multiplicity `1` gets the
 guarantee. -/
-lemma counted_one_guarantees (channel : Channel F Message) (mult : F)
+lemma counted_one_guarantees_iff (channel : Channel F Message) (mult : F)
     (message : Vector F (size Message)) (data : ProverData F) :
     (channel.counted 1).Guarantees mult message data ↔
       channel.toRaw.Guarantees mult message data := by
   simp [counted, toRaw, countUpTo_one_iff]
 
 /-- `counted 1` owes what the plain typed channel owes: an active push owes the guarantee, and a
-pull has multiplicity `0` or `1`. Together with `counted_one_guarantees`, counting up to `1` is the
+pull has multiplicity `0` or `1`. Together with `counted_one_guarantees_iff`, counting up to `1` is the
 channel Clean already had. -/
-lemma counted_one_requirements (channel : Channel F Message) (direction : Direction) (mult : F)
+lemma counted_one_requirements_iff (channel : Channel F Message) (direction : Direction) (mult : F)
     (message : Vector F (size Message)) (data : ProverData F) :
     (channel.counted 1).Requirements direction mult message data ↔
       channel.toRaw.Requirements direction mult message data := by
