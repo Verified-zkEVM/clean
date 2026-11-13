@@ -2,8 +2,12 @@
 This file proves some properties about `forM`, `mapM`, and `foldlM` monad loops when used in a `Circuit`,
 typically leveraging a `ConstantLength` assumption on the loop body.
 
-The end result are loop methods `Circuit.{mapFinRange, map, forEach, foldl}` that simplify
-under `circuit_norm` in every way we need them to.
+The end result are loop methods `Circuit.{mapFinRange, map, forEach, foldl, foldlRange}` that
+simplify under `circuit_norm` in every way we need them to.
+
+Each loop method has a docstring stating the contract its body must satisfy and the lemmas that
+extract per-iteration statements. For worked examples, see `Gadgets/Keccak/Permutation.lean`
+(`foldl`) and `Gadgets/SHA256/SHA256Compress.lean` (`foldlRange`).
 -/
 module
 
@@ -485,6 +489,15 @@ theorem forAllNoOffset_iff_const [NeZero m] (constant : ConstantLength (prod cir
 
 end FoldlM
 
+/--
+Run `body` on every element of `xs`, for its constraints and witnesses only; the loop has no output.
+
+Contract: `body` must have `ConstantLength` (proved by `infer_constant_length` by default), so
+iteration `i` starts at offset `n + i * (body default).localLength`.
+
+Proofs: `forEach.forAll` and `forEach.usesLocalWitnesses` turn the loop into a `∀ i : Fin m`
+statement about `body xs[i]`, so soundness and completeness reduce to a per-iteration argument.
+-/
 def forEach {m : ℕ} [Inhabited α] (xs : Vector α m) (body : α → Circuit F Unit)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F Unit :=
   xs.forM body
@@ -497,14 +510,56 @@ theorem forEach_cons {m : ℕ} [Inhabited α] (x : α) (xs : Vector α m) (body 
   rw [←Vector.forM_toList]
   rfl
 
+/--
+Map a circuit over a vector, collecting the outputs of `body` in a vector.
+
+Contract: `body` must have `ConstantLength`. Iterations are independent; the output of
+iteration `i` may depend on `xs[i]` but there is no state shared between iterations.
+
+Proofs: `map.forAll` and `map.usesLocalWitnesses` give a `∀ i : Fin m` statement about
+`body xs[i]`, and `map.output_eq` gives the output as `xs.mapIdx` of the per-iteration outputs.
+-/
 def map {m : ℕ} (xs : Vector α m) (body : α → Circuit F β)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F (Vector β m) :=
   xs.mapM body
 
+/--
+Like `map`, but over the indices `0, …, m - 1` instead of a vector: the result is
+`body 0, …, body (m - 1)`.
+
+Same contract and proof experience as `map`: `body` must have `ConstantLength`, iterations are
+independent, and `mapFinRange.forAll`, `mapFinRange.usesLocalWitnesses` and
+`mapFinRange.output_eq` give per-iteration statements.
+-/
 def mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit F β)
     (_constant : ConstantLength body := by infer_constant_length) : Circuit F (Vector β m) :=
   Vector.mapFinRangeM m body
 
+/--
+Fold `body` over `xs`, threading a state `s : β` from one iteration to the next.
+
+Contract: `body` must have both `ConstantLength` and `ConstantOutput`. `ConstantOutput` means
+the output expressions of an iteration depend only on the offset, not on the incoming state or
+the loop element. The state and element can still flow into the iteration's assertions and
+subcircuit inputs; but whatever the iteration returns is determined by the cells it introduces
+(for example witnesses). Keccak rounds fit this: they return fixed cells whatever the round
+constant is.
+
+This is what makes proofs tractable. Write `k = (body default default).localLength`. The output
+of iteration `i` collapses to `(body default xs[i]).output (n + i * k)`, so `foldl.output_eq`
+gives the loop output (that of the final iteration, `m - 1`) in closed form, and `foldl.forAll`
+and `foldl.usesLocalWitnesses` express each later iteration with that output as its state. The
+result is plain variable offsets, with no `Fin.foldl` left in the extracted hypotheses. These
+lemmas, like `mapFinRange`, need `[NeZero m]`.
+
+If your loop body returns an expression built from the state, restructure it: let each iteration
+witness the cells it introduces and return only those, passing shared cells through the state
+into assertions. A canonical example is `Gadgets/Keccak/Permutation.lean`.
+
+The default `_const_out` tactic proves `ConstantOutput` by `rfl` after `circuit_norm`. If it
+fails, the body most likely returns something that depends on the state; restructure it as
+above, or prove `ConstantOutput` manually.
+-/
 def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β) (body : β → α → Circuit F β)
   (_const_out : ConstantOutput (fun (s, a) => body s a) := by
     simp only [circuit_norm]
@@ -514,6 +569,25 @@ def foldl {m : ℕ} [Inhabited β] [Inhabited α] (xs : Vector α m) (init : β)
    : Circuit F β :=
   xs.foldlM body init
 
+/--
+Fold `body` over the indices `0, …, m - 1`, threading a state `s : β` from one iteration to
+the next.
+
+Contract: `body` only needs `ConstantLength`. In contrast to `foldl`, `ConstantOutput` is *not*
+required, so the output of an iteration may mention the incoming state. That is accepted at
+definition time, but it costs you later in the proof:
+
+* `foldlRange.output_eq` leaves `Fin.foldl m (fun acc i => (body acc i).output _) init` in the
+  extracted hypotheses, and `foldlRange.forAll` states each iteration in terms of
+  `FoldlM.foldlAcc`. These `Fin.foldl` terms are hard to match with `rw` or `simp only`, so you
+  typically have to prove a closed form for the accumulator by hand, as
+  `fin_foldl_eq_stateVar` does in `Gadgets/SHA256/SHA256Compress.lean` (a private lemma, so it is
+not linked in the docs). `Gadgets/SHA256/SHA256Schedule.lean` is a second `foldlRange` example.
+
+Prefer `foldl` whenever the body's output can be made independent of the state. If you do use
+`foldlRange`, restructure the body so that each iteration returns only cells it introduces
+itself, with the state flowing into assertions only, and then switch to `foldl`.
+-/
 def foldlRange (m : ℕ) [Inhabited β] (init : β) (body : β → Fin m → Circuit F β)
   (_constant : ConstantLength (fun (s, a) => body s a) := by
     apply Circuit.ConstantLength.fromConstantLength'
