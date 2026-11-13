@@ -53,12 +53,12 @@ compiled end-to-end to the snarkjs toolchain:
    {"a": "3", "b": "4"}
    ```
 
-   For `a = 3, b = 4` the witness is `[1, 17, 3, 4, 12]`: signal 0 is the
+   For `a = 3, b = 4` the witness is `[1, 17, 3, 4]`: signal 0 is the
    constant signal, signal 1 is the output `w = 3·4 + 5 = 17` (outputs-first
-   layout), then the two inputs, then an intermediate (signal 4 = `a·b` = 12)
-   induced by the `===` assert: the compiler witnesses the product as its own
-   signal so the constraints stay quadratic — `a·b = v4` and `w = v4 + 5`
-   (visible in the R1CS JSON).
+   layout), then the two inputs. The `===` assert is a single quadratic row
+   `a·b = w − 5`: the product is absorbed into the assert row's sides instead
+   of being witnessed as its own intermediate signal (visible in the R1CS
+   JSON) — the same shape circom emits for `w <== a*b + 5`.
 -/
 
 open Backends.Circom
