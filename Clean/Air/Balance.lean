@@ -21,7 +21,15 @@ with a channel, together with the proof that the check implies these facts.
 -/
 
 /-- A multiplicity of `k` for some `1 ≤ k ≤ N`: what a table that answers `k` identical lookups
-with one row pulls the facts it relies on with. `CountUpTo 1` is multiplicity `1`. -/
+with one row pulls the facts it relies on with. `CountUpTo 1` is multiplicity `1`.
+
+What this says is that the multiplicity is named by such a `k`, and nothing about the field it
+lives in. It does not ask for `N < ringChar F`, so in a small enough field two of those `k` name
+the same element, and `CountUpTo 2 (0 : ZMod 2)` holds because `(2 : ZMod 2) = 0`. Asking for the
+bound here would carry a condition on the field through every requirement, guarantee and proof that
+mentions a count, to exclude a case the balance check excludes already: `Balance.logUpUpTo N` fits
+an interaction count only when `count * N < ringChar F`, which over `ZMod 2` with `N = 2` leaves
+`count = 0`, so a witness holding such a pull fails the check independently of its multiplicity. -/
 def CountUpTo (N : ℕ) (mult : F) : Prop := ∃ k : ℕ, 1 ≤ k ∧ k ≤ N ∧ mult = k
 
 lemma countUpTo_one_iff {mult : F} : CountUpTo 1 mult ↔ mult = 1 := by
