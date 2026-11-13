@@ -193,8 +193,7 @@ def formalFibTable : FormalTable (F p) RowType := {
 
       have spec2 : (next.y).val = fib8 (rest.len + 2) := by
         simp only [fib8]
-        rw [←curr_fib0, ←curr_fib1]
-        assumption
+        rwa [←curr_fib0, ←curr_fib1]
 
       exact ⟨spec1, spec2⟩
 }

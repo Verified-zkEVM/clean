@@ -37,13 +37,12 @@ theorem soundness {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) 
       (main params matrix offset hOffset) (fun _ => True) (Spec params matrix offset) := by
   circuit_proof_start [Sigma.circuit, Mix.circuit, Mix.Spec]
   rw [h_holds.2]
-  simp_rw [Vector.ext_iff, Vector.getElem_map] at h_input
   unfold Specs.PoseidonOptimized.denseRound
   apply congrArg (Specs.Poseidon.mix matrix)
   ext i hi
   have hc : offset + i < 8 * t + params.nPartial := by omega
   simp [Specs.Poseidon.ark, Specs.Poseidon.sboxFull, Specs.Poseidon.sigma,
-    h_holds.1 ⟨i, hi⟩, h_input, hc, circuit_norm]
+    h_holds.1 ⟨i, hi⟩, hc, circuit_norm]
 
 theorem completeness {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t) (offset : ℕ)
     (hOffset : offset + t ≤ 8 * t + params.nPartial) :
@@ -95,13 +94,12 @@ theorem soundness {t : ℕ} (params : Params t) (cOffset : ℕ)
   circuit_proof_start [Sigma.circuit, MixS.circuit, MixS.Spec]
   obtain ⟨hSigma, hArk, hMix⟩ := h_holds
   rw [hMix]
-  simp_rw [Vector.ext_iff, Vector.getElem_map] at h_input
   unfold Specs.PoseidonOptimized.partialRound
-  simp only [dif_pos hOffset]
+  simp only [dite_eq_left hOffset]
   apply congrArg (Specs.PoseidonOptimized.mixS params round)
   ext i hi
   by_cases hi0 : i = 0
-  · simp [hi0, Specs.Poseidon.sigma, hSigma, hArk, h_input, circuit_norm]
+  · simp [hi0, Specs.Poseidon.sigma, hSigma, hArk, circuit_norm]
   · simp [hi0, h_input, circuit_norm]
 
 theorem completeness {t : ℕ} (params : Params t) (cOffset : ℕ)
@@ -145,13 +143,12 @@ theorem soundness {t : ℕ} (params : Params t) :
       (main params) (fun _ => True) (Spec params) := by
   circuit_proof_start [Sigma.circuit, MixLast.circuit, MixLast.Spec]
   rw [h_holds.2]
-  simp_rw [Vector.ext_iff, Vector.getElem_map] at h_input
   apply congrArg fun state => (Specs.Poseidon.mix params.M state)[0]'(by
     have := params.two_le_width
     omega)
   ext i hi
   simp [Specs.Poseidon.sboxFull, Specs.Poseidon.sigma,
-    h_holds.1 ⟨i, hi⟩, h_input, circuit_norm]
+    h_holds.1 ⟨i, hi⟩, circuit_norm]
 
 theorem completeness {t : ℕ} (params : Params t) :
     Completeness F (Input := fields t) (Output := field)

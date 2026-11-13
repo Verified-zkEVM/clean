@@ -67,8 +67,8 @@ lemma forAll_flatten_abstract (circuit : Fin m → Circuit F β) (constant : Con
     set k' := constant'.localLength
     have : k' = k := rfl
     rw [this] at ih
-    have : ((circuit 0).operations n).localLength + n = n + constant.localLength := by
-      rw [←constant.localLength_eq 0 n]; ac_rfl
+    have : n + ((circuit 0).operations n).localLength = n + constant.localLength := by
+      rw [←constant.localLength_eq 0 n]
     rw [this]
     ring_nf at ih ⊢
     rw [ih]
@@ -281,6 +281,7 @@ theorem output_eq :
   case cons x xs ih =>
     rw [foldlM_cons, bind_output_eq, ih, constant.localLength_eq (init, x), finFoldl_cons_succ]
 
+@[computable_witnesses]
 def foldlAcc (n : ℕ) (xs : Vector α m) (circuit : β → α → Circuit F β) (init : β) (j : Fin m) : β :=
   Fin.foldl j (fun acc i => (circuit acc xs[i.val]).output (n + i*(circuit acc xs[i.val]).localLength)) init
 

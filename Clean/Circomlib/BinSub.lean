@@ -44,7 +44,7 @@ lemma inputLinearSub_eval_eq_sub {n : ℕ} [NeZero n] (env : Environment (F p))
     Expression.eval env (inputLinearSub n input) =
       fieldFromBits input_val[0] + 2^n - fieldFromBits input_val[1] := by
   simp only [inputLinearSub, circuit_norm, eval_foldl]
-  simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
+  simp only [h_eval]
   have h_foldl_split := Fin.foldl_split_mul_add_distrib (α:=F p) (fun j k => input_val[j][k]) (fun i => 2^i) (n:=n)
   simp_all only [Fin.getElem_fin, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.mod_succ]
   simp [fieldFromBits_as_sum]
@@ -320,9 +320,11 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Step 4: Analyze the Right Hand Side (RHS) of the main equation
     -- Link the circuit's reconstruction loop to `fieldFromBits` of the output vars
     -- Hint: Use `foldl_explicit` and `Bits.fieldFromBits_eval`
-    let out_vars : Vector (Expression (F p)) n := Vector.mapRange n (fun i ↦ var { index := i₀ + i })
-    have h_rhs_eval : Expression.eval env (Fin.foldl n (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 * 2)) (0, 1)).1 = fieldFromBits (Vector.map (Expression.eval env) out_vars) := by
-      -- By definition of `fieldFromBits`, we know that `fieldFromBits (Vector.map (Expression.eval env) out_vars)` is the sum of the bits of `out_vars` multiplied by their respective powers of 2.
+    have h_rhs_eval : Expression.eval env (Fin.foldl n
+        (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 * 2)) (0, 1)).1 =
+        fieldFromBits (Vector.mapRange n fun i => env.get (i₀ + i)) := by
+      -- By definition of `fieldFromBits`, the right-hand side is the sum of the output bits
+      -- multiplied by their respective powers of 2.
       apply Eq.symm; exact (by
       convert foldl_explicit _ _ _ _ using 1;
       any_goals exact fun i => h_out_bool _ i.2;
@@ -330,8 +332,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         -- By definition of `fieldFromBits`, we know that it is equal to the foldl of the same operation.
         have h_fieldFromBits_eq_foldl : ∀ (bits : Vector (F p) n), Utils.Bits.fieldFromBits bits = Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ (k : ℕ)) 0 := by exact fieldFromBits_as_sum;
         convert h_fieldFromBits_eq_foldl _;
-        simp +decide only [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapRange];
-        rfl;
+        simp +decide only [Fin.getElem_fin, Vector.getElem_mapRange];
       · norm_num)
 
     -- Final Conclusion: Assemble the parts

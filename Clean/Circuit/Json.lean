@@ -46,6 +46,7 @@ instance : ToJson (Lookup F) where
 instance : ToJson (AbstractInteraction F) where
   toJson i := Json.mkObj [
     ("channel", toJson i.channel.name),
+    ("direction", toJson i.direction.name),
     ("multiplicity", toJson i.mult),
     ("message", toJson i.msg.toArray)
   ]

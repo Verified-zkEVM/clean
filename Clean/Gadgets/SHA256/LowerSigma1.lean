@@ -155,11 +155,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
          2 * env.get (i₀ + i.val) * Expression.eval env (shr32 10 input_var)[i.val]) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
-  set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + (32 + 32 * 0) + i} : Expression (F p))) with hz_def
+  set z : fields 32 (F p) := Vector.mapRange 32 fun i => env.get (i₀ + (32 + 32 * 0) + i)
+    with hz_def
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
-    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    intro i; simp [z, Vector.getElem_mapRange]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 17).val] + input[(i + 19).val] -
         2 * input[(i + 17).val] * input[(i + 19).val])
@@ -173,7 +172,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [lowerSigma1, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
+  obtain ⟨h_env1, h_env2⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr17 := eval_rotr32 env.toEnvironment input_var input h_input 17 i
     have hr19 := eval_rotr32 env.toEnvironment input_var input h_input 19 i
@@ -196,7 +195,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hs10 := eval_shr32 env.toEnvironment input_var input h_input 10 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [circuit_norm, mul_zero, zero_add] at h2
+    simp only [circuit_norm, mul_zero] at h2
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr17, hr19, hs10]
     have b17 : input[(i + 17).val] = (0 : F p) ∨ input[(i + 17).val] = 1 := h_assumptions (i + 17)
     have b19 : input[(i + 19).val] = (0 : F p) ∨ input[(i + 19).val] = 1 := h_assumptions (i + 19)
@@ -229,6 +228,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by computable_witnesses [rotr32, shr32, Vector.getElem_rotate]
 
 end LowerSigma1
 end Gadgets.SHA256

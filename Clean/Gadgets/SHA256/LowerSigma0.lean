@@ -188,9 +188,10 @@ lemma valueBits_rotr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x)
 /-! ## eval helpers for rotr32 / shr32 -/
 
 lemma eval_rotr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (rotr32 k input_var)[i.val] = input[(i + k).val] := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold rotr32
   rw [Vector.getElem_rotate]
   subst h_input
@@ -236,10 +237,11 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
           (Nat.lt_of_le_of_lt (Nat.div_le_self _ _) hval_lt) pow_le)]
 
 lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (shr32 k input_var)[i.val] =
       if h : i.val + k.val < 32 then input[i.val + k.val]'h else 0 := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold shr32; rw [Vector.getElem_ofFn]; subst h_input
   split
   · next h => rw [Vector.getElem_map]
@@ -381,11 +383,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
   -- Set z to the output vector
-  set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + (32 + 32 * 0) + i} : Expression (F p))) with hz_def
+  set z : fields 32 (F p) := Vector.mapRange 32 fun i => env.get (i₀ + (32 + 32 * 0) + i)
+    with hz_def
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
-    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    intro i; simp [z, Vector.getElem_mapRange]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 7).val] + input[(i + 18).val] -
         2 * input[(i + 7).val] * input[(i + 18).val])
@@ -399,7 +400,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [lowerSigma0, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
+  obtain ⟨h_env1, h_env2⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr7 := eval_rotr32 env.toEnvironment input_var input h_input 7 i
     have hr18 := eval_rotr32 env.toEnvironment input_var input h_input 18 i
@@ -422,7 +423,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hs3 := eval_shr32 env.toEnvironment input_var input h_input 3 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [circuit_norm, mul_zero, zero_add] at h2
+    simp only [circuit_norm, mul_zero] at h2
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr7, hr18, hs3]
     have b7 : input[(i + 7).val] = (0 : F p) ∨ input[(i + 7).val] = 1 := h_assumptions (i + 7)
     have b18 : input[(i + 18).val] = (0 : F p) ∨ input[(i + 18).val] = 1 := h_assumptions (i + 18)
@@ -457,6 +458,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by computable_witnesses [rotr32, shr32, Vector.getElem_rotate]
 
 end LowerSigma0
 end Gadgets.SHA256

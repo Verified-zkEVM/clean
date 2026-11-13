@@ -3,6 +3,7 @@ module
 public import Mathlib.Analysis.Normed.Ring.Lemmas
 public import Mathlib.Combinatorics.Enumerative.Composition
 public import Init.Data.List.Find
+public import Batteries.Data.Vector.Lemmas
 
 @[expose] public section
 
@@ -414,4 +415,61 @@ lemma map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n)
 def ofArray [Inhabited α] (n : ℕ) (arr : Array α) : Vector α n :=
   ⟨ arr.take n |>.rightpad n default, by simp [Array.size_rightpad] ⟩
 
+/-! Pushing a `map` inside a vector constructor, with pointwise results stated as lambdas. -/
+
+theorem map_ofFn_fun {f : Fin n → α} {g : α → β} :
+    (ofFn f).map g = ofFn fun i => g (f i) := by
+  rw [map_ofFn]; rfl
+
+theorem map_map_fun {f : α → β} {γ : Type} {g : β → γ} {xs : Vector α n} :
+    (xs.map f).map g = xs.map fun a => g (f a) := by
+  rw [map_map]; rfl
+
+theorem map_mapIdx_fun {γ : Type} {f : ℕ → α → β} {g : β → γ} {xs : Vector α n} :
+    (xs.mapIdx f).map g = xs.mapIdx fun i a => g (f i a) := by
+  ext i hi
+  simp only [getElem_map, getElem_mapIdx]
+
+theorem map_take_comm (f : α → β) (xs : Vector α n) (i : ℕ) :
+    (xs.take i).map f = (xs.map f).take i :=
+  (map_take f xs i).symm
+
+theorem map_cast {f : α → β} {xs : Vector α n} (h : n = m) :
+    (xs.cast h).map f = (xs.map f).cast h := by
+  ext i hi
+  simp only [getElem_map, getElem_cast]
+
+theorem append_eq_hAppend {m : ℕ} (v : Vector α n) (w : Vector α m) : v.append w = v ++ w := rfl
+
+/-! Congruence with the index bound in context: rewriting the body of an index binder may use
+`i < n`. -/
+
+theorem mapRange_congr {n : ℕ} {f g : ℕ → α} (h : ∀ i, i < n → f i = g i) :
+    mapRange n f = mapRange n g := by
+  ext i hi
+  simp only [getElem_mapRange, h i hi]
+
+theorem ofFn_congr {n : ℕ} {f g : Fin n → α} (h : ∀ i : Fin n, i.val < n → f i = g i) :
+    ofFn f = ofFn g := by
+  ext i hi
+  simp only [getElem_ofFn, h ⟨i, hi⟩ hi]
+
+theorem mapFinRange_congr {n : ℕ} {f g : Fin n → α} (h : ∀ i : Fin n, i.val < n → f i = g i) :
+    mapFinRange n f = mapFinRange n g := by
+  ext i hi
+  simp only [getElem_mapFinRange, h ⟨i, hi⟩ hi]
+
+theorem mapIdx_congr {n : ℕ} {v w : Vector α n} {f g : ℕ → α → β} (hv : v = w)
+    (h : ∀ i a, i < n → f i a = g i a) : v.mapIdx f = w.mapIdx g := by
+  subst hv
+  ext i hi
+  simp only [getElem_mapIdx, h i _ hi]
+
 end Vector
+
+theorem Fin.foldl_congr_lt {n : ℕ} {f g : α → Fin n → α} {x y : α} (hx : x = y)
+    (h : ∀ a (i : Fin n), i.val < n → f a i = g a i) : Fin.foldl n f x = Fin.foldl n g y := by
+  subst hx
+  congr 1
+  funext a i
+  exact h a i i.isLt

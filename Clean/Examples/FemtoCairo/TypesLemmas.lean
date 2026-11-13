@@ -41,6 +41,11 @@ lemma State.eval_fp (env : Environment F) (s : Var State F) :
   obtain ⟨pc, ap, fp⟩ := s
   simp [circuit_norm, explicit_provable_type]
 
+@[circuit_norm]
+lemma State.eval_of_literal (env : Environment F) (pc ap fp : Expression F) :
+    eval env (State.mk pc ap fp) = State.mk (pc.eval env) (ap.eval env) (fp.eval env) := by
+  simp only [explicit_provable_type, circuit_norm]
+
 end StateEval
 
 section RawInstructionEval
@@ -74,6 +79,29 @@ lemma RawInstruction.eval_op3 (env : Environment F) (r : Var RawInstruction F) :
   obtain ⟨rawInstrType, op1, op2, op3⟩ := r
   simp [circuit_norm, explicit_provable_type]
 
+@[circuit_norm]
+lemma RawInstruction.eval_of_literal (env : Environment F) (a b c d : Expression F) :
+    eval env (RawInstruction.mk a b c d) =
+      RawInstruction.mk (a.eval env) (b.eval env) (c.eval env) (d.eval env) := by
+  simp only [explicit_provable_type, circuit_norm]
+
 end RawInstructionEval
+
+section DecodedEval
+variable {F : Type} [FiniteField F]
+
+@[circuit_norm]
+lemma DecodedInstructionType.eval_of_literal (env : Environment F) (a b c d : Expression F) :
+    eval env (DecodedInstructionType.mk a b c d) =
+      DecodedInstructionType.mk (a.eval env) (b.eval env) (c.eval env) (d.eval env) := by
+  simp only [explicit_provable_type, circuit_norm]
+
+@[circuit_norm]
+lemma DecodedAddressingMode.eval_of_literal (env : Environment F) (a b c d : Expression F) :
+    eval env (DecodedAddressingMode.mk a b c d) =
+      DecodedAddressingMode.mk (a.eval env) (b.eval env) (c.eval env) (d.eval env) := by
+  simp only [explicit_provable_type, circuit_norm]
+
+end DecodedEval
 
 end Examples.FemtoCairo.Types

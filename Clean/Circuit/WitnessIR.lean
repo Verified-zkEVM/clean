@@ -18,8 +18,8 @@ A deep-embedded IR for witness-generation callbacks
 
 A witness program (`WitgenIR F m`) is either
 - `native f` — an arbitrary Lean closure, the migration escape hatch. Not serializable.
-  `eval (native f) = f` holds definitionally, which is what lets phase 2 wrap all
-  existing callbacks without touching any gadget or proof.
+  `eval (native f) = f` holds definitionally, which lets existing callbacks be wrapped
+  without touching any gadget or proof.
 - `ir steps out` — structured IR: a list of scalar `let`-steps, followed by a
   vector-shaped output expression.
 
@@ -75,9 +75,8 @@ inductive FExpr (F : Type) where
   | ite (c : BExpr F) (t e : FExpr F)
   /-- Read an expression list at a computed index, 0 if out of range -/
   | listGet (xs : List (FExpr F)) (i : U64Expr F)
-  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`:
-  row `row` of table `key` with rows of width `n`, projected at column `col`.
-  Missing rows read as 0. The nondeterministic escape hatch (FemtoCairo memory). -/
+  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`: row `row` of
+  component `key` with rows of width `n`, projected at column `col`. Missing rows read as 0. -/
   | dataGet (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n)
   /-- Same as `dataGet` but reads the uncommitted `ProverEnvironment.hint`. -/
   | hintGet (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n)
@@ -164,7 +163,7 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
   | .listGet xs i => FExpr.evalList ctx (i.eval ctx).toNat xs
   | .dataGet key n row col =>
-    ((ctx.env.data key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
+    ((ctx.env.data.tables key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
   | .hintGet key n row col =>
     ((ctx.env.hint key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
 
@@ -337,11 +336,12 @@ inductive Step (F : Type) where
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
 @[circuit_norm]
 def evalSteps [FiniteField F] (env : ProverEnvironment F)
-    (steps : List (Step F)) (locals : Array (F ⊕ UInt64) := #[]) : Array (F ⊕ UInt64) :=
+    (steps : List (Step F)) (locals : Array (F ⊕ UInt64) := #[])
+    (idx : ℕ := 0) : Array (F ⊕ UInt64) :=
   match steps with
   | [] => locals
-  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals })))
-  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals })))
+  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals, idx }))) idx
+  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals, idx }))) idx
 
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIR (F : Type) : ℕ → Type where
@@ -379,8 +379,9 @@ simp-normalize to exactly the same hypothesis shapes as the closures they replac
 def WitgenIR.ofFExpr (e : FExpr F) : WitgenIR F 1 := .ir [] (.lit #v[e])
 
 /-- Witness program computing each output element from its own IR expression. -/
-def WitgenIR.ofFExprs {n : ℕ} (es : Vector (FExpr F) n) : WitgenIR F n :=
-  .ir [] (.lit es)
+def WitgenIR.ofCompositeFExpr {value : TypeMap} [ProvableType value]
+    (e : value (FExpr F)) : WitgenIR F (size value) :=
+  .ir [] (.lit (toElements e))
 
 /-- Witness program computing a whole provable value from a native Lean closure — the
 payload of `witnessNative`. A named definition (rather than an inline `.native` lambda)
@@ -392,6 +393,7 @@ def WitgenIR.nativeValue {value : TypeMap} [ProvableType value]
     (compute : ProverEnvironment F → value F) : WitgenIR F (size value) :=
   .native fun env => compute env |> toElements
 
+@[computable_witnesses]
 theorem WitgenIR.eval_nativeValue [FiniteField F] {value : TypeMap} [ProvableType value]
     (compute : ProverEnvironment F → value F) (env : ProverEnvironment F) :
     (WitgenIR.nativeValue compute).eval env = toElements (compute env) := rfl
@@ -442,23 +444,26 @@ instance-polymorphic lemmas like `if_pos`/`if_neg`/`by_cases` handle it); togeth
 `FiniteField.val_inj` this gives `.feq` conditions the plain `x = y` shape. -/
 attribute [circuit_norm] decide_eq_true_eq
 
+section
+variable [FiniteField F] {value : TypeMap} [ProvableType value]
+
 /-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_mapRange [FiniteField F] (ctx : Ctx F) (n : ℕ) (body : FExpr F)
+theorem VExpr.getElem_eval_mapRange (ctx : Ctx F) (n : ℕ) (body : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
   simp [VExpr.eval, Vector.getElem_mapRange]
 
 /-- Elementwise evaluation of environment ranges, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_envRange [FiniteField F] (ctx : Ctx F) {n : ℕ} (offset : ℕ)
+theorem VExpr.getElem_eval_envRange (ctx : Ctx F) {n : ℕ} (offset : ℕ)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.envRange (n := n) offset))[i] = ctx.env.get (offset + i) := by
   simp [VExpr.eval, Vector.getElem_mapRange]
 
 /-- Elementwise evaluation of bit decompositions, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_bitsOf [FiniteField F] (ctx : Ctx F) {n : ℕ} (x : FExpr F)
+theorem VExpr.getElem_eval_bitsOf (ctx : Ctx F) {n : ℕ} (x : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.bitsOf (n := n) x))[i]
       = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
@@ -466,7 +471,7 @@ theorem VExpr.getElem_eval_bitsOf [FiniteField F] (ctx : Ctx F) {n : ℕ} (x : F
 
 /-- Elementwise evaluation of literal vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_lit [FiniteField F] {n : ℕ} (ctx : Ctx F)
+theorem VExpr.getElem_eval_lit {n : ℕ} (ctx : Ctx F)
     (es : Vector (FExpr F) n) (i : ℕ) (hi : i < n) :
     (VExpr.eval ctx (.lit es))[i] = es[i].eval ctx := by
   simp [VExpr.eval]
@@ -474,7 +479,7 @@ theorem VExpr.getElem_eval_lit [FiniteField F] {n : ℕ} (ctx : Ctx F)
 /-- Elementwise evaluation of general witness programs, keyed on `getElem`:
 reduces to the output vector expression evaluated with the `let`-steps in scope. -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F))
+theorem WitgenIR.getElem_eval_ir {n : ℕ} (steps : List (Step F))
     (out : VExpr F n) (env : ProverEnvironment F)
     (i : ℕ) (hi : i < n) :
     ((WitgenIR.ir steps out).eval env)[i]
@@ -483,7 +488,7 @@ theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F
 
 /-- Scalar witness programs evaluate elementwise to their IR expression. -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
+theorem WitgenIR.getElem_eval_ofFExpr (e : FExpr F)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < 1) :
     ((ofFExpr e).eval env)[i] = e.eval { env } := by
   rcases Nat.lt_one_iff.mp hi
@@ -491,41 +496,39 @@ theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
 
 /-- Elementwise evaluation of multi-element witness programs, keyed on `getElem`. -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (FExpr F) n)
-    (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
-    ((ofFExprs es).eval env)[i] = es[i].eval { env } := by
-  simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
+theorem WitgenIR.getElem_eval_ofCompositeFExpr (e : value (FExpr F))
+    (env : ProverEnvironment F) (i : ℕ) (hi : i < size value) :
+    ((ofCompositeFExpr e).eval env)[i] = (toElements e)[i].eval { env } := by
+  simp [ofCompositeFExpr, WitgenIR.eval, VExpr.eval, evalSteps]
 
 @[circuit_norm]
-theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
+theorem WitgenIR.eval_ofCompositeFExpr_singleton {F: Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
-  ext i hi
-  change i < 1 at hi
-  have : i = 0 := Nat.lt_one_iff.mp hi
-  subst i
-  simp [WitgenIR.getElem_eval_ofFExprs, toElements]
+    (WitgenIR.ofCompositeFExpr (value:=field) x).eval env = #v[x.eval { env }] := by
+  with_unfolding_all rfl
 
-/-- Same as `eval_ofFExprs_singleton`, keyed on the literal-vector spelling
+/-- Same as `eval_ofCompositeFExpr_singleton`, keyed on the literal-vector spelling
 (`toElements (M := field) x` and `#v[x]` are not identified during simp matching).
 Not in `circuit_norm`: firing on transient literal-vector spellings changes downstream
 goal shapes; cite it explicitly where needed. -/
-theorem WitgenIR.eval_ofFExprs_one {F : Type} [FiniteField F]
+theorem WitgenIR.eval_ofCompositeFExpr_one {F : Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs #v[x]).eval env = #v[x.eval { env }] := by
-  exact WitgenIR.eval_ofFExprs_singleton x env
+    (WitgenIR.ofCompositeFExpr (value := fields 1) #v[x]).eval env = #v[x.eval { env }] := by
+  with_unfolding_all rfl
 
 /-- Field-equality conditions decide propositional equality (via the injective
-`ℕ` embedding). -/
-@[circuit_norm]
-theorem BExpr.eval_feq_iff [FiniteField F] (x y : FExpr F) (ctx : Ctx F) :
+`ℕ` embedding). Rewrites top-down, before `BExpr.eval` unfolds: the unfolded condition is
+`decide` of an equation whose sides `FExpr.eval` then rewrites definitionally, leaving the
+`Decidable` instance at the old spelling, where no lemma matches it any more. -/
+@[circuit_norm ↓]
+theorem BExpr.eval_feq_iff (x y : FExpr F) (ctx : Ctx F) :
     (BExpr.feq x y).eval ctx = Bool.true ↔ x.eval ctx = y.eval ctx := by
   simp only [BExpr.eval, decide_eq_true_eq]
 
 /-- Shape-exact evaluation for expression-copying scalar witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
-theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
+theorem WitgenIR.eval_ofFExpr_expr (e : Expression F)
     (env : ProverEnvironment F) :
     (ofFExpr (.expr e)).eval env = #v[e.eval env.toEnvironment] := by
   ext i hi
@@ -536,7 +539,7 @@ theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
 fires regardless of how the expression vector was built (matches the codebase's
 getElem-first simp discipline). -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofExprs [FiniteField F] {n : ℕ}
+theorem WitgenIR.getElem_eval_ofExprs {n : ℕ}
     (es : Vector (Expression F) n) (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
     ((ofExprs es).eval env)[i] = es[i].eval env.toEnvironment := by
   rw [eval_ofExprs]
@@ -545,11 +548,12 @@ theorem WitgenIR.getElem_eval_ofExprs [FiniteField F] {n : ℕ}
 /-- Shape-exact evaluation for expression-copying struct witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
-theorem WitgenIR.eval_ofExprs_toElements [FiniteField F] {M : TypeMap} [ProvableType M]
+theorem WitgenIR.eval_ofExprs_toElements {M : TypeMap} [ProvableType M]
     (x : M (Expression F)) (env : ProverEnvironment F) :
     (WitgenIR.ofExprs (toElements x)).eval env
       = toElements (Eval.eval env.toEnvironment x) := by
   rw [WitgenIR.eval_ofExprs, ProvableType.toElements_eval]
+end
 
 /-!
 ## Eval-simplification tooling
@@ -750,3 +754,29 @@ end Eval
 end Witgen
 
 export Witgen (WitgenIR)
+
+/-- Interpret the rows stored under a component name using their declared circuit-input type. -/
+def ProverData.getRows (data : ProverData F) (name : String)
+    (Row : TypeMap) [ProvableType Row] : Array (Row F) :=
+  data.tables name (size Row) |>.map fromElements
+
+/-- Read a typed component-input row from committed prover data. -/
+def Witgen.dataGet (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
+  fromElements <| Vector.mapFinRange (size Row) fun col =>
+    Witgen.FExpr.dataGet name (size Row) row col
+
+@[circuit_norm]
+lemma Witgen.eval_dataGet [FiniteField F] (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
+    Witgen.eval ctx (Witgen.dataGet name Row row) =
+      ((ctx.env.data.getRows name Row)[(row.eval ctx).toNat]?.getD default) := by
+  simp only [Witgen.eval, Witgen.dataGet, ProverData.getRows]
+  rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements,
+    Vector.map_mapFinRange]
+  simp only [Witgen.FExpr.eval]
+  by_cases h : (row.eval ctx).toNat < (ctx.env.data.tables name (size Row)).size
+  · simp [h]
+    rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
+  · simp [h, Vector.mapFinRange_eq_self]
+    simp only [default, ProvableType.toElements_fromElements]

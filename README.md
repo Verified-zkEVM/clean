@@ -40,13 +40,15 @@ After that, we recommend open the repo in VSCode to get immediate inline feedbac
 
 Make sure to install the `lean4` extension for VSCode!
 
-## Documentation
+### Using Clean as a dependency
 
-We are actively working on creating proper documentation for `clean`.
-In the meantime, we recommend checking out our [AI-generated DeepWiki](https://deepwiki.com/Verified-zkEVM/clean).
+Every Lean toolchain bump on `main` creates a release tagged with the toolchain version, e.g. `v4.34.1`. Newer `main` commits on the same toolchain are released by hand as `v4.34.1-patch1`, `v4.34.1-patch2`, etc. Each release carries a prebuilt `Clean` library, which Lake downloads instead of compiling Clean when your project pins the release tag:
 
-⚠️ **Disclaimer:** The wiki may contain inaccuracies or outdated details.
-Please take all information with a grain of salt until the official documentation is released.
+```lean
+require Clean from git "https://github.com/Verified-zkEVM/clean" @ "v4.34.1"
+```
+
+The prebuilt library only works with the release's exact toolchain. A project that pins a `main` commit without a release tag builds Clean from source; Lake then warns that it found no release, which fails `lake build --wfail`.
 
 ## Code Style
 

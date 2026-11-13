@@ -145,7 +145,7 @@ def DecodedInstructionType.val : DecodedInstructionType (F p) → ℕ := fun ins
   Property that checks if the one-hot encoding of an instruction type is valid, i.e., only
   one of the four fields is set to 1 and the others are set to 0.
 -/
-def DecodedInstructionType.isEncodedCorrectly (instrType : DecodedInstructionType (F p)) : Prop :=
+def DecodedInstructionType.IsEncodedCorrectly (instrType : DecodedInstructionType (F p)) : Prop :=
   (instrType.isAdd = 1 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 0) ∨
   (instrType.isAdd = 0 ∧ instrType.isMul = 1 ∧ instrType.isStoreState = 0 ∧ instrType.isLoadState = 0) ∨
   (instrType.isAdd = 0 ∧ instrType.isMul = 0 ∧ instrType.isStoreState = 1 ∧ instrType.isLoadState = 0) ∨
@@ -164,7 +164,7 @@ def DecodedAddressingMode.val : DecodedAddressingMode (F p) → ℕ := fun mode 
   Property that checks if the one-hot encoding of an addressing mode is valid, i.e., only
   one of the four fields is set to 1 and the others are set to 0.
 -/
-def DecodedAddressingMode.isEncodedCorrectly (mode : DecodedAddressingMode (F p)) : Prop :=
+def DecodedAddressingMode.IsEncodedCorrectly (mode : DecodedAddressingMode (F p)) : Prop :=
   (mode.isDoubleAddressing = 1 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
   (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 1 ∧ mode.isFpRelative = 0 ∧ mode.isImmediate = 0) ∨
   (mode.isDoubleAddressing = 0 ∧ mode.isApRelative = 0 ∧ mode.isFpRelative = 1 ∧ mode.isImmediate = 0) ∨

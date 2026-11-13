@@ -9,6 +9,13 @@ namespace Circomlib.Poseidon
 open Specs.Poseidon (F)
 open Specs.PoseidonOptimized (Params)
 
+/-- A constant accumulator update returns the last value, or the initial
+value for an empty fold. The conditional exposes both cases to simplification. -/
+private theorem foldl_const_eq_ite {α : Type} (n : ℕ) (init : α) (f : Fin n → α) :
+    Fin.foldl n (fun _ i => f i) init =
+      if h : n = 0 then init else f ⟨n - 1, by omega⟩ := by
+  cases n <;> simp [Fin.foldl_const, Fin.last]
+
 /-- Value of a folded circuit state after `k` rounds. The stride and output
 offset are supplied by the repeated child circuit's elaborated layout. -/
 def envState {t : ℕ} (env : Environment F) (input : Vector F t) (base stride outputOffset k : ℕ) :
@@ -82,9 +89,10 @@ theorem soundness {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) 
     rcases k with _ | j
     · simpa [state, envState, Circuit.FoldlM.foldlAcc, circuit_norm,
         FullRound.circuit, h_input] using hk'
-    · simp only [state, envState, Nat.succ_ne_zero, if_false, Nat.succ_sub_one]
+    · simp only [state, envState, Nat.succ_ne_zero, ite_false, Nat.succ_sub_one]
       simp [Circuit.FoldlM.foldlAcc, circuit_norm, Fin.foldl_const] at hk'
       convert hk' using 1
+      all_goals simp [circuit_norm]
   have hFinal := denseRounds_induction params matrix nRounds offset state hRound
   rcases nRounds with _ | n
   · simp only [Fin.foldl_zero]
@@ -107,6 +115,29 @@ def circuit {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
   Spec := Spec params matrix nRounds offset
   soundness := soundness params matrix nRounds offset hOffset
   completeness := completeness params matrix nRounds offset hOffset
+  computableWitnesses := by
+    run_tac ComputableWitnesses.run #[← `(FullRound.circuit), ← `(foldl_const_eq_ite)]
+    all_goals split_ifs <;> simp_all [circuit_norm, Nat.sub_mul]
+    all_goals
+      first
+      | apply FormalCircuit.toSubcircuit_computableWitnesses
+        · simp_all
+        · intro h_agrees
+          first
+          | exact h
+          | simp only [circuit_norm]
+            ext j hj
+            simp only [Vector.getElem_mapRange]
+            apply h_agrees.get_eq
+            have := params.two_le_width
+            have := Nat.mul_le_mul_right (t * 3 + t) (show 1 ≤ i.val by omega)
+            simp only [one_mul] at this
+            omega
+      | intro j hj
+        apply h_agrees.get_eq
+        have := Nat.mul_le_mul_right (t * 3 + t) (show 1 ≤ nRounds by omega)
+        simp only [one_mul] at this
+        split_ifs at * <;> omega
 
 end ApplyFullRounds
 
@@ -177,9 +208,10 @@ theorem soundness {t : ℕ} (params : Params t) (nRounds cOffset sRound : ℕ)
     rcases k with _ | j
     · simpa [state, envState, Circuit.FoldlM.foldlAcc, circuit_norm,
         PartialRound.circuit, h_input] using hk'
-    · simp only [state, envState, Nat.succ_ne_zero, if_false, Nat.succ_sub_one]
+    · simp only [state, envState, Nat.succ_ne_zero, ite_false, Nat.succ_sub_one]
       simp [Circuit.FoldlM.foldlAcc, circuit_norm, Fin.foldl_const] at hk'
       convert hk' using 1
+      all_goals simp [circuit_norm]
   have hFinal := partialRounds_induction params nRounds cOffset sRound hRounds state hRound
   rcases nRounds with _ | n
   · simp only [Fin.foldl_zero]
@@ -204,6 +236,29 @@ def circuit {t : ℕ} (params : Params t) (nRounds cOffset sRound : ℕ)
   Spec := Spec params nRounds cOffset sRound hRounds
   soundness := soundness params nRounds cOffset sRound hRounds hOffset
   completeness := completeness params nRounds cOffset sRound hRounds hOffset
+  computableWitnesses := by
+    run_tac ComputableWitnesses.run #[← `(PartialRound.circuit), ← `(foldl_const_eq_ite)]
+    all_goals split_ifs <;> simp_all [circuit_norm, Nat.sub_mul]
+    all_goals
+      first
+      | apply FormalCircuit.toSubcircuit_computableWitnesses
+        · simp_all
+        · intro h_agrees
+          first
+          | exact h
+          | simp only [circuit_norm]
+            ext j hj
+            simp only [Vector.getElem_mapRange]
+            apply h_agrees.get_eq
+            have := params.two_le_width
+            have := Nat.mul_le_mul_right (3 + (1 + t)) (show 1 ≤ i.val by omega)
+            simp only [one_mul] at this
+            omega
+      | intro j hj
+        apply h_agrees.get_eq
+        have := Nat.mul_le_mul_right (3 + (1 + t)) (show 1 ≤ nRounds by omega)
+        simp only [one_mul] at this
+        split_ifs at * <;> omega
 
 end ApplyPartialRounds
 

@@ -48,13 +48,16 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   -- clean up formulation
   let state (i : ℕ) : KeccakState (F p) := eval env (stateVar (p:=p) i₀ i)
 
-  change (state 0).Normalized ∧
-    (state 0).value = keccakRound input.value roundConstants[0]
-  at h_init
+  replace h_init : (state 0).Normalized ∧
+      (state 0).value = keccakRound input.value roundConstants[0] := by
+    simp only [state, stateVar, circuit_norm]
+    exact h_init
 
-  change ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized → (state (i + 1)).Normalized ∧
-    (state (i + 1)).value = keccakRound (state i).value roundConstants[i + 1]
-  at h_succ
+  replace h_succ : ∀ (i : ℕ) (hi : i + 1 < 24), (state i).Normalized →
+      (state (i + 1)).Normalized ∧
+      (state (i + 1)).value = keccakRound (state i).value roundConstants[i + 1] := by
+    simp only [state, stateVar, circuit_norm]
+    exact h_succ
 
   -- inductive proof
   have h_inductive (i : ℕ) (hi : i < 24) :
@@ -88,13 +91,18 @@ theorem completeness : Completeness (F p) main Assumptions := by
   -- clean up formulation
   let state (i : ℕ) : KeccakState (F p) := eval env.toEnvironment (stateVar (p:=p) i₀ i)
 
-  change (state 0).Normalized at h_init
+  replace h_init : (state 0).Normalized := by
+    simp only [state, stateVar, circuit_norm]
+    exact h_init
 
-  change ∀ (i : ℕ) (hi : i + 1 < 24),
-    (state i).Normalized → (state (i + 1)).Normalized
-  at h_succ
+  replace h_succ : ∀ (i : ℕ) (hi : i + 1 < 24),
+      (state i).Normalized → (state (i + 1)).Normalized := by
+    simp only [state, stateVar, circuit_norm]
+    exact h_succ
 
-  change (state i).Normalized
+  suffices (state i).Normalized by
+    simp only [state, stateVar, circuit_norm] at this
+    exact this
 
   -- inductive proof
   have h_norm (i : ℕ) (hi : i < 24) : (state i).Normalized := by

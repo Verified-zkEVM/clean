@@ -21,11 +21,18 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-/-- Arbitrary data a prover can witness and refer to in a circuit spec -/
-def ProverData (F : Type) :=
-  String → (n : ℕ) → Array (Vector F n)
+/-- Data fixed for a whole proof, which circuit specs may refer to: the rows of the proof's tables,
+keyed by name, and the public input. -/
+structure ProverData (F : Type) where
+  tables : String → (n : ℕ) → Array (Vector F n)
+  publicInput : Array F
 
-/-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
+/-- Proof data without tables or public input. -/
+def ProverData.empty (F : Type) : ProverData F where
+  tables _ _ := #[]
+  publicInput := #[]
+
+/-- Runtime-only hashmap of prover hints. Same shape as `ProverData.tables`, but
 distinct to emphasize that hints are *not* committed: they feed only the
 witness-generation step and never appear in the proof. -/
 def ProverHint (F : Type) :=
@@ -75,6 +82,10 @@ instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := �
 @[circuit_norm] abbrev Environment.fromArray [Field F] (row : Array F) (data : ProverData F) : Environment F where
   get j := row[j]?.getD 0
   data
+
+/-- The verifier's environment: its variables are the public input of the prover data. -/
+abbrev ProverData.publicEnvironment [Field F] (data : ProverData F) : Environment F :=
+  .fromArray data.publicInput data
 
 namespace Expression
 variable [Field F]
@@ -187,6 +198,7 @@ lemma eval_sub (env : Environment F) (a b : Expression F) :
   rw [eval_add, eval_neg, ← sub_eq_add_neg]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/
+@[computable_witnesses]
 lemma eval_foldl (env : Environment F) (n : ℕ)
     (f : Expression F → Fin n → Expression F) (init : Expression F)
     (hf : ∀ (e : Expression F) (i : Fin n),
@@ -211,5 +223,51 @@ lemma eval_foldl (env : Environment F) (n : ℕ)
     rw [hf (Fin.foldl n' (fun x1 x2 => f x1 x2.castSucc) init) (Fin.last n')]
     -- Rewrite using h1
     rw [h1]
+
+/-- Expression.eval distributes over the branches of an `if`. -/
+@[computable_witnesses]
+lemma eval_ite (env : Environment F) (c : Prop) [Decidable c] (a b : Expression F) :
+    Expression.eval env (if c then a else b) = if c then Expression.eval env a else Expression.eval env b :=
+  apply_ite _ c a b
+
+/-- Expression.eval distributes over the branches of a dependent `if`. -/
+@[computable_witnesses]
+lemma eval_dite (env : Environment F) (c : Prop) [Decidable c] (a : c → Expression F)
+    (b : ¬c → Expression F) :
+    Expression.eval env (if h : c then a h else b h) =
+      if h : c then Expression.eval env (a h) else Expression.eval env (b h) :=
+  apply_dite _ c a b
+
+/-- Expression.eval distributes over the sum of a vector. -/
+@[computable_witnesses]
+lemma eval_vector_sum (env : Environment F) {n : ℕ} (v : Vector (Expression F) n) :
+    Expression.eval env v.sum = (v.map (Expression.eval env)).sum := by
+  rcases v with ⟨⟨l⟩, rfl⟩
+  simp only [Vector.sum_mk, Vector.map_mk, List.sum_toArray, List.map_toArray]
+  induction l with
+  | nil => rfl
+  | cons a l ih => simp only [List.sum_cons, List.map_cons, ← ih]; rfl
+
+/-- Expression.eval distributes over a sum folded over `Fin n`. -/
+@[computable_witnesses]
+lemma eval_foldl_add (env : Environment F) (n : ℕ) (g : Fin n → Expression F) (init : Expression F) :
+    Expression.eval env (Fin.foldl n (fun acc i => acc + g i) init) =
+      Fin.foldl n (fun acc i => acc + Expression.eval env (g i)) (Expression.eval env init) := by
+  induction n with
+  | zero => simp only [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ_last, Expression.eval]
+    rw [ih fun i => g i.castSucc]
+
+/-- Expression.eval distributes over a product folded over `Fin n`. -/
+@[computable_witnesses]
+lemma eval_foldl_mul (env : Environment F) (n : ℕ) (g : Fin n → Expression F) (init : Expression F) :
+    Expression.eval env (Fin.foldl n (fun acc i => acc * g i) init) =
+      Fin.foldl n (fun acc i => acc * Expression.eval env (g i)) (Expression.eval env init) := by
+  induction n with
+  | zero => simp only [Fin.foldl_zero]
+  | succ n ih =>
+    simp only [Fin.foldl_succ_last, Expression.eval]
+    rw [ih fun i => g i.castSucc]
 
 end EvalLemmas

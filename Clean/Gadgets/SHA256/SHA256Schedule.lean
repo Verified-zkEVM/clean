@@ -122,7 +122,7 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
       Fin.foldl 48 (fun w (i : Fin 48) => body w i.val) init := by
     congr 1; funext w i
     have hi : i.val < 48 := i.isLt
-    simp only [hbody_def, dif_pos hi]
+    simp only [hbody_def, dite_eq_left hi]
   rw [hspec]
   suffices h : ∀ k (hk : k ≤ 48),
       Fin.foldl k (fun w (i : Fin k) => body w i.val) init =
@@ -138,7 +138,7 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
     specialize ih hk'
     rw [show (fun w (i : Fin k) => body w i.castSucc.val) =
            (fun w (i : Fin k) => body w i.val) from rfl, ih]
-    simp only [Fin.val_last, hbody_def, dif_pos (show k < 48 from by omega)]
+    simp only [Fin.val_last, hbody_def, dite_eq_left (show k < 48 from by omega)]
 
 /-- The output of `scheduleStep w i` at offset `n` is `w.set (i.val + 16) (varFromOffset ...)`. -/
 private lemma scheduleStep_output (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
@@ -165,7 +165,7 @@ private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Bloc
   | succ k ih =>
     have hk : k < 48 := by omega
     specialize ih hk
-    rw [Fin.foldl_succ_last, varSchedule, dif_pos hk]
+    rw [Fin.foldl_succ_last, varSchedule, dite_eq_left hk]
     rw [show Fin.foldl k
           (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin k) =>
             (scheduleStep acc ⟨i.castSucc.val, by have := i.isLt; omega⟩).output
@@ -217,7 +217,7 @@ private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256B
             (scheduleStep acc ⟨i.val, by have := i.isLt; omega⟩ (i₀ + i.val * 227)).1)
             _ from rfl, ih]
     simp only [Fin.val_last]
-    rw [varSchedule, dif_pos hk'']
+    rw [varSchedule, dite_eq_left hk'']
     -- (scheduleStep w i).output n = (scheduleStep w i n).1
     change (scheduleStep _ ⟨k, hk''⟩).output (i₀ + k * 227) = _
     rw [scheduleStep_output]
@@ -255,7 +255,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
         change valueBits (eval env (input_var ++
           Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))[j]) = _
         rw [Vector.getElem_append_left hj16]
-        simp only [Vector.getElem_mapFinRange, hj16, dif_pos]
+        simp only [Vector.getElem_mapFinRange, hj16, dite_eq_left]
         rw [show (Vector.map valueBits input).get ⟨j, hj16⟩ =
               (Vector.map valueBits input)[j]'hj16 from rfl]
         rw [Vector.getElem_map]
@@ -270,7 +270,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
             (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))[j - 16]'(by omega)
             from Vector.getElem_append_right hj' (by omega : (16 : ℕ) ≤ j)]
         rw [Vector.getElem_replicate]
-        simp only [Vector.getElem_mapFinRange, hj16, dif_neg, not_false_eq_true]
+        simp only [Vector.getElem_mapFinRange, hj16, dite_eq_right, not_false_eq_true]
         -- LHS: valueBits (eval env (Vector.replicate 32 0)) = 0
         have h_eval_repl :
             eval env (Vector.replicate 32 (0 : Expression (F p))) =
@@ -324,10 +324,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
     -- Establish normalization of indexed positions via IH.
     -- Convert `Vector.get x ⟨i, h⟩` to `x[i]` for our IH lemmas.
     have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-        Vector.map (Expression.eval env) (Vector.get x ⟨i, h⟩) = eval env (x[i]'h) := by
-      intros x i h
-      rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
-          CircuitType.eval_var_fields]
+        eval env (Vector.get x ⟨i, h⟩) = eval env (x[i]'h) := fun _ _ _ => rfl
     have h_norm_m2 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 2]'(by omega))) :=
       ih_norm (k + 16 - 2) (by omega)
     have h_norm_m7 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 7]'(by omega))) :=
@@ -349,23 +346,17 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
     -- Now compose values: wj's value should equal valSchedule's k+16 slot.
     refine ⟨?_, ?_⟩
     · intro j hj
-      simp only [varSchedule, valSchedule, dif_pos hk'']
+      simp only [varSchedule, valSchedule, dite_eq_left hk'']
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]
         -- RHS: the wj of the spec.
         -- LHS: valueBits (eval env (varFromOffset (fields 32) (i₀ + k * 227 + 194)))
         rw [show (i₀ + k * 227 + 194 : ℕ) = i₀ + k * 227 + 64 + 64 + 33 + 33 from by ring]
-        rw [show (varFromOffset (fields 32)
-              (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
-            (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
-            from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
-        rw [CircuitType.eval_var_fields, v_wj, v_sum1, v_sig0, v_sum0, v_sig1,
+        simp only [circuit_norm]
+        rw [v_wj, v_sum1, v_sig0, v_sum0, v_sig1,
           ih_val (k + 16 - 7) (by omega), ih_val (k + 16 - 16) (by omega),
           ih_val (k + 16 - 2) (by omega), ih_val (k + 16 - 15) (by omega)]
-        -- RHS uses `set ... [k+16]` which is the new wj_spec.
-        rw [Vector.getElem_set_self]
         -- Both sides should be `(sig1 + x-7 + sig0 + x-16) % 2^32` after unfolding add32.
         show _ = (_root_.add32 (_root_.add32 _ _) (_root_.add32 _ _) : ℕ)
         unfold _root_.add32
@@ -375,17 +366,12 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
         rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih_val j hj
     · intro j hj
-      simp only [varSchedule, dif_pos hk'']
+      simp only [varSchedule, dite_eq_left hk'']
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]
         rw [show (i₀ + k * 227 + 194 : ℕ) = i₀ + k * 227 + 64 + 64 + 33 + 33 from by ring]
-        rw [show (varFromOffset (fields 32)
-              (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
-            (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
-            from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
-        rw [CircuitType.eval_var_fields]
+        simp only [circuit_norm]
         exact n_wj
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih_norm j hj
@@ -477,11 +463,8 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
       -- We need to show Normalized at slot j for varSchedule (k+1).
       obtain ⟨c_sig1, c_sig0, c_sum0, c_sum1, c_wj⟩ := h_step
       have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-          Vector.map (Expression.eval env.toEnvironment) (Vector.get x ⟨i, h⟩) =
-            eval env.toEnvironment (x[i]'h) := by
-        intros x i h
-        rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
-            CircuitType.eval_var_fields]
+          eval env.toEnvironment (Vector.get x ⟨i, h⟩) =
+            eval env.toEnvironment (x[i]'h) := fun _ _ _ => rfl
       have h_norm_m2 := ih (k + 16 - 2) (by omega)
       have h_norm_m7 := ih (k + 16 - 7) (by omega)
       have h_norm_m15 := ih (k + 16 - 15) (by omega)
@@ -496,17 +479,12 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
       rw [h_eval_get] at c_wj
       obtain ⟨_, n_wj⟩ := c_wj n_sum1 h_norm_m16
       intro j hj
-      simp only [varSchedule, dif_pos hk'']
+      simp only [varSchedule, dite_eq_left hk'']
       by_cases hjk : j = k + 16
       · subst hjk
         rw [Vector.getElem_set_self]
         rw [show (i₀ + k * 227 + 194 : ℕ) = i₀ + k * 227 + 64 + 64 + 33 + 33 from by ring]
-        rw [show (varFromOffset (fields 32)
-              (i₀ + k * 227 + 64 + 64 + 33 + 33) : Vector (Expression (F p)) 32) =
-            (Vector.mapRange 32 fun i ↦ (var { index := i₀ + k * 227 + 64 + 64 + 33 + 33 + i } : Expression (F p)))
-            from by
-          simp [varFromOffset, ProvableType.varFromOffset, fromElements, size]]
-        rw [CircuitType.eval_var_fields]
+        simp only [circuit_norm]
         exact n_wj
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih j hj
@@ -533,11 +511,8 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
   -- Extract the chain from h_env_i.
   obtain ⟨e_sig1, e_sig0, e_sum0, e_sum1, e_wj⟩ := h_env_i
   have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-      Vector.map (Expression.eval env.toEnvironment) (Vector.get x ⟨i, h⟩) =
-        eval env.toEnvironment (x[i]'h) := by
-    intros x i h
-    rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
-        CircuitType.eval_var_fields]
+      eval env.toEnvironment (Vector.get x ⟨i, h⟩) =
+        eval env.toEnvironment (x[i]'h) := fun _ _ _ => rfl
   have h_norm_m2 := ih (i.val + 16 - 2) (by omega)
   have h_norm_m7 := ih (i.val + 16 - 7) (by omega)
   have h_norm_m15 := ih (i.val + 16 - 15) (by omega)

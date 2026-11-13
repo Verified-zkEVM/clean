@@ -103,7 +103,6 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
 
 theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Spec := by
   circuit_proof_start [IsZeroField.circuit]
-  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
     arg 1
     rw [Zero.toOfNat0, OfNat.ofNat]
@@ -111,9 +110,10 @@ theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Sp
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff
-  · assumption
+  apply foldl_isZero_eq_one_iff (vars := toElements input_var) (vals := toElements input)
+  · simp only [circuit_norm, h_input]
   · intro i _
+    simp only [circuit_norm, IsZeroField.circuit, h_input]
     exact h_holds i
 
 theorem completeness : Completeness F (main (M:=M)) Assumptions := by

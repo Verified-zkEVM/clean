@@ -19,6 +19,7 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
+  rw [ProvableType.getElem_eval_fields env xs i hi]
   exact h_holds ⟨i, hi⟩
 
 theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
@@ -26,6 +27,7 @@ theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs 
     ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
+  rw [← ProvableType.getElem_eval_fields env.toEnvironment xs i.val i.isLt]
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality

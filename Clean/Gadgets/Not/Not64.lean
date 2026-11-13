@@ -60,6 +60,7 @@ def circuit : FormalCircuit (F p) U64 U64 where
   Assumptions x := x.Normalized
   Spec x z := z.value = not64 x.value ∧ z.Normalized
 
+  computableWitnesses := by computable_witnesses [eval_not]
   soundness := by
     intro i env x_var x h_input x_norm h_holds
     simp_all only [circuit_norm, eval_not]

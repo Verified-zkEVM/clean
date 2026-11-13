@@ -1,0 +1,291 @@
+module
+
+public import Clean.Air.WitnessGeneration.Assembly
+
+@[expose] public section
+
+/-!
+# Channel-driven witness generation
+
+This file generates the witness of a flat AIR ensemble from its public input and the prover's
+private input. Each component says how its rows come into existence in its `generation`.
+
+## The chain reaction
+
+Channel balance means that, for every channel message, pushes and pulls cancel out. The generator
+keeps a tally of the messages that don't cancel yet: their *demand*. It starts with the
+interactions of the verifier and of the preallocated rows, and then repeats one step: pick an
+unanswered message, and let the component that handles it add or update a row that answers it.
+The new row brings interactions of its own, which may create new demand, and so on, until the
+tally is empty.
+
+For example, the verifier of a VM pushes the initial state and pulls the final state. The pushed
+initial state has no pull, so the VM gets a row that pulls it and pushes the next state. That state
+is again unanswered, so the VM gets another row. Every row may also pull from other channels, which
+creates rows in chips like an addition chip, or increments multiplicities in a memory or a lookup
+table. The reaction stops when a row pushes the final state, which the verifier pulls.
+
+How a component answers is its generation mode, see `Clean.Air.WitnessGeneration.Generation`:
+- a `demand` component gets a new row for the message, or changes the multiplicity cell of an
+  existing row,
+- a `preallocated` component changes the multiplicity cell of the row that its `rowOf` maps the
+  message to, if that row carries the message.
+
+Exactly one component may accept each message: the demand components on its channel whose guard
+holds, and the preallocated components whose `rowOf` row carries it.
+
+Finally, demand-generated tables are padded to a power-of-two height. Padding rows can interact,
+so the generator balances and pads again until no table grows.
+
+## Assumptions
+
+TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
+rather than from the idea. None of them is fundamental:
+- Witness programs only read prover data from cells of preallocated components that aren't
+  multiplicity cells, see `Clean.Air.WitnessGeneration.Validation`.
+- All padding rows of a component have the same input.
+
+Generation can also fail, because we hacked around non-termination with a `fuel` parameter that can
+be exhausted, and because we don't yet prove that channels balance, so generation fails on demand
+that no component handles.
+-/
+
+namespace Air.Flat.WitnessGeneration
+
+variable {F : Type} [FiniteField F]
+variable {PublicIO : TypeMap} [ProvableType PublicIO]
+
+/-! ### Answering demand -/
+
+/-- The row a component adds or replaces to answer a demand. -/
+inductive Change (F : Type) where
+  | add (row : GeneratedRow F)
+  /-- A new row created for the demanded `message`, which counts it. -/
+  | addForMessage (message : Array F) (row : GeneratedRow F)
+  /-- The row at `index` is updated from `old` to `new`. -/
+  | update (index : ℕ) (old new : GeneratedRow F)
+
+/-- The rows that leave the tally with their interactions. -/
+def Change.removedRows : Change F → List (GeneratedRow F)
+  | .add _ | .addForMessage _ _ => []
+  | .update _ old _ => [old]
+
+/-- The rows that enter the tally with their interactions. -/
+def Change.addedRows : Change F → List (GeneratedRow F)
+  | .add row | .addForMessage _ row | .update _ _ row => [row]
+
+def ComponentState.applyChange (state : ComponentState F) : Change F → ComponentState F
+  | .add row => state.pushRow row
+  | .addForMessage message row => state.pushMessageRow message row
+  | .update index _ new => state.setRow index new
+
+/-- Whether a demand component answers the demand: it is on the mode's channel and triggers it, and
+the guard holds. -/
+def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input)
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Bool :=
+  mode.channel.name == demand.channel && mode.trigger == demand.direction &&
+    mode.guardCondition.eval { env := .fromArray demand.message data hint }
+
+/-- Whether a preallocated component answers the demand: it is on the mode's channel and triggers
+it. Answering also needs a row for the message, see `PreallocatedMode.findRow`. -/
+def PreallocatedMode.accepts {Input : TypeMap} [ProvableType Input]
+    (mode : PreallocatedMode F Input) (demand : Demand F) : Bool :=
+  mode.channel.name == demand.channel && mode.trigger == demand.direction
+
+/-- Whether a row has an interaction on `channel`, opposite to `trigger`, with the message. -/
+def ComponentState.carries (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F)
+    (channel : String) (trigger : Channel.Direction) (message : Array F) : Bool :=
+  let environment := Environment.fromArray row.values data
+  state.interactions.any fun interaction =>
+    interaction.channel.name == channel && interaction.direction != trigger &&
+      (interaction.eval environment).msg == message
+
+/-- The row of a preallocated component that answers the demanded message, with its index: the row
+at `rowOf` of the message, if it carries the message. -/
+def PreallocatedMode.findRow (state : ComponentState F)
+    (mode : PreallocatedMode F state.component.Input) (demand : Demand F) (data : ProverData F)
+    (hint : ProverHint F) : Option (ℕ × GeneratedRow F) :=
+  let index := mode.rowIndex.eval { env := .fromArray demand.message (.empty F) hint }
+  state.rows[index.toNat]?.bind fun row =>
+    if state.carries row data mode.channel.name mode.trigger demand.message then
+      some (index.toNat, row)
+    else none
+
+/-- Count the demand in the multiplicity cell in input column `column` of a row, and complete the
+row again. -/
+def incrementMultiplicity (state : ComponentState F) (column : ℕ) (demand : Demand F)
+    (data : ProverData F) (hint : ProverHint F) : ℕ × GeneratedRow F → Change F
+  | (index, row) =>
+      let count := (row.input[column]?.getD 0) + demand.count
+      .update index row (completeRow state (row.input.set! column count) data hint)
+
+/-- A new row answering the demanded message, whose multiplicity cell, if any, starts at the
+demanded count. -/
+def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.component.Input)
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
+  let env := ProverEnvironment.fromArray demand.message data hint
+  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 demand.count
+  completeRow state input data hint
+
+/-- Answer demand with a new row for one occurrence, or, with a multiplicity cell, by counting it
+in the row created for the message, which the first demand for the message creates. -/
+def DemandMode.answer (state : ComponentState F) (mode : DemandMode F state.component.Input)
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Change F :=
+  match state.multiplicity with
+  | none => .add (mode.newRow state demand data hint)
+  | some column =>
+      match state.messageRows[demand.message]?.bind fun index =>
+          state.rows[index]?.map (index, ·) with
+      | some found => incrementMultiplicity state column demand data hint found
+      | none => .addForMessage demand.message (mode.newRow state demand data hint)
+
+/-- The component's answer to the demand, if it accepts it. A preallocated component accepts the
+messages that its `rowOf` row carries. -/
+def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data : ProverData F)
+    (hint : ProverHint F) : Option (Change F) :=
+  match state.component.generation with
+  | .demand mode =>
+      if mode.accepts demand data hint then some (mode.answer state demand data hint) else none
+  | .preallocated mode =>
+      if mode.accepts demand then
+        state.multiplicity.bind fun column =>
+          (mode.findRow state demand data hint).map
+            (incrementMultiplicity state column demand data hint)
+      else none
+
+/-- The answers of all components that accept the demand, with their indices and names. -/
+def answers (states : Array (ComponentState F)) (demand : Demand F) (data : ProverData F)
+    (hint : ProverHint F) : List (ℕ × String × Change F) :=
+  states.toList.zipIdx.filterMap fun (state, index) =>
+    (state.answer? demand data hint).map (index, state.component.circuit.name, ·)
+
+/-- The answer to the first demand that some component accepts, with that component's index. Fails
+if several components accept it, or if no component accepts any demand. -/
+def findAnswer (states : Array (ComponentState F)) (data : ProverData F) (hint : ProverHint F)
+    (tally : Tally F) : Except GenerationError (ℕ × Change F) := do
+  for (_, demand) in tally.byPosition do
+    match answers states demand data hint with
+    | [] => pure ()
+    | [(index, _, change)] => return (index, change)
+    | answers => throw (.ambiguousDemand demand.channel (answers.map (·.2.1)))
+  throw (.unhandledImbalance (tally.demands.map (·.channel)))
+
+/-- Apply the change of the component at `index`, and update the tally with the changed rows. -/
+def applyAnswer (states : Array (ComponentState F)) (tally : Tally F) (index : ℕ)
+    (change : Change F) (data : ProverData F) : Array (ComponentState F) × Tally F :=
+  let (removed, added) := match states[index]? with
+    | some state =>
+        (change.removedRows.flatMap (rowInteractions state · data),
+          change.addedRows.flatMap (rowInteractions state · data))
+    | none => ([], [])
+  (states.modify index (·.applyChange change),
+    (tally.removeInteractions removed).addInteractions added)
+
+/-! ### The loop -/
+
+/-- Answer demand until the tally is empty. -/
+def generateLoop (data : ProverData F) (hint : ProverHint F) :
+    ℕ → Array (ComponentState F) → Tally F → Except GenerationError (Array (ComponentState F))
+  | 0, _, _ => throw .fuelExhausted
+  | fuel + 1, states, tally =>
+      if tally.isEmpty then pure states else
+      match findAnswer states data hint tally with
+      | .error error => throw error
+      | .ok (index, change) =>
+          let (states, tally) := applyAnswer states tally index change data
+          generateLoop data hint fuel states tally
+
+/-- The padded height of a demand-generated table: a power of two, or zero for a table without
+rows. Preallocated tables are never padded. -/
+def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
+  match state.component.generation with
+  | .demand _ => if state.rows.isEmpty then 0 else nextPowerOfTwo state.rows.size
+  | .preallocated _ => state.rows.size
+
+/-- Pad a demand-generated table to its target height; returns the padded state and the
+interactions of the padding rows. -/
+def ComponentState.pad (state : ComponentState F) (data : ProverData F) (hint : ProverHint F) :
+    ComponentState F × List (Interaction F) :=
+  match state.component.generation with
+  | .preallocated _ => (state, [])
+  | .demand mode =>
+      let row := completeRow state (toElements mode.padding).toArray data hint
+      let rows := List.replicate (state.targetHeight - state.rows.size) row
+      (rows.foldl (·.pushRow) state, rows.flatMap (rowInteractions state · data))
+
+/-- Pad, then answer the demand of the padding rows, until no table grows. -/
+def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
+    ℕ → Array (ComponentState F) → Except GenerationError (Array (ComponentState F))
+  | 0, _ => throw .fuelExhausted
+  | rounds + 1, states => do
+      let padded := states.map (·.pad data hint)
+      let tally := Tally.empty.addInteractions (padded.toList.flatMap (·.2))
+      let states ← generateLoop data hint fuel (padded.map (·.1)) tally
+      if states.all fun state => state.rows.size == state.targetHeight then return states
+      padAndBalance data hint fuel rounds states
+
+/-! ### Generating a witness -/
+
+/-- The prover data of the preallocated rows' inputs, under their components' names. -/
+def initialData (states : Array (ComponentState F)) (inputs : Array (List (Array F))) :
+    List (String × PreparedRows F) :=
+  (states.zip inputs).toList.map fun (state, inputs) =>
+    (state.component.circuit.name, .ofRows inputs.toArray (size state.component.Input))
+
+/-- Generate an ensemble witness from an ensemble with validated generation, the public input and
+the prover's private input. -/
+def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fuel : ℕ)
+    (publicInput : PublicIO F) (proverInput : ens.ProverInput F) :
+    Except GenerationError (EnsembleWitness ens) := do
+  let hint : ProverHint F :=
+    readNamedRows (prepareHint ens.hintTables (toElements proverInput).toArray)
+  -- preallocate rows, and complete them with the prover data of all preallocated inputs
+  let states := (ens.tables.zip valid.multiplicities).toArray.map fun (component, multiplicity) =>
+    ComponentState.initial component multiplicity
+  let inputs := states.map (initialInputs · hint)
+  let data : ProverData F := {
+    tables := readNamedRows (initialData states inputs)
+    publicInput := (toElements publicInput).toArray }
+  let states := (states.zip inputs).map fun (state, inputs) =>
+    inputs.foldl (fun state input => state.pushRow (completeRow state input data hint)) state
+  -- start the chain reaction from the verifier's and the preallocated rows' interactions
+  let verifier := ens.verifierOperations.interactionValues data.publicEnvironment
+  let rows := states.toList.flatMap fun state =>
+    state.rows.toList.flatMap (rowInteractions state · data)
+  let tally := Tally.empty.addInteractions (verifier ++ rows)
+  let generated ← generateLoop data hint fuel states tally
+  let padded ← padAndBalance data hint fuel fuel generated
+  let assembled ← assembleTables ens.tables padded.toList
+  have hunique : (assembled.tables.map fun table => table.component.circuit.name).Nodup := by
+    simpa [← assembled.map_component, Function.comp_def] using ens.unique_names
+  return {
+    tables := withDerivedData assembled.tables hunique (toElements publicInput).toArray
+    publicInput
+    same_length := by simp [withDerivedData, assembled.same_length]
+    same_circuits := by simp [withDerivedData, assembled.same_circuits]
+    same_data := withDerivedData_data assembled.tables hunique _
+  }
+
+/-- Validate the generation of an ensemble, then generate a witness from the public input and the
+prover's private input. `fuel` bounds the number of generation steps. -/
+def generate (ens : Ensemble F PublicIO) (fuel : ℕ) (publicInput : PublicIO F)
+    (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens) :=
+  match validateGeneration ens with
+  | .error error => .error (.validation error)
+  | .ok valid => generateValid valid fuel publicInput proverInput
+
+/-! ### Checking a witness -/
+
+/-- Whether all constraints of a witness hold. Fails on tables with lookups. -/
+def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
+  witness.tables.all fun table =>
+    table.table.all fun row =>
+      table.component.operations.lookups.isEmpty &&
+      table.component.operations.constraints.all fun constraint =>
+        constraint.eval (Environment.fromArray row witness.data) == 0
+
+/-- Whether all channels of a witness balance. -/
+def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
+  (Tally.empty.addInteractions witness.interactions).isEmpty
+
+end Air.Flat.WitnessGeneration

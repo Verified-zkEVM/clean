@@ -126,11 +126,9 @@ theorem soundness {t : ℕ} (matrix : Vector (Vector ℕ t) t) :
       (main matrix) (fun _ => True) (Spec matrix) := by
   circuit_proof_start
   rw [h_holds]
-  simp_rw [Vector.ext_iff, Vector.getElem_map] at h_input
   ext column hcolumn
-  rw [Vector.getElem_map, Vector.getElem_ofFn, Linear.eval_dot]
-  simp_rw [h_input]
-  simp_rw [Vector.getElem_ofFn]
+  rw [Vector.getElem_ofFn, Linear.eval_dot]
+  simp only [circuit_norm, h_input]
   exact Linear.dot_eq_mix_column matrix input ⟨column, hcolumn⟩
 
 theorem completeness {t : ℕ} (matrix : Vector (Vector ℕ t) t) :
@@ -148,6 +146,7 @@ def circuit {t : ℕ} (matrix : Vector (Vector ℕ t) t) :
   Spec := Spec matrix
   soundness := soundness matrix
   completeness := completeness matrix
+  computableWitnesses := by computable_witnesses [Linear.eval_dot]
 
 end Mix
 
@@ -186,7 +185,6 @@ theorem soundness {t : ℕ} (params : Params t) (round : Fin params.nPartial) :
       (main params round) (fun _ => True) (Spec params round) := by
   circuit_proof_start
   rw [h_holds]
-  simp_rw [Vector.ext_iff, Vector.getElem_map] at h_input
   ext i hi
   by_cases hi0 : i = 0
   · simp [Specs.PoseidonOptimized.mixS, hi0, circuit_norm, Linear.eval_dot,
@@ -208,6 +206,7 @@ def circuit {t : ℕ} (params : Params t) (round : Fin params.nPartial) :
   Spec := Spec params round
   soundness := soundness params round
   completeness := completeness params round
+  computableWitnesses := by computable_witnesses [Linear.eval_dot]
 
 end MixS
 
@@ -236,10 +235,8 @@ theorem soundness {t : ℕ} (params : Params t) :
     Soundness F (Input := fields t) (Output := field)
       (main params) (fun _ => True) (Spec params) := by
   circuit_proof_start
-  simp_rw [Vector.ext_iff, Vector.getElem_map] at h_input
   rw [h_holds, Linear.eval_dot]
-  simp_rw [h_input]
-  simp only [coefficients, Vector.getElem_ofFn]
+  simp only [circuit_norm, h_input, coefficients]
   exact Linear.dot_eq_mix_column params.M input ⟨0, by
     have := params.two_le_width
     omega⟩
@@ -257,6 +254,7 @@ def circuit {t : ℕ} (params : Params t) :
   Spec := Spec params
   soundness := soundness params
   completeness := completeness params
+  computableWitnesses := by computable_witnesses [Linear.eval_dot]
 
 end MixLast
 

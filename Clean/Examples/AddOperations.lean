@@ -22,5 +22,5 @@ def circuit := do
 
 /-- info: #[246, 20, 10, 1, 247, 0, 1] -/
 #guard_msgs in
-#eval (circuit.operations 0).localWitnesses (circuit.proverEnvironment default)|>.toArray
+#eval (circuit.operations 0).localWitnesses (circuit.proverEnvironment (.empty _) default)|>.toArray
 end

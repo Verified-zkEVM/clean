@@ -101,7 +101,7 @@ lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [NeZero n]
   simp only [inputLinearSum, circuit_norm, eval_foldl, Fin.foldl_factor_const]
 
   -- Step 2: Replace Expression.eval env input[j][k] with input_val[j][k]
-  simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
+  simp only [h_eval]
 
   rw [Fin.sum_interchange]
   simp only [fieldFromBits_as_sum]
@@ -178,6 +178,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
         Fin.foldl ops (fun sum (j : Fin ops) =>
           sum + fieldFromBits input[j]) (0 : F p)
 
+  computableWitnesses := by computable_witnesses [inputLinearSum]
   soundness := by
     intros offset env input_var input h_input_eval h_assumptions h_constraints_hold
 

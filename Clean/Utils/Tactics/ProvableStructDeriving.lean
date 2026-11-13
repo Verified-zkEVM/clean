@@ -462,6 +462,20 @@ def mkProvableStructInstance (structName : Name) : CommandElabM Unit := do
 
   elabCommand theoremCmd
 
+  -- The inverse simp lemma, so that `toElements` of a structure literal computes.
+  let toTheoremIdent := mkIdent (← relativeToCurrentNamespace (structName ++ `toComponents_mk))
+  let toTheoremCmd ← `(
+      @[circuit_norm]
+      theorem $toTheoremIdent:ident $binderSyntaxes:bracketedBinder* $theoremFBinder:bracketedBinder
+          $fieldBinderSyntaxes:bracketedBinder* :
+          toComponents (α := $appliedStructType) (F := $theoremFTerm) $theoremMkAppSyntax =
+            (($theoremFromCompTerm : ProvableStruct.ProvableTypeList $theoremFTerm
+              $componentsListSyntax)) := by
+        rfl
+    )
+
+  elabCommand toTheoremCmd
+
 /-- The deriving handler for ProvableStruct -/
 def provableStructDerivingHandler (declNames : Array Name) : CommandElabM Bool := do
   if declNames.size != 1 then

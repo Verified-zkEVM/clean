@@ -55,6 +55,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   suffices goal : KeccakState.Normalized (eval env state_after_absorb)
     ∧ KeccakState.value (eval env state_after_absorb) =
       Vector.mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
+    simp only [state_after_absorb, circuit_norm] at goal
     simp_all
   replace h_holds := h_holds.left
 
@@ -67,7 +68,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   by_cases hi' : i < 17 <;> simp only [hi', reduceDIte]
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_left hi']
     specialize h_holds ⟨ i, hi'⟩
-    simp only [getElem_eval_vector, h_input, h_assumptions.right ⟨ i, hi'⟩, h_assumptions.left ⟨ i, hi ⟩, and_true, true_implies] at h_holds
+    simp only [h_input, h_assumptions.right ⟨ i, hi'⟩, h_assumptions.left ⟨ i, hi ⟩, and_true, true_implies] at h_holds
     exact ⟨ h_holds.right, h_holds.left ⟩
   · simp only [Vector.getElem_mapFinRange, Vector.getElem_append_right (show i < 17 + 8 from hi) (by linarith)]
     have : 17 + (i - 17) = i := by omega
@@ -79,7 +80,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   -- simplify goal and witnesses
   simp only [circuit_norm, RATE, main, Assumptions, Xor64.circuit, Xor64.Assumptions, Xor64.Spec,
     Permutation.circuit, Permutation.Assumptions, Permutation.Spec, Input.mk.injEq] at *
-  simp only [getElem_eval_vector, h_input] at h_env ⊢
+  simp only [h_input] at h_env ⊢
 
   have assumptions' (i : Fin 17) : state[i.val].Normalized ∧ block[i.val].Normalized := by
     simp [h_assumptions.left ⟨i, by linarith [i.is_lt]⟩, h_assumptions.right i]
@@ -93,6 +94,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   suffices goal : KeccakState.Normalized (eval env.toEnvironment state_after_absorb)
     ∧ KeccakState.value (eval env.toEnvironment state_after_absorb) =
       .mapFinRange 25 fun i => state.value[i.val] ^^^ if h : i.val < 17 then block.value[i.val] else 0 by
+    simp only [state_after_absorb, circuit_norm] at goal
     simp_all
   replace h_env := h_env.left
 

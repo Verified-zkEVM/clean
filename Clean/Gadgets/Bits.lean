@@ -32,6 +32,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   Spec (x : F p) (bits : Vector (F p) n) _ :=
     x.val < 2^n ∧ bits = fieldToBits n x
 
+  computableWitnesses := by computable_witnesses [fieldFromBitsExpr]
   soundness := by
     circuit_proof_start
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
@@ -45,7 +46,8 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
     change input = env (fieldFromBitsExpr bit_vars) at h_eq
     rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
-    use fieldFromBits_lt _ h_bits
+    refine ⟨fieldFromBits_lt _ h_bits, ?_⟩
+    simp only [bits, bit_vars, circuit_norm]
 
   completeness := by
     circuit_proof_start

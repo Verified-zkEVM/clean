@@ -9,3 +9,6 @@ public import Clean.Circuit.StructEvalSimprocs
 public import Clean.Utils.Tactics.ProvableStructDeriving
 public import Clean.Gadgets.Equality
 public import Clean.Gadgets.Conditional
+public import Clean.Circuit.ExpressionPolynomial
+
+public import Clean.Circuit.ProvableOptional
