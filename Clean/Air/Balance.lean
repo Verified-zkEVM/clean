@@ -431,9 +431,6 @@ def Balance.logUp [ComputableRingChar F] : Balance F where
     have length_lt := ComputableRingChar.char_eq (R := F) ▸ of_decide_eq_true fits
     ⟨ balanced.exists_push_of_pull length_lt,
       balanced.activeCount_push_eq_activeCount_pull_of_isBool length_lt ⟩
-  matchedUpTo_of_balanced _ fits balanced _ :=
-    have length_lt := ComputableRingChar.char_eq (R := F) ▸ of_decide_eq_true fits
-    balanced.matchedUpTo (by simpa using length_lt)
 
 /-- `Balance.logUp` matches pulls of multiplicity `1` only. Stated so that `simp`/`circuit_norm`
 can reduce a `ConsistentUpTo (Balance.logUp).pullBound` goal, which instance search cannot do on
