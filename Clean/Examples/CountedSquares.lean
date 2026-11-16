@@ -30,8 +30,8 @@ A row's multiplicity is counted by `Tally.signedCount`, which reads it as a natu
 counted pull is tallied as the number it claims; that part needs no change for counted channels.
 
 Constraining the count arithmetically only scales for a small bound. A circuit counting to `510`
-would range-check its multiplicity on another channel instead, which needs the finishing order of
-`Ensemble.tableSoundness_of_stagedOn` rather than the single finished channel here.
+would range-check its multiplicity on another channel instead, which needs a finishing order over
+several channels rather than the single finished channel here.
 -/
 
 namespace CountedSquares

@@ -20,7 +20,15 @@ variable {Message : TypeMap} [ProvableType Message]
 
 namespace Channel
 
-/-- `channel`, with pulls of multiplicity up to `N`. -/
+/-- `channel`, with pulls of multiplicity up to `N`.
+
+The name is kept, so `channel.toRaw`, `channel.counted 2` and `channel.counted 3` are distinct
+`RawChannel`s that share one name. That is deliberate: witness generation tallies interactions by
+channel name, and `DemandMode` and `PreallocatedMode` take the plain `Channel`, so a counted
+channel under a new name would silently stop generating rows. An `Ensemble` identifies channels by
+name and asks those names to be distinct, so at most one of them belongs to a given ensemble: a
+channel is emitted on either counted or not, not both. Adding two of them leaves a `Nodup` goal
+that no longer closes. -/
 def counted (N : ℕ) (channel : Channel F Message) : RawChannel F where
   name := channel.name
   arity := size Message
@@ -173,7 +181,14 @@ example [ComputableRingChar F] (N : ℕ) (channel : Channel F Message) :
     (channel.counted N).ConsistentUpTo (Balance.logUpUpTo (F := F) N).pullBound :=
   inferInstance
 
-/-- The counted channel is also consistent for balance checks with a larger bound. -/
+/-- The counted channel is also consistent for balance checks with a larger bound.
+
+A theorem and not an instance. The instance above fixes the channel's own `N` on both sides, so
+synthesis closes `ConsistentUpTo N` for a channel counted at `N` and nothing else. An ensemble
+that finishes a channel counted at `N` under a check whose `pullBound` is a larger `M` has to
+supply this theorem with `haveI` before calling `SoundEnsemble.markFinished`, which takes the
+consistency as an instance argument and leaves no place for a `simp` step. As an instance this
+would send synthesis looking for an `N ≤ M` on every goal of the shape. -/
 theorem counted_consistentUpTo_of_le {M N : ℕ} (h : N ≤ M) (channel : Channel F Message) :
     (channel.counted N).ConsistentUpTo M where
   consistent interactions data balanced :=
