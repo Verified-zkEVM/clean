@@ -22,13 +22,12 @@ namespace Channel
 
 /-- `channel`, with pulls of multiplicity up to `N`.
 
-The name is kept, so `channel.toRaw`, `channel.counted 2` and `channel.counted 3` are distinct
-`RawChannel`s that share one name. That is deliberate: witness generation tallies interactions by
-channel name, and `DemandMode` and `PreallocatedMode` take the plain `Channel`, so a counted
-channel under a new name would silently stop generating rows. An `Ensemble` identifies channels by
-name and asks those names to be distinct, so at most one of them belongs to a given ensemble: a
-channel is emitted on either counted or not, not both. Adding two of them leaves a `Nodup` goal
-that no longer closes. -/
+The name is kept, so `channel.toRaw`, `channel.counted 2` and `channel.counted 3` may denote
+different `RawChannel`s under one name. That is deliberate: witness generation tallies
+interactions by channel name, and `DemandMode` and `PreallocatedMode` take the plain `Channel`, so
+a counted channel under a new name would silently stop generating rows. An `Ensemble` asks the
+names of its channels to be distinct, so use one raw-channel value per name: a second entry under
+a name already taken fails `unique_channel_names`. -/
 def counted (N : ℕ) (channel : Channel F Message) : RawChannel F where
   name := channel.name
   arity := size Message

@@ -385,10 +385,11 @@ and `ringChar F ≤ 2 * N`: both multiplicities count up to `N`, they sum to the
 a list of length `2` passes a bound on the length alone. This is what `Balance.logUpUpTo N` rules
 out by asking for `count * N < ringChar F` as well.
 
-What this covers, and what it does not: `ringChar F ≤ 2 * N` confines the statement to fields no
-larger than `2 * N`, so on its own it says nothing about a field of practical size. The shape does
-generalize, since `L` multiplicities in `[1, N]` reach every sum between `L` and `L * N`, so any
-field with `L ≤ ringChar F ≤ L * N` admits the same counterexample on `L` interactions. That
+What this covers, and what it does not: `ringChar F ≤ 2 * N` bounds the characteristic, not the
+number of elements, and bounds it in terms of `N`. The shape does generalize, since `L`
+multiplicities in `[1, N]` reach every sum between `L` and `L * N`, so any field with
+`L < ringChar F ≤ L * N` admits the same counterexample on `L` interactions; the inequality is
+strict because at `L = ringChar F` the list no longer passes a bound on the length alone. That
 version is not proved here.
 -/
 theorem exists_logUpBalanced_not_matchedUpTo {N : ℕ} (hN : 2 ≤ N) (h_lt : N < ringChar F)
