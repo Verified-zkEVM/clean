@@ -142,13 +142,22 @@ abbrev providerComponent : Component (F p) where
 
 /-- One consumer row per pushed square that nothing has pulled, each needing it twice. Two rows
 answer the provider's four pushes. Their `x` and `y` come from the message, so what makes
-`y = x * x` true of a consumer row is the channel and the provider's constraint, nothing local. -/
+`y = x * x` true of a consumer row is the channel and the provider's constraint, nothing local.
+
+Rows of this component are meant to be active: away from characteristic `2`, the default padding
+of `0` does not satisfy its one constraint, `(count - 1) * (count - 2) = 0`. The padding row given
+here pulls at multiplicity `1` the one message the provider ever pushes, and the generator answers
+that extra pull by raising a provider multiplicity, as it does for any interacting padding row. The
+generation test's own run has a power-of-two height and so never pads; its second scenario drives
+the padding directly. A chip whose rows may be idle would take the `count = 0` branch of the pull's
+requirement rather than pad with an active row. -/
 abbrev consumerComponent : Component (F p) where
   circuit := consumer
   generation := .demand {
     channel := squares
     trigger := .push
     input | (x, y) => pure { x, y, count := .witness 2 }
+    padding := { x := 2, y := 4, count := 1 }
   }
 
 /-- The ensemble: the counted channel, the chip that serves it, the channel finished, and the chip
