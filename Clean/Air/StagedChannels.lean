@@ -84,87 +84,6 @@ lemma Component.stagedRequirements_of_forall {component : Component F} :
       Component.stagedRequirements_of_forall fun c e ⟨later, hl⟩ =>
         h c e ⟨channel :: later, by simp [hl]⟩⟩
 
-namespace Ensemble
-variable {PublicIO : TypeMap} [ProvableType PublicIO]
-
-/-- Every table's guarantees on every channel of `finished` hold, by induction from the oldest
-channel. -/
-theorem channelGuarantees_of_staged {ens : Ensemble F PublicIO} {N : ℕ}
-    (verifier_empty : ens.verifier = .empty F PublicIO)
-    (witness : EnsembleWitness ens) (assumptions : witness.Assumptions)
-    (constraints : witness.Constraints)
-    (balanced : ∀ channel ∈ ens.channels, BalancedUpTo N (witness.interactionsWith channel)) :
-    ∀ {finished : List (RawChannel F)}, finished ⊆ ens.channels →
-    (∀ channel ∈ finished, channel.ConsistentUpTo N) →
-    (∀ component ∈ ens.tables, component.StagedRequirements finished) →
-    ∀ table ∈ witness.tables, ∀ channel ∈ finished, table.ChannelGuarantees channel
-  | [], _, _, _ => by simp
-  | channel :: earlier, finished_subset, consistent, staged => by
-    have ih := channelGuarantees_of_staged verifier_empty witness assumptions constraints balanced
-      (List.subset_of_cons_subset finished_subset)
-      (fun c hc => consistent c (List.mem_cons_of_mem _ hc))
-      (fun component h => (staged component h).2)
-    -- the requirements of every table on `channel` hold, given the guarantees on earlier channels
-    have requirements : ∀ table ∈ witness.tables, table.ChannelRequirements channel :=
-      fun table h_table =>
-        (staged table.component (witness.component_mem_tables_of_mem h_table)).1 table rfl
-          (assumptions table h_table) (constraints table h_table) (ih table h_table)
-    -- so all interactions with `channel` satisfy their requirements, and by consistency their
-    -- guarantees
-    have : channel.ConsistentUpTo N := consistent channel List.mem_cons_self
-    have all_guarantees := RawChannel.ConsistentUpTo.consistent
-      (witness.interactionsWith channel) witness.data
-      (balanced channel (finished_subset List.mem_cons_self)) (by
-        intro i h_i
-        refine ⟨witness.channel_eq_of_mem_interactionsWith h_i, ?_⟩
-        rw [EnsembleWitness.interactionsWith_of_verifier_empty verifier_empty, List.mem_flatMap]
-          at h_i
-        obtain ⟨table, h_table, h_i⟩ := h_i
-        have := (requirements table h_table)
-        rw [Table.channelRequirements_iff_forall, witness.same_data table h_table] at this
-        exact this i h_i)
-    intro table h_table c h_c
-    rcases List.mem_cons.mp h_c with rfl | h_c
-    · rw [Table.channelGuarantees_iff_forall, witness.same_data table h_table]
-      intro i h_i
-      apply all_guarantees i
-      rw [EnsembleWitness.interactionsWith_of_verifier_empty verifier_empty, List.mem_flatMap]
-      exact ⟨table, h_table, h_i⟩
-    · exact ih table h_table c h_c
-
-/--
-Soundness from channel finishing order: if every table's guarantees come from finished channels,
-every finished channel is consistent under the balance check, and every component's requirements
-on a finished channel follow from its guarantees on the channels finished before it, then the
-tables are sound.
--/
-theorem tableSoundness_of_staged {ens : Ensemble F PublicIO} {balance : Balance F}
-    (finished : List (RawChannel F))
-    (verifier_empty : ens.verifier = .empty F PublicIO)
-    (finished_subset : finished ⊆ ens.channels)
-    (subset_finished : ∀ component ∈ ens.tables,
-      component.circuit.channelsWithGuarantees ⊆ finished)
-    (consistent : ∀ channel ∈ finished, channel.ConsistentUpTo balance.pullBound)
-    (staged : ∀ component ∈ ens.tables, component.StagedRequirements finished) :
-    ens.TableSoundness balance := by
-  intro witness assumptions constraints fit balanced
-  have guarantees := channelGuarantees_of_staged verifier_empty witness assumptions constraints
-    (witness.balancedChannels_of_balanced fit balanced)
-    finished_subset consistent staged
-  refine ⟨?_, fun table h_table => ?_⟩
-  · apply ens.verifierSpec_of_verifierGuarantees
-    rw [verifierGuarantees_iff]
-    intro channel h_channel
-    simp [verifier_empty, Verifier.Program.empty, circuit_norm] at h_channel
-  · have all_guarantees : table.Guarantees := by
-      rw [Table.guarantees_iff_channelGuarantees]
-      exact fun c hc => guarantees table h_table c
-        (subset_finished table.component (witness.component_mem_tables_of_mem h_table) hc)
-    exact (Table.weakSoundness (assumptions table h_table) (constraints table h_table)
-      all_guarantees).1
-
-end Ensemble
-
 /-!
 ## Stages: a channel and a class of its messages
 
@@ -277,6 +196,22 @@ lemma Component.requirementsAfterOn_of_requirementsAfter {component : Component 
   rw [Table.channelRequirements_iff_forall] at this
   exact this i h_i
 
+/-- The stage that is a whole channel. -/
+def Stage.ofChannel (channel : RawChannel F) : Stage F := { channel }
+
+@[simp] lemma Stage.ofChannel_channel (channel : RawChannel F) :
+    (Stage.ofChannel channel).channel = channel := rfl
+
+lemma Component.stagedRequirementsOn_of_stagedRequirements
+    {component : Component F} :
+    ∀ {finished : List (RawChannel F)}, component.StagedRequirements finished →
+      component.StagedRequirementsOn (finished.map Stage.ofChannel)
+  | [], _ => trivial
+  | _ :: _, ⟨after, rest⟩ =>
+    ⟨ Component.requirementsAfterOn_of_requirementsAfter after
+        fun c hc => ⟨Stage.ofChannel c, List.mem_map_of_mem hc, rfl, fun _ => rfl⟩,
+      stagedRequirementsOn_of_stagedRequirements rest ⟩
+
 namespace Ensemble
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
@@ -355,6 +290,58 @@ theorem tableSoundness_of_stagedOn {ens : Ensemble F PublicIO} {balance : Balanc
         (guarantees table h_table)
     exact (Table.weakSoundness (assumptions table h_table) (constraints table h_table)
       all_guarantees).1
+
+/-!
+### The channel form
+
+A whole channel is the stage whose class is every message, so a finishing order of channels is the
+finishing order of those stages and the two theorems below are the stage ones read through that
+correspondence. The statements are kept because an ensemble whose channels finish whole is the
+simpler thing to say, and to use.
+-/
+
+/-- Every table's guarantees on every channel of `finished` hold: `guaranteesOn_of_stagedOn` on the
+stages that are those channels whole. -/
+theorem channelGuarantees_of_staged {ens : Ensemble F PublicIO} {N : ℕ}
+    (verifier_empty : ens.verifier = .empty F PublicIO)
+    (witness : EnsembleWitness ens) (assumptions : witness.Assumptions)
+    (constraints : witness.Constraints)
+    (balanced : ∀ channel ∈ ens.channels, BalancedUpTo N (witness.interactionsWith channel)) :
+    ∀ {finished : List (RawChannel F)}, finished ⊆ ens.channels →
+    (∀ channel ∈ finished, channel.ConsistentUpTo N) →
+    (∀ component ∈ ens.tables, component.StagedRequirements finished) →
+    ∀ table ∈ witness.tables, ∀ channel ∈ finished, table.ChannelGuarantees channel := by
+  intro finished finished_subset consistent staged table h_table channel h_channel
+  have guarantees := guaranteesOn_of_stagedOn verifier_empty witness assumptions constraints
+    balanced (finished := finished.map Stage.ofChannel)
+    (by simpa using fun _ h => finished_subset h)
+    (by simpa using consistent)
+    (fun component h => Component.stagedRequirementsOn_of_stagedRequirements (staged component h))
+  rw [Table.channelGuarantees_iff_forall]
+  exact fun i h_i => guarantees table h_table (Stage.ofChannel channel)
+    (List.mem_map_of_mem h_channel) i h_i rfl
+
+/--
+Soundness from channel finishing order: if every table's guarantees come from finished channels,
+every finished channel is consistent under the balance check, and every component's requirements
+on a finished channel follow from its guarantees on the channels finished before it, then the
+tables are sound.
+-/
+theorem tableSoundness_of_staged {ens : Ensemble F PublicIO} {balance : Balance F}
+    (finished : List (RawChannel F))
+    (verifier_empty : ens.verifier = .empty F PublicIO)
+    (finished_subset : finished ⊆ ens.channels)
+    (subset_finished : ∀ component ∈ ens.tables,
+      component.circuit.channelsWithGuarantees ⊆ finished)
+    (consistent : ∀ channel ∈ finished, channel.ConsistentUpTo balance.pullBound)
+    (staged : ∀ component ∈ ens.tables, component.StagedRequirements finished) :
+    ens.TableSoundness balance :=
+  tableSoundness_of_stagedOn (finished.map Stage.ofChannel) verifier_empty
+    (by simpa using fun _ h => finished_subset h)
+    (fun component h c h_c _ => ⟨Stage.ofChannel c,
+      List.mem_map_of_mem (subset_finished component h h_c), rfl, rfl⟩)
+    (by simpa using consistent)
+    (fun component h => Component.stagedRequirementsOn_of_stagedRequirements (staged component h))
 
 end Ensemble
 end Air.Flat
