@@ -15,16 +15,17 @@ second costs one interaction instead of two, and is what `Channel.counted` is fo
 The fact here is `y = x * x`. The squaring chip enforces it with a constraint and pushes the pair;
 a consumer that needs the same square once or twice pulls it once with that multiplicity.
 `squares.counted 2` hands its guarantee to a pull of multiplicity `1` or `2`, and asks such a pull
-to say which. That obligation is what the consumer discharges by constraining its count, and it is
-what makes the channel sound: `Channel.counted_not_consistent` shows that a row free to claim any
-multiplicity would break it.
+to say which. That obligation is what the consumer discharges by constraining its count. The
+obligation by itself is not what makes the channel sound: `Channel.counted_not_consistent` builds
+two pulls that both satisfy it and are still unmatched under plain `BalancedInteractions`, which is
+why the bound has to come from the balance check, here `Balance.logUpUpTo 2`.
 
 The ensemble also generates. Four provider rows exist before any demand, and a multiplicity cell
 starts at `0`, so the `+ 1` of the provider's emit turns each of them into one push. Those four
 pushes are the demand the consumer answers, with two rows pulling at multiplicity `2`. The `+ 1` is
 there to seed the run and nothing else: a VM seeds its channels from the verifier instead, as in
-`Clean/Examples/FemtoCairo/FlatAir.lean`. `Clean/Examples/CountedSquaresWitnessGenerationTest.lean`
-runs it and pins the result.
+`Clean/Examples/FemtoCairo/FlatAir.lean`.
+`Clean/Examples/CountedSquares/WitnessGenerationTest.lean` runs it and pins the result.
 
 A row's multiplicity is counted by `Tally.signedCount`, which reads it as a natural number, so a
 counted pull is tallied as the number it claims; that part needs no change for counted channels.
@@ -41,7 +42,7 @@ open Air.Flat
 variable {p : ℕ} [Fact p.Prime]
 
 /-- Pulls may count up to `2`. -/
-abbrev N : ℕ := 2
+abbrev countBound : ℕ := 2
 
 /-- Pairs `(x, y)` with `y = x * x`. -/
 def squares : Channel (F p) (ProvablePair field field) where
@@ -50,7 +51,7 @@ def squares : Channel (F p) (ProvablePair field field) where
 
 /-- A count of `1` or `2` is a count up to `2`: the step from a field constraint to the channel's
 `CountUpTo`, and the only arithmetic the example needs. -/
-lemma countUpTo_of_one_or_two {c : F p} (h : (c - 1) * (c - 2) = 0) : CountUpTo N c := by
+lemma countUpTo_of_mul_eq_zero {c : F p} (h : (c - 1) * (c - 2) = 0) : CountUpTo countBound c := by
   rcases mul_eq_zero.mp h with h | h <;> rw [sub_eq_zero] at h
   · exact ⟨1, le_rfl, by norm_num, by simp [h]⟩
   · exact ⟨2, by norm_num, le_rfl, by simp [h]⟩
@@ -73,9 +74,9 @@ def provider : GeneralFormalCircuit (F p) ProviderInput unit where
   name := "squares-provider"
   main input := do
     input.y === input.x * input.x
-    squares.emitUpTo N (input.mult + 1) (input.x, input.y)
+    squares.emitUpTo countBound (input.mult + 1) (input.x, input.y)
 
-  channelsWithRequirements := [squares.counted N]
+  channelsWithRequirements := [squares.counted countBound]
   Spec _ _ _ := True
   ProverAssumptions input _ _ := input.y = input.x * input.x
 
@@ -101,7 +102,7 @@ def consumer : GeneralFormalCircuit (F p) ConsumerInput unit where
   name := "squares-consumer"
   main input := do
     assertZero ((input.count - 1) * (input.count - 2))
-    squares.pullUpTo N input.count (input.x, input.y)
+    squares.pullUpTo countBound input.count (input.x, input.y)
 
   Spec input _ _ := input.y = input.x * input.x
   ProverAssumptions input _ _ :=
@@ -110,12 +111,12 @@ def consumer : GeneralFormalCircuit (F p) ConsumerInput unit where
   requirementsChannelsLawful := by
     simp only [circuit_norm, seval]
     intro input env h
-    exact .inr (countUpTo_of_one_or_two h)
+    exact .inr (countUpTo_of_mul_eq_zero h)
 
   soundness := by
     circuit_proof_start [squares]
     obtain ⟨h_count, h_guarantee⟩ := h_holds
-    have h_in := countUpTo_of_one_or_two h_count
+    have h_in := countUpTo_of_mul_eq_zero h_count
     exact ⟨h_guarantee h_in, .inr h_in⟩
   completeness := by
     circuit_proof_start [squares]
@@ -163,14 +164,14 @@ abbrev consumerComponent : Component (F p) where
 /-- The ensemble: the counted channel, the chip that serves it, the channel finished, and the chip
 that reads it. `markFinished` is where the counted channel has to be `ConsistentUpTo` the balance
 check's `pullBound`, which is why `Balance.logUpUpTo` must be reducible. -/
-def soundEnsemble : SoundEnsemble (F p) unit (Balance.logUpUpTo N) :=
-  SoundEnsemble.empty (F p) unit (Balance.logUpUpTo N)
-  |>.addChannel (squares.counted N)
+def soundEnsemble : SoundEnsemble (F p) unit (Balance.logUpUpTo countBound) :=
+  SoundEnsemble.empty (F p) unit (Balance.logUpUpTo countBound)
+  |>.addChannel (squares.counted countBound)
   |>.addTable providerComponent
       (by simp [circuit_norm, provider])
       (by simp [circuit_norm, provider])
       (by simp [circuit_norm, provider])
-  |>.markFinished (squares.counted N)
+  |>.markFinished (squares.counted countBound)
   |>.addTable consumerComponent
       (by simp [circuit_norm, consumer])
       (by simp [circuit_norm, consumer])
@@ -184,7 +185,7 @@ The balance check's `fits` is where the bound of `LogUpBalanced.matchedUpTo` is 
 satisfies `Ensemble.Statement` when the interaction count times `2` stays below the characteristic.
 -/
 theorem tableSoundness :
-    (soundEnsemble (p := p)).ensemble.TableSoundness (Balance.logUpUpTo N) :=
+    (soundEnsemble (p := p)).ensemble.TableSoundness (Balance.logUpUpTo countBound) :=
   Ensemble.tableSoundness_of_soundChannels
     ⟨_, (soundEnsemble (p := p)).finished_subset, (soundEnsemble (p := p)).soundChannels⟩
 
