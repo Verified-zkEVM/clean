@@ -274,8 +274,10 @@ theorem tableSoundness_of_stagedRequirementsOn {ens : Ensemble F PublicIO} {bala
     (finished : List (Stage F))
     (verifier_empty : ens.verifier = .empty F PublicIO)
     (finished_channels : ∀ s ∈ finished, s.channel ∈ ens.channels)
-    (covered : ∀ component ∈ ens.tables, ∀ c ∈ component.circuit.channelsWithGuarantees,
-      ∀ msg, ∃ s ∈ finished, s.channel = c ∧ s.cls msg)
+    (covered : ∀ table : Table F, table.component ∈ ens.tables →
+      ∀ c ∈ table.component.circuit.channelsWithGuarantees,
+      ∀ i ∈ table.interactionsWith c, i.direction = .pull →
+        ∃ s ∈ finished, s.channel = c ∧ s.cls i.msg)
     (consistent : ∀ s ∈ finished, s.channel.ConsistentUpTo balance.pullBound)
     (staged : ∀ component ∈ ens.tables, component.StagedRequirementsOn finished) :
     ens.TableSoundness balance := by
@@ -291,9 +293,7 @@ theorem tableSoundness_of_stagedRequirementsOn {ens : Ensemble F PublicIO} {bala
     simp [verifier_empty, Verifier.Program.empty, circuit_norm] at h_channel
   · have h_comp := witness.component_mem_tables_of_mem h_table
     have all_guarantees : table.Guarantees :=
-      Table.guarantees_of_guaranteesOn
-        (fun c h_c i _ _ => covered table.component h_comp c h_c i.msg)
-        (guarantees table h_table)
+      Table.guarantees_of_guaranteesOn (covered table h_comp) (guarantees table h_table)
     exact (Table.weakSoundness (assumptions table h_table) (constraints table h_table)
       all_guarantees).1
 
@@ -323,8 +323,8 @@ theorem tableSoundness_of_stagedRequirements {ens : Ensemble F PublicIO} {balanc
     ens.TableSoundness balance :=
   tableSoundness_of_stagedRequirementsOn (finished.map Stage.ofChannel) verifier_empty
     (by simpa using fun _ h => finished_subset h)
-    (fun component h c h_c _ => ⟨Stage.ofChannel c,
-      List.mem_map_of_mem (subset_finished component h h_c), rfl, rfl⟩)
+    (fun table h c h_c _ _ _ => ⟨Stage.ofChannel c,
+      List.mem_map_of_mem (subset_finished table.component h h_c), rfl, rfl⟩)
     (by simpa using consistent)
     (fun component h => Component.stagedRequirementsOn_of_stagedRequirements (staged component h))
 
