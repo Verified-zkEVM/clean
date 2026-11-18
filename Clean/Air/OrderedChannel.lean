@@ -569,7 +569,7 @@ def SoundChannels (ens : Ensemble F PublicIO) (N : ℕ) (finished : List (RawCha
 lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} {channel : RawChannel F} :
     ens.OrderedChannel channel →
-    BalancedUpTo N (witness.interactionsWith channel) →
+    witness.BalancedChannel N channel →
       PartialBalancedChannel N witness.toTables channel := by
   intro ordered balanced
   use witness.verifierInteractionsWith channel
@@ -593,7 +593,7 @@ lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
 lemma verifierChannelGuarantees_of_tableRequirements {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} {channel : RawChannel F} [channel.ConsistentUpTo N] :
     OrderedChannelRefl channel ens.verifier →
-    BalancedUpTo N (witness.interactionsWith channel) →
+    witness.BalancedChannel N channel →
     (∀ table ∈ witness.tables, table.ChannelRequirements channel) →
       ens.VerifierChannelGuarantees witness.data channel := by
   intro ordered balanced table_requirements
