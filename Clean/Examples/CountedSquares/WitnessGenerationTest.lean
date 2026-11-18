@@ -43,6 +43,10 @@ holds three rows.
 between them: the circuit's `+ 1` on the multiplicities `[2, 0, 0, 0]`. Six pulls against six
 pushes balance, and `ComponentState.targetHeight` asks a three-row demand table for four. -/
 def unpadded : Array (ComponentState (F p)) := Id.run do
+  -- The prover data and hint are empty because nothing here reads them: neither chip's circuit,
+  -- spec or assumptions mentions the data, and the channel's guarantee is `y = x * x`, on the
+  -- message alone. `completeRow` takes them to evaluate witness programs, and the two cells these
+  -- rows witness are a literal and a multiplicity.
   let data := ProverData.empty (F p)
   let hint := ProverHint.empty (F p)
   let mut consumer := ComponentState.initial (consumerComponent (p := p)) none
