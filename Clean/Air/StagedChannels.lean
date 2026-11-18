@@ -185,6 +185,38 @@ lemma Component.requirementsAfterOn_of_guarantees_subset {component : Component 
     component.RequirementsAfterOn stage earlier :=
   requirementsAfterOn_of_covered fun _ _ c h_c i _ _ => h c h_c i.msg
 
+/-- A stage's obligation read one row and one interaction at a time, which is the form a
+component's own `circuit_norm` lemmas normalize to. `Table.RequirementsOn` quantifies over the
+interactions of the whole table; `Table.forall_interactionsWith_iff` turns that into rows times the
+component's row operations, and `AbstractInteraction.eval_requirements` carries the requirement
+back. -/
+lemma Component.requirementsAfterOn_of_rowOperations {component : Component F} {stage : Stage F}
+    {earlier : List (Stage F)}
+    (h : ∀ table : Table F, table.component = component → table.Assumptions → table.Constraints →
+      (∀ s ∈ earlier, table.GuaranteesOn s) →
+      ∀ row ∈ table.table, ∀ i ∈ component.rowOperations.interactions,
+        i.channel = stage.channel →
+        stage.cls ((i.eval (table.environment row)).msg) = true →
+        i.Requirements (table.environment row)) :
+    component.RequirementsAfterOn stage earlier := by
+  rintro table rfl assumptions constraints guarantees
+  show ∀ i ∈ table.interactionsWith stage.channel, _
+  rw [Table.forall_interactionsWith_iff]
+  intro row h_row i h_i h_channel h_cls
+  rw [interactions_eq] at h_i
+  exact AbstractInteraction.eval_requirements.mpr
+    (h table rfl assumptions constraints guarantees row h_row i h_i h_channel h_cls)
+
+/-- A component that receives no guarantee owes nothing on any stage: its requirements are already
+unconditional. A provider, which pushes its table and pulls nothing, is the case. -/
+lemma Component.stagedRequirementsOn_of_no_guarantees {component : Component F}
+    (h : component.circuit.channelsWithGuarantees = []) :
+    ∀ stages : List (Stage F), component.StagedRequirementsOn stages
+  | [] => trivial
+  | _ :: rest =>
+    ⟨requirementsAfterOn_of_guarantees_subset (by simp [h]),
+      stagedRequirementsOn_of_no_guarantees h rest⟩
+
 /-- A channel-level `RequirementsAfter` gives the stage-level one for the whole channel, when every
 earlier channel is a whole-channel stage. -/
 lemma Component.requirementsAfterOn_of_requirementsAfter {component : Component F}
