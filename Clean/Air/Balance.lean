@@ -433,10 +433,10 @@ def Balance.logUp [ComputableRingChar F] : Balance F where
     ⟨ balanced.exists_push_of_pull length_lt,
       balanced.activeCount_push_eq_activeCount_pull_of_isBool length_lt ⟩
 
-/-- `Balance.logUp` matches pulls of multiplicity `1` only. Stated so that `simp`/`circuit_norm`
-can reduce a `ConsistentUpTo (Balance.logUp).pullBound` goal, which instance search cannot do on
-its own: `Balance.logUp` is a plain `def`, so the projection is not reducible. -/
-@[simp, circuit_norm] lemma Balance.logUp_pullBound [ComputableRingChar F] :
+/-- `Balance.logUp` matches pulls of multiplicity `1` only. Stated so that `circuit_norm` can
+reduce a `ConsistentUpTo (Balance.logUp).pullBound` goal, which instance search cannot do on its
+own: `Balance.logUp` is a plain `def`, so the projection is not reducible. -/
+@[circuit_norm] lemma Balance.logUp_pullBound [ComputableRingChar F] :
     (Balance.logUp : Balance F).pullBound = 1 := rfl
 
 /--
@@ -463,10 +463,10 @@ argument leaves no place to `simp` first.
       (of_decide_eq_true (Bool.and_eq_true_iff.mp fits).2)
     balanced.matchedUpTo length_mul_lt
 
-/-- `Balance.logUpUpTo N` matches pulls of multiplicity up to `N`, for `simp` and `circuit_norm`.
-Instance search needs the same fact, and gets it from the check being `@[reducible]`: a `simp`
-lemma plays no part in synthesis. -/
-@[simp, circuit_norm] lemma Balance.logUpUpTo_pullBound [ComputableRingChar F] (N : ℕ) :
+/-- `Balance.logUpUpTo N` matches pulls of multiplicity up to `N`, for `circuit_norm`. Instance
+search needs the same fact, and gets it from the check being `@[reducible]`: a simp lemma plays no
+part in synthesis. -/
+@[circuit_norm] lemma Balance.logUpUpTo_pullBound [ComputableRingChar F] (N : ℕ) :
     (Balance.logUpUpTo N : Balance F).pullBound = N := rfl
 
 /-- At bound `1`, the counted check is `Balance.logUp` itself, so an ensemble that does not count
@@ -507,10 +507,9 @@ def Balance.multiset : Balance F where
     obtain ⟨ b, b_mem, h_b ⟩ := List.countP_pos_iff.mp pull_pos
     simp only [decide_eq_true_eq] at h_b
     exact ⟨ b, b_mem, h_b.2.1, h_b.2.2, by simp [h_b.1] ⟩
-  -- `matchedUpTo_of_balanced` is the default: `pullBound` is `1`.
 
 /-- `Balance.multiset` matches pulls of multiplicity `1` only. -/
-@[simp, circuit_norm] lemma Balance.multiset_pullBound :
+@[circuit_norm] lemma Balance.multiset_pullBound :
     (Balance.multiset : Balance F).pullBound = 1 := rfl
 
 /- ## Conditions on channels that strengthen the implications of interaction balance. -/

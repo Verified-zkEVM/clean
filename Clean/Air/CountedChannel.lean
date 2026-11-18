@@ -90,14 +90,14 @@ def emitUpTo (N : ℕ) (channel : Channel F Message) (mult : Expression F)
   ((), [.interact (emittedUpTo N channel mult msg)])
 
 instance {N : ℕ} {channel : Channel F Message} {count : Expression F} :
-    ExplicitCircuits (F := F) (channel.pullUpTo N count) where
+    ExplicitCircuits (F:=F) (channel.pullUpTo N count) where
   output _ _ := ()
   localLength _ _ := 0
   operations msg _ := [.interact (pulledUpTo N channel count msg)]
   channelsWithGuarantees _ _ := [channel.counted N]
 
 instance {N : ℕ} {channel : Channel F Message} {mult : Expression F} :
-    ExplicitCircuits (F := F) (channel.emitUpTo N mult) where
+    ExplicitCircuits (F:=F) (channel.emitUpTo N mult) where
   output _ _ := ()
   localLength _ _ := 0
   operations msg _ := [.interact (emittedUpTo N channel mult msg)]
