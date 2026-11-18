@@ -17,3 +17,4 @@ public import Clean.Examples.FemtoCairo.FlatAirTest
 public import Clean.Examples.OpcodeVm.WitnessGenerationTest
 public import Clean.Examples.BinaryFibonacci.WitnessGenerationTest
 public import Clean.Examples.CountedSquares.WitnessGenerationTest
+public import Clean.Examples.StagedSquares.WitnessGenerationTest

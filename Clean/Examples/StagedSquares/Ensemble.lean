@@ -20,8 +20,8 @@ which `OrderedChannel` cannot express: it orders tables, and nothing about the o
 three tables says where the bound comes from. `Ensemble.tableSoundness_of_stagedRequirements`
 orders the channels instead, `counts` finished before `squares`.
 
-Only soundness is exercised; the ensemble is assembled directly rather than through
-`SoundEnsemble`, which the staged argument does not compose with.
+The ensemble is assembled directly rather than through `SoundEnsemble`, which the staged argument
+does not compose with. It generates, and `WitnessGenerationTest.lean` pins what it generates.
 -/
 
 namespace StagedSquares
@@ -42,14 +42,20 @@ structure RangeInput (F : Type) where
   mult : F
 deriving ProvableStruct
 
-/-- The range chip: constrains its value to `1` or `2` and pushes it, once on top of every pull it
-answers. Its constraint is what pays for the guarantee, exactly as the squaring chip's constraint
-pays for `y = x * x`. -/
+/-- The range chip: constrains its value to `1` or `2` and pushes it as often as it is pulled. Its
+constraint is what pays for the guarantee, exactly as the squaring chip's constraint pays for
+`y = x * x`.
+
+The multiplicity is pushed as it stands. The squaring chip of `CountedSquares` emits `mult + 1`
+because it is `preallocated`: its rows exist before any demand and their multiplicity cells start
+at `0`, so the `+ 1` is what seeds a run. This chip is `demand`, so a row is created only by a pull
+it has to answer and is born with that pull counted; a `+ 1` here would push once more than anyone
+pulls, and the channel would not balance. -/
 def rangeProvider : GeneralFormalCircuit (F p) RangeInput unit where
   name := "counts-provider"
   main input := do
     assertZero ((input.c - 1) * (input.c - 2))
-    counts.emit (input.mult + 1) input.c
+    counts.emit input.mult input.c
 
   channelsWithRequirements := [counts.toRaw]
   Spec _ _ _ := True
@@ -85,13 +91,15 @@ def stagedConsumer : GeneralFormalCircuit (F p) ConsumerInput unit where
     refine ⟨?_, fun _ => h_square⟩
     rcases h_count with h | h <;> simp [h] <;> exact countUpTo_of_mul_eq_zero (by ring)
 
-/-- One row per pulled count that nothing has pushed. -/
+/-- One row per pulled count that nothing has pushed. The padding row answers nothing — multiplicity
+`0`, no push — and `c := 1` is there to satisfy the chip's own constraint, which `0` would not. -/
 abbrev rangeProviderComponent : Component (F p) where
   circuit := rangeProvider
   generation := .demand {
     channel := counts
     trigger := .pull
     input c := pure { c, mult := .multiplicity }
+    padding := { c := 1, mult := 0 }
   }
 
 /-- One row per pushed square that nothing has pulled, as in `CountedSquares`, but pulling its
