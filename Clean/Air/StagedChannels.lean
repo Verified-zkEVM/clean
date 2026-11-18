@@ -7,10 +7,12 @@ public import Clean.Air.FlatEnsemble
 /-!
 # Soundness by channel finishing order
 
-`OrderedChannel` orders tables: a table may not both pull from a channel and owe requirements on it.
-That rules out a table whose requirements on a channel follow from guarantees on *other* channels,
-like a pull whose multiplicity is range-checked by a lookup on another channel: `LT` pulls `IS_HALF`
-with multiplicity `μ`, and `μ ≤ 255` comes from pulling `ARE_BYTES[μ, 0]`.
+`OrderedChannel` orders tables: on each channel, every table that pushes comes before every table
+that pulls, and no table does both. That rules out a table whose requirements on one channel follow
+from its guarantees on *another*. A counted pull is the case that needs this: its multiplicity owes
+`CountUpTo N`, and for a bound too large to constrain arithmetically that comes from range-checking
+the multiplicity on a second channel. `Clean/Examples/CountedSquares` counts to `2` and constrains
+its count in the circuit, which is why one finished channel is enough there.
 
 Here channels are ordered instead. `finished` lists the channels newest first, and a component's
 requirements on a channel may use its guarantees on the channels finished before it
@@ -87,12 +89,14 @@ lemma Component.stagedRequirements_of_forall {component : Component F} :
 /-!
 ## Stages: a channel and a class of its messages
 
-A channel that one table both pulls from and pushes to, on different messages, is not a cycle. The
-ALU bus of a VM is the example: a division table pulls `LT` and `MUL` results and pushes `DIVREM`
-results, all on the same bus. Ordering by stage, a channel together with a class of messages,
-lets the `DIVREM` stage be finished after the `LT`/`MUL` stage. Balance is message by message
-(`BalancedUpTo.filter_msg`), so each stage balances by itself. A whole channel is the stage whose
-class is every message.
+A channel that one table both pulls from and pushes to, on different messages, is not a cycle: what
+it reads and what it writes are disjoint. A bus shared by several operations is where this happens.
+A table that answers one operation by using the answers to others pulls those answers and pushes
+its own, all under one channel name, and ordering whole channels cannot express that. Ordering by
+stage, a channel together with a class of its messages, lets the class it pushes be finished after
+the classes it pulls. Balance is message by message (`BalancedUpTo.filter_msg`), so each stage
+balances by itself, and a whole channel is the stage whose class is every message. Genuine cycles
+still have no valid order.
 -/
 
 /-- The messages of one class on one channel. -/
