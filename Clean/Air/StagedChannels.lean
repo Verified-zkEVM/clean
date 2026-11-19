@@ -18,6 +18,11 @@ Here channels are ordered instead. `finished` lists the channels newest first, a
 requirements on a channel may use its guarantees on the channels finished before it
 (`Component.StagedRequirements`). Then, by induction from the oldest channel, every channel's
 requirements hold, so by consistency every channel's guarantees hold, and every table's spec follows.
+
+This was written for lambda_vm, a RISC-V zkVM built on Clean, whose lookup channels admit a
+finishing order with one cycle, an arithmetic bus that one table both reads and writes. The cycle
+is what the message classes break. `Clean/Examples/StagedSquares` and `Clean/Examples/SameBus` are
+the two shapes in miniature.
 -/
 
 variable {F : Type} [FiniteField F]
