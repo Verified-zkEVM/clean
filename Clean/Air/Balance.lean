@@ -46,7 +46,10 @@ omit [FiniteField F] in
 This is how a circuit discharges the requirement of a counted pull. The pull owes
 `mult = 0 ∨ CountUpTo N mult`, and a chip that range-checks its multiplicity knows exactly
 `mult ≠ 0` and `mult.val ≤ N`. Stating it over `ZMod p` rather than a general field is what makes
-`mult.val` available. -/
+`mult.val` available.
+
+No example in this repo range-checks a multiplicity, because the bound there is `2` and a
+constraint is cheaper. The chips that do are in lambda_vm, where the bound is a byte. -/
 lemma countUpTo_of_val {p : ℕ} [Fact p.Prime] {N : ℕ} {mult : ZMod p} (h0 : mult ≠ 0)
     (hN : mult.val ≤ N) : CountUpTo N mult :=
   ⟨ mult.val, Nat.one_le_iff_ne_zero.mpr ((ZMod.val_ne_zero mult).mpr h0), hN,

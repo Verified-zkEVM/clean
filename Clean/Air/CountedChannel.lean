@@ -13,6 +13,9 @@ multiplicity `k`. `Channel.counted N channel` is `channel` with pulls of multipl
 a pull gets the guarantee, and an active push owes it. It is consistent in the sense of
 `RawChannel.ConsistentUpTo N`, so it can be finished in a `SoundEnsemble` whose balance check has a
 `pullBound` of at least `N`, e.g. `Balance.logUpUpTo N`.
+
+This was written for lambda_vm, a RISC-V zkVM built on Clean, whose arithmetic chips answer several
+identical lookups per row. `Clean/Examples/CountedSquares` is the same shape in miniature.
 -/
 
 variable {F : Type} [FiniteField F]
