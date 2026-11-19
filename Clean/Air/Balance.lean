@@ -141,11 +141,11 @@ lemma BalancedInteractions.nil : BalancedInteractions ([] : List (Interaction F)
   ⟨ by simp, by simp [activeCount] ⟩
 
 /--
-Every pull of multiplicity up to `N` is matched by an interaction that pushes its message. For
-`N = 1` this is `BalancedInteractions.exists_push_of_pull`. For larger `N` it needs more than balance
-of the counts: under field-sum balance, `(p - 1) / 2` pulls of multiplicity `2` and one pull of
-multiplicity `1` sum to `p ≡ 0` with no push. It holds when the number of interactions times `N`
-is below the characteristic, see `LogUpBalanced.matchedUpTo`.
+Every pull of multiplicity up to `N` is matched by an interaction that pushes its message.
+`BalancedInteractions` implies it for `N = 1` (`BalancedInteractions.matchedUpTo_one`). For larger
+`N` it needs more than balance of the counts: under field-sum balance, `(p - 1) / 2` pulls of
+multiplicity `2` and one pull of multiplicity `1` sum to `p ≡ 0` with no push. It holds when the
+number of interactions times `N` is below the characteristic, see `LogUpBalanced.matchedUpTo`.
 -/
 def MatchedUpTo (N : ℕ) (interactions : List (Interaction F)) : Prop :=
   ∀ a ∈ interactions, a.PullUpTo N → ∃ b ∈ interactions, b.msg = a.msg ∧ b.PushUpTo N
@@ -358,7 +358,7 @@ lemma balanceOf_eq_neg_of_pullUpTo {N : ℕ} {msg : Array F} (hN : N < ringChar 
 /--
 Every pull of multiplicity up to `N` is matched by a push, when the number of interactions times
 `N` is below the characteristic: otherwise the multiplicities of the pulls of a message could add
-up to a multiple of the characteristic.
+up to a multiple of the characteristic (`exists_logUpBalanced_not_matchedUpTo`).
 -/
 theorem LogUpBalanced.matchedUpTo {N : ℕ} {interactions : List (Interaction F)}
     (balanced : LogUpBalanced interactions) (length_mul_lt : interactions.length * N < ringChar F) :

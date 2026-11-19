@@ -12,7 +12,8 @@ A table that answers `k` identical lookups with one row pulls the facts it relie
 multiplicity `k`. `Channel.counted N channel` is `channel` with pulls of multiplicity up to `N`: such
 a pull gets the guarantee, and an active push owes it. It is consistent in the sense of
 `RawChannel.ConsistentUpTo N`, so it can be finished in a `SoundEnsemble` whose balance check has a
-`pullBound` of at least `N`, e.g. `Balance.logUpUpTo N`.
+`pullBound` of at least `N`, such as `Balance.logUpUpTo N`: at exactly `N` by instance, above it
+through `counted_consistentUpTo_of_le`.
 
 This was written for lambda_vm, a RISC-V zkVM built on Clean, whose arithmetic chips answer several
 identical lookups per row. `Clean/Examples/CountedSquares` is the same shape in miniature.
@@ -80,7 +81,8 @@ def emittedUpTo (N : ℕ) (channel : Channel F Message) (mult : Expression F)
     (msg : Message (Expression F)) : AbstractInteraction F :=
   ⟨ channel.counted N, .push, mult, toElements msg ⟩
 
-/-- Pull `msg` `count` times, for `count` up to `N`. -/
+/-- Pull `msg` `count` times from `channel.counted N`, which requires `count` to be `0` or to count
+up to `N`. -/
 @[circuit_norm]
 def pullUpTo (N : ℕ) (channel : Channel F Message) (count : Expression F)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>

@@ -27,8 +27,11 @@ there to seed the run and nothing else: a VM seeds its channels from the verifie
 `Clean/Examples/FemtoCairo/FlatAir.lean`.
 `Clean/Examples/CountedSquares/WitnessGenerationTest.lean` runs it and pins the result.
 
-A row's multiplicity is counted by `Tally.signedCount`, which reads it as a natural number, so a
-counted pull is tallied as the number it claims; that part needs no change for counted channels.
+Generation tallies a counted pull as the natural number its multiplicity claims
+(`Tally.signedCount`), but does not split a row at `N`. A demand component with a multiplicity cell
+keeps one row per message (`DemandMode.answer`), so if it also pulled with that count, a message
+demanded more than `N` times would get a row whose counted pull fails its constraint. The consumer
+here pulls a fixed count per row instead.
 
 Constraining the count arithmetically only scales for a small bound. A circuit counting to `510`
 would range-check its multiplicity on another channel instead, which needs a finishing order over
@@ -51,7 +54,8 @@ def squares : Channel (F p) (ProvablePair field field) where
 
 /-- A count of `1` or `2` is a count up to `2`: the step from a field constraint to the channel's
 `CountUpTo`, and the only arithmetic the example needs. -/
-lemma countUpTo_of_mul_eq_zero {c : F p} (h : (c - 1) * (c - 2) = 0) : CountUpTo countBound c := by
+lemma countUpTo_of_sub_one_mul_sub_two_eq_zero {c : F p} (h : (c - 1) * (c - 2) = 0) :
+    CountUpTo countBound c := by
   rcases mul_eq_zero.mp h with h | h <;> rw [sub_eq_zero] at h
   · exact ⟨1, le_rfl, by norm_num, by simp [h]⟩
   · exact ⟨2, by norm_num, le_rfl, by simp [h]⟩
@@ -111,12 +115,12 @@ def consumer : GeneralFormalCircuit (F p) ConsumerInput unit where
   requirementsChannelsLawful := by
     simp only [circuit_norm, seval]
     intro input env h
-    exact .inr (countUpTo_of_mul_eq_zero h)
+    exact .inr (countUpTo_of_sub_one_mul_sub_two_eq_zero h)
 
   soundness := by
     circuit_proof_start [squares]
     obtain ⟨h_count, h_guarantee⟩ := h_holds
-    have h_in := countUpTo_of_mul_eq_zero h_count
+    have h_in := countUpTo_of_sub_one_mul_sub_two_eq_zero h_count
     exact ⟨h_guarantee h_in, .inr h_in⟩
   completeness := by
     circuit_proof_start [squares]
