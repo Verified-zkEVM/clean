@@ -35,7 +35,8 @@ here pulls a fixed count per row instead.
 
 Constraining the count arithmetically only scales for a small bound. A circuit counting to `510`
 would range-check its multiplicity on another channel instead, which needs a finishing order over
-several channels rather than the single finished channel here.
+several channels rather than the single finished channel here, as in
+`Clean/Examples/StagedSquares`.
 -/
 
 namespace CountedSquares

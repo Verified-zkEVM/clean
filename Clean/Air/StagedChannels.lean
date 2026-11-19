@@ -62,7 +62,7 @@ def Component.StagedRequirements (component : Component F) : List (RawChannel F)
       component.RequirementsAfter channel earlier ∧ component.StagedRequirements earlier :=
   .rfl
 
-/-- A component owes nothing on a channel it doesn't require. -/
+/-- A component owes nothing on a channel outside its `channelsWithRequirements`. -/
 lemma Component.requirementsAfter_of_not_mem {component : Component F} {channel : RawChannel F}
     (earlier : List (RawChannel F))
     (h : channel ∉ component.circuit.channelsWithRequirements) :
@@ -83,7 +83,7 @@ lemma Component.requirementsAfter_of_guarantees_subset {component : Component F}
   exact table.channelRequirements_of_requirements
     (Table.weakSoundness assumptions constraints all_guarantees).2
 
-/-- Staged requirements on a list of channels, from one of the two lemmas above for each channel. -/
+/-- `StagedRequirements` from `RequirementsAfter` at every position of the list. -/
 lemma Component.stagedRequirements_of_forall {component : Component F} :
     ∀ {finished : List (RawChannel F)},
     (∀ (channel : RawChannel F) (earlier : List (RawChannel F)),
@@ -163,7 +163,7 @@ lemma Table.guarantees_of_guaranteesOn {table : Table F} {stages : List (Stage F
     exact guarantees s h_s i h_i h_cls
   · exact fun h => absurd h h_pull
 
-/-- A component owes nothing on a stage of a channel it doesn't require. -/
+/-- A component owes nothing on a stage whose channel is outside its `channelsWithRequirements`. -/
 lemma Component.requirementsAfterOn_of_not_mem {component : Component F} {stage : Stage F}
     (earlier : List (Stage F))
     (h : stage.channel ∉ component.circuit.channelsWithRequirements) :
@@ -247,7 +247,7 @@ lemma Component.requirementsAfterOn_of_requirementsAfter {component : Component 
 def Stage.ofChannel (channel : RawChannel F) : Stage F := { channel }
 
 omit [FiniteField F] in
-@[simp] lemma Stage.channel_ofChannel (channel : RawChannel F) :
+@[circuit_norm] lemma Stage.channel_ofChannel (channel : RawChannel F) :
     (ofChannel channel).channel = channel := rfl
 
 lemma Component.stagedRequirementsOn_of_stagedRequirements
@@ -366,10 +366,10 @@ theorem tableSoundness_of_stagedRequirements {ens : Ensemble F PublicIO} {balanc
     (staged : ∀ component ∈ ens.tables, component.StagedRequirements finished) :
     ens.TableSoundness balance :=
   tableSoundness_of_stagedRequirementsOn (finished.map Stage.ofChannel) verifier_empty
-    (by simpa using fun _ h => finished_subset h)
+    (by simpa [circuit_norm] using fun _ h => finished_subset h)
     (fun table h c h_c _ _ _ => ⟨Stage.ofChannel c,
       List.mem_map_of_mem (subset_finished table.component h h_c), rfl, rfl⟩)
-    (by simpa using consistent)
+    (by simpa [circuit_norm] using consistent)
     (fun component h => Component.stagedRequirementsOn_of_stagedRequirements (staged component h))
 
 end Ensemble

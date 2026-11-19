@@ -63,7 +63,7 @@ def rangeProvider : GeneralFormalCircuit (F p) RangeInput unit where
 
   soundness := by
     circuit_proof_start [counts]
-    simp_all [countUpTo_of_mul_eq_zero]
+    simp_all [countUpTo_of_sub_one_mul_sub_two_eq_zero]
   completeness := by
     circuit_proof_start [counts]
     rcases h_assumptions with h | h <;> simp [h]
@@ -89,7 +89,8 @@ def stagedConsumer : GeneralFormalCircuit (F p) ConsumerInput unit where
     circuit_proof_start [squares, counts]
     obtain ⟨h_count, h_square⟩ := h_assumptions
     refine ⟨?_, fun _ => h_square⟩
-    rcases h_count with h | h <;> simp [h] <;> exact countUpTo_of_mul_eq_zero (by ring)
+    rcases h_count with h | h <;> simp [h] <;>
+      exact countUpTo_of_sub_one_mul_sub_two_eq_zero (by ring)
 
 /-- One row per pulled count that nothing has pushed. The padding row answers nothing — multiplicity
 `0`, no push — and `c := 1` is there to satisfy the chip's own constraint, which `0` would not. -/
