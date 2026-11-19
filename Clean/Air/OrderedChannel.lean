@@ -210,7 +210,7 @@ def PartialBalancedChannel (N : ℕ) (tables : Tables F) (channel : RawChannel F
     (channel ∉ tables.tables.flatMap (·.channelsWithGuarantees) ∨ ∀ i ∈ extraInteractions, i.Requirements tables.data)
 
 /-- Partial balance is trivially weaker than balance -/
-lemma partialBalancedChannel_of_balancedInteractions {tables : Tables F} {channel : RawChannel F} :
+lemma partialBalancedChannel_of_balancedUpTo {tables : Tables F} {channel : RawChannel F} :
     BalancedUpTo N (tables.interactionsWith channel) → PartialBalancedChannel N tables channel := by
   intro balanced
   use []

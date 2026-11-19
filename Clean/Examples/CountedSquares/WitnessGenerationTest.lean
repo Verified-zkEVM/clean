@@ -13,7 +13,7 @@ namespace CountedSquares.WitnessGenerationTest
 
 open Air.Flat Air.Flat.WitnessGeneration
 
-/-- Small enough to run in, and large enough for the bound: the runs below make `6` and `8`
+/-- Small enough to run in, and large enough for the bound: the runs below make `6`, `7` and `8`
 interactions on the channel, and `Balance.logUpUpTo 2` asks for `8 * 2 < p1009`. -/
 abbrev p : ℕ := p1009
 
