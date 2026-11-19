@@ -1,6 +1,7 @@
 module
 
 public import Clean.Examples.CountedSquares.Ensemble
+public import Clean.Air.OrderedChannel
 public import Clean.Air.StagedChannels
 
 @[expose] public section
@@ -112,6 +113,12 @@ abbrev stagedConsumerComponent : Component (F p) where
     trigger := .push
     input | (x, y) => pure { x, y, count := .witness 2 }
   }
+
+/-- The claim the module docstring makes, machine-checked: the hierarchy of `OrderedChannel.lean`
+cannot take this consumer, which both pulls from `squares` and owes requirements on it. -/
+example : ¬ OrderedChannelRefl (squares.counted countBound : RawChannel (F p))
+    (stagedConsumerComponent (p := p)) := by
+  simp [circuit_norm, stagedConsumer]
 
 /-- The three chips and the two channels they share. Assembled directly: the staged argument is
 stated for a whole ensemble, so there is no `SoundEnsemble` to build up. -/
