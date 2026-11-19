@@ -49,6 +49,7 @@ public import Clean.Gadgets.BLAKE3.Round
 public import Clean.Gadgets.BLAKE3.FinalizeChunk
 public import Clean.Examples.FibonacciVm.Ensemble
 public import Clean.Examples.CountedSquares.Ensemble
+public import Clean.Examples.RangeCheckedCount
 public import Clean.Examples.StagedSquares.Ensemble
 public import Clean.Examples.StagedSquares.Verifier
 public import Clean.Examples.SameBus.Ensemble
