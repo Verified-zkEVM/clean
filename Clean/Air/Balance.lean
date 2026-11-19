@@ -196,7 +196,8 @@ lemma balancedUpTo_one_iff {interactions : List (Interaction F)} :
   ⟨ fun balanced => balanced.toBalancedInteractions,
     fun balanced => ⟨ balanced, balanced.matchedUpTo_one ⟩ ⟩
 
-/-- Balance is message by message, so it restricts to any class of messages. -/
+/-- Filtering by a class of messages keeps the active count of a message in the class and zeroes
+it outside. -/
 lemma activeCount_filter_msg (interactions : List (Interaction F)) (cls : Array F → Bool)
     (direction : Channel.Direction) (msg : Array F) :
     activeCount (interactions.filter fun i => cls i.msg) direction msg =

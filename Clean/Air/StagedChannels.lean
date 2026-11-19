@@ -19,6 +19,11 @@ requirements on a channel may use its guarantees on the channels finished before
 (`Component.StagedRequirements`). Then, by induction from the oldest channel, every channel's
 requirements hold, so by consistency every channel's guarantees hold, and every table's spec follows.
 
+Not covered: both soundness theorems assume `ens.verifier = .empty F PublicIO`, unlike
+`Ensemble.tableSoundness_of_soundChannels`, and there is no staged counterpart of
+`Ensemble.addVm_soundVmChannel_of_soundChannels` for adding a VM. `Clean/Air/README.md` says what
+that hypothesis stands for and what `OrderedChannel.lean` uses in its place.
+
 This was written for lambda_vm, a RISC-V zkVM built on Clean, whose lookup channels admit a
 finishing order with one cycle, an arithmetic bus that one table both reads and writes. The cycle
 is what the message classes break. `Clean/Examples/StagedSquares` and `Clean/Examples/SameBus` are
@@ -105,7 +110,7 @@ still have no valid order.
 -/
 
 /-- The messages of one class on one channel. -/
-structure Stage (F : Type) [FiniteField F] where
+structure Stage (F : Type) where
   channel : RawChannel F
   cls : Array F → Bool := fun _ => true
 
@@ -123,6 +128,7 @@ def Table.RequirementsAfterOn (table : Table F) (stage : Stage F) (earlier : Lis
   table.Assumptions → table.Constraints → (∀ s ∈ earlier, table.GuaranteesOn s) →
     table.RequirementsOn stage
 
+/-- `Table.RequirementsAfterOn` for every table of the component. -/
 def Component.RequirementsAfterOn (component : Component F) (stage : Stage F)
     (earlier : List (Stage F)) : Prop :=
   ∀ table : Table F, table.component = component → table.RequirementsAfterOn stage earlier
@@ -240,6 +246,7 @@ lemma Component.requirementsAfterOn_of_requirementsAfter {component : Component 
 /-- The stage that is a whole channel. -/
 def Stage.ofChannel (channel : RawChannel F) : Stage F := { channel }
 
+omit [FiniteField F] in
 @[simp] lemma Stage.channel_ofChannel (channel : RawChannel F) :
     (ofChannel channel).channel = channel := rfl
 
@@ -261,7 +268,7 @@ theorem guaranteesOn_of_stagedRequirementsOn {ens : Ensemble F PublicIO} {N : �
     (verifier_empty : ens.verifier = .empty F PublicIO)
     (witness : EnsembleWitness ens) (assumptions : witness.Assumptions)
     (constraints : witness.Constraints)
-    (balanced : ∀ channel ∈ ens.channels, BalancedUpTo N (witness.interactionsWith channel)) :
+    (balanced : witness.BalancedChannels N) :
     ∀ {finished : List (Stage F)}, (∀ s ∈ finished, s.channel ∈ ens.channels) →
     (∀ s ∈ finished, s.channel.ConsistentUpTo N) →
     (∀ component ∈ ens.tables, component.StagedRequirementsOn finished) →
