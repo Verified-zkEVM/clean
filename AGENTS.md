@@ -260,7 +260,7 @@ Practical recommendations:
   - start with `simp_all only [circuit_norm]` (or `simp_all [circuit_norm]` when closing a goal),
   - avoid brittle `exact h.1.2` style proofs. `simp_all` can do the same work of using the right assumptions, in a more robust way.
   - do not use `simpa`, which is a closing tactic and will often fail. use `simp` and `simp_all`, which can advance the goal state without failing.
-- Definitional equality is a **superpower** to perform otherwise tricky unifications. The following tactics force Lean to look past definitions and elaborate as far as possible:
+- Definitional equality is a **dangerous superpower**: it performs otherwise tricky unifications, but use it rarely. Needing it often points to a missing simple lemma, and unfolding definitions can cause performance cliffs. The following tactics force Lean to look past definitions and elaborate as far as possible:
   - try `rfl` when the goal is an equality
   - try `convert <assumption>` when one of the assumptions has the same shape as the conclusion but differs in 1-2 places
   - try `congr` when proving two sides of an equality that already have the same shape but differ in 1-2 places
