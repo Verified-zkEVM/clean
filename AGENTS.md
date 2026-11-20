@@ -260,7 +260,7 @@ Practical recommendations:
   - start with `simp_all only [circuit_norm]` (or `simp_all [circuit_norm]` when closing a goal),
   - avoid brittle `exact h.1.2` style proofs. `simp_all` can do the same work of using the right assumptions, in a more robust way.
   - do not use `simpa`, which is a closing tactic and will often fail. use `simp` and `simp_all`, which can advance the goal state without failing.
-- Definitional equality is a **superpower** to perform otherwise tricky unifications. The following tactics force Lean to look past definitions and elaborate as far as possible:
+- Definitional equality is a **dangerous superpower**: it performs otherwise tricky unifications, but use it rarely. Needing it often points to a missing simple lemma, and unfolding definitions can cause performance cliffs. The following tactics force Lean to look past definitions and elaborate as far as possible:
   - try `rfl` when the goal is an equality
   - try `convert <assumption>` when one of the assumptions has the same shape as the conclusion but differs in 1-2 places
   - try `congr` when proving two sides of an equality that already have the same shape but differ in 1-2 places
@@ -269,6 +269,7 @@ Practical recommendations:
 - If stuck, use `lean_multi_attempt` to quickly test candidate tactics.
 - If proof steps get complicated, move them into a local helper lemma. Make the lemma as general as possible and leave out hypotheses of the current proof likely not needed for that lemma. That reduces noise in the lemma's goal state and makes proving it easier.
 - At the very end of a proving task, run `lean_diagnostic_messages` and fix all linter warnings you can easily address. For example, fix "unnecessary simpa" warnings by replacing simpa with simp.
+- CI runs `python3 scripts/check-consecutive-empty-lines.py`, then builds the default target with `lake build --wfail`, so any warning fails CI. Run both before pushing Lean changes.
 - In general, avoid non-lean-mcp commands like `lake build <file>` (full dependency rebuild) and `lake env lean <file>` (targeted check without rebuild). Their output is way too large. Use these commands only as a fallback to get maximum information when you feel lost.
 
 Check `doc/proving-guide.md` for more tips especially related to user-facing circuit formalization proofs.
@@ -290,9 +291,9 @@ example : ElaboratedCircuit F field (fields 8) main := by
 
 To profile tactic scripts, per-command `#count_heartbeats in` should give fine-grained feedback.
 
-For profiling meta tactics in this codebase, temporary `IO.getNumHeartbeats` logging inside the
-tactic has been checked against `#count_heartbeats` on small declarations and matched the same
-scale closely enough to identify bottlenecks.
+For profiling meta tactics in this codebase, temporary `IO.getNumHeartbeats` logging inside the tactic works. That counter is 1000 times finer than `maxHeartbeats`, `#count_heartbeats` and `scripts/bench`, so divide its deltas by 1000 before comparing.
+
+To measure a whole module, run `scripts/bench/heartbeats <Module.Name>` (a module name, not a path); to compare a module against `main` or another revision, run `scripts/bench/heartbeat-diff <Module.Name> [rev]`. See `scripts/bench/README.md`.
 
 To inspect what `simp` is doing, enable tracing around the failing proof:
 
