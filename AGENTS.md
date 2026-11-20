@@ -269,7 +269,7 @@ Practical recommendations:
 - If stuck, use `lean_multi_attempt` to quickly test candidate tactics.
 - If proof steps get complicated, move them into a local helper lemma. Make the lemma as general as possible and leave out hypotheses of the current proof likely not needed for that lemma. That reduces noise in the lemma's goal state and makes proving it easier.
 - At the very end of a proving task, run `lean_diagnostic_messages` and fix all linter warnings you can easily address. For example, fix "unnecessary simpa" warnings by replacing simpa with simp.
-- CI builds the default target with `lake build --wfail`, so any warning fails CI. Run `lake build --wfail` before pushing Lean changes.
+- CI runs `python3 scripts/check-consecutive-empty-lines.py`, then builds the default target with `lake build --wfail`, so any warning fails CI. Run both before pushing Lean changes.
 - In general, avoid non-lean-mcp commands like `lake build <file>` (full dependency rebuild) and `lake env lean <file>` (targeted check without rebuild). Their output is way too large. Use these commands only as a fallback to get maximum information when you feel lost.
 
 Check `doc/proving-guide.md` for more tips especially related to user-facing circuit formalization proofs.
