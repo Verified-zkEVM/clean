@@ -226,7 +226,9 @@ theorem chip_requirementsAfterOn_fourth :
 
 theorem tableSoundness :
     (ensemble (p := p)).TableSoundness Balance.logUp := by
-  apply Ensemble.tableSoundness_of_stagedRequirementsOn stages rfl
+  apply Ensemble.tableSoundness_of_stagedRequirementsOn stages
+    (verifier_covered := by simp [ensemble, circuit_norm, Verifier.Program.empty])
+    (verifier_staged := Ensemble.verifierStagedRequirementsOn_of_verifier_empty rfl _)
   · intro s hs
     simp only [stages, List.mem_cons, List.not_mem_nil, or_false] at hs
     rcases hs with rfl | rfl <;> simp [ensemble]

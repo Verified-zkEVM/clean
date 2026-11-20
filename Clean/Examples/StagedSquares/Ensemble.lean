@@ -154,34 +154,51 @@ theorem consumer_requirementsAfter {earlier : List (RawChannel (F p))}
     counts, squares] at g ⊢
   exact .inr g.1
 
+/-- Every channel a table has guarantees on is finished. -/
+theorem guarantees_subset_finished : ∀ component ∈ (ensemble (p := p)).tables,
+    component.circuit.channelsWithGuarantees ⊆ finished := by
+  intro component h
+  simp only [ensemble, List.mem_cons, List.not_mem_nil, or_false] at h
+  rcases h with rfl | rfl | rfl <;>
+    simp [circuit_norm, finished, rangeProvider, provider, stagedConsumer, counts, squares]
+
+/-- Each component's requirements on `squares` follow from its guarantees on `counts`, and its
+requirements on `counts` hold unconditionally. -/
+theorem stagedRequirements :
+    ∀ component ∈ (ensemble (p := p)).tables, component.StagedRequirements finished := by
+  intro component h
+  simp only [ensemble, List.mem_cons, List.not_mem_nil, or_false] at h
+  rcases h with rfl | rfl | rfl
+  -- the two providers pull nothing, so they receive no guarantee and owe unconditionally
+  · exact Component.stagedRequirements_of_forall fun _ _ _ =>
+      Component.requirementsAfter_of_guarantees_subset (by simp [circuit_norm, rangeProvider])
+  · exact Component.stagedRequirements_of_forall fun _ _ _ =>
+      Component.requirementsAfter_of_guarantees_subset (by simp [circuit_norm, provider])
+  -- the consumer: `squares` after `counts`, and nothing owed on `counts` itself
+  · refine ⟨consumer_requirementsAfter (by simp), ?_, trivial⟩
+    apply Component.requirementsAfter_of_not_mem
+    simp only [circuit_norm, stagedConsumer, List.mem_cons, List.not_mem_nil, or_false]
+    intro h
+    have := congrArg RawChannel.name h
+    simp [counts, squares, Channel.toRaw, Channel.counted] at this
+
+/-- Every finished channel is consistent under `Balance.logUpUpTo countBound`. -/
+theorem finished_consistent :
+    ∀ c ∈ (finished : List (RawChannel (F p))),
+      c.ConsistentUpTo (Balance.logUpUpTo (F := F p) countBound).pullBound := by
+  intro c hc
+  simp only [finished, List.mem_cons, List.not_mem_nil, or_false] at hc
+  rcases hc with rfl | rfl <;> infer_instance
+
 /-- Every table of the ensemble is sound, from the finishing order `counts`, then `squares`. The
 consumer constrains nothing about its count; what makes its pull legal is a guarantee it was
 handed on another channel, and the order is what says that guarantee was already earned. -/
 theorem tableSoundness :
-    (ensemble (p := p)).TableSoundness (Balance.logUpUpTo countBound) := by
-  apply Ensemble.tableSoundness_of_stagedRequirements finished rfl (List.Subset.refl _)
-  · intro component h
-    simp only [ensemble, List.mem_cons, List.not_mem_nil, or_false] at h
-    rcases h with rfl | rfl | rfl <;>
-      simp [circuit_norm, finished, rangeProvider, provider, stagedConsumer, counts, squares]
-  · intro c hc
-    show c.ConsistentUpTo (Balance.logUpUpTo countBound).pullBound
-    simp only [finished, List.mem_cons, List.not_mem_nil, or_false] at hc
-    rcases hc with rfl | rfl <;> infer_instance
-  · intro component h
-    simp only [ensemble, List.mem_cons, List.not_mem_nil, or_false] at h
-    rcases h with rfl | rfl | rfl
-    -- the two providers pull nothing, so they receive no guarantee and owe unconditionally
-    · exact Component.stagedRequirements_of_forall fun _ _ _ =>
-        Component.requirementsAfter_of_guarantees_subset (by simp [circuit_norm, rangeProvider])
-    · exact Component.stagedRequirements_of_forall fun _ _ _ =>
-        Component.requirementsAfter_of_guarantees_subset (by simp [circuit_norm, provider])
-    -- the consumer: `squares` after `counts`, and nothing owed on `counts` itself
-    · refine ⟨consumer_requirementsAfter (by simp), ?_, trivial⟩
-      apply Component.requirementsAfter_of_not_mem
-      simp only [circuit_norm, stagedConsumer, List.mem_cons, List.not_mem_nil, or_false]
-      intro h
-      have := congrArg RawChannel.name h
-      simp [counts, squares, Channel.toRaw, Channel.counted] at this
+    (ensemble (p := p)).TableSoundness (Balance.logUpUpTo countBound) :=
+  Ensemble.tableSoundness_of_stagedRequirements finished (List.Subset.refl _)
+    guarantees_subset_finished
+    (by simp [ensemble, circuit_norm, Verifier.Program.empty])
+    finished_consistent stagedRequirements
+    (Ensemble.verifierStagedRequirementsOn_of_verifier_empty rfl _)
 
 end StagedSquares

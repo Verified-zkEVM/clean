@@ -50,6 +50,7 @@ public import Clean.Gadgets.BLAKE3.FinalizeChunk
 public import Clean.Examples.FibonacciVm.Ensemble
 public import Clean.Examples.CountedSquares.Ensemble
 public import Clean.Examples.StagedSquares.Ensemble
+public import Clean.Examples.StagedSquares.Verifier
 public import Clean.Examples.SameBus.Ensemble
 public import Clean.Examples.OpcodeVm.Ensemble
 public import Clean.Examples.BinaryFibonacci.Ensemble
