@@ -48,7 +48,7 @@ private lemma denseRounds_induction {t : ℕ} (params : Params t)
 namespace ApplyFullRounds
 
 def main {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
-    (nRounds offset : ℕ) (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial)
+    (nRounds offset : ℕ) [NeZero nRounds] (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial)
     (input : Vector (Expression F) t) : Circuit F (Vector (Expression F) t) :=
   Circuit.foldlRange nRounds input
     (fun state round =>
@@ -59,6 +59,9 @@ def main {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
           offset + round.val * t + t = offset + (round.val + 1) * t := by ring
           _ ≤ offset + nRounds * t := Nat.add_le_add_left hMul offset
           _ ≤ 8 * t + params.nPartial := hOffset) state)
+    (by
+      intro pair n
+      simp only [circuit_norm, FullRound.circuit])
     ⟨4 * t, by
       intro pair n
       simp only [circuit_norm, FullRound.circuit]
@@ -69,46 +72,40 @@ def Spec {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
   output = Specs.PoseidonOptimized.denseRounds params matrix nRounds offset input
 
 instance elaborated {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
-    (nRounds offset : ℕ) (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial) :
+    (nRounds offset : ℕ) [NeZero nRounds] (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial) :
     ElaboratedCircuit F (fields t) (fields t)
       (main params matrix nRounds offset hOffset) := by
   elaborate_circuit
 
 theorem soundness {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
-    (nRounds offset : ℕ) (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial) :
+    (nRounds offset : ℕ) [NeZero nRounds] (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial) :
     Soundness F (Input := fields t) (Output := fields t)
       (main params matrix nRounds offset hOffset) (fun _ => True)
       (Spec params matrix nRounds offset) := by
   circuit_proof_start [FullRound.circuit, FullRound.Spec]
+  obtain ⟨h0, hSucc⟩ := h_holds
   let state := envState env input i₀ (t * 3 + t) (t * 3)
   have hRound : ∀ (k : ℕ), k < nRounds →
       state (k + 1) = Specs.PoseidonOptimized.denseRound params matrix
         (offset + k * t) (state k) := by
     intro k hk
-    have hk' := h_holds ⟨k, hk⟩
     rcases k with _ | j
-    · simpa [state, envState, Circuit.FoldlM.foldlAcc, circuit_norm,
-        FullRound.circuit, h_input] using hk'
+    · simpa [state, envState, circuit_norm] using h0
     · simp only [state, envState, Nat.succ_ne_zero, ite_false, Nat.succ_sub_one]
-      simp [Circuit.FoldlM.foldlAcc, circuit_norm, Fin.foldl_const] at hk'
-      convert hk' using 1
+      convert hSucc j hk using 1
       all_goals simp [circuit_norm]
   have hFinal := denseRounds_induction params matrix nRounds offset state hRound
-  rcases nRounds with _ | n
-  · simp only [Fin.foldl_zero]
-    rw [h_input]
-    simpa [state, envState] using hFinal
-  · simp [state, envState, circuit_norm, Fin.foldl_const] at hFinal ⊢
-    convert hFinal using 1
+  simp [state, envState, circuit_norm, NeZero.ne nRounds] at hFinal ⊢
+  convert hFinal using 1
 
 theorem completeness {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
-    (nRounds offset : ℕ) (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial) :
+    (nRounds offset : ℕ) [NeZero nRounds] (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial) :
     Completeness F (Input := fields t) (Output := fields t)
       (main params matrix nRounds offset hOffset) (fun _ => True) := by
   circuit_proof_start [FullRound.circuit]
 
 def circuit {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
-    (nRounds offset : ℕ) (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial) :
+    (nRounds offset : ℕ) [NeZero nRounds] (hOffset : offset + nRounds * t ≤ 8 * t + params.nPartial) :
     FormalCircuit F (fields t) (fields t) where
   main := main params matrix nRounds offset hOffset
   elaborated := elaborated params matrix nRounds offset hOffset
@@ -116,28 +113,21 @@ def circuit {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
   soundness := soundness params matrix nRounds offset hOffset
   completeness := completeness params matrix nRounds offset hOffset
   computableWitnesses := by
-    run_tac ComputableWitnesses.run #[← `(FullRound.circuit), ← `(foldl_const_eq_ite)]
-    all_goals split_ifs <;> simp_all [circuit_norm, Nat.sub_mul]
-    all_goals
-      first
-      | apply FormalCircuit.toSubcircuit_computableWitnesses
-        · simp_all
-        · intro h_agrees
-          first
-          | exact h
-          | simp only [circuit_norm]
-            ext j hj
-            simp only [Vector.getElem_mapRange]
-            apply h_agrees.get_eq
-            have := params.two_le_width
-            have := Nat.mul_le_mul_right (t * 3 + t) (show 1 ≤ i.val by omega)
-            simp only [one_mul] at this
-            omega
-      | intro j hj
+    run_tac ComputableWitnesses.run #[← `(FullRound.circuit)]
+    · apply FormalCircuit.toSubcircuit_computableWitnesses
+      · simp
+      · intro h_agrees
+        simp only [circuit_norm]
+        ext j hj
+        simp only [Vector.getElem_mapRange]
         apply h_agrees.get_eq
-        have := Nat.mul_le_mul_right (t * 3 + t) (show 1 ≤ nRounds by omega)
-        simp only [one_mul] at this
-        split_ifs at * <;> omega
+        have : (i + 1) * (t * 3 + t) = i * (t * 3 + t) + (t * 3 + t) := by ring
+        omega
+    · intro j hj
+      apply h_agrees.get_eq
+      have := Nat.mul_le_mul_right (t * 3 + t) (NeZero.one_le (n:=nRounds))
+      simp only [Nat.sub_mul, one_mul] at this ⊢
+      omega
 
 end ApplyFullRounds
 
@@ -167,7 +157,7 @@ def main {t : ℕ} (params : Params t) (nRounds cOffset sRound : ℕ)
     (hRounds : sRound + nRounds ≤ params.nPartial)
     (hOffset : cOffset + nRounds ≤ 8 * t + params.nPartial)
     (input : Vector (Expression F) t) : Circuit F (Vector (Expression F) t) :=
-  Circuit.foldlRange nRounds input
+  Circuit.foldlRangeDynamic nRounds input
     (fun state round =>
       PartialRound.circuit params (cOffset + round.val) (by
         have := round.isLt

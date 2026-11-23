@@ -21,9 +21,9 @@ Returns 1 if all elementts are 0, otherwise returns 0.
 -/
 def main (input : Var M F) : Circuit F (Var field F) := do
   let elemVars := toElements (M:=M) input
-  -- Use foldlRange to multiply all IsZero results together
+  -- Use foldlRangeDynamic to multiply all IsZero results together
   -- Start with 1, and for each element, multiply by its IsZero result
-  let result ← Circuit.foldlRange (size M) (1 : Expression F) fun acc i => do
+  let result ← Circuit.foldlRangeDynamic (size M) (1 : Expression F) fun acc i => do
     let isZeroElem ← IsZeroField.circuit elemVars[i]
     return acc * isZeroElem
   return result

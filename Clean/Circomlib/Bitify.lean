@@ -40,7 +40,7 @@ template Num2Bits(n) {
 def main (n : ℕ) (inp : Expression (F p)) := do
   let out ← witnessVector n (inp.bits n)
 
-  let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
+  let (lc1, _) ← Circuit.foldlRangeDynamic n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0
     let lc1 := lc1 + out[i] * e2
     -- `e2 * 2` (not `e2 + e2`): the compiler's expression flattening is a

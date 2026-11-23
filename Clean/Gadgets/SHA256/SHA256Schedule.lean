@@ -54,7 +54,7 @@ def messageSchedule (block : SHA256Block (Expression (F p))) :
   let init : SHA256Schedule (Expression (F p)) := block.append (Vector.replicate 48 zero32)
   -- Expand indices 16..63 one at a time.
   -- Pass ConstantLength explicitly because the default tactic times out on this complex body.
-  Circuit.foldlRange 48 init (fun w i => scheduleStep w i) constantLength
+  Circuit.foldlRangeDynamic 48 init (fun w i => scheduleStep w i) constantLength
 
 namespace MessageSchedule
 
@@ -70,7 +70,7 @@ def Spec (block : SHA256Block (F p)) (sched : SHA256Schedule (F p)) : Prop :=
   ∀ i : Fin 64, valueBits sched[i] = expected[i] ∧ Normalized sched[i]
 
 /-- Variable-level schedule after `k` expansion steps. Used as the explicit description
-    of the foldlRange accumulator, mirroring `SHA256Rounds.stateVar`. -/
+    of the foldlRangeDynamic accumulator, mirroring `SHA256Rounds.stateVar`. -/
 def varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) :
     ℕ → SHA256Schedule (Expression (F p))
   | 0 =>

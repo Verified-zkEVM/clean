@@ -172,7 +172,7 @@ def main (n : ℕ) (input : Expression (F p)) := do
   let out ← witnessVector n (diff.bits n)
 
   -- Constrain each bit to be 0 or 1 and compute linear combination
-  let lc1 ← Circuit.foldlRange n 0 fun lc1 i => do
+  let lc1 ← Circuit.foldlRangeDynamic n 0 fun lc1 i => do
     assertBool out[i]
     return lc1 + out[i] * (2^i.val : F p)
 
