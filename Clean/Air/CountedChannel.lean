@@ -38,7 +38,8 @@ different `RawChannel`s under one name. That is deliberate: witness generation t
 interactions by channel name, and `DemandMode` and `PreallocatedMode` take the plain `Channel`, so
 a counted channel under a new name would silently stop generating rows. An `Ensemble` asks the
 names of its channels to be distinct, so use one raw-channel value per name: a second entry under
-a name already taken fails `unique_channel_names`. -/
+a name already taken fails `unique_channel_names`, which is what the `fresh` argument of
+`SoundEnsemble.addChannel` discharges. -/
 def counted (N : ℕ) (channel : Channel F Message) : RawChannel F where
   name := channel.name
   arity := size Message

@@ -48,8 +48,9 @@ This is how a circuit discharges the requirement of a counted pull. The pull owe
 `mult ≠ 0` and `mult.val ≤ N`. Stating it over `ZMod p` rather than a general field is what makes
 `mult.val` available.
 
-No example in this repo range-checks a multiplicity, because the bound there is `2` and a
-constraint is cheaper. The chips that do are in lambda_vm, where the bound is a byte. -/
+No example in this repo takes that route, because the bound there is `2`, which a constraint pins
+more cheaply than a lookup does. The route pays off once the bound is a byte and the range check is
+a table the circuit pulls anyway, which is how the arithmetic chips of lambda_vm discharge it. -/
 lemma countUpTo_of_ne_zero_of_val_le {p : ℕ} [Fact p.Prime] {N : ℕ} {mult : ZMod p} (h0 : mult ≠ 0)
     (hN : mult.val ≤ N) : CountUpTo N mult :=
   ⟨ mult.val, Nat.one_le_iff_ne_zero.mpr ((ZMod.val_ne_zero mult).mpr h0), hN,
@@ -446,6 +447,10 @@ own: `Balance.logUp` is a plain `def`, so the projection is not reducible. -/
 LogUp with counted pulls: field sums, sound for interaction counts whose product with `N` is below
 the characteristic, so that pulls of multiplicity up to `N` are matched by a push.
 
+`fits` sees only a count, and `Ensemble.interactionsFit` applies it to every channel, counted or
+not: a channel whose pulls all have multiplicity `1` is also asked for `count * N < ringChar F`, not
+just the `count < ringChar F` of `Balance.logUp`.
+
 Reducible so that instance search can project `pullBound` out of it.
 `SoundEnsemble.markFinished` takes `[channel.ConsistentUpTo balance.pullBound]` as an instance
 argument, and the counted channel's instance ties that bound to the channel's own `N`, so synthesis
@@ -581,6 +586,9 @@ instance (channel : RawChannel F) [channel.Normal] : channel.Consistent :=
 Consistency on balanced lists whose pulls of multiplicity up to `N` are matched by a push
 (`MatchedUpTo N`). Channels with counted pulls are consistent in this sense, under a balance check
 whose `pullBound` is at least `N`.
+
+This is the form `SoundEnsemble.markFinished` asks of a channel, at its balance check's `pullBound`,
+which is where the bound a channel has to be consistent up to comes from.
 -/
 class ConsistentUpTo (N : ℕ) (channel : RawChannel F) : Prop where
   consistent : ∀ (interactions : List (Interaction F)) (data : ProverData F),
