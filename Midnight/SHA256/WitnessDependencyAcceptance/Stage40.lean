@@ -1,0 +1,16 @@
+import Midnight.Math.Witness.DependencySnapshotSyntax
+import Midnight.SHA256.WitnessDependencyAcceptanceData
+import Midnight.SHA256.WitnessDependencyAcceptance.Stage39
+
+namespace Midnight.SHA256.WitnessDependencyAcceptance
+open Halo2 Midnight.Math.Witness Semantics.WitnessCheckpoints
+attribute [local instance] lexOrd
+set_option Elab.async false
+set_option maxRecDepth 10000
+
+def expand36Physical : List (DependencyPlan.PlanAssignment F) := RegionPlan.lower place expand36Plan 133
+theorem expand36Count : expand36Plan.length = 3 := by decide +kernel
+dependency_snapshot_step expand36 tree5187 from expand35After
+theorem expand36Ordered : DependencyPlan.ordered place expand35After expand36Physical = true := by decide +kernel
+
+end Midnight.SHA256.WitnessDependencyAcceptance

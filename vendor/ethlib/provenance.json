@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/ethereum/EthLib",
+  "revision": "3bd2b3c6ce78ecec9cef1471e2b957e55269729e",
+  "roots": [
+    "EthLib.Cryptography.Hash.Blake2b"
+  ],
+  "files": {
+    "EthLib/Cryptography/Hash/Blake2b.lean": "1316f46997f2239ae3559030cc5f5646a29029d01d4d0f94ccffe0b4a0a467c2",
+    "LICENSE": "36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673"
+  }
+}

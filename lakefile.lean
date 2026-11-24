@@ -19,6 +19,21 @@ lean_lib Orchard where
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
+-- The proof roots, plus every module under Midnight.
+lean_lib Midnight where
+  roots := #[`Midnight.SHA256.Semantics.Formal, `Midnight.SHA256.WitnessComplete, `Midnight.SHA256.Admission.Certificate]
+  globs := #[.submodules `Midnight, .one `Midnight]
+
+-- Lean half of the VK export tool (scripts/vk-export); not a default target.
+lean_lib MidnightExport where
+  globs := #[.submodules `MidnightExport]
+
+-- ethereum/EthLib at 3bd2b3c, BLAKE2b compression only, vendored with per-file hashes
+-- (scripts/ethlib-vendor/vendor.py --check); Midnight's key hash runs on its compression function.
+lean_lib EthLib where
+  srcDir := "vendor/ethlib"
+  roots := #[`EthLib.Cryptography.Hash.Blake2b]
+
 -- Public Lean 4.35 compatibility port of daira/CompElliptic.
 require CompElliptic from git
   "https://github.com/zksecurity/compelliptic-lean4-35.git" @ "f26a235f2f647b10fe63bc4ec4c7ee394b3c8f43"
