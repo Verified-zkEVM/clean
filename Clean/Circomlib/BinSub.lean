@@ -255,7 +255,7 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
   let aux ← witness (lin.bit n)
 
   -- Calculate output linear sum and constrain bits
-  let (lout, _) ← Circuit.foldlRange n ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) i => do
+  let (lout, _) ← Circuit.foldlRangeDynamic n ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) i => do
     -- Ensure out[i] is binary
     out[i] * (out[i] - 1) === 0
     let lout := lout + out[i] * e2

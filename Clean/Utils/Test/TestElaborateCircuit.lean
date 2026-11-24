@@ -120,15 +120,15 @@ metadata projections (regression: the parametric path used to store the raw
 `ExplicitCircuits.localLength (main n) ⟨inferred instance⟩` projection, a
 ~600KB term that blows up all downstream proofs; cf. Orchard `Mul/Incomplete`). -/
 
-def mainParam (n : ℕ) (input : Var field (F p)) : Circuit (F p) (Expression (F p)) :=
+def mainParam (n : ℕ) [NeZero n] (input : Var field (F p)) : Circuit (F p) (Expression (F p)) :=
   .foldlRange n input fun acc _ => loopBody acc acc
 
-instance elaboratedParam (n : ℕ) :
+instance elaboratedParam (n : ℕ) [NeZero n] :
     ElaboratedCircuit (F p) field field (mainParam n) := by
   elaborate_circuit
 
-assert_reduced fun (n : ℕ) => (elaboratedParam (p := pBabybear) n).localLength
-assert_reduced fun (n : ℕ) => (elaboratedParam (p := pBabybear) n).output
+assert_reduced fun (n : ℕ) [NeZero n] => (elaboratedParam (p := pBabybear) n).localLength
+assert_reduced fun (n : ℕ) [NeZero n] => (elaboratedParam (p := pBabybear) n).output
 
 /-! ### 5. Parametric output type: the shape that used to produce an `Eq.mpr`-wrapped
 instance from `infer_explicit_circuits`' goal-simp, blocking all projection reduction

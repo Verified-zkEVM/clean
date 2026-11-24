@@ -39,7 +39,7 @@ structure Inputs (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) :=
-  Circuit.foldlRange 64 input.state (fun s i =>
+  Circuit.foldlRangeDynamic 64 input.state (fun s i =>
     SHA256Round.circuit ⟨s, constWord32 Specs.SHA256.K[i].toNat, input.schedule[i]⟩)
 
 /-- The variable-level state after `k` rounds. Used as the explicit `output` for the
