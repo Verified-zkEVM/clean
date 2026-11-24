@@ -8,7 +8,8 @@ under `circuit_norm` in every way we need them to.
 `foldl` and `foldlRange` require `ConstantOutput`: the body's output must not depend on the loop state.
 `foldlDynamic` and `foldlRangeDynamic` drop that requirement, at the price of weaker simplification:
 their output stays a `Fin.foldl`, and the loop state in each step is a `FoldlM.foldlAcc` instead of
-the previous step's output.
+the previous step's output. Given a closed form of the loop state, `Fin.foldl_eq_of_succ` and
+`FoldlM.foldlAcc_finRange_eq_of_output_eq` rewrite both to it.
 -/
 module
 
@@ -370,6 +371,16 @@ theorem forAllNoOffset_iff_finRange {constant : ConstantLength (prod circuit)} :
       ((circuit (foldlAcc n (Vector.finRange m) circuit init i) i).operations
         (n + i * (circuit init i).localLength)).forAllNoOffset prop' := by
   simp only [forAllNoOffset_iff, Vector.getElem_finRange]
+
+/-- Closed form of the loop state: if `acc` starts at `init` and follows the body's output
+step by step, then `acc i` is the loop state in step `i`. -/
+theorem foldlAcc_finRange_eq_of_output_eq {acc : ℕ → β} (h_init : acc 0 = init)
+  (h_output : ∀ i : Fin m,
+    (circuit (acc i) i).output (n + i * (circuit (acc i) i).localLength) = acc (i + 1))
+  (i : Fin m) :
+  foldlAcc n (Vector.finRange m) circuit init i = acc i := by
+  simp only [foldlAcc, Vector.getElem_finRange]
+  exact Fin.foldl_eq_of_succ h_init fun j => h_output ⟨j, j.isLt.trans i.isLt⟩
 
 end
 -- we can massively simplify the foldlM theory when assuming the body's output is independent of the input
