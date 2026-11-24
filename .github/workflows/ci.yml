@@ -11,6 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 340
     steps:
+      # Mathlib plus the Midnight build outputs exceed a hosted runner's free disk.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune -af >/dev/null || true
+          df -h /
       - uses: actions/checkout@v4
       - uses: leanprover/lean-action@v1
         with:
