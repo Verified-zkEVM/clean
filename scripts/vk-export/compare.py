@@ -9,7 +9,8 @@ constraint system text, or the domain part of the transcript input. status is FA
 agree and checks.json has all three certified checks ok, the exported planner and the contract
 placement (`same`, or `not compared` for another planner); then ALTERNATE (exit 3) for another planner than the
 candidate's, PASS-UNPINNED-ZK for a midnight-zk other than a clean 1e39c120 or a setup file off its pin (allowed by run.sh), else
-PASS. compare.py --failed STAGE OUT_DIR writes a FAIL report for a run that stopped at STAGE."""
+PASS. `vk` is the circuit's fingerprint, the transcript representative in hex: unlike the raw bytes' SHA-256 it
+covers the constraint system. compare.py --failed STAGE OUT_DIR writes a FAIL report for a run that stopped at STAGE."""
 import hashlib, json, sys
 from pathlib import Path
 
@@ -122,6 +123,7 @@ def main(out):
     report = {"schema": "midnight-vk-export-report-v2", "status": status, "key_status": key_status,
         "format": {"lean": lk.get("format"), "rust": rk.get("format")},
         "planner": planner, **extra, "k": export["k"], "equal": equal, "differences": diffs,
+        "vk": {"lean": f"0x{int(lk['transcript_repr']):064x}", "rust": f"0x{int(rk['transcript_repr']):064x}"},
         "lean_raw_sha256": digest(lk, "raw"), "rust_raw_sha256": digest(rk, "raw"),
         "lean_processed_sha256": digest(lk, "processed"), "rust_processed_sha256": digest(rk, "processed"),
         "transcript_repr": {"lean": lk["transcript_repr"], "rust": rk["transcript_repr"]},
@@ -130,7 +132,8 @@ def main(out):
         "copies": len(export["copies"]), "regions": len(export["region_starts"])},
         "ms": {**{f"lean_{k}": v for k, v in lean["ms"].items()}, **{f"rust_{k}": v for k, v in rust["ms"].items()}, **timings}}
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(f"{report['status']} k={export['k']} [{lk.get('format')}, {planner}, {build}] lean {report['lean_raw_sha256'][:16]} rust {report['rust_raw_sha256'][:16]}"
+    vk = report["vk"]["lean"] if report["vk"]["lean"] == report["vk"]["rust"] else f"lean {report['vk']['lean']} rust {report['vk']['rust']}"
+    print(f"{report['status']} k={export['k']} [{lk.get('format')}, {planner}, {build}] vk {vk}, raw sha256 lean {report['lean_raw_sha256'][:16]} rust {report['rust_raw_sha256'][:16]}"
           + (f" static {','.join(rust['static_vks'])}" if rust["static_vks"] else ""))
     for d in diffs[:10]: print("  differs:", json.dumps(d)[:300])
     return {"PASS": 0, "PASS-UNPINNED-ZK": 0, "ALTERNATE": 3}.get(status, 1)

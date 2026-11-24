@@ -43,7 +43,8 @@ PATH="$cargo:/usr/bin:/bin" bash -c '
 python3 - "$alone/prove/$message/prove.json" <<'PYTEST'
 import json, sys
 p = json.loads(open(sys.argv[1]).read())
-if not p["verified"] or p["vk_raw_sha256"] != "071bd29aef0bffdb7b699b467df54fcc8e76ac5644b31245368bb9e5fcf89183":
+if (not p["verified"] or p["vk_raw_sha256"] != "071bd29aef0bffdb7b699b467df54fcc8e76ac5644b31245368bb9e5fcf89183"
+        or p["vk"] != "0x2be57df21018a4e8e78615aff27c6f08f2c8037878ec29d71df6fb060c0f1477"):
     sys.exit(f"Rust alone: {p}")
 print(f"Rust alone, {p['message']}: proved and verified in {p['ms']}")
 PYTEST

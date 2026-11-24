@@ -2,8 +2,9 @@
 //! OUT_DIR/export.json, OUT_DIR/witgen.json (`run.sh --witgen`) and the Filecoin setup, runs the
 //! contract's witness program on the message, then derives the key, proves and verifies.
 //! Writes OUT_DIR/prove/HEX/{prove.json,proof.bin}, the proof only if accepted; exits non-zero unless the check passed.
-//! Prints `vk SHA256 FORMAT`, the SHA-256 of the key's raw bytes and `midnight` or `halo2`; with no
-//! HEX it stops there, reading only export.json and the setup.
+//! Prints `vk FINGERPRINT FORMAT raw-sha256 SHA256`: the key's transcript representative (which covers the constraint
+//! system), `midnight` or `halo2`, and the SHA-256 of its raw bytes; with no HEX it stops there, reading only
+//! export.json and the setup.
 //! Usage: OUT_DIR [HEX] [--zk MIDNIGHT_ZK] [--lean WITNESS.json]
 //!   [--tamper first|copy | --wrong-digest | --mock],
 //! HEX the message as 48 lowercase hex digits. `--lean` compares the advice cell for cell with Lean's evaluation.
@@ -23,7 +24,7 @@ use midnight_proofs::{
     poly::{commitment::{Guard, PolynomialCommitmentScheme}, kzg::params::ParamsKZG},
     transcript::{CircuitTranscript, Transcript},
 };
-use midnight_vk_export_native::{JsonCircuit, Vk, field, hex, key_bytes, list, num, params};
+use midnight_vk_export_native::{JsonCircuit, Vk, field, fingerprint, hex, key_bytes, list, num, params};
 use midnight_zk_stdlib::DefaultPCS;
 use num_bigint::BigUint;
 use rand_core::OsRng;
@@ -150,7 +151,8 @@ fn main() {
     std::process::exit(if passed { 0 } else { 1 });
 }
 
-/// Derives the key and prints its raw bytes' SHA-256 (a submission's `lean_raw_sha256`); `true` for `MidnightVK`.
+/// Derives the key and prints its fingerprint and raw bytes' SHA-256 (a submission's `lean_raw_sha256`); `true` for
+/// `MidnightVK`.
 fn derive_key<P: FloorPlanner>(spec: &Arc<Json>, planner: &str, params: &ParamsKZG<Bls12>, k: u32)
     -> (Vk, String, bool) {
     let keyed = JsonCircuit::<P> {
@@ -159,7 +161,7 @@ fn derive_key<P: FloorPlanner>(spec: &Arc<Json>, planner: &str, params: &ParamsK
     let vk = keygen_vk_with_k::<Fq, DefaultPCS, _>(params, &keyed, k).unwrap();
     let (stdlib, raw, _) = key_bytes(spec, planner, &keyed, &vk);
     let raw_sha256 = hex(&Sha256::digest(&raw));
-    println!("vk {raw_sha256} {}", if stdlib { "midnight" } else { "halo2" });
+    println!("vk {} {} raw-sha256 {raw_sha256}", fingerprint(&vk), if stdlib { "midnight" } else { "halo2" });
     (vk, raw_sha256, stdlib)
 }
 
@@ -301,7 +303,7 @@ fn prove<P: FloorPlanner>(
     println!("prove {message_hex}: {outcome}, {proof_bytes} bytes, witness {witness_ms} ms, prove {prove_ms} ms, verify {verify_ms} ms");
     write("prove.json", json!({"schema": "midnight-vk-export-prove-v1", "planner": planner,
         "status": if passed { "PASS" } else { "FAIL" }, "outcome": outcome, "verified": verified,
-        "message": message_hex, "digest": hex(&digest), "vk_raw_sha256": raw_sha256,
+        "message": message_hex, "digest": hex(&digest), "vk": fingerprint(&vk), "vk_raw_sha256": raw_sha256,
         "contract_placement": w["contract_placement"], "proof_bytes": proof_bytes, "advice_cells": circuit.witness.as_ref().unwrap().0.len(),
         "public_inputs": {"instance": instances[1].len(), "midnight_header": header, "consistent": header_ok},
         "lean_mismatches": lean_mismatches, "ms": ms}));

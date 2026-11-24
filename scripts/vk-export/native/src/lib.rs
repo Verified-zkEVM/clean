@@ -20,6 +20,11 @@ pub type Witness = Option<(Arc<Vec<(usize, usize, Fq)>>, bool)>;
 
 pub fn hex(bytes: &[u8]) -> String { bytes.iter().map(|b| format!("{b:02x}")).collect() }
 pub fn scalar(value: Fq) -> String { BigUint::from_bytes_le(value.to_repr().as_ref()).to_string() }
+/// The key's transcript representative as big-endian hex, as `Debug` prints it: the hash of the raw key, the pinned
+/// domain and the pinned constraint system (gates, lookups, degree), so it names the whole circuit.
+pub fn fingerprint(vk: &Vk) -> String {
+    format!("0x{}", hex(&vk.transcript_repr().to_repr().as_ref().iter().rev().copied().collect::<Vec<_>>()))
+}
 pub fn field(text: &Json) -> Fq { Fq::from_str_vartime(text.as_str().unwrap()).expect("canonical scalar") }
 pub fn num(v: &Json) -> usize { v.as_u64().unwrap() as usize }
 pub fn list(v: &Json) -> &Vec<Json> { v.as_array().unwrap() }

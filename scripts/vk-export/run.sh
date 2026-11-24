@@ -288,7 +288,8 @@ for hex in sys.argv[2:]:
     results = {c: result(n) for c, n in raw.items()}
     entry = {k: p.get(k) for k in ["verified", "outcome", "digest", "proof_bytes", "advice_cells", "contract_placement",
                                    "public_inputs", "ms"]}
-    entry |= {"vk_equals_lean": p.get("vk_raw_sha256") == report.get("lean_raw_sha256"),
+    entry |= {"vk": p.get("vk"), "vk_equals_lean": p.get("vk") == (report.get("vk") or {}).get("lean")
+                  and p.get("vk_raw_sha256") == report.get("lean_raw_sha256"),
               "lean_mismatches": (p.get("lean_mismatches") or {}).get("count"),
               "lean_witness_ms": (w.get("ms") or {}).get("witness"), "negatives": neg, "negative_results": results}
     if (mock := load("mock.json")) is not None: entry["mock"] = mock
@@ -334,7 +335,7 @@ import json, sys
 from pathlib import Path
 out = Path(sys.argv[1])
 keys = ["status", "key_status", "lean_build", "contract_proof", "planner", "candidate_planner", "experiment",
-        "contract_placement", "certified_checks", "failed_stage", "midnight_zk", "setup", "project", "format", "k", "lean_raw_sha256", "rust_raw_sha256", "transcript_repr", "rust_static_vks", "ms", "prove"]
+        "contract_placement", "certified_checks", "failed_stage", "midnight_zk", "setup", "project", "format", "k", "vk", "lean_raw_sha256", "rust_raw_sha256", "transcript_repr", "rust_static_vks", "ms", "prove"]
 summary = {}
 for name in sys.argv[2:]:
     r = out / "submissions" / name / "report.json"

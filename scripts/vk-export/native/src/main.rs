@@ -8,7 +8,7 @@ use group::Curve;
 use midnight_curves::{Fq, serde_traits::SerdeObject};
 use midnight_proofs::{circuit::{SimpleFloorPlanner, floor_planner::V1}, plonk::{FloorPlanner, keygen_vk_with_k},
     utils::SerdeFormat};
-use midnight_vk_export_native::{JsonCircuit, hex, key_bytes, params, scalar};
+use midnight_vk_export_native::{JsonCircuit, fingerprint, hex, key_bytes, params, scalar};
 use midnight_zk_stdlib::DefaultPCS;
 use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
@@ -58,10 +58,10 @@ fn export<P: FloorPlanner>(spec: Json, planner: &str, zk: &Path, out: &Path, dro
     let report = json!({"schema": "midnight-vk-export-rust-v1", "k": k, "srs": format!("bls_filecoin_2p{file_k}"),
         "planner": planner, "drop_copy": drop_copy, "static_vks": static_vks,
         "key": {"format": if stdlib { "midnight" } else { "halo2" }, "points": points, "raw": hex(&raw), "processed": hex(&processed), "transcript_input": hex(&transcript),
-            "transcript_repr": scalar(vk.transcript_repr()), "pinned_cs": pinned, "degree": cs.degree(),
+            "transcript_repr": scalar(vk.transcript_repr()), "fingerprint": fingerprint(&vk), "pinned_cs": pinned, "degree": cs.degree(),
             "blinding_factors": cs.blinding_factors(), "num_fixed": cs.num_fixed_columns(),
             "permutation_columns": cs.permutation().get_columns().len()},
         "ms": {"srs": loaded, "keygen": keygen}});
     fs::write(out.join("rust.json"), serde_json::to_vec_pretty(&report).unwrap()).unwrap();
-    println!("rust: keygen {keygen} ms, raw sha256 {}, static {:?}", hex(&digest), static_vks);
+    println!("rust: keygen {keygen} ms, vk {}, raw sha256 {}, static {:?}", fingerprint(&vk), hex(&digest), static_vks);
 }

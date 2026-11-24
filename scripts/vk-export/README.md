@@ -11,7 +11,7 @@ VK_KERNEL=1 VK_CONTRACT=CHALLENGE/Challenge scripts/vk-export/run.sh --witgen SU
 ```
 
 - `SUBMISSION`: a directory or `.tar.gz`.
-- `OUT/report.json`: `key_status` `PASS` when Lean's and Rust's keys match; `status` `PASS` when the layout and certified checks also hold.
+- `OUT/report.json`: `key_status` `PASS` when Lean's and Rust's keys match; `status` `PASS` when the layout and certified checks also hold; `vk` the circuit's fingerprint (below).
 - `VK_KERNEL=1`: builds the submission with kernel checking.
 - Needs a clean midnight-zk `1e39c120` in `../midnight-zk` (`VK_ALLOW_DIRTY_ZK=1` to override, reported as `PASS-UNPINNED-ZK`).
 - Limits: `k ≤ 19` (the Filecoin setup size); no unblinded advice.
@@ -19,11 +19,11 @@ VK_KERNEL=1 VK_CONTRACT=CHALLENGE/Challenge scripts/vk-export/run.sh --witgen SU
 ## Prove with Rust alone
 
 ```bash
-cargo run --release --manifest-path scripts/vk-export/native/Cargo.toml --example prove -- OUT              # prints the key hash
+cargo run --release --manifest-path scripts/vk-export/native/Cargo.toml --example prove -- OUT              # prints the key
 cargo run --release --manifest-path scripts/vk-export/native/Cargo.toml --example prove -- OUT MESSAGE_HEX  # proves a 24-byte message
 ```
 
-The baseline's key hash is `071bd29a… midnight` (Rust's `ShaPreImageCircuitVk`). `OUT` can move to any machine with this repository and `../midnight-zk`.
+It prints `vk FINGERPRINT FORMAT raw-sha256 SHA256`. The fingerprint is the key's transcript representative, a hash of the raw key with the pinned domain and constraint system, so circuits that differ only in gates or degree get different fingerprints; the raw bytes' SHA-256 (midnight-zk's `static_vks` value) can coincide for them. The baseline prints `vk 0x2be57df2…0c0f1477 midnight raw-sha256 071bd29a…`, both Rust's `ShaPreImageCircuitVk`. `OUT` can move to any machine with this repository and `../midnight-zk`.
 
 ## Untrusted submissions
 
