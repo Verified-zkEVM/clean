@@ -76,7 +76,8 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
     dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
     simp only [h_input, circuit_norm] at h_env ⊢
-    simp only [Num2Bits.lc_eq, Fin.forall_iff,
+    simp only [HShiftRight.hShiftRight, ShiftRight.shiftRight, Witgen.NExprOver.eval,
+      circuit_norm, h_input, Num2Bits.lc_eq, Fin.forall_iff,
       mul_eq_zero, sub_eq_zero] at h_env ⊢
     rw [Vector.map_mapRange]
     simp only [Expression.eval]
@@ -86,6 +87,7 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     set bits := Vector.mapRange 254 fun i => env.get (i0 + i)
     have h_eq : bits = fieldToBits 254 input := by
       ext i hi; simp only [bits, Vector.getElem_mapRange, h_env i hi, getElem_fieldToBits]
+      rfl
     have input_lt : input.val < 2^254 := by
       linarith [‹Fact (p < 2^254)›.elim, ZMod.val_lt input]
     use h_bits
@@ -123,10 +125,19 @@ set_option linter.constructorNameAsVariable false
 
 def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   main
-  -- elaborated := by elaborate_circuit_with {
-  --   localLength _ := 265
-  --   output _ i := varFromOffset field (i + 264)
-  -- } using (by simp +arith only [circuit_norm])
+  elaborated :=
+    { localLength _ := 265
+      output _ i := varFromOffset field (i + 264)
+      localLength_eq input i := by
+        simp only [main, circuit_norm, AliasCheck.circuit, Bits2Num.main]
+      output_eq input i := by
+        simp only [main, circuit_norm, AliasCheck.circuit, Bits2Num.main]
+      subcircuitsConsistent input i := by
+        simp only [main, circuit_norm, Bits2Num.main]
+        ac_rfl
+      channelsWithGuarantees := []
+      channelsLawful input i := by
+        simp only [main, circuit_norm, AliasCheck.circuit, Bits2Num.main] }
 
   ProverAssumptions (input : fields 254 (F p)) _ _ :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
@@ -270,13 +281,17 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
         rw [← h_env]
         rw [← h_input]
         simp_all
-    · obtain ⟨h_bits, h_eq⟩ := h_env
+    · simp only [HShiftRight.hShiftRight, ShiftRight.shiftRight, Witgen.NExprOver.eval,
+        circuit_norm, h_input] at h_env
+      obtain ⟨h_bits, h_eq⟩ := h_env
       constructor
       · intro i
         rw [h_bits]
         simp only [IsBool]
-        rcases Nat.mod_two_eq_zero_or_one (ZMod.val ((2 ^ n : F p) - input) >>> i.val) with h | h <;>
-          rw [h] <;> simp
+        rcases Nat.mod_two_eq_zero_or_one (ZMod.val ((2 ^ n : F p) - input) >>> i.val) with h | h
+        <;> simp only [HShiftRight.hShiftRight, ShiftRight.shiftRight] at h
+        <;> rw [h]
+        <;> simp
       · rw [h_eq]
         simp_all only [Nat.reducePow, gt_iff_lt, mul_zero, dite_eq_ite, ite_self,
           add_zero, ite_mul, one_mul, zero_mul]
@@ -331,6 +346,7 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
             intro i
             simp only [Fin.getElem_fin, Vector.getElem_map]
             rw [this, h_field_eq, ZMod.cast_id, getElem_fieldToBits, sub_eq_add_neg]
+            rfl
 
           simp_all only [↓reduceIte, add_zero]
           rw [← h_1]

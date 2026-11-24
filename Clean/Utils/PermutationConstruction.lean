@@ -211,12 +211,12 @@ theorem sameCycle_build_of_mem (cs : List (α × α)) : ∀ p ∈ cs, (build cs)
       unfold step
       rcases List.mem_cons.mp hp with rfl | hpr
       · by_cases hsc : (build rest).SameCycle a b
-        · rw [if_pos hsc]; exact hsc
-        · rw [if_neg hsc]; exact sameCycle_mul_swap_self hsc
+        · rw [ite_eq_left hsc]; exact hsc
+        · rw [ite_eq_right hsc]; exact sameCycle_mul_swap_self hsc
       · have hp' := ih p hpr
         by_cases hsc : (build rest).SameCycle a b
-        · rw [if_pos hsc]; exact hp'
-        · rw [if_neg hsc]; exact sameCycle_mul_swap_mono hsc hp'
+        · rw [ite_eq_left hsc]; exact hp'
+        · rw [ite_eq_right hsc]; exact sameCycle_mul_swap_mono hsc hp'
 
 /-- **No spurious merges.** Two cells share a `build cs` cycle only if the copy constraints force it. -/
 theorem eqvGen_of_sameCycle_build : ∀ (cs : List (α × α)) {x y : α},
@@ -234,7 +234,7 @@ theorem eqvGen_of_sameCycle_build : ∀ (cs : List (α × α)) {x y : α},
       intro x y h
       have mono : ∀ {u v : α}, Relation.EqvGen (fun u v => (u, v) ∈ rest) u v →
           Relation.EqvGen (fun u v => (u, v) ∈ (a, b) :: rest) u v :=
-        fun huv => Relation.EqvGen.mono (fun _ _ hm => List.mem_cons_of_mem _ hm) huv
+        fun huv => Relation.EqvGen.mono (fun _ _ hm => List.mem_cons_of_mem _ hm) _ _ huv
       have hab_link : Relation.EqvGen (fun u v => (u, v) ∈ (a, b) :: rest) a b :=
         Relation.EqvGen.rel a b List.mem_cons_self
       have E : Equivalence (Relation.EqvGen (fun u v => (u, v) ∈ (a, b) :: rest)) :=
@@ -242,9 +242,9 @@ theorem eqvGen_of_sameCycle_build : ∀ (cs : List (α × α)) {x y : α},
       change (step (build rest) (a, b)).SameCycle x y at h
       unfold step at h
       by_cases hsc : (build rest).SameCycle a b
-      · rw [if_pos hsc] at h
+      · rw [ite_eq_left hsc] at h
         exact mono (ih h)
-      · rw [if_neg hsc] at h
+      · rw [ite_eq_right hsc] at h
         rcases (sameCycle_mul_swap hsc x y).mp h with h1 | ⟨h1, h2⟩ | ⟨h1, h2⟩
         · exact mono (ih h1)
         · exact E.trans (mono (ih h1)) (E.trans hab_link (E.symm (mono (ih h2))))

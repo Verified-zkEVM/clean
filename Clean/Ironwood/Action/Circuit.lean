@@ -396,6 +396,7 @@ private theorem configureShared_qAdd_index (counts) :
   unfold configureShared
   infer_instance
 
+set_option backward.isDefEq.respectTransparency true in
 private theorem configureShared_selectorRequirements (counts) :
     configureSharedInferred.selectorRequirements counts := by
   dsimp only [configureSharedInferred, configure_selector_norm, configureShared]
@@ -554,7 +555,7 @@ theorem configureBase_lagrangeCoeff_index
     ((configureBase.output counts).lagrangeCoeffs index).index =
       counts.numFixedColumns + 3 + index := by
   unfold configureBase configureShared
-  simpa only using configureLagrange_output_index
+  exact configureLagrange_output_index
     ({ counts with numFixedColumns := counts.numFixedColumns + 3 }) index
 
 theorem configureBase_lagrangeCoeff_index_lt_finalCounts
@@ -568,6 +569,7 @@ theorem configureBase_lagrangeCoeff_index_lt_finalCounts
   unfold configureBase
   infer_instance
 
+set_option backward.isDefEq.respectTransparency true in
 private theorem configureBase_selectorRequirements (counts) :
     configureBaseInferred.selectorRequirements counts := by
   dsimp only [configureBaseInferred, configure_selector_norm, configureBase]
@@ -795,12 +797,14 @@ def configureChips (G : Generators) (base : ConfigureBase) :
   unfold configureChips
   infer_instance
 
+set_option backward.isDefEq.respectTransparency true in
 private theorem configureChips_selectorRequirements
     (G : Generators) (base : ConfigureBase) (counts) :
     (configureChipsInferred G base).selectorRequirements counts := by
   dsimp only [configureChipsInferred, configure_selector_norm, configureChips]
   simp only [configure_selector_norm, and_true]
 
+set_option backward.isDefEq.respectTransparency true in
 private instance (G : Generators) (base : ConfigureBase) :
     ElaboratedConfigure (configureChips G base) :=
   ((configureChipsInferred G base).closeSelectorRequirements
@@ -1227,6 +1231,7 @@ private theorem configure_instanceQueries (G : Generators) : ∀ counts,
       [(⟨counts.numInstanceColumns⟩, 0)] := by
   configure_norm
 
+set_option backward.isDefEq.respectTransparency true in
 private theorem configure_selectorRequirements (G : Generators) (counts) :
     (elaboratedConfigure G).selectorRequirements counts := by
   dsimp +instances only [configure_selector_norm, configure]
@@ -2167,7 +2172,7 @@ theorem synthCrossAddressChecks_synthesisSummary_eq
             (DISABLE_CROSS_ADDRESS + 1) := by
     rw [RegionCircuit.forRange'_regionSynthesisSummary]
     simp only [crossAddressRow_synthesisSummary_eq]
-    simpa only [Nat.zero_add, Nat.one_mul] using
+    simpa only [Nat.zero_add, Nat.one_mul, Nat.mul_one] using
       (FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector
           cfg.qOrchard.index (crossAddressColumns cfg) 0 1 1 4 4
             (DISABLE_CROSS_ADDRESS + 1))

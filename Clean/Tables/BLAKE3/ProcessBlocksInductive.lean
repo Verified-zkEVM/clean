@@ -133,6 +133,115 @@ end BLAKE3BlockInputNormalized
 
 attribute [local circuit_norm] eval_vector_takeShort Vector.map_takeShort
 
+omit p_large in
+private theorem state_eval (env : Environment (F p))
+    (state : Var ProcessBlocksState (F p)) :
+    eval env state =
+      { chaining_value := eval env state.chaining_value
+        chunk_counter := eval env state.chunk_counter
+        blocks_compressed := eval env state.blocks_compressed } := by
+  cases state
+  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval,
+    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
+    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
+
+omit p_large in
+private theorem block_eval (env : Environment (F p))
+    (input : Var BlockInput (F p)) :
+    eval env input =
+      { block_exists := eval env input.block_exists
+        block_data := eval env input.block_data } := by
+  cases input
+  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval,
+    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
+    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
+
+omit p_large in
+private theorem conditional_eval {M : TypeMap} [ProvableType M]
+    (env : Environment (F p)) (input : Var (Conditional.Inputs M) (F p)) :
+    eval env input =
+      { selector := eval env input.selector
+        ifTrue := eval env input.ifTrue
+        ifFalse := eval env input.ifFalse } := by
+  cases input
+  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval,
+    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
+    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
+
+omit p_large in
+private theorem state_eval_prover (env : ProverEnvironment (F p))
+    (state : Var ProcessBlocksState (F p)) :
+    eval env state =
+      { chaining_value := eval env.toEnvironment state.chaining_value
+        chunk_counter := eval env.toEnvironment state.chunk_counter
+        blocks_compressed := eval env.toEnvironment state.blocks_compressed } := by
+  cases state
+  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval_prover,
+    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
+    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
+
+omit p_large in
+private theorem block_eval_prover (env : ProverEnvironment (F p))
+    (input : Var BlockInput (F p)) :
+    eval env input =
+      { block_exists := eval env.toEnvironment input.block_exists
+        block_data := eval env.toEnvironment input.block_data } := by
+  cases input
+  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval_prover,
+    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
+    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
+
+omit p_large in
+private theorem conditional_eval_prover {M : TypeMap} [ProvableType M]
+    (env : ProverEnvironment (F p)) (input : Var (Conditional.Inputs M) (F p)) :
+    eval env input =
+      { selector := eval env.toEnvironment input.selector
+        ifTrue := eval env.toEnvironment input.ifTrue
+        ifFalse := eval env.toEnvironment input.ifFalse } := by
+  cases input
+  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval_prover,
+    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
+    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
+
+attribute [local circuit_norm ↓ 100000] state_eval block_eval conditional_eval
+  state_eval_prover block_eval_prover conditional_eval_prover
+
+private theorem compress_length (input : Var BLAKE3.ApplyRounds.Inputs (F p)) :
+    BLAKE3.Compress.circuit.localLength input = 5440 := rfl
+
+/-- The compression output references ignore the round inputs; normalize their
+addresses without expanding the seven-round computation in the table proofs. -/
+private theorem compress_output (input : Var BLAKE3.ApplyRounds.Inputs (F p))
+    (offset : Nat) :
+    BLAKE3.Compress.circuit.output input offset =
+      varFromOffset BLAKE3.BLAKE3State (offset + 5376) := by
+  dsimp +instances only [FormalCircuitBase.output, BLAKE3.Compress.circuit,
+    BLAKE3.Compress.elaborated, ElaboratedCircuit.output]
+  apply Vector.ext
+  intro i hi
+  have cases_i : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 ∨
+      i = 8 ∨ i = 9 ∨ i = 10 ∨ i = 11 ∨ i = 12 ∨ i = 13 ∨ i = 14 ∨ i = 15 := by omega
+  rcases cases_i with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+  all_goals simp only [circuit_norm, BLAKE3.BLAKE3State,
+    varFromOffset_vector, ProvableType.size, Nat.add_assoc, Nat.reduceAdd, Nat.reduceMul]
+
+private theorem compress_elaborated_output
+    (input : Var BLAKE3.ApplyRounds.Inputs (F p)) (offset : Nat) :
+    ElaboratedCircuit.output BLAKE3.Compress.main
+      (self := BLAKE3.Compress.elaborated) input offset =
+      varFromOffset BLAKE3.BLAKE3State (offset + 5376) := by
+  simpa only [FormalCircuitBase.output, BLAKE3.Compress.circuit] using
+    compress_output input offset
+
+private theorem compress_elaborated_length
+    (input : Var BLAKE3.ApplyRounds.Inputs (F p)) :
+    ElaboratedCircuit.localLength BLAKE3.Compress.main
+      (self := BLAKE3.Compress.elaborated) input = 5440 := rfl
+
+attribute [local circuit_norm] compress_output compress_length
+  compress_elaborated_output compress_elaborated_length
+
 /--
 The step function that processes one block or passes through the state.
 -/
@@ -236,7 +345,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   · intro input
     rintro (_ | _) <;> simp_all
   by_cases h_x : x_block_exists = 1
-  · simp only [h_x, decide_true, cond_true, circuit_norm] at *
+  · simp only [h_x, decide_true, Bool.cond_true, circuit_norm] at *
     have h_state_norm := h_holds.1
     have h_input_norm := h_holds.2.1
     have h_iszero := h_holds.2.2.1
@@ -244,10 +353,6 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     have h_addition := h_holds.2.2.2.2.1
     have h_cv_cond := h_holds.2.2.2.2.2.1
     have h_blocks_cond := h_holds.2.2.2.2.2.2
-    -- On 4.30, `fromComponents` projections no longer reduce during `simp` matching,
-    -- so resolve the Conditional spec by definitional equality instead.
-    replace h_cv_cond : _ = Vector.takeShort _ 8 step._proof_2 :=
-      (h_cv_cond (Or.inr rfl)).trans (if_pos rfl)
     simp only [ProcessBlocksState.Normalized] at h_state_norm
     simp only [BlockInput.Normalized] at h_input_norm
     specialize h_compress (by
@@ -317,12 +422,12 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         simp only [Vector.getElem_takeShort]
         rfl
     constructor
-    · exact takeShort8_normalized step._proof_2 h_compress_norm
+    · exact takeShort8_normalized (by omega) h_compress_norm
     constructor
     · exact h_state_norm.2.1
     change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
     exact h_add_norm
-  · simp only [h_x, decide_false, cond_false]
+  · simp only [h_x, decide_false, Bool.cond_false]
     simp only [circuit_norm] at h_holds
     have x_block_exists_zero : x_block_exists = 0 := by
       simp only [BlockInput.Normalized] at input_normalized
@@ -331,10 +436,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
     simp only [circuit_norm] at h_holds ⊢
-    -- Same 4.30 workaround: resolve the chaining-value Conditional spec definitionally.
-    have h_cv_eq : _ = acc_chaining_value :=
-      (h_holds.2.2.2.2.2.1 (Or.inl rfl)).trans (if_neg (by exact zero_ne_one))
-    simp only [circuit_norm, h_holds, h_cv_eq, ProcessBlocksState.toChunkState] at ⊢ spec_previous
+    simp only [circuit_norm, h_holds, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢
     simp_all only [circuit_norm]
     omega
@@ -414,9 +516,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             simp [ZMod.val_zero]
         · norm_num)
       simp_all [circuit_norm]
-    -- 4.30: `(fromComponents _).selector` no longer reduces for `assumption`/`trivial`;
-    -- provide the boolean fact by definitional unfolding instead.
-    exact ⟨h_input.1, trivial⟩
+    trivial
 
 /--
 The InductiveTable for processBlocks.

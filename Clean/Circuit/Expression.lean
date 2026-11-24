@@ -112,6 +112,13 @@ instance : Neg (Expression F) where neg e := mul (const (-1)) e
 instance : Sub (Expression F) where sub e₁ e₂ := add e₁ (-e₂)
 instance : Mul (Expression F) where mul := mul
 
+/-- Keep subtraction evaluation explicit across elaborator transparency changes. -/
+@[circuit_norm]
+theorem eval_sub (env : Environment F) (left right : Expression F) :
+    eval env (left - right) = eval env left - eval env right := by
+  change eval env left + (-1) * eval env right = _
+  rw [neg_one_mul, sub_eq_add_neg]
+
 /- The `Neg`/`Sub` instances above (and their witness-IR `FExpr` counterparts) desugar
 `-e` to `(-1) * e` and `e₁ - e₂` to `e₁ + (-1) * e₂`, so *evaluated* goals come out
 spelled `x + -1 * y`. Normalize back to `-x` / `x - y` in `circuit_norm`, so user-facing

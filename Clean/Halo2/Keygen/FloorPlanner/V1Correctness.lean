@@ -105,25 +105,22 @@ private theorem starts_getD_of_pair_mem
   rw [hlength, ← hzip]
   exact hsortedPair
 
-/-- V1's actual first-fit candidate separates every pair of shared columns. -/
-theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
-    (operations : Operations F) :
-    SharedColumnIntervalsDisjoint
-      (measureRegions operations)
-      (planCandidate (measureRegions operations)).1 := by
-  let shapes := measureRegions operations
-  let sortedArray :=
-    (Pdqsort.quicksort shapes.toArray
-      (fun left right => left.key < right.key)).reverse
-  let sortedShapes := sortedArray.toList
-  have hsorted : sortedShapes.Perm shapes := by
-    have hquick := Pdqsort.quicksort_perm shapes.toArray
-      (fun left right => left.key < right.key)
-    exact (by
-      simpa [sortedShapes, sortedArray] using
-        (List.reverse_perm
-          (Pdqsort.quicksort shapes.toArray
-            (fun left right => left.key < right.key)).toList).trans hquick)
+/-- Restoring source-index order preserves every slotted region's start.
+The slotting order may be chosen by a downstream planner. -/
+theorem restoredStarts_getD (pairs : List (ℕ × ℕ)) (count : ℕ)
+    (indices : (pairs.map Prod.fst).Perm (List.range count))
+    {index start : ℕ} (member : (index, start) ∈ pairs) :
+    ((sortPairsByIndex pairs).map Prod.snd).getD index 0 = start :=
+  starts_getD_of_pair_mem pairs count
+    (sortPairsByIndex_fst_eq_range pairs count indices) member
+
+/-- First-fit safety depends on the measured shapes, independently of the
+ordering policy used before slotting. -/
+theorem slotIn_measureRegions_sharedColumnIntervalsDisjoint
+    (operations : Operations F) (sortedShapes : List RegionShape)
+    (hsorted : sortedShapes.Perm (measureRegions operations)) :
+    SharedColumnIntervalsDisjoint (measureRegions operations)
+      ((sortPairsByIndex (slotIn sortedShapes).1).map Prod.snd) := by
   have hwellFormed : sortedShapes.Forall RegionShape.WellFormed := by
     rw [List.forall_iff_forall_mem]
     intro shape hshape
@@ -149,10 +146,6 @@ theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
         List.range operations.regionCount :=
     sortPairsByIndex_fst_eq_range pairs operations.regionCount
       hpairsRange
-  have hplanStarts :
-      (planCandidate (measureRegions operations)).1 =
-        (sortPairsByIndex pairs).map (·.2) := by
-    rfl
   intro left right hleft hright hindices column
     hleftColumn hrightColumn
   have hleftSorted : left ∈ sortedShapes := hsorted.mem_iff.mpr hleft
@@ -181,11 +174,24 @@ theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
     exact congrArg (fun placed : RegionShape × ℕ => placed.1.index) heq
   rcases rel_or_reverse_of_pairwise_of_mem hslot.disjoint
       hleftPlaced hrightPlaced hplacedNe with hforward | hreverse
-  · rw [hplanStarts, hleftStart, hrightStart]
+  · rw [hleftStart, hrightStart]
     exact hforward column hleftColumn hrightColumn
   · have hdisjoint := hreverse column hrightColumn hleftColumn
-    rw [hplanStarts, hleftStart, hrightStart]
+    rw [hleftStart, hrightStart]
     exact hdisjoint.elim Or.inr Or.inl
+
+/-- V1's actual first-fit candidate separates every pair of shared columns. -/
+theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
+    (operations : Operations F) :
+    SharedColumnIntervalsDisjoint (measureRegions operations)
+      (planCandidate (measureRegions operations)).1 := by
+  apply slotIn_measureRegions_sharedColumnIntervalsDisjoint
+  simpa using (List.reverse_perm
+    (Pdqsort.quicksort (measureRegions operations).toArray
+      (fun left right => left.key < right.key)).toList).trans
+    (Pdqsort.quicksort_perm (measureRegions operations).toArray
+      (fun left right => left.key < right.key))
+
 def placementEndFrom (shapes : List RegionShape) (regionStarts : List ℕ) : ℕ :=
   shapes.map (fun shape =>
     regionStarts.getD shape.index 0 + shape.rowCount)
@@ -1563,15 +1569,6 @@ theorem slotSummaryStateFromWith_bubble
                 rw [List.forall_append]
                 exact ⟨hwellBefore.2, hwellSuffix⟩))
 
-theorem perm_bubble (pivot : RegionShapeSummary)
-    (before suffix : List RegionShapeSummary) :
-    (before ++ pivot :: suffix).Perm (pivot :: before ++ suffix) := by
-  induction before with
-  | nil => rfl
-  | cons head rest inductionHypothesis =>
-      exact (inductionHypothesis.cons head).trans
-        (List.Perm.swap pivot head (rest ++ suffix))
-
 /-- For two key-sorted permutations, V1's endpoint is insensitive to the order
 within tied-key runs whenever tied summaries are placement-equivalent or
 column-disjoint. -/
@@ -1634,7 +1631,7 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable
             · have hrightCons :
                   (key head :: (beforeRest ++ pivot :: suffix).map key).Pairwise
                     (· ≤ ·) := by
-                simpa only [List.sortedLE_iff_pairwise, List.map_cons] using
+                simpa only [List.sortedLE_iff_pairwise, List.cons_append, List.map_cons] using
                   hsortedRight
               rw [List.pairwise_cons] at hrightCons
               exact hkeysEqual.1.le.trans
@@ -1668,7 +1665,7 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable
         initial allocations hvalid hwellRight.2.2 hwellTail
       have htailPerm : rest.Perm (before ++ suffix) := by
         apply List.Perm.cons_inv
-        exact hperm.trans (perm_bubble pivot before suffix)
+        exact hperm.trans List.perm_middle
       have htailSorted : ((before ++ suffix).map key).SortedLE := by
         rw [List.sortedLE_iff_pairwise, List.map_append,
           List.pairwise_append]
@@ -1761,7 +1758,7 @@ theorem slotSummaryStateFromWith_eq_of_sorted_perm_interchangeable
             · have hrightCons :
                   (key head :: (beforeRest ++ pivot :: suffix).map key).Pairwise
                     (· ≤ ·) := by
-                simpa only [List.sortedLE_iff_pairwise, List.map_cons] using
+                simpa only [List.sortedLE_iff_pairwise, List.cons_append, List.map_cons] using
                   hsortedRight
               rw [List.pairwise_cons] at hrightCons
               exact hkeysEqual.1.le.trans
@@ -1795,7 +1792,7 @@ theorem slotSummaryStateFromWith_eq_of_sorted_perm_interchangeable
         initial allocations hvalid hwellRight.2.2
       have htailPerm : rest.Perm (before ++ suffix) := by
         apply List.Perm.cons_inv
-        exact hperm.trans (perm_bubble pivot before suffix)
+        exact hperm.trans List.perm_middle
       have htailSorted : ((before ++ suffix).map key).SortedLE := by
         rw [List.sortedLE_iff_pairwise, List.map_append,
           List.pairwise_append]
@@ -1860,9 +1857,9 @@ theorem slotSummaryEndFromWith_eq_of_normalized_perm
       (left.map RegionShapeSummary.normalized).Perm
         (right.map RegionShapeSummary.normalized))
     (hsortedLeft :
-      (left.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE)
+      (left.map (fun summary => (OrderDual.toDual summary.key))).SortedLE)
     (hsortedRight :
-      (right.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE)
+      (right.map (fun summary => (OrderDual.toDual summary.key))).SortedLE)
     (hwellFormed : right.Forall RegionShapeSummary.WellFormed)
     (hties : ∀ first, first ∈ right → ∀ second, second ∈ right →
       first.key = second.key →
@@ -1894,17 +1891,17 @@ theorem slotSummaryEndFromWith_eq_of_normalized_perm
       (slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
         (List.rel_append hplacement htailPlacement) initial allocations)
   have hkeys :
-      left.map (fun summary => (summary.key : OrderDual ℕ)) =
-        aligned.map (fun summary => (summary.key : OrderDual ℕ)) := by
+      left.map (fun summary => (OrderDual.toDual summary.key)) =
+        aligned.map (fun summary => (OrderDual.toDual summary.key)) := by
     rw [← List.forall₂_eq_eq_eq]
-    simpa only [List.forall₂_map_left_iff,
-      List.forall₂_map_right_iff] using hplacement.imp (fun first second h =>
-        congrArg (fun summary => (summary.key : OrderDual ℕ))
+    rw [List.forall₂_map_left_iff, List.forall₂_map_right_iff]
+    exact hplacement.imp (fun first second h =>
+        congrArg (fun summary => (OrderDual.toDual summary.key))
           (RegionShapeSummary.placementEquivalent_iff_normalized_eq.mp h) |>
             (RegionShapeSummary.normalized_key_eq first ▸
               RegionShapeSummary.normalized_key_eq second ▸ ·))
   have hsortedAligned :
-      (aligned.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE := by
+      (aligned.map (fun summary => (OrderDual.toDual summary.key))).SortedLE := by
     rw [← hkeys]
     exact hsortedLeft
   have hrightAligned :=
@@ -1925,9 +1922,9 @@ theorem slotSummaryStateFromWith_eq_of_normalized_perm
       (left.map RegionShapeSummary.normalized).Perm
         (right.map RegionShapeSummary.normalized))
     (hsortedLeft :
-      (left.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE)
+      (left.map (fun summary => (OrderDual.toDual summary.key))).SortedLE)
     (hsortedRight :
-      (right.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE)
+      (right.map (fun summary => (OrderDual.toDual summary.key))).SortedLE)
     (hwellFormed : right.Forall RegionShapeSummary.WellFormed)
     (hties : ∀ first, first ∈ right → ∀ second, second ∈ right →
       first.key = second.key →
@@ -1951,17 +1948,17 @@ theorem slotSummaryStateFromWith_eq_of_normalized_perm
     slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
       hplacement initial allocations
   have hkeys :
-      left.map (fun summary => (summary.key : OrderDual ℕ)) =
-        aligned.map (fun summary => (summary.key : OrderDual ℕ)) := by
+      left.map (fun summary => (OrderDual.toDual summary.key)) =
+        aligned.map (fun summary => (OrderDual.toDual summary.key)) := by
     rw [← List.forall₂_eq_eq_eq]
-    simpa only [List.forall₂_map_left_iff,
-      List.forall₂_map_right_iff] using hplacement.imp (fun first second h =>
-        congrArg (fun summary => (summary.key : OrderDual ℕ))
+    rw [List.forall₂_map_left_iff, List.forall₂_map_right_iff]
+    exact hplacement.imp (fun first second h =>
+        congrArg (fun summary => (OrderDual.toDual summary.key))
           (RegionShapeSummary.placementEquivalent_iff_normalized_eq.mp h) |>
             (RegionShapeSummary.normalized_key_eq first ▸
               RegionShapeSummary.normalized_key_eq second ▸ ·))
   have hsortedAligned :
-      (aligned.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE := by
+      (aligned.map (fun summary => (OrderDual.toDual summary.key))).SortedLE := by
     rw [← hkeys]
     exact hsortedLeft
   have hrightAligned :=
@@ -2299,8 +2296,8 @@ theorem activation_row_lt_placementEnd
       have hlocal : localRow < (measureRegion index body).rowCount := by
         have hbound := regionOperationRowExtent_le_synthesisSummary_of_mem
           body (.enableGate gate localRow) hoperation
-        simpa only [measureRegion_rowCount,
-          regionOperationRowExtent] using hbound
+        simp only [measureRegion_rowCount, regionOperationRowExtent] at hbound ⊢
+        omega
       unfold placementEnd
       simp only [measureRegion] at hend hlocal
       omega
@@ -2465,7 +2462,7 @@ theorem placementEnd_eq_slotSummaryEndFrom (ops : Operations F) :
   have hsummary := slottedEndFrom_eq_slottedSummaryEndFrom
     sortedDesc (∅ : CircuitAllocations)
   simpa only [sortedSummaryOrder, sortedRegionOrder, sortedDesc, slotIn,
-    slotSummaryEndFrom, slotSummaryEndFromWith] using hsummary
+    slotSummaryEndFrom, slotSummaryEndFromWith, slottedSummaryEndFrom] using hsummary
 
 /-- When virtual selectors are anchored by physical columns, the exact V1
 endpoint can be computed after erasing selectors from the consensus-sorted
@@ -2498,8 +2495,8 @@ theorem placementEnd_eq_slotSummaryEndFrom_withoutSelectors
     CircuitAllocations.Valid.empty
     (CircuitAllocations.PhysicalEquivalent.refl ∅)
     (SelectorAllocationsDominatedBy.empty anchor) hsortedAnchors
-  simpa only [sorted, slotSummaryEndFrom, slotSummaryEndFromWith]
-    using herasure
+  simpa only [sorted, slotSummaryEndFrom, slotSummaryEndFromWith,
+    slottedSummaryEndFrom] using herasure
 
 end V1
 end Halo2.FloorPlanner

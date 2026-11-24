@@ -313,19 +313,43 @@ def circuit (wlsb : WitgenIR Fp 1) :
           · exact Or.inl (Or.inl (Or.inl (Or.inl (by simp))))
           · exact Or.inl (Or.inl (Or.inl (Or.inr hk0)))
           · exact Or.inl (Or.inl (Or.inr (by
-              simpa only [LookupRangeCheck.witnessShortCheck_nextRegionIndex]
+              simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+                LookupRangeCheck.witnessCheckDecomposed_regionCount,
+                LookupRangeCheck.witnessShortCheck_nextRegionIndex]
                 using hk2)))
           · exact Or.inl (Or.inr (by
-              simpa only [LookupRangeCheck.witnessShortCheck_nextRegionIndex,
-                Nat.add_assoc] using hj.1))
+              simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+                LookupRangeCheck.witnessCheckDecomposed_regionCount,
+                LookupRangeCheck.witnessShortCheck_nextRegionIndex,
+                Nat.add_assoc, Nat.reduceAdd] using hj.1))
           · exact Or.inl (Or.inr (by
-              simpa only [LookupRangeCheck.witnessShortCheck_nextRegionIndex,
-                Nat.add_assoc] using hj.2.1))
+              simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+                LookupRangeCheck.witnessCheckDecomposed_regionCount,
+                LookupRangeCheck.witnessShortCheck_nextRegionIndex,
+                Nat.add_assoc, Nat.reduceAdd] using hj.2.1))
           · exact Or.inl (Or.inr (by
-              simpa only [LookupRangeCheck.witnessShortCheck_nextRegionIndex,
-                Nat.add_assoc] using hj.2.2))
-          · exact Or.inr (by simpa only using hjp.1)
-          · exact Or.inr (by simpa only using hjp.2)
+              simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+                LookupRangeCheck.witnessCheckDecomposed_regionCount,
+                LookupRangeCheck.witnessShortCheck_nextRegionIndex,
+                Nat.add_assoc, Nat.reduceAdd] using hj.2.2))
+          · exact Or.inr (by simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+              LookupRangeCheck.witnessCheckDecomposed_regionCount,
+              LookupRangeCheck.witnessCheck_nextRegionIndex,
+              LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex,
+              LookupRangeCheck.witnessShortCheck_nextRegionIndex, Nat.add_assoc, Nat.reduceAdd,
+              (LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex
+                configInput.2 (jWit wlsb input.y) (i + 2)),
+              (LookupRangeCheck.witnessCheckDecomposed_regionCount
+                configInput.2 (jWit wlsb input.y) (i + 2))] using hjp.1)
+          · exact Or.inr (by simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+              LookupRangeCheck.witnessCheckDecomposed_regionCount,
+              LookupRangeCheck.witnessCheck_nextRegionIndex,
+              LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex,
+              LookupRangeCheck.witnessShortCheck_nextRegionIndex, Nat.add_assoc, Nat.reduceAdd,
+              (LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex
+                configInput.2 (jWit wlsb input.y) (i + 2)),
+              (LookupRangeCheck.witnessCheckDecomposed_regionCount
+                configInput.2 (jWit wlsb input.y) (i + 2))] using hjp.2)
       output cfg _ i := .of (i + 4) 0 (cfg.1.advices 6)
       regionCount _ := 5
       synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg

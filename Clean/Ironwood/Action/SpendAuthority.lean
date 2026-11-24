@@ -125,9 +125,9 @@ theorem synthesize_copyCellsAssignedFrom
     · simp
     · simp
   have hall := hfullWidth.append (by
-    simpa only [fullWidthOps, FormalCircuit.call_regionCount', Nat.add_zero] using hadd)
+    simpa only [fullWidthOps, FormalCircuit.call_regionCount', Ecc.MulFixed.FullWidth.circuit_regionCount, Nat.add_zero] using hadd)
   simpa only [Circuit.operations_bind, Circuit.operations_pure,
-    FormalCircuit.call_regionCount', FormalCircuit.output_call',
+    FormalCircuit.call_regionCount', Ecc.MulFixed.FullWidth.circuit_regionCount, FormalCircuit.output_call',
     FormalCircuit.nextRegionIndex_call', Nat.add_zero, fullWidthOps,
     fullWidthOutput] using hall
 
@@ -151,14 +151,38 @@ def circuit (G : FixedBase) : FormalCircuit Fp
   elaborated :=
     { keygenRequirements := keygenRequirements G
       registered := by
-        intro cfg counts hconfig input self
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
-          Operations.KeygenRegistered.append, circuit_norm]
-        constructor
-        · apply (Ecc.MulFixed.FullWidth.circuit G).call_keygenRegistered
-            cfg.1 hconfig.1 input.alpha self <;> keygen_registration
-        · apply Ecc.Add.addFormal.call_keygenRegistered
-            cfg.2 hconfig.2 _ (self + 2) <;> keygen_registration
+        set_option backward.isDefEq.respectTransparency true in
+          intro cfg counts hconfig input self
+          simp only [Circuit.operations_bind, Circuit.operations_pure,
+            Operations.KeygenRegistered.append, FormalCircuit.call_regionCount',
+            Ecc.MulFixed.FullWidth.circuit_regionCount, Nat.add_assoc, Nat.reduceAdd, circuit_norm]
+          constructor
+          · apply (Ecc.MulFixed.FullWidth.circuit G).call_keygenRegistered
+                cfg.1 hconfig.1 input.alpha self
+            · intro gate h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inl h
+            · intro argument h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inl h
+            · intro column h
+              simp only [keygenRequirements, List.mem_append]
+              exact Or.inl (Or.inl h)
+            · keygen_registration
+            · keygen_registration
+          · apply Ecc.Add.addFormal.call_keygenRegistered
+                cfg.2 hconfig.2 _ (self + 2)
+            · intro gate h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inr h
+            · intro argument h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inr h
+            · intro column h
+              simp only [keygenRequirements, List.mem_append]
+              exact Or.inl (Or.inr h)
+            · keygen_registration
+            · keygen_registration
       lookupSelectorsAnchoredBy_of_registered := by
         intro cfg counts hconfig input self anchor _ hregistered
         have hlookups :
@@ -175,8 +199,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
         simp only [operations, program, Configure.output_pure,
           Circuit.operations_bind, Circuit.operations_pure,
           FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
-          FormalCircuit.call_regionCount',
-          Ecc.MulFixed.FullWidth.circuit_regionCount,
+          FormalCircuit.call_regionCount', Ecc.MulFixed.FullWidth.circuit_regionCount,
           keygen_norm, keygen_spine]
       copyCellsAssigned := by
         intro cfg _ hconfig input self
@@ -216,7 +239,7 @@ def circuit (G : FixedBase) : FormalCircuit Fp
         intro cfg input i
         simp only [Circuit.output_bind, Circuit.output_pure,
           FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
-          FormalCircuit.call_regionCount', circuit_norm,
+          FormalCircuit.call_regionCount', Ecc.MulFixed.FullWidth.circuit_regionCount, circuit_norm,
           Ecc.Add.addFormal_output_cells] }
 
   EnvAssumptions := fun (fcfg, _) env =>
@@ -275,8 +298,7 @@ theorem circuit_call_output_cells_assigned
     { p := product, q := input.akP } (region + 2)
   simp only [circuit, Circuit.operations_bind, Circuit.operations_pure,
     FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
-    FormalCircuit.call_regionCount', Operations.assignedCellsFrom_append,
-    Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.Add.addFormal_output_cells,
+    FormalCircuit.call_regionCount', Ecc.MulFixed.FullWidth.circuit_regionCount, Operations.assignedCellsFrom_append, Ecc.Add.addFormal_output_cells,
     List.mem_append, AssignedCell.of_cell, Nat.add_assoc,
     product] at hadd ⊢
   exact ⟨Or.inr (Or.inl hadd.1), Or.inr (Or.inl hadd.2)⟩

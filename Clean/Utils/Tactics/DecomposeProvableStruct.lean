@@ -79,7 +79,12 @@ def findProvableStructVars : Lean.Elab.Tactic.TacticM (List Lean.FVarId) := do
     -- Helper function to check if an fvarId has a ProvableStruct instance
     let hasProvableStructInstance (fvarId : Lean.FVarId) : Lean.MetaM Bool := do
       let type ← inferType (.fvar fvarId)
-      let type' ← withTransparency .reducible (whnf type)
+      -- `Var` hides its view behind a class projection. Only unwrap this public
+      -- type alias; ordinary structure detection retains reducible transparency.
+      let type' ← if type.isAppOf ``Var then
+        withTransparency .all (whnf type)
+      else
+        withTransparency .reducible (whnf type)
       -- For a type like `Inputs n (F p)`, we want to check `ProvableStruct (Inputs n)`
       -- So we need to extract the type constructor with its type parameters (but not value parameters)
       match type' with

@@ -679,8 +679,16 @@ theorem soundness : Soundness Fp main Assumptions Spec := by
   have hvalid : row.r.Valid := by
     rw [hcoords]
     apply Point.valid_add hpCopy hqCopy
-  exact ⟨by simpa [row] using hvalid,
-    by simpa [row, pCopy, qCopy, hpCopyEq, hqCopyEq] using hcoords⟩
+  have hpeq : pCopy = input_p := hpCopyEq
+  have hqeq : qCopy = input_q := hqCopyEq
+  change row.r = pCopy + qCopy at hcoords
+  rw [hpeq, hqeq] at hcoords
+  have hx : Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).x =
+      env.get (i₀ + 2 + 2) := by simp only [circuit_norm, explicit_provable_type]
+  have hy : Expression.eval env (varFromOffset Point (i₀ + 2 + 2)).y =
+      env.get (i₀ + 2 + 2 + 1) := by simp only [circuit_norm, explicit_provable_type]
+  exact ⟨by simpa only [hx, hy, row, Gate.Input.r] using hvalid,
+    by simpa only [hx, hy, row, Gate.Input.r] using hcoords⟩
 
 /-- The evaluated `.ite` witness program for `lambda` is `lambdaValue`. Stated with the
 `Decidable` instances as variables: `BExpr.feq`'s evaluation decides field equality
@@ -761,14 +769,45 @@ private theorem ite_rY (px py qx qy : Fp)
 theorem completeness : Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, Spec,
     Gate.circuit, Gate.Spec, rowValue_spec]
-  simp only [ite_lambdaValue, ite_deltaValue, ite_rX, ite_rY] at h_env
   rcases h_assumptions with ⟨hp, hq⟩
   rcases input_p with ⟨px, py⟩
   rcases input_q with ⟨qx, qy⟩
-  simp_all [circuit_norm, explicit_provable_type]
+  have hpx : env.get (i₀) = px := by
+    have hcopy := h_env.1 ⟨0, by decide⟩
+    have hvalue := congrArg Point.x h_input.1
+    simp only [circuit_norm, explicit_provable_type] at hcopy hvalue
+    exact hcopy.trans hvalue
+  have hpy : env.get (i₀ + 1) = py := by
+    have hcopy := h_env.1 ⟨1, by decide⟩
+    have hvalue := congrArg Point.y h_input.1
+    simp only [circuit_norm, explicit_provable_type] at hcopy hvalue
+    exact hcopy.trans hvalue
+  have hqx : env.get (i₀ + 2) = qx := by
+    have hcopy := h_env.2.1 ⟨0, by decide⟩
+    have hvalue := congrArg Point.x h_input.2
+    simp only [circuit_norm, explicit_provable_type] at hcopy hvalue
+    exact hcopy.trans hvalue
+  have hqy : env.get (i₀ + 2 + 1) = qy := by
+    have hcopy := h_env.2.1 ⟨1, by decide⟩
+    have hvalue := congrArg Point.y h_input.2
+    simp only [circuit_norm, explicit_provable_type] at hcopy hvalue
+    exact hcopy.trans hvalue
+  simp only [HAnd.hAnd, AndOp.and, Witgen.EqCond.eqCond,
+    Witgen.BExprOver.eval, Witgen.FExprOver.eval, WitgenEnv.readVar_eq,
+    Bool.and_eq_true, decide_eq_true_eq] at h_env
+  simp only [ite_lambdaValue, ite_deltaValue, ite_rX, ite_rY] at h_env
+  simp_all only [circuit_norm, explicit_provable_type]
+  have hlambda := ite_lambdaValue px py qx qy
+    (d1 := inferInstance) (d2 := inferInstance)
+  have hxOutput := ite_rX px py qx qy
+    (d1 := inferInstance) (d2 := inferInstance) (d3 := inferInstance) (d4 := inferInstance)
+  have hyOutput := ite_rY px py qx qy
+    (d1 := inferInstance) (d2 := inferInstance) (d3 := inferInstance) (d4 := inferInstance)
+  simp (config := { contextual := true }) only [] at hlambda hxOutput hyOutput
+  simp_all only [hlambda, hxOutput, hyOutput, Point.mk.injEq]
   have hrow := rowValue_spec
     (input := { p := { x := px, y := py }, q := { x := qx, y := qy } }) hp hq
-  simpa [Gate.Spec, rowValue] using hrow
+  simpa only [Gate.Spec, rowValue, hlambda, hxOutput, hyOutput] using hrow
 
 def circuit : FormalCircuit Fp Input Point where
   main

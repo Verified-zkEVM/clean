@@ -54,18 +54,18 @@ private theorem Allocations.insertList_comm_of_ne
         · by_cases horder : leftStart < rightStart
           · have hnotReverse : ¬ rightStart < leftStart := by omega
             simp only [insertList, hleft, hright, horder, hnotReverse,
-              if_pos, if_false]
+              ite_eq_left, ite_false]
           · have hreverse : rightStart < leftStart := by omega
             simp only [insertList, hleft, hright, horder, hreverse,
-              if_pos, if_false]
+              ite_eq_left, ite_false]
         · have hnotRightLeft : ¬ rightStart < leftStart := by omega
           simp only [insertList, hleft, hright, hnotRightLeft,
-            if_pos, if_false]
+            ite_eq_left, ite_false]
       · by_cases hright : rightStart < head.1
         · have hnotLeftRight : ¬ leftStart < rightStart := by omega
           simp only [insertList, hleft, hright, hnotLeftRight,
-            if_pos, if_false]
-        · simp only [insertList, hleft, hright, if_false]
+            ite_eq_left, ite_false]
+        · simp only [insertList, hleft, hright, ite_false]
           rw [inductionHypothesis]
 
 /-- Intervals with distinct starts are inserted in a canonical order,
@@ -186,7 +186,8 @@ theorem Allocations.Valid.insert
     (hfits : allocations.Fits start length)
     (hlength : 0 < length) :
     (allocations.insert start length).Valid := by
-  simpa [Valid, insert] using
+  change (insertList start length allocations.toList).toArray.toList.Pairwise IntervalBefore
+  simpa only [List.toList_toArray] using
     valid_insertList allocations.toList start length hvalid hfits hlength
 
 theorem Allocations.mem_insert
@@ -287,7 +288,7 @@ private theorem Allocations.scanFreeIntervals_head_of_fits
         | none =>
             simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte]
             have hgap : start < head.1 := by omega
-            rw [if_pos hgap]
+            rw [ite_eq_left hgap]
             exact Or.inl ⟨some head.1,
               (scanFreeIntervals none rest
                 (max start (head.1 + head.2))).1,
@@ -304,7 +305,7 @@ private theorem Allocations.scanFreeIntervals_head_of_fits
             · simp only [scanFreeIntervals, hpast, decide_false,
                 Bool.not_false, ↓reduceIte]
               have hgap : start < head.1 := by omega
-              rw [if_pos hgap]
+              rw [ite_eq_left hgap]
               exact Or.inl ⟨some head.1,
                 (scanFreeIntervals (some endRow) rest
                   (max start (head.1 + head.2))).1,
@@ -323,14 +324,14 @@ private theorem Allocations.scanFreeIntervals_head_of_fits
         | none =>
             simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte]
             have hnoGap : ¬ start < head.1 := by omega
-            rw [if_neg hnoGap, max_eq_left hheadEnd]
+            rw [ite_eq_right hnoGap, max_eq_left hheadEnd]
             exact inductionHypothesis hrestValid hrestFits
         | some endRow =>
             have hpast : ¬ endRow ≤ head.1 := hnotPast endRow rfl
             simp only [scanFreeIntervals, hpast, decide_false,
               Bool.not_false, ↓reduceIte]
             have hnoGap : ¬ start < head.1 := by omega
-            rw [if_neg hnoGap, max_eq_left hheadEnd]
+            rw [ite_eq_right hnoGap, max_eq_left hheadEnd]
             exact inductionHypothesis hrestValid hrestFits
 
 /-- A fitting interval at the requested start is the first interval enumerated by
@@ -464,18 +465,18 @@ private theorem Allocations.scanFreeIntervals_spaces_fit
             · intro allocated hallocated
               exact inductionHypothesis (previous := previous ++ [head])
                 (row := max row (head.1 + head.2))
-                (by simpa only [List.append_assoc] using hvalid)
+                (by simpa only [List.append_assoc, List.singleton_append] using hvalid)
                 (endsBefore_append_singleton hprevious)
                 htail allocated
-                (by simpa only [List.append_assoc] using hallocated)
+                (by simpa only [List.append_assoc, List.singleton_append] using hallocated)
           next hnoGap =>
             intro allocated hallocated
             exact inductionHypothesis (previous := previous ++ [head])
               (row := max row (head.1 + head.2))
-              (by simpa only [List.append_assoc] using hvalid)
+              (by simpa only [List.append_assoc, List.singleton_append] using hvalid)
               (endsBefore_append_singleton hprevious)
               hspace allocated
-              (by simpa only [List.append_assoc] using hallocated)
+              (by simpa only [List.append_assoc, List.singleton_append] using hallocated)
   | some endRow =>
       induction items generalizing previous row with
       | nil => simp [scanFreeIntervals] at hspace
@@ -501,18 +502,18 @@ private theorem Allocations.scanFreeIntervals_spaces_fit
               · intro allocated hallocated
                 exact inductionHypothesis (previous := previous ++ [head])
                   (row := max row (head.1 + head.2))
-                  (by simpa only [List.append_assoc] using hvalid)
+                  (by simpa only [List.append_assoc, List.singleton_append] using hvalid)
                   (endsBefore_append_singleton hprevious)
                   htail allocated
-                  (by simpa only [List.append_assoc] using hallocated)
+                  (by simpa only [List.append_assoc, List.singleton_append] using hallocated)
             next hnoGap =>
               intro allocated hallocated
               exact inductionHypothesis (previous := previous ++ [head])
                 (row := max row (head.1 + head.2))
-                (by simpa only [List.append_assoc] using hvalid)
+                (by simpa only [List.append_assoc, List.singleton_append] using hvalid)
                 (endsBefore_append_singleton hprevious)
                 hspace allocated
-                (by simpa only [List.append_assoc] using hallocated)
+                (by simpa only [List.append_assoc, List.singleton_append] using hallocated)
 
 private theorem Allocations.row_le_scanFreeIntervals
     (items : List (ℕ × ℕ)) (row : ℕ) (endBound : Option ℕ) :
@@ -743,7 +744,7 @@ private theorem Allocations.scanFreeIntervals_contains_fitting_candidate
           simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte]
           rcases hheadFits with hcandidateBefore | hheadBefore
           · have hgap : row < head.1 := by omega
-            rw [if_pos hgap]
+            rw [ite_eq_left hgap]
             exact Or.inl ⟨(row, some head.1), by simp,
               ⟨hrow, by intro stop hstop; simp_all⟩⟩
           · have hnext : max row (head.1 + head.2) ≤ candidate := by omega
@@ -762,7 +763,7 @@ private theorem Allocations.scanFreeIntervals_contains_fitting_candidate
               Bool.not_false, ↓reduceIte]
             rcases hheadFits with hcandidateBefore | hheadBefore
             · have hgap : row < head.1 := by omega
-              rw [if_pos hgap]
+              rw [ite_eq_left hgap]
               exact Or.inl ⟨(row, some head.1), by simp,
                 ⟨hrow, by intro stop hstop; simp_all⟩⟩
             · have hnext : max row (head.1 + head.2) ≤ candidate := by omega
@@ -1299,7 +1300,7 @@ theorem firstFit_eq_of_sufficient_fuel
                               Option ℕ × CircuitAllocations) =
                             ((if ok = true then _ else _) :
                               Option ℕ × CircuitAllocations)
-                          simp only [if_pos hok]
+                          simp only [ite_eq_left hok]
                           have havailable :
                               (spaceEnd.map fun stop =>
                                 (stop : ℤ) - spaceStart - length) =
@@ -1312,7 +1313,7 @@ theorem firstFit_eq_of_sufficient_fuel
                               Option ℕ × CircuitAllocations) =
                             ((if ok = true then _ else _) :
                               Option ℕ × CircuitAllocations)
-                          simp only [if_pos hok]
+                          simp only [ite_eq_left hok]
                           have havailable :
                               (spaceEnd.map fun stop =>
                                 (stop : ℤ) - spaceStart - length) =
@@ -1325,7 +1326,7 @@ theorem firstFit_eq_of_sufficient_fuel
                           Option ℕ × CircuitAllocations) =
                         ((if ok = true then _ else _) :
                           Option ℕ × CircuitAllocations)
-                      simpa only [if_neg hok] using hnext
+                      simpa only [ite_eq_right hok] using hnext
               simp only [firstFit]
               exact compareSpaces spaces initialized
 
@@ -1542,7 +1543,7 @@ theorem firstFit_law
         column row length hfitsRecursive hlength
     have hinsertExtends := CircuitAllocations.Extends.insertAllocation
       recursiveAllocations column row length
-    simp only [trySpaces, hok, if_true, hrecursive]
+    simp only [trySpaces, hok, ite_true, hrecursive]
     constructor
     · refine
         { valid := hresultValid
@@ -1570,7 +1571,7 @@ theorem firstFit_law
         intro candidate hcandidate
         simp only [List.mem_cons] at hcandidate
         rcases hcandidate with rfl | hrest
-        · rw [Std.HashMap.getD_insert, if_pos]
+        · rw [Std.HashMap.getD_insert, ite_eq_left]
           · exact Allocations.mem_insert _ _ _
           · simp
         · exact hinsertExtends candidate (row, length)
@@ -1604,7 +1605,7 @@ theorem firstFit_law
     obtain ⟨hremainingLaw, hremainingWitness⟩ :=
       spacesInduction hrecursiveLaw.valid hnodup hcolumn hlength
         hremainingSafety
-    simp only [trySpaces, hok, if_true, hrecursive]
+    simp only [trySpaces, hok, ite_true, hrecursive]
     constructor
     · refine
         { valid := hremainingLaw.valid
@@ -1730,14 +1731,14 @@ theorem firstFit_effect
       hvalid hnodup hcolumn hlength
     have hrecursiveEffect := inductionHypothesis hvalid hnodup hlength
     rw [hrecursive] at hrecursiveEffect
-    simp only [trySpaces, hok, if_true, hrecursive]
+    simp only [trySpaces, hok, ite_true, hrecursive]
     intro candidate
     simp only [PlacementEffect] at hrecursiveEffect ⊢
     rw [Std.HashMap.getD_insert]
     split <;> rename_i heq
     · have hcandidate : column = candidate := beq_iff_eq.mp heq
       subst candidate
-      rw [if_pos (by simp)]
+      rw [ite_eq_left (by simp)]
       rw [hrecursiveEffect]
       simp [hcolumn]
     · have hcandidate : column ≠ candidate := by
@@ -1762,7 +1763,7 @@ theorem firstFit_effect
     rw [hrecursive] at hrecursiveValid
     have hremainingEffect := spacesInduction hrecursiveValid hnodup
       hcolumn hlength
-    simp only [trySpaces, hok, if_true, hrecursive]
+    simp only [trySpaces, hok, ite_true, hrecursive]
     intro candidate
     simp only [PlacementEffect] at hrecursiveEffect hremainingEffect ⊢
     specialize hrecursiveEffect candidate
@@ -1771,7 +1772,7 @@ theorem firstFit_effect
   case case7 =>
     intro fuel allocations column rest spaceStart spaceEnd more hok
       inductionHypothesis hvalid hnodup hcolumn hlength
-    simpa only [trySpaces, hok] using
+    simpa only [trySpaces, hok, Bool.false_eq_true, ite_false] using
       inductionHypothesis hvalid hnodup hcolumn hlength
 
 /-- If the requested row fits every column, first-fit accepts it immediately. -/
@@ -1998,7 +1999,7 @@ theorem firstFit_row_le_fitting_candidate
                             | some value => decide (value ≥ 0)
                             | none => true) = true := by
                         simpa only [ok, available] using hok
-                      simp only [trySpaces, hok', if_true]
+                      simp only [trySpaces, hok', ite_true]
                       change (match (firstFit fuel current rest length
                         spaceStart (available.map Int.toNat)).1 with
                         | some found =>
@@ -2068,7 +2069,7 @@ theorem firstFit_row_le_fitting_candidate
                             | none => true) = true := by
                         simpa only [ok, available] using hok
                       exact ⟨row, updated, by
-                        simp only [trySpaces, hok', if_true]
+                        simp only [trySpaces, hok', ite_true]
                         change (match (firstFit fuel current rest length
                           spaceStart (available.map Int.toNat)).1 with
                           | some found => _
@@ -2103,7 +2104,7 @@ theorem firstFit_row_le_fitting_candidate
                         | none => true) = true := by
                     simpa only [ok, available] using hok
                   exact ⟨row, updated, by
-                    simp only [trySpaces, if_neg hok', hresult], hrow⟩
+                    simp only [trySpaces, ite_eq_right hok', hresult], hrow⟩
           obtain ⟨row, updated, hresult, hrow⟩ := tryComplete spaces
             initialized hinitializedValid hrestFits hspacesPairwise
             hcandidateSpace
@@ -2230,8 +2231,7 @@ theorem firstFit_drop_dominated_suffix
           have hheadRestSuffix : head ∉ rest ++ suffix :=
             List.nodup_cons.mp hfullNodup |>.1
           have hrestFuel : (rest ++ suffix).length ≤ fuel := by
-            simpa only [List.length_cons] using
-              Nat.le_of_succ_le_succ hfuel
+            exact Nat.le_of_succ_le_succ hfuel
           let leftInitialized :=
             left.insert head (left.getD head #[])
           let rightInitialized :=
@@ -2398,7 +2398,7 @@ theorem firstFit_drop_dominated_suffix
                           Option ℕ × CircuitAllocations).1 =
                         ((if ok = true then _ else _) :
                           Option ℕ × CircuitAllocations).1
-                      simp only [if_pos hok]
+                      simp only [ite_eq_left hok]
                       rw [havailable, hfull, hcore]
                   | none =>
                       have hcoreRow : coreRow = none := hrecursiveRows.symm
@@ -2453,7 +2453,7 @@ theorem firstFit_drop_dominated_suffix
                           Option ℕ × CircuitAllocations).1 =
                         ((if ok = true then _ else _) :
                           Option ℕ × CircuitAllocations).1
-                      simp only [if_pos hok]
+                      simp only [ite_eq_left hok]
                       rw [havailable, hfull, hcore]
                       exact hnext
                 · have hnextSafety : ∀ next ∈ more, ∀ candidate,
@@ -2473,7 +2473,7 @@ theorem firstFit_drop_dominated_suffix
                       Option ℕ × CircuitAllocations).1 =
                     ((if ok = true then _ else _) :
                       Option ℕ × CircuitAllocations).1
-                  simpa only [if_neg hok] using hnext
+                  simpa only [ite_eq_right hok] using hnext
           have hresult := compareSpaces spaces leftInitialized rightInitialized
             hleftInitializedValid hrightInitializedValid hinitializedEquivalent
             (CircuitAllocations.Equivalent.refl leftInitialized)
@@ -2561,7 +2561,7 @@ theorem firstFit_congruent
       exact List.mem_cons_of_mem column hcandidate)
     have hfirst := firstInduction other hvalidLeft hvalidRight
       hrestNodup hlength hrestAgree
-    simp only [trySpaces, hok, if_true, hleftRecursive] at hfirst ⊢
+    simp only [trySpaces, hok, ite_true, hleftRecursive] at hfirst ⊢
     generalize hrightRecursive :
       firstFit fuel other rest length spaceStart
         ((spaceEnd.map fun endRow =>
@@ -2650,7 +2650,7 @@ theorem firstFit_congruent
     have hremaining := spacesInduction rightRecursive
       hleftLaw.1.valid hrightLaw.1.valid hrestNodup hcolumnRest
       hlength hrecursiveAgree
-    simpa only [trySpaces, hok, if_true, hleftRecursive,
+    simpa only [trySpaces, hok, ite_true, hleftRecursive,
       hrightRecursive, hrightRow] using hremaining
   case case7 =>
     intro fuel allocations column rest spaceStart spaceEnd more hok
@@ -2658,7 +2658,7 @@ theorem firstFit_congruent
       hcolumnRest hlength hagree
     have hresult := inductionHypothesis other hvalidLeft hvalidRight
       hrestNodup hcolumnRest hlength hagree
-    simpa only [trySpaces, hok] using hresult
+    simpa only [trySpaces, hok, Bool.false_eq_true, ite_false] using hresult
 
 /-- Extensionally equal allocation maps remain equal after the same first-fit
 placement, and produce the same start row. -/

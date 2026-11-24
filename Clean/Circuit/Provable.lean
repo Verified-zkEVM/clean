@@ -305,7 +305,18 @@ inductive ProvableTypeList (F : Type) : List WithProvableType → Type 1 where
 | nil : ProvableTypeList F []
 | cons : ∀ {a : WithProvableType} {as : List WithProvableType}, a.type F → ProvableTypeList F as → ProvableTypeList F (a :: as)
 
-abbrev combinedSize' (cs : List WithProvableType) : ℕ := cs.map (fun x => x.provableType.size) |>.sum
+abbrev combinedSize' : List WithProvableType → ℕ
+  | [] => 0
+  | c :: cs => c.provableType.size + combinedSize' cs
+
+/-- The structural size calculation agrees with the sum of component sizes. -/
+theorem combinedSize'_eq_sum (cs : List WithProvableType) :
+    combinedSize' cs = (cs.map fun c => c.provableType.size).sum := by
+  induction cs with
+  | nil => rfl
+  | cons c cs ih =>
+      simpa only [combinedSize', List.map_cons, List.sum_cons] using
+        congrArg (c.provableType.size + ·) ih
 end ProvableStruct
 
 -- if we can split a type into components that are provable types, then this gives us a provable type
@@ -681,7 +692,8 @@ theorem eval_varFromOffset (env : Environment F) (offset : ℕ) :
   congr
   rw [Vector.ext_iff]
   intro i hi
-  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+  rw [Vector.getElem_map]
+  simp only [Vector.getElem_mapRange, Expression.eval]
 
 theorem eval_varFromOffset_prover {α : TypeMap} [ProvableType α] (env : ProverEnvironment F) (offset : ℕ) :
     (Eval.eval env (varFromOffset α offset : α (Expression F)) : α F) =
@@ -710,13 +722,15 @@ theorem getElem_eval_toElements
 theorem getElem_eval_fields (env : Environment F) (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
     Expression.eval env x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression]
-  simp only [explicit_provable_type, fromElements, Vector.getElem_map]
+  simp only [explicit_provable_type, fromElements]
+  exact (Vector.getElem_map _ hi).symm
 
 theorem getElem_eval_fields_prover {n : ℕ} {env : ProverEnvironment F}
   (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
     Expression.eval env.toEnvironment x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression_prover]
-  simp only [explicit_provable_type, fromElements, Vector.getElem_map]
+  simp only [explicit_provable_type, fromElements]
+  exact (Vector.getElem_map _ hi).symm
 end ProvableType.Clean
 
 -- more concrete ProvableType instances

@@ -302,7 +302,6 @@ theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → ℕ)
     (n := d + 1)
     (by
       intro s hs
-      dsimp only
       rw [if_pos (show s ≤ d by omega)]
       rcases Nat.lt_or_ge s d with hsd | hsd
       · rw [if_pos (show s + 1 ≤ d by omega), show r + (s + 1) = r + s + 1 by omega]
@@ -311,7 +310,7 @@ theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → ℕ)
         rw [if_neg (show ¬ s + 1 ≤ s by omega), mul_zero, _root_.add_zero,
           show r + s = w by omega]
         exact hlast)
-    (by dsimp only; rw [if_neg (show ¬ d + 1 ≤ d by omega)])
+    (by rw [if_neg (show ¬ d + 1 ≤ d by omega)])
   simpa using h
 
 /-! ### The Sinsemilla step bridges
@@ -371,7 +370,7 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
       ({ x := P.x, y := P.y } : Point Fp) ≠ Point.zero := by
     intro P hP h
     apply hP
-    simpa [Point.zero_def] using h
+    simpa only [Point.zero, Point.zero_def] using h
   have hRadd := Point.nondegenerateAdd_eq_add
     (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS

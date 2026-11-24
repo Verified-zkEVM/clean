@@ -164,6 +164,8 @@ structure ConfigureDelta (F : Type) where
   adviceQueries : List (Column .advice × Rotation) := []
   fixedQueries : List (Column .fixed × Rotation) := []
   instanceQueries : List (Column .instance × Rotation) := []
+  /-- midnight-zk compilation entries, positioned relative to this delta's lists. -/
+  extensions : List (ConfigureExtension F) := []
 
 /-- Exact degree of the gate and lookup arguments emitted by this configure delta. -/
 def ConfigureDelta.constraintDegree (delta : ConfigureDelta F) : ℕ :=
@@ -216,6 +218,23 @@ def ConfigureDelta.RegistersPermutationColumn
   | ⟨.fixed, index⟩ => (⟨index⟩, 0) ∈ delta.fixedQueries
   | ⟨.instance, index⟩ => (⟨index⟩, 0) ∈ delta.instanceQueries
 
+/-- `entries` placed after `left`. Hiding the list lengths keeps `simp` from normalising them
+when it unfolds `append`. -/
+def ConfigureDelta.rebaseAfter (left : ConfigureDelta F)
+    (entries : List (ConfigureExtension F)) : List (ConfigureExtension F) :=
+  ConfigureExtension.rebase left.gates.length left.lookups.length entries
+
+@[simp] theorem ConfigureDelta.rebaseAfter_nil (left : ConfigureDelta F) :
+    left.rebaseAfter [] = [] :=
+  ConfigureExtension.rebase_nil _ _
+
+/-- The entries of `left.append right`. One application keeps `append`'s body small: `whnf`
+instantiates it once per append, and ironwood's `Ecc.Mul` elaborates close to the heartbeat
+limit. -/
+def ConfigureDelta.appendExtensions (left right : ConfigureDelta F) :
+    List (ConfigureExtension F) :=
+  left.extensions ++ left.rebaseAfter right.extensions
+
 def ConfigureDelta.append (left right : ConfigureDelta F) : ConfigureDelta F where
   gates := left.gates ++ right.gates
   lookups := left.lookups ++ right.lookups
@@ -225,6 +244,12 @@ def ConfigureDelta.append (left right : ConfigureDelta F) : ConfigureDelta F whe
   adviceQueries := left.adviceQueries ++ right.adviceQueries
   fixedQueries := left.fixedQueries ++ right.fixedQueries
   instanceQueries := left.instanceQueries ++ right.instanceQueries
+  extensions := left.appendExtensions right
+
+@[simp] theorem ConfigureDelta.extensions_append
+    (left right : ConfigureDelta F) :
+    (left.append right).extensions = left.extensions ++ left.rebaseAfter right.extensions :=
+  rfl
 
 @[simp] theorem ConfigureDelta.append_constants
     (left right : ConfigureDelta F) :
@@ -234,12 +259,12 @@ def ConfigureDelta.append (left right : ConfigureDelta F) : ConfigureDelta F whe
 @[simp] theorem ConfigureDelta.empty_append (delta : ConfigureDelta F) :
     ({} : ConfigureDelta F).append delta = delta := by
   cases delta
-  rfl
+  simp [ConfigureDelta.append, ConfigureDelta.appendExtensions, ConfigureDelta.rebaseAfter]
 
 @[simp] theorem ConfigureDelta.append_empty (delta : ConfigureDelta F) :
     delta.append ({} : ConfigureDelta F) = delta := by
   cases delta
-  simp [ConfigureDelta.append]
+  simp [ConfigureDelta.append, ConfigureDelta.appendExtensions]
 
 @[simp] theorem ConfigureDelta.constraintDegree_append
     (left right : ConfigureDelta F) :
@@ -418,6 +443,14 @@ def ConfigureDelta.apply (delta : ConfigureDelta F)
     appendFirstEncounters initial.fixedQueries delta.fixedQueries
   instanceQueries :=
     appendFirstEncounters initial.instanceQueries delta.instanceQueries
+  extensions := initial.extensions ++
+    ConfigureExtension.rebase initial.gates.length initial.lookups.length delta.extensions
+
+theorem ConfigureDelta.extensions_apply
+    (delta : ConfigureDelta F) (initial : ConstraintSystem F) (counts : ConfigureCounts) :
+    (delta.apply initial counts).extensions = initial.extensions ++
+      ConfigureExtension.rebase initial.gates.length initial.lookups.length delta.extensions :=
+  rfl
 
 theorem ConfigureDelta.mem_constants_apply
     (delta : ConfigureDelta F) (initial : ConstraintSystem F)

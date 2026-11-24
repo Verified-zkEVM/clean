@@ -43,16 +43,6 @@ def constantFreeRowsFrom (shapes : List RegionShape) (regionStarts : List ℕ)
   (List.range endRow).filter fun row =>
     !rowOccupiedIn shapes regionStarts (.column .fixed column) row
 
-private theorem filter_not_length_add_filter_length
-    (values : List ℕ) (predicate : ℕ → Bool) :
-    (values.filter fun value => !predicate value).length +
-      (values.filter predicate).length = values.length := by
-  induction values with
-  | nil => rfl
-  | cons value values inductionHypothesis =>
-      cases hpredicate : predicate value <;>
-        simp [hpredicate] <;> omega
-
 theorem constantFreeRowsFrom_length_lowerBound
     (shapes : List RegionShape) (regionStarts : List ℕ)
     (endRow column : ℕ) :
@@ -78,10 +68,10 @@ theorem constantFreeRowsFrom_length_lowerBound
   have hpartition :
       (constantFreeRowsFrom shapes regionStarts endRow column).length +
         occupied.length = endRow := by
-    simpa only [constantFreeRowsFrom, occupied, List.length_range] using
-      filter_not_length_add_filter_length (List.range endRow)
-        (fun row => rowOccupiedIn shapes regionStarts
-          (.column .fixed column) row)
+    have hsplit := (List.range endRow).length_eq_length_filter_add
+      (fun row => rowOccupiedIn shapes regionStarts (.column .fixed column) row)
+    simp only [constantFreeRowsFrom, occupied, List.length_range] at hsplit ⊢
+    omega
   omega
 
 /-- Compositional lower bound on the total deferred-constant capacity.  The placement
@@ -188,16 +178,8 @@ rows in `[0, first_unassigned_row)` of that column's allocations (`v1.rs:102-108
 zipped with `plan.constants` — the `constrain_constant` `(value, cell)` list collected in
 region-then-body order during the assignment pass (`v1.rs:122`). -/
 
-/-- `plan.constants` values in collection order (`assign_advice_from_constant` /
-`constrain_constant` push `(constant, cell)`; we keep the constant), region-index order then
-body order (`v1.rs` `AssignmentPass` runs regions in order). -/
-def regionConstantValues (body : RegionOperations F) : List F :=
-  match body with
-  | [] => []
-  | .constrainConstant _ value :: rest =>
-      value :: regionConstantValues rest
-  | _ :: rest => regionConstantValues rest
-
+/-- `plan.constants` values in region-index order then body order (`v1.rs` `AssignmentPass`
+runs regions in order). -/
 def constantValues (ops : Operations F) : List F :=
   (indexedRegions ops 0).1.flatMap fun (_, body) =>
     regionConstantValues body
@@ -421,7 +403,7 @@ theorem constantAssignments_map_fst
         endRow, List.length_map, List.length_zip] using hfull
     omega
   simp only [constantAssignments, List.map_map]
-  simpa only [Function.comp_apply] using
+  simpa only [Function.comp_def, positions, shapes, regionStarts, endRow] using
     List.map_snd_zip hpositions
 
 /-- Every V1 constant allocation uses one of the configured constants columns. -/

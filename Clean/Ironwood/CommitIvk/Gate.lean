@@ -94,11 +94,13 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   unfold configure
   infer_instance
 
+set_option backward.isDefEq.respectTransparency true in
 private theorem configure_selectorRequirements
     (advices : Fin 10 → Column .advice) (counts) :
     (configureInferred advices).selectorRequirements counts := by
   dsimp only [configureInferred, configure]
-  simp [configure_selector_norm]
+  simp only [configure_selector_norm]
+  simp [Configure.output_selector, Configure.finalCounts_selector]
 
 instance (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) :=

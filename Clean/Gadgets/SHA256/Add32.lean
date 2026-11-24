@@ -310,7 +310,16 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
-  simp only [bitsVal_eval, Nat.shiftRight_eq_div_pow] at h_env_z h_env_cout
+  have h_shiftExpr (ctx : Ctx (F p)) (a b : NExpr (F p)) :
+      (a >>> b).eval ctx = a.eval ctx >>> b.eval ctx := rfl
+  simp only [h_shiftExpr, bitsVal_eval] at h_env_z
+  simp only [Witgen.NExprOver.eval] at h_env_z
+  simp only [Array.getElem?_singleton, ite_true] at h_env_z
+  have h_add (a b : NExpr (F p)) :
+      (a + b).eval { env } = a.eval { env } + b.eval { env } := rfl
+  simp only [h_shiftExpr, h_add, bitsVal_eval] at h_env_cout
+  simp only [Witgen.NExprOver.eval] at h_env_cout
+  simp only [Nat.shiftRight_eq_div_pow] at h_env_z h_env_cout
   set S := evalBitsNat env input_var_a + evalBitsNat env input_var_b with hS_def
   have h_p_large := h_large.elim
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num

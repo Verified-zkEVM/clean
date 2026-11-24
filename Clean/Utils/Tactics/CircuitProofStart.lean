@@ -164,6 +164,10 @@ elab_rules : tactic
   try (evalTactic (← `(tactic| dsimp only [field, id_eq, CircuitType.var_of_provableType,
     CircuitType.value_of_provableType, CircuitType.proverValue_of_provableType] at *))) catch _ => pure ()
 
+  -- Expose the stored output projection after the circuit wrapper has been
+  -- unfolded by user-supplied simplification rules.
+  try (evalTactic (← `(tactic| dsimp only [FormalCircuitBase.output, ElaboratedCircuit.output, Circuit.output, Expression.eval] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do
   circuitProofStartCore

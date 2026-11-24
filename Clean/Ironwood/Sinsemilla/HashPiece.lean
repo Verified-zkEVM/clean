@@ -777,7 +777,8 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
         · exact hleft.2.2.trans hright.2.2.symm
       copyCellsAssigned := by
         intro configInput counts hconfig offset input region
-        simpa only [Configure.output_pure, circuitKeygenRequirements]
+        simpa only [Configure.output_pure, circuitKeygenRequirements,
+          RegionOperations.CopyCellsAssigned]
           using circuitBody_copyCellsAssigned G w final yaIn configInput offset input region }
 
   synthesize := circuitBody G w final yaIn

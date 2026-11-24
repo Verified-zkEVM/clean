@@ -534,7 +534,7 @@ instance lookup
     intro counts hselectors
     constructor
     · simp [Configure.delta_lookup_gates]
-    · simpa [Configure.delta, Halo2.lookup,
+    · simpa [Configure.delta, Configure.finalCounts, Configure.countDelta, ConfigureCountDelta.apply, Halo2.lookup,
         ConfigureDelta.fixedQueriesOfColumns, foldlTableDelta_lookups] using
         hselectors.1
     · simpa using hselectors.2
@@ -605,10 +605,17 @@ instance lookup
             (F := F) (List.mem_map.mpr
               ⟨(input, table), hentry, rfl⟩)).append_right.append_left
       · simp
-    · simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
-        ConfigureDelta.RegistersPermutationColumn,
-        ConfigureDelta.append] using
-          hcombined.permutationRequests_registered
+    · rw [List.forall_iff_forall_mem]
+      intro column hcolumn
+      have hmember : column ∈ (queryDelta.append tableDelta).permutationRequests := by
+        simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
+          ConfigureDelta.append] using hcolumn
+      have hregistered := List.forall_iff_forall_mem.mp
+        hcombined.permutationRequests_registered column hmember
+      rcases column with ⟨kind, index⟩
+      cases kind <;>
+        simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
+          ConfigureDelta.RegistersPermutationColumn, ConfigureDelta.append] using hregistered
     · simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
         ConfigureDelta.append] using
           hcombined.constants_permutationRequests

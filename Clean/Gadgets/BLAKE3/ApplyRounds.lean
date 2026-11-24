@@ -398,16 +398,36 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 -- proof, which makes the proof much more brittle and expensive. See https://github.com/Verified-zkEVM/clean/issues/394
 -- that said -- full unfolding is also kind of bad for outputs here because it's a long chain of `Round.main ...`
 -- that's why we override the output.
-instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
-  elaborate_circuit_with {
-    localLength _ := 5376
-    output input i₀ := main input |>.output i₀
-    channelsWithGuarantees := []
-  } using by
-    simp +instances only [circuit_norm, main, sevenRoundsApplyStyle, FormalCircuitBase.output]
-    simp +instances only [circuit_norm, sevenRoundsFinal, FormalCircuit.concat, sixRoundsApplyStyle, FormalCircuit.weakenSpec,
-      sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
-      Round.circuit, Round.elaborated, Permute.circuit, Permute.elaborated, initializeStateVector, id_eq]
+/-- Compose the length certificates without expanding any round's output. -/
+private theorem sevenRounds_localLength (input : Var Round.Inputs (F p)) :
+    sevenRoundsApplyStyle.localLength input = 5376 := by
+  have hround (x : Var Round.Inputs (F p)) : roundWithPermute.localLength x = 768 := rfl
+  have hlast (x : Var Round.Inputs (F p)) : Round.circuit.localLength x = 768 := rfl
+  simp only [sevenRoundsApplyStyle, FormalCircuit.weakenSpec_localLength,
+    sevenRoundsFinal, FormalCircuit.concat_localLength, sixRoundsApplyStyle,
+    sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, hround, hlast]
+
+set_option backward.isDefEq.respectTransparency true in
+instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main where
+  localLength _ := 5376
+  output input offset := (main input).output offset
+  output_eq _ _ := rfl
+  localLength_eq input offset := by
+    simpa only [main, circuit_norm] using
+      sevenRounds_localLength (p:=p) ⟨initializeStateVector input, input.block_words⟩
+  subcircuitsConsistent input offset := by
+    simp only [main, circuit_norm]
+  channelsWithGuarantees := []
+  channelsLawful input offset := by
+    simp only [main, circuit_norm]
+    change ([] : List (RawChannel (F p))) ⊆ []
+    exact List.Subset.refl _
+
+private theorem elaborated_output (input : Var Inputs (F p)) (offset : ℕ) :
+    ElaboratedCircuit.output main (self := elaborated) input offset =
+      sevenRoundsApplyStyle.output ⟨initializeStateVector input, input.block_words⟩ offset  := by
+  change (main input).output offset = _
+  conv_lhs => simp only [main, circuit_norm]
 
 def Assumptions (input : Inputs (F p)) :=
   let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input
@@ -435,6 +455,8 @@ lemma initial_state_and_messages_are_normalized
     (h_input : eval env input_var = { chaining_value, block_words, counter_high, counter_low, block_len, flags })
     (h_normalized : Assumptions { chaining_value, block_words, counter_high, counter_low, block_len, flags }) :
     (eval env (initializeStateVector input_var)).Normalized ∧ ∀ (i : Fin 16), block_words[i].Normalized := by
+  rcases input_var with ⟨cv, bw, ch, cl, bl, fl⟩
+  let input_var : Var Inputs (F p) := ⟨cv, bw, ch, cl, bl, fl⟩
   set state_vec : BLAKE3State (Expression (F p)) := initializeStateVector input_var
   simp only [Assumptions] at h_normalized
   simp only [circuit_norm] at *
@@ -442,21 +464,21 @@ lemma initial_state_and_messages_are_normalized
 
   -- Helper to prove normalization of chaining value elements
   have h_chaining_value_normalized (i : ℕ) (h_i : i < 8) : (eval env input_var.chaining_value[i]).Normalized := by
-    simp_all only [circuit_norm, eval_vector_eq_get]
+    simp_all only [circuit_norm, explicit_provable_type, eval_vector_eq_get, input_var]
     convert h_normalized.1 ⟨ i, h_i ⟩
 
   -- Show the state is normalized
   have h_state_normalized : BLAKE3State.Normalized (eval env state_vec) := by
-    simp only [BLAKE3State.Normalized, state_vec, initializeStateVector, eval_vector]
+    simp only [BLAKE3State.Normalized, state_vec, input_var, initializeStateVector, eval_vector]
     intro i
     fin_cases i
     -- First 8 elements are from chaining_value
     case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
-      state_vec_norm_simp; simp [h_chaining_value_normalized]
+      state_vec_norm_simp; simp [h_chaining_value_normalized, input_var]
     -- Next 4 are IV constants
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
-    case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all
+    case «12» |«13» | «14» | «15» => state_vec_norm_simp_simple; simp_all +instances
 
   constructor
   · apply h_state_normalized
@@ -464,9 +486,25 @@ lemma initial_state_and_messages_are_normalized
     intro i
     exact h_normalized.2.1 i
 
-theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start [sevenRoundsApplyStyle]
+private theorem sevenRounds_assumptions (input : Round.Inputs (F p)) :
+    sevenRoundsApplyStyle.Assumptions input = Round.Assumptions input := rfl
 
+private theorem sevenRounds_spec (input : Round.Inputs (F p)) (output : BLAKE3State (F p)) :
+    sevenRoundsApplyStyle.Spec input output = SevenRoundsSpec input output := rfl
+
+/-- Compare the word vectors before applying the opaque seven-round function. -/
+private theorem finish_spec (env : Environment (F p))
+    (input_var : Var Inputs (F p)) (input : Inputs (F p)) (output : BLAKE3State (F p))
+    (h_input : eval env input_var = input) (h_assumptions : Assumptions input)
+    (h_contract : SevenRoundsSpec
+      ⟨eval env (initializeStateVector input_var), eval env input_var.block_words⟩ output) :
+    Spec input output := by
+  rcases input with ⟨input_chaining_value, input_block_words, input_counter_high,
+    input_counter_low, input_block_len, input_flags⟩
+  rcases input_var with ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
+    input_var_counter_low, input_var_block_len, input_var_flags⟩
+  simp only [Spec, Assumptions, circuit_norm] at *
+  provable_struct_simp
   -- Equations for counter values
   have h_counter_low_eq : input_counter_low.value % 4294967296 = input_counter_low.value := by
     apply Nat.mod_eq_of_lt
@@ -483,21 +521,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     rw [Nat.div_eq_of_lt h1]
     simp
 
-  -- Apply h_holds with the proven assumptions
-  have h_spec := h_holds (by
-    apply initial_state_and_messages_are_normalized env
-    · simp only [circuit_norm, h_input]
-      rfl
-    · simp only [Assumptions]
-      aesop
-  )
-  clear h_holds
-
+  have h_spec := h_contract
   -- Now we need to show that the spec holds
   -- h_spec tells us that sevenRoundsApplyStyle.Spec holds for the inputs and output
   -- We need to unpack what this means and relate it to our Spec
-
-  simp only [FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat] at h_spec
 
   -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
   simp only [SevenRoundsSpec] at h_spec
@@ -511,18 +538,37 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
     -- h_value tells us the output equals applySevenRounds on our constructed state
     simp only [BLAKE3State.value] at h_value ⊢
-    calc
-      _ = _ := h_value
-      _ = _ := by
-        clear h_value
-        simp only [initializeStateVector, h_input, eval_vector, circuit_norm, getElem_eval_vector]
-        simp [circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
+    refine h_value.trans (congrArg₂ applySevenRounds ?_ ?_)
+    · simp only [initializeStateVector, h_input, eval_vector, circuit_norm, getElem_eval_vector]
+      simp [circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
+    · simp only [h_input]
   · -- Show out.Normalized
     exact h_normalized
-  · left; trivial
 
+set_option backward.isDefEq.respectTransparency true in
+theorem soundness : Soundness (F p) main Assumptions Spec := by
+  circuit_proof_start_core
+  have hgood : Round.Assumptions
+      ⟨eval env (initializeStateVector input_var), eval env input_var.block_words⟩ := by
+    rcases input with ⟨cv, bw, ch, cl, bl, fl⟩
+    have hg := initial_state_and_messages_are_normalized env input_var bw cv ch cl bl fl
+      h_input h_assumptions
+    have hb : eval env input_var.block_words = bw := by
+      rcases input_var with ⟨vcv, vbw, vch, vcl, vbl, vfl⟩
+      have hb := congrArg (fun x : Inputs (F p) => x.block_words) h_input
+      simpa only [circuit_norm, explicit_provable_type] using hb
+    simpa only [Round.Assumptions, hb] using hg
+  simp only [main, circuit_norm, sevenRounds_assumptions, sevenRounds_spec] at h_holds
+  constructor
+  · simp only [elaborated_output]
+    exact finish_spec env input_var input _ h_input h_assumptions (h_holds hgood)
+  · simp only [main, circuit_norm]
+    exact Or.inr (by simpa only [sevenRounds_assumptions] using hgood)
+
+set_option backward.isDefEq.respectTransparency true in
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
+  rw [sevenRounds_assumptions]
 
   -- Use the helper lemma to prove normalization
   apply initial_state_and_messages_are_normalized (p := p) env

@@ -8,6 +8,10 @@ namespace Configure
 
 variable {α β : Type}
 
+/-- A pure configuration returns its value and emits no arguments or allocations. -/
+@[simp] theorem plan_pure (value : α) (counts : ConfigureCounts) :
+    (pure value : Configure F α).plan counts = (value, {}, {}) := rfl
+
 @[simp] theorem delta_pure (value : α) (counts : ConfigureCounts) :
     delta (pure value : Configure F α) counts = {} :=
   rfl
@@ -367,8 +371,7 @@ private theorem ConfigureDelta.queriedCells_instanceQueries_aux
     (ConfigureDelta.queriedCells cells).instanceQueries =
       ConfigureDelta.instanceQueriesOfCells cells := by
   rw [ConfigureDelta.queriedCells]
-  simpa [ConfigureDelta.instanceQueriesOfCells] using
-    ConfigureDelta.queriedCells_instanceQueries_aux
+  exact ConfigureDelta.queriedCells_instanceQueries_aux
       (F := F) cells {}
 
 @[simp] theorem Configure.delta_adviceColumn_instanceQueries
@@ -484,14 +487,14 @@ def ConfigureDelta.fixedQueriesOfCells
     List (Column .fixed × Rotation) :=
   cells.flatMap fun cell =>
     match cell with
-    | .var (.fixed column _) => [(column, 0)]
+    | .var (.fixed column rotation) => [(column, rotation)]
     | _ => []
 
 @[simp] theorem ConfigureDelta.queriedCell_fixedQueries
     (cell : Expression F Query) :
     (ConfigureDelta.queriedCell cell).fixedQueries =
       match cell with
-      | .var (.fixed column _) => [(column, 0)]
+      | .var (.fixed column rotation) => [(column, rotation)]
       | _ => [] := by
   cases cell with
   | var query =>

@@ -50,61 +50,68 @@ def unexportableWitnesses (ops : List (FlatOperation F)) : List ℕ :=
 
 /-! ## Serialization -/
 
-variable [ToJson F]
+variable [ToJson F] {V : Type}
 
 mutual
 
-def FExprOver.toJson : FExpr F → Json
-  | .expr e => Json.mkObj [("type", "expr"), ("expr", Lean.toJson e)]
-  | .envGet i => Json.mkObj [("type", "envGet"), ("index", i.toJson)]
+def FExprOver.toJsonWith (enc : V → Json) : FExprOver F V → Json
+  | .expr e => Json.mkObj [("type", "expr"), ("expr", enc e)]
+  | .envGet i => Json.mkObj [("type", "envGet"), ("index", i.toJsonWith enc)]
   | .const c => Json.mkObj [("type", "const"), ("value", Lean.toJson c)]
   | .localVar i => Json.mkObj [("type", "localVar"), ("index", Lean.toJson i)]
-  | .add x y => Json.mkObj [("type", "add"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .mul x y => Json.mkObj [("type", "mul"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .inv x => Json.mkObj [("type", "inv"), ("arg", x.toJson)]
-  | .ofNat n => Json.mkObj [("type", "ofNat"), ("arg", n.toJson)]
+  | .add x y => Json.mkObj [("type", "add"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .mul x y => Json.mkObj [("type", "mul"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .inv x => Json.mkObj [("type", "inv"), ("arg", x.toJsonWith enc)]
+  | .ofNat n => Json.mkObj [("type", "ofNat"), ("arg", n.toJsonWith enc)]
   | .ite c t e => Json.mkObj [("type", "ite"),
-      ("cond", c.toJson), ("then", t.toJson), ("else", e.toJson)]
+      ("cond", c.toJsonWith enc), ("then", t.toJsonWith enc), ("else", e.toJsonWith enc)]
   | .listGet xs i => Json.mkObj [("type", "listGet"),
-      ("items", Json.arr (FExprOver.listToJson xs).toArray), ("index", i.toJson)]
+      ("items", Json.arr (FExprOver.listToJsonWith enc xs).toArray), ("index", i.toJsonWith enc)]
   | .dataGet key n row col => Json.mkObj [("type", "dataGet"),
       ("table", Lean.toJson key), ("width", Lean.toJson n),
-      ("row", row.toJson), ("col", Lean.toJson col.val)]
+      ("row", row.toJsonWith enc), ("col", Lean.toJson col.val)]
   | .hintGet key n row col => Json.mkObj [("type", "hintGet"),
       ("table", Lean.toJson key), ("width", Lean.toJson n),
-      ("row", row.toJson), ("col", Lean.toJson col.val)]
+      ("row", row.toJsonWith enc), ("col", Lean.toJson col.val)]
 
-def FExprOver.listToJson : List (FExpr F) → List Json
+def FExprOver.listToJsonWith (enc : V → Json) : List (FExprOver F V) → List Json
   | [] => []
-  | x :: xs => x.toJson :: FExprOver.listToJson xs
+  | x :: xs => x.toJsonWith enc :: FExprOver.listToJsonWith enc xs
 
-def NExprOver.toJson : NExpr F → Json
+def NExprOver.toJsonWith (enc : V → Json) : NExprOver F V → Json
   | .const n => Json.mkObj [("type", "const"), ("value", Lean.toJson n)]
-  | .val x => Json.mkObj [("type", "val"), ("arg", x.toJson)]
+  | .val x => Json.mkObj [("type", "val"), ("arg", x.toJsonWith enc)]
   | .idx => Json.mkObj [("type", "idx")]
   | .localVar i => Json.mkObj [("type", "localVar"), ("index", Lean.toJson i)]
-  | .add x y => Json.mkObj [("type", "add"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .mul x y => Json.mkObj [("type", "mul"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .div x y => Json.mkObj [("type", "div"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .mod x y => Json.mkObj [("type", "mod"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .land x y => Json.mkObj [("type", "and"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .lor x y => Json.mkObj [("type", "or"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .lxor x y => Json.mkObj [("type", "xor"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .shiftL x y => Json.mkObj [("type", "shiftLeft"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .shiftR x y => Json.mkObj [("type", "shiftRight"), ("lhs", x.toJson), ("rhs", y.toJson)]
+  | .add x y => Json.mkObj [("type", "add"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .mul x y => Json.mkObj [("type", "mul"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .div x y => Json.mkObj [("type", "div"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .mod x y => Json.mkObj [("type", "mod"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .land x y => Json.mkObj [("type", "and"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .lor x y => Json.mkObj [("type", "or"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .lxor x y => Json.mkObj [("type", "xor"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .shiftL x y => Json.mkObj [("type", "shiftLeft"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .shiftR x y => Json.mkObj [("type", "shiftRight"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
   | .ite c t e => Json.mkObj [("type", "ite"),
-      ("cond", c.toJson), ("then", t.toJson), ("else", e.toJson)]
+      ("cond", c.toJsonWith enc), ("then", t.toJsonWith enc), ("else", e.toJsonWith enc)]
 
-def BExprOver.toJson : BExpr F → Json
+def BExprOver.toJsonWith (enc : V → Json) : BExprOver F V → Json
   | .true => Json.mkObj [("type", "true")]
   | .false => Json.mkObj [("type", "false")]
-  | .feq x y => Json.mkObj [("type", "eq"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .neq x y => Json.mkObj [("type", "natEq"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .lt x y => Json.mkObj [("type", "lt"), ("lhs", x.toJson), ("rhs", y.toJson)]
-  | .not b => Json.mkObj [("type", "not"), ("arg", b.toJson)]
-  | .and x y => Json.mkObj [("type", "and"), ("lhs", x.toJson), ("rhs", y.toJson)]
+  | .feq x y => Json.mkObj [("type", "eq"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .neq x y => Json.mkObj [("type", "natEq"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .lt x y => Json.mkObj [("type", "lt"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
+  | .not b => Json.mkObj [("type", "not"), ("arg", b.toJsonWith enc)]
+  | .and x y => Json.mkObj [("type", "and"), ("lhs", x.toJsonWith enc), ("rhs", y.toJsonWith enc)]
 
 end
+
+/-! Main Clean instantiates the atom as `Expression`, encoded with its own `ToJson`. -/
+
+def FExprOver.toJson : FExpr F → Json := FExprOver.toJsonWith Lean.toJson
+def FExprOver.listToJson : List (FExpr F) → List Json := FExprOver.listToJsonWith Lean.toJson
+def NExprOver.toJson : NExpr F → Json := NExprOver.toJsonWith Lean.toJson
+def BExprOver.toJson : BExpr F → Json := BExprOver.toJsonWith Lean.toJson
 
 instance : ToJson (FExpr F) := ⟨FExprOver.toJson⟩
 instance : ToJson (NExpr F) := ⟨NExprOver.toJson⟩

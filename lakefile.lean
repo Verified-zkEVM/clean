@@ -19,12 +19,11 @@ lean_lib Orchard where
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
--- The shared elliptic-curve/finite-field theory used by Clean/Ironwood and by
--- zcash/ironwood (which pins the same revision) — replacing the formerly vendored
--- Clean/Ironwood/Specs/CompElliptic+CompPoly copies. Brings CompPoly transitively.
+-- Public Lean 4.35 compatibility port of daira/CompElliptic.
 require CompElliptic from git
-  "https://github.com/daira/CompElliptic" @ "2c0444035a84db957f27f06433715058d1e890ad"
+  "https://github.com/zksecurity/compelliptic-lean4-35.git" @ "f26a235f2f647b10fe63bc4ec4c7ee394b3c8f43"
 
 -- mathlib LAST so its pinned toolchain-matched versions of the common transitive
 -- dependencies (batteries, aesop, Qq, proofwidgets, ...) take precedence.
-require mathlib from git "https://github.com/leanprover-community/mathlib4"@"v4.30.0"
+require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git" @ "v4.35.0"
+require mathlib from git "https://github.com/leanprover-community/mathlib4" @ "v4.35.0"

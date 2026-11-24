@@ -332,133 +332,6 @@ theorem KeySorted.keysLE_last
     simp [hnil] at hitems)] at hrelation
   simpa [getElem!_pos items (items.length - 1) (by omega)] using hrelation
 
-/-- Stable insertion used to state the pure semantics of pdqsort's shifting
-insertion-sort primitive. Equal keys remain in their original order. -/
-def insertByKey (key : T → ℕ) (item : T) : List T → List T
-  | [] => [item]
-  | head :: rest =>
-      if key item < key head then
-        item :: head :: rest
-      else
-        head :: insertByKey key item rest
-
-omit [Inhabited T] in
-theorem mem_insertByKey_iff
-    (key : T → ℕ) (item candidate : T) (items : List T) :
-    candidate ∈ insertByKey key item items ↔
-      candidate = item ∨ candidate ∈ items := by
-  induction items with
-  | nil => simp [insertByKey]
-  | cons head rest inductionHypothesis =>
-      simp only [insertByKey]
-      split <;> simp_all [or_left_comm]
-
-omit [Inhabited T] in
-theorem insertByKey_perm
-    (key : T → ℕ) (item : T) (items : List T) :
-    (insertByKey key item items).Perm (item :: items) := by
-  induction items with
-  | nil => exact .refl _
-  | cons head rest inductionHypothesis =>
-      simp only [insertByKey]
-      split
-      · exact .refl _
-      · exact (inductionHypothesis.cons head).trans (.swap _ _ _)
-
-omit [Inhabited T] in
-theorem insertByKey_eq_append
-    (key : T → ℕ) (item : T) (items : List T)
-    (hbound : KeysLE key items (key item)) :
-    insertByKey key item items = items ++ [item] := by
-  induction items with
-  | nil => rfl
-  | cons head rest inductionHypothesis =>
-      have hhead := hbound head (by simp)
-      have hnotBefore : ¬key item < key head := by omega
-      rw [Pdqsort.insertByKey, if_neg hnotBefore,
-        inductionHypothesis (by
-          intro candidate hcandidate
-          exact hbound candidate (by simp [hcandidate])),
-        List.cons_append]
-
-omit [Inhabited T] in
-theorem KeySorted.insertByKey
-    (key : T → ℕ) (item : T) (items : List T)
-    (hitems : KeySorted key items) :
-    KeySorted key (insertByKey key item items) := by
-  rw [KeySorted, List.sortedLE_iff_pairwise] at hitems ⊢
-  induction items with
-  | nil =>
-      exact List.Pairwise.cons (by simp) List.Pairwise.nil
-  | cons head rest inductionHypothesis =>
-      change List.Pairwise (fun left right : ℕ => left ≤ right)
-        (key head :: rest.map key) at hitems
-      rw [List.pairwise_cons] at hitems
-      by_cases hbefore : key item < key head
-      · rw [Pdqsort.insertByKey, if_pos hbefore, List.map_cons, List.map_cons,
-          List.pairwise_cons]
-        exact ⟨by
-          intro value hvalue
-          rw [List.mem_cons] at hvalue
-          rcases hvalue with rfl | hvalue
-          · exact hbefore.le
-          · exact hbefore.le.trans (hitems.1 value hvalue),
-          List.Pairwise.cons hitems.1 hitems.2⟩
-      · rw [Pdqsort.insertByKey, if_neg hbefore, List.map_cons, List.pairwise_cons]
-        have hrestSorted := inductionHypothesis hitems.2
-        refine ⟨?_, hrestSorted⟩
-        intro value hvalue
-        rw [List.mem_map] at hvalue
-        obtain ⟨candidate, hcandidate, rfl⟩ := hvalue
-        rw [mem_insertByKey_iff] at hcandidate
-        rcases hcandidate with rfl | hcandidate
-        · omega
-        · exact hitems.1 (key candidate) (by
-            rw [List.mem_map]
-            exact ⟨_, hcandidate, rfl⟩)
-
-/-- Pure left-to-right insertion sort matching the small-slice path's stable
-equal-key behavior. -/
-def insertionSortByKey (key : T → ℕ) (items : List T) : List T :=
-  items.foldl (fun sorted item => insertByKey key item sorted) []
-
-omit [Inhabited T] in
-theorem insertionSortByKey_sorted (key : T → ℕ) (items : List T) :
-    KeySorted key (insertionSortByKey key items) := by
-  unfold insertionSortByKey
-  generalize hsorted : ([] : List T) = sorted
-  have hinitial : KeySorted key sorted := by
-    rw [← hsorted]
-    exact KeySorted.nil key
-  clear hsorted
-  induction items generalizing sorted with
-  | nil => exact hinitial
-  | cons item rest inductionHypothesis =>
-      simp only [List.foldl_cons]
-      exact inductionHypothesis _
-        (KeySorted.insertByKey key item sorted hinitial)
-
-omit [Inhabited T] in
-theorem insertionSortByKey_perm (key : T → ℕ) (items : List T) :
-    (insertionSortByKey key items).Perm items := by
-  unfold insertionSortByKey
-  have hfold : ∀ (remaining accumulator : List T),
-      (remaining.foldl
-        (fun sorted item => insertByKey key item sorted) accumulator).Perm
-        (remaining.reverse ++ accumulator) := by
-    intro remaining
-    induction remaining with
-    | nil => intro accumulator; exact .refl _
-    | cons item rest inductionHypothesis =>
-        intro accumulator
-        simp only [List.foldl_cons, List.reverse_cons, List.append_assoc]
-        exact (inductionHypothesis (insertByKey key item accumulator)).trans
-          ((List.Perm.refl rest.reverse).append
-            (insertByKey_perm key item accumulator))
-  have hresult := hfold items []
-  rw [List.append_nil] at hresult
-  exact hresult.trans (List.reverse_perm items)
-
 /-- Swap two array entries by index (`slice::swap`). -/
 @[inline] def swp (a : Array T) (i j : ℕ) : Array T :=
   let x := a[i]!
@@ -558,21 +431,18 @@ def overwrite (a : Array T) (start : ℕ) (sub : Array T) : Array T := Id.run do
     a := a.set! (start + i) (sub[i]!)
   return a
 
-/-- `shift_tail` (`sort.rs:81-123`): shift the last element left to its sorted position. -/
+/-- `shift_tail` (`sort.rs:81-123`): shift the last element left to its sorted position.
+The loop state is explicit so its invariant has a stable interface across Lean versions. -/
 def shiftTail (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
   let len := v.size
   if len < 2 then return v
   if !isLess (v[len-1]!) (v[len-2]!) then return v
-  let mut v := v
   let tmp := v[len-1]!
-  let mut hole := len - 2
-  v := v.set! (len-1) (v[len-2]!)
-  for i in (List.range (len-2)).reverse do
-    if !isLess tmp (v[i]!) then break
-    v := v.set! (i+1) (v[i]!)
-    hole := i
-  v := v.set! hole tmp
-  return v
+  let result ← forIn (List.range (len - 2)).reverse
+    (⟨len - 2, v.set! (len - 1) v[len-2]!⟩ : MProd ℕ (Array T)) fun i state =>
+      if !isLess tmp (state.snd[i]!) then pure (.done state)
+      else pure (.yield ⟨i, state.snd.set! (i + 1) (state.snd[i]!)⟩)
+  return result.snd.set! result.fst tmp
 
 private theorem shiftTail_loop_sorted
     (tmp : T) (key : T → ℕ) :
@@ -764,16 +634,12 @@ def shiftHead (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
   let len := v.size
   if len < 2 then return v
   if !isLess (v[1]!) (v[0]!) then return v
-  let mut v := v
   let tmp := v[0]!
-  let mut hole := 1
-  v := v.set! 0 (v[1]!)
-  for i in [2:len] do
-    if !isLess (v[i]!) tmp then break
-    v := v.set! (i-1) (v[i]!)
-    hole := i
-  v := v.set! hole tmp
-  return v
+  let result ← forIn (List.range' 2 (len - 2))
+    (⟨1, v.set! 0 v[1]!⟩ : MProd ℕ (Array T)) fun i state =>
+      if !isLess (state.snd[i]!) tmp then pure (.done state)
+      else pure (.yield ⟨i, state.snd.set! (i - 1) (state.snd[i]!)⟩)
+  return result.snd.set! result.fst tmp
 
 /-- `insertion_sort` (`sort.rs:175-182`). -/
 def insertionSort (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
@@ -784,16 +650,16 @@ def insertionSort (v : Array T) (isLess : T → T → Bool) : Array T := Id.run 
 
 /-- One `sift_down` step of `heapsort` (`sort.rs:191-210`). -/
 def siftDown (v : Array T) (isLess : T → T → Bool) (node0 : ℕ) : Array T := Id.run do
-  let mut v := v
-  let mut node := node0
-  for _ in [0:v.size+1] do
-    let left := 2*node + 1
-    let right := 2*node + 2
-    let greater := if right < v.size && isLess (v[left]!) (v[right]!) then right else left
-    if greater ≥ v.size || !isLess (v[node]!) (v[greater]!) then break
-    v := swp v node greater
-    node := greater
-  return v
+  let result ← forIn (List.range' 0 (v.size + 1))
+    (⟨node0, v⟩ : MProd ℕ (Array T)) fun _ state =>
+      let node := state.fst
+      let v := state.snd
+      let left := 2 * node + 1
+      let right := 2 * node + 2
+      let greater := if right < v.size && isLess (v[left]!) (v[right]!) then right else left
+      if greater ≥ v.size || !isLess (v[node]!) (v[greater]!) then pure (.done state)
+      else pure (.yield ⟨greater, swp v node greater⟩)
+  return result.snd
 
 /-- `heapsort` (`sort.rs:186-222`). -/
 def heapsort (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
@@ -1283,7 +1149,7 @@ private theorem cycle_set_perm
   apply cycle_set_loop_perm nexts a hole a[hole]! a hhole hnexts
   rw [show a.set! hole a[hole]! = a by
     apply Array.toList_inj.mp
-    simpa [Array.set!, hhole] using
+    simpa only [Array.set!, Array.toList_setIfInBounds, getElem!_pos a hole hhole, ← Array.getElem_toList hhole] using
       (List.set_getElem_self (as := a.toList) (i := hole)
         (by simpa using hhole))]
 
@@ -1644,7 +1510,7 @@ private theorem block_cycle_classifies
     (by simp) (by simpa [afterFirst] using hinitial)
   have hloopResult : CycleStateInvariant array.size left right sl sr count
       (count - 1) leftGood rightGood result := by
-    simpa only [result, Nat.zero_add, List.length_range'] using hloop
+    simpa only [result, Nat.zero_add, Nat.add_zero, List.length_range'] using hloop
   rcases hloopResult with
     ⟨hresultLeft, hresultRight, hresultSize,
       hleftDone, hrightDone, hleftFuture, hrightFuture⟩
@@ -1813,11 +1679,11 @@ private theorem block_cycle_outside
     (List.range' 0 (count - 1)) 0 afterFirst
     (by simp) (by simp [afterFirst]) hafterFirst
   have hresultValue : result.2.2[position]! = array[position]! := by
-    simpa only [result, Nat.zero_add] using hloop
+    simpa only [result, Nat.zero_add, Nat.add_zero] using hloop
   have hshape := cycle_loop_shape (T := T) left right sl sr
     (List.range' 0 (count - 1)) 0 afterFirst
   have hresultRight : result.2.1 = sr + (count - 1) := by
-    simpa only [result, Nat.zero_add, List.length_range'] using hshape.2.1
+    simpa only [result, Nat.zero_add, Nat.add_zero, List.length_range'] using hshape.2.1
   have hresultSize : result.2.2.size = array.size := by
     simpa [result, afterFirst] using hshape.2.2
   have htarget : right result.2.1 < result.2.2.size := by
@@ -1865,7 +1731,7 @@ private theorem block_cycle_perm
       hleftStart hrightStart]
     have hself : a.set! (left sl) tmp = a := by
       apply Array.toList_inj.mp
-      simpa [tmp, Array.set!, hleftStart] using
+      simpa only [tmp, Array.set!, Array.toList_setIfInBounds, getElem!_pos a (left sl) hleftStart, ← Array.getElem_toList hleftStart] using
         (List.set_getElem_self (as := a.toList) (i := left sl)
           (by simpa using hleftStart))
     rw [hself]
@@ -1903,8 +1769,8 @@ private theorem scan_offsets_aux
       simp only [List.forIn_cons]
       have hend : endIdx < offsets.size := by
         have : endIdx + 1 ≤ endIdx + (indices.length + 1) := by omega
-        simpa only [List.length_cons] using
-          this.trans hcapacity
+        have := this.trans hcapacity
+        omega
       let offsets' := offsets.set! endIdx i
       let endIdx' :=
         if keep i = true then endIdx + 1 else endIdx
@@ -2674,7 +2540,7 @@ private theorem blockCycleOutput_size
     (List.range' 0 (count - 1)) 0 afterFirst
   have hresultSize : result.2.2.size = array.size := by
     simpa [result, afterFirst] using hshape.2.2
-  simpa [blockCycleOutput, left, right, result, Array.set!]
+  simpa [blockCycleOutput, left, right, result, afterFirst, Array.set!]
     using hresultSize
 
 private theorem scanned_block_cycle_classifies
@@ -5084,24 +4950,24 @@ def partitionP (v0 : Array T) (pivotIdx : ℕ) (isLess : T → T → Bool) : (�
 /-- `partition_equal` (`sort.rs:527-579`): partition `[==pivot | >pivot]` (assumes no element
 `< pivot`). Returns the number equal to the pivot (incl. the pivot) and the mutated slice. -/
 def partitionEqual (v0 : Array T) (pivotIdx : ℕ) (isLess : T → T → Bool) : ℕ × Array T := Id.run do
-  let mut v := swp v0 0 pivotIdx
+  let v := swp v0 0 pivotIdx
   let pivotVal := v[0]!
   let n := v.size
-  let mut l : ℕ := 0
-  let mut r : ℕ := n - 1
-  let mut done := false
-  for _ in [0:n+1] do
-    if !done then
-      for _ in [0:n] do
-        if l < r && !isLess pivotVal (v[1+l]!) then l := l + 1 else break
-      for _ in [0:n] do
-        if l < r && isLess pivotVal (v[1+(r-1)]!) then r := r - 1 else break
-      if l ≥ r then done := true
-      else
-        r := r - 1
-        v := swp v (1+l) (1+r)
-        l := l + 1
-  return (l+1, v)
+  let result ← forIn (List.range (n + 1))
+    (⟨false, 0, n - 1, v⟩ : MProd Bool (MProd ℕ (MProd ℕ (Array T)))) fun _ state => do
+      let done := state.fst
+      let mut l := state.snd.fst
+      let mut r := state.snd.snd.fst
+      let v := state.snd.snd.snd
+      if !done then
+        for _ in List.range n do
+          if l < r && !isLess pivotVal (v[1+l]!) then l := l + 1 else break
+        for _ in List.range n do
+          if l < r && isLess pivotVal (v[1+(r-1)]!) then r := r - 1 else break
+        if l ≥ r then return .yield ⟨true, l, r, v⟩
+        else return .yield ⟨done, l + 1, r - 1, swp v (1+l) (1+(r-1))⟩
+      return .yield state
+  return (result.snd.fst + 1, result.snd.snd.snd)
 
 /-- Smallest power of two `≥ n` (`usize::next_power_of_two`). -/
 def nextPow2 (n : ℕ) : ℕ := Id.run do
@@ -5115,26 +4981,27 @@ def nextPow2 (n : ℕ) : ℕ := Id.run do
 Uses the MODIFIED (deterministic, 64-bit) Xorshift with two `gen_u32` calls per `gen_usize`
 (`sort.rs:595-597`). u32 wrapping arithmetic is modelled with `UInt32`. -/
 def breakPatterns (v0 : Array T) : Array T := Id.run do
-  let mut v := v0
-  let len := v.size
+  let len := v0.size
   if len ≥ 8 then
-    let mut random : UInt32 := len.toUInt32
     let modulus := nextPow2 len
-    let pos := len/4*2
-    for i in [0:3] do
-      random := random ^^^ (random <<< 13)
-      random := random ^^^ (random >>> 17)
-      random := random ^^^ (random <<< 5)
-      let hi := random
-      random := random ^^^ (random <<< 13)
-      random := random ^^^ (random >>> 17)
-      random := random ^^^ (random <<< 5)
-      let lo := random
-      let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
-      let mut other : ℕ := g.toNat % modulus
-      if other ≥ len then other := other - len
-      v := swp v (pos - 1 + i) other
-  return v
+    let pos := len / 4 * 2
+    let result ← forIn (List.range' 0 3)
+      (⟨len.toUInt32, v0⟩ : MProd UInt32 (Array T)) fun i state => do
+        let mut random := state.fst
+        random := random ^^^ (random <<< 13)
+        random := random ^^^ (random >>> 17)
+        random := random ^^^ (random <<< 5)
+        let hi := random
+        random := random ^^^ (random <<< 13)
+        random := random ^^^ (random >>> 17)
+        random := random ^^^ (random <<< 5)
+        let lo := random
+        let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
+        let raw := g.toNat % modulus
+        let other := if raw ≥ len then raw - len else raw
+        return .yield ⟨random, swp state.snd (pos - 1 + i) other⟩
+    return result.snd
+  return v0
 
 /-- `choose_pivot` (`sort.rs:625-686`): median-of-medians pivot selection. Returns
 `((pivot index, likely-sorted), mutated slice)`. `sort2`/`sort3` reorder INDEX variables
@@ -5168,23 +5035,23 @@ def choosePivot (v0 : Array T) (isLess : T → T → Bool) : (ℕ × Bool) × Ar
 
 /-- `partial_insertion_sort` (`sort.rs:129-172`). Returns `(sorted?, mutated slice)`. -/
 def partialInsertionSort (v0 : Array T) (isLess : T → T → Bool) : Bool × Array T := Id.run do
-  let MAX_STEPS := 5
-  let SHORTEST_SHIFTING := 50
-  let mut v := v0
-  let len := v.size
-  let mut i : ℕ := 1
-  let mut result : Option Bool := none
-  for _ in [0:MAX_STEPS] do
-    if result.isNone then
-      for _ in [0:len+1] do
-        if i < len && !isLess (v[i]!) (v[i-1]!) then i := i + 1 else break
-      if i == len then result := some true
-      else if len < SHORTEST_SHIFTING then result := some false
-      else
-        v := swp v (i-1) i
-        v := overwrite v 0 (shiftTail (v.extract 0 i) isLess)
-        v := overwrite v i (shiftHead (v.extract i v.size) isLess)
-  return (result.getD false, v)
+  let len := v0.size
+  let result ← forIn (List.range' 0 5)
+    (⟨1, none, v0⟩ : MProd ℕ (MProd (Option Bool) (Array T))) fun _ state => do
+      let mut i := state.fst
+      let mut result := state.snd.fst
+      let mut v := state.snd.snd
+      if result.isNone then
+        for _ in [0:len+1] do
+          if i < len && !isLess (v[i]!) (v[i-1]!) then i := i + 1 else break
+        if i == len then result := some true
+        else if len < 50 then result := some false
+        else
+          v := swp v (i-1) i
+          v := overwrite v 0 (shiftTail (v.extract 0 i) isLess)
+          v := overwrite v i (shiftHead (v.extract i v.size) isLess)
+      return .yield ⟨i, result, v⟩
+  return (result.snd.fst.getD false, result.snd.snd)
 
 /--
 The ordinary pivot split, factored out of the recursive driver.  Making this

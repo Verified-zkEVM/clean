@@ -43,12 +43,7 @@ def inputValues (place : RegionIndex → ℕ) (env : Environment F)
 /-- The lookup table tuple at one absolute usable row. -/
 def tableValues (env : Environment F) (lookup : EnabledLookup F)
     (tableRow : ℕ) : List F :=
-  lookup.argument.tables.map
-    (Expression.eval
-      (Query.eval env
-        (fun index =>
-          if ∃ selector ∈ lookup.enabled, selector.index = index then 1 else 0)
-        (tableRow : ℤ)))
+  lookup.argument.tables.map (Expression.eval (Query.eval env (fun _ => 0) (tableRow : ℤ)))
 
 /-- Clean's semantic lookup relation for one extracted activation. -/
 def Satisfied (place : RegionIndex → ℕ) (env : Environment F)

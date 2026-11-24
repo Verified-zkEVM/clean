@@ -130,6 +130,7 @@ theorem configure_output_mulFixedBaseField_lookupConfig
   unfold configure
   infer_instance
 
+set_option backward.isDefEq.respectTransparency true in
 private theorem configure_selectorRequirements
     (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
@@ -145,6 +146,7 @@ private theorem configure_selectorRequirements
     MulFixed.FullWidth.configure,
     MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
+set_option backward.isDefEq.respectTransparency true in
 instance (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) :
@@ -408,6 +410,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro gate hgate
         simp only [WitnessPoint.pointFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hgate
         simp only [configureDeltaContext]
@@ -418,6 +421,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro argument hargument
         simp only [WitnessPoint.pointFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hargument
         simp only [configureDeltaContext]
@@ -428,6 +432,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro column hcolumn
         simp only [WitnessPoint.pointFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
         simp only [configureDeltaContext]
@@ -438,6 +443,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro column hcolumn
         simp only [WitnessPoint.pointFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
         simp only [configureDeltaContext]
@@ -451,6 +457,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro gate hgate
         simp only [WitnessPoint.pointNonIdFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hgate
         simp only [configureDeltaContext]
@@ -461,6 +468,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro argument hargument
         simp only [WitnessPoint.pointNonIdFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hargument
         simp only [configureDeltaContext]
@@ -471,6 +479,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro column hcolumn
         simp only [WitnessPoint.pointNonIdFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
         simp only [configureDeltaContext]
@@ -481,6 +490,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro column hcolumn
         simp only [WitnessPoint.pointNonIdFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
         simp only [configureDeltaContext]

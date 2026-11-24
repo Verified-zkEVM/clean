@@ -1,3 +1,4 @@
+import Clean.Gadgets.WitnessEvaluation
 import Clean.Orchard.Ecc.MulFixed
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
@@ -690,9 +691,9 @@ theorem soundness (B : FixedBase) :
               accPt env i₀ j) := by
     intro j hj
     rcases j with _ | j'
-    · simpa only [zCell, accPt, Nat.zero_mul, Nat.add_zero, Nat.reduceAdd, circuit_norm]
+    · simpa only [zCell, accPt, Nat.zero_mul, Nat.add_zero, Nat.reduceAdd, List.sum_cons, List.sum_nil, explicit_provable_type, circuit_norm]
         using h_loop.1
-    · simpa only [zCell, accPt, Nat.reduceAdd, circuit_norm]
+    · simpa only [zCell, accPt, Nat.reduceAdd, List.sum_cons, List.sum_nil, explicit_provable_type, circuit_norm]
         using h_loop.2 j' (by omega)
   clear h_input
   -- window values from the range checks
@@ -1191,9 +1192,20 @@ theorem completeness (B : FixedBase) :
     circuit_norm]
     at h_add_env h_signw h_lastww h_yPw ⊢
   rw [Nat.add_comm 200 (i₀ + 1 + 4)] at h_signw h_lastww h_yPw
+  have h_read (w : ℕ) (xs : Vector Fp 8) :
+      (xs[(input_var_magnitude.val / Witgen.NExprOver.const (8^w) % 8 : NExpr Fp)]).eval {env} =
+        xs[FiniteField.val input_magnitude / 8^w % 8] := by
+    rw [Witgen.eval_vector_const_read {env} xs _ (by
+      change (FiniteField.val (Expression.eval env.toEnvironment input_var_magnitude) / 8^w) % 8 < 8
+      exact Nat.mod_lt _ (by decide))]
+    simp only [Witgen.eval_div, Witgen.eval_mod, circuit_norm, h_input]
+  simp only [h_read, Witgen.eval_div, Witgen.eval_mod, circuit_norm,
+    h_input, Vector.getElem_ofFn] at h_t0 h_loop_env h_t21
+  have h_program (w : ℕ) := rowProgram_value B input_magnitude w
+  simp only [dif_pos (Nat.mod_lt _ (by decide : 0 < 8))] at h_program
   -- witnessed row values
   obtain ⟨h0z, h0x, h0y, h0u⟩ :=
-    env_get_rowTail (h_t0.trans (rowProgram_value B input_magnitude 0))
+    env_get_rowTail (h_t0.trans (h_program 0))
   have hrow : ∀ (j : ℕ) (hj : j < 20),
       env.get (i₀ + 1 + 4 + j * 10) = (rowTailValue B input_magnitude (j + 1)).zNext ∧
         env.get (i₀ + 1 + 4 + j * 10 + 1) = (rowTailValue B input_magnitude (j + 1)).xP ∧
@@ -1204,15 +1216,15 @@ theorem completeness (B : FixedBase) :
     fun j hj => by
       rcases j with _ | j'
       · exact env_get_rowTail
-          (h_loop_env.1.1.trans (rowProgram_value B input_magnitude 1))
+          (h_loop_env.1.1.trans (h_program 1))
       · exact env_get_rowTail
           ((h_loop_env.2 j' (by omega)).1.trans
-            (rowProgram_value B input_magnitude (j' + 1 + 1)))
+            (h_program (j' + 1 + 1)))
   have h21 : env.get (200 + (i₀ + 1 + 4)) = (rowTailValue B input_magnitude 21).zNext ∧
       env.get (200 + (i₀ + 1 + 4) + 1) = (rowTailValue B input_magnitude 21).xP ∧
         env.get (200 + (i₀ + 1 + 4) + 1 + 1) = (rowTailValue B input_magnitude 21).yP ∧
         env.get (200 + (i₀ + 1 + 4) + 1 + 1 + 1) = (rowTailValue B input_magnitude 21).u :=
-    env_get_rowTail (h_t21.trans (rowProgram_value B input_magnitude 21))
+    env_get_rowTail (h_t21.trans (h_program 21))
   rw [Nat.add_comm 200 (i₀ + 1 + 4)] at h21
   obtain ⟨h21z, h21x, h21y, h21u⟩ := h21
   -- the z-chain cells in honest form
@@ -1237,9 +1249,9 @@ theorem completeness (B : FixedBase) :
             accPt env.toEnvironment i₀ j := by
     intro j hj
     rcases j with _ | j'
-    · simpa only [accPt, Nat.zero_mul, Nat.add_zero, Nat.reduceAdd, circuit_norm]
+    · simpa only [accPt, Nat.zero_mul, Nat.add_zero, Nat.reduceAdd, List.sum_cons, List.sum_nil, explicit_provable_type, circuit_norm]
         using h_loop_env.1.2
-    · simpa only [accPt, Nat.reduceAdd, circuit_norm]
+    · simpa only [accPt, Nat.reduceAdd, List.sum_cons, List.sum_nil, explicit_provable_type, circuit_norm]
         using (h_loop_env.2 j' (by omega)).2
   clear h_loop_env
   have h_acc0 :
@@ -1379,10 +1391,10 @@ theorem completeness (B : FixedBase) :
       (h0y.trans (rowTailValue_yP B input_magnitude 0))
       (h0u.trans (rowTailValue_u B input_magnitude 0))
   · constructor
-    · simpa only [zCell, accPt, Nat.zero_mul, Nat.add_zero, Nat.reduceAdd, circuit_norm]
+    · simpa only [zCell, accPt, Nat.zero_mul, Nat.add_zero, Nat.reduceAdd, List.sum_cons, List.sum_nil, explicit_provable_type, circuit_norm]
         using hB 0 (by omega)
     · intro i hi
-      simpa only [zCell, accPt, Nat.reduceAdd, circuit_norm]
+      simpa only [zCell, accPt, Nat.reduceAdd, List.sum_cons, List.sum_nil, explicit_provable_type, circuit_norm]
         using hB (i + 1) (by omega)
   · exact word_inRange input_magnitude 21
       (show env.get (zCell i₀ 20) = _ from hzCell 20 le_rfl) hz22cell

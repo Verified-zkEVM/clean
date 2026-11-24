@@ -69,7 +69,8 @@ def booleanAnd : FormalCircuit (F p) Input field where
   completeness := by
     circuit_proof_start [witnessBool, IsBool]
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
-    <;> simp_all
+    <;> simp_all [HAnd.hAnd, AndOp.and, Witgen.EqCond.eqCond,
+      Witgen.BExprOver.eval, Witgen.FExprOver.eval, circuit_norm]
 
 structure MixedInput (F : Type) where
   someElement : U32 F

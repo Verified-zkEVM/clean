@@ -169,8 +169,6 @@ def circuit (params : Gate.Params Fp) : FormalCircuit Fp Permute.State Permute.S
     exact ⟨h0, h1, h2⟩
   completeness := by
     circuit_proof_start [main, value, Gate.circuit, Gate.Spec, pow5]
-    change env.ExtendsVector ((Witgen.M.toIRLiteral (value := Permute.State) _).eval env) i₀ at h_env
-    rw [ProverEnvironment.extendsVector_toIRLiteral] at h_env
     simp_all [circuit_norm]
 
 end FullRound
@@ -472,16 +470,19 @@ def circuitP128 (roundConstants : Nat → Permute.State Fp) (round : Nat) :
     · have happ := Permute.P128Pow5T3.mds_mul_mdsInv_apply ⟨0, by norm_num⟩
         (env.get (i₀ + 1)) (env.get (i₀ + 1 + 1)) (env.get (i₀ + 1 + 1 + 1))
       rw [h0, h1, h2] at happ
-      simpa [hmid] using happ.symm
+      simp only [hmid] at happ
+      convert happ.symm using 1 <;> rfl
     constructor
     · have happ := Permute.P128Pow5T3.mds_mul_mdsInv_apply ⟨1, by norm_num⟩
         (env.get (i₀ + 1)) (env.get (i₀ + 1 + 1)) (env.get (i₀ + 1 + 1 + 1))
       rw [h0, h1, h2] at happ
-      simpa [hmid] using happ.symm
+      simp only [hmid] at happ
+      convert happ.symm using 1 <;> rfl
     · have happ := Permute.P128Pow5T3.mds_mul_mdsInv_apply ⟨2, by norm_num⟩
         (env.get (i₀ + 1)) (env.get (i₀ + 1 + 1)) (env.get (i₀ + 1 + 1 + 1))
       rw [h0, h1, h2] at happ
-      simpa [hmid] using happ.symm
+      simp only [hmid] at happ
+      convert happ.symm using 1 <;> rfl
   completeness := by
     -- TODO(4.30 bump): legacy defeq so `circuit_norm`'s witness-IR completeness lemmas
     -- (`extendsVector_ofFExprs` etc.) keep matching through stuck `size`/`localLength`

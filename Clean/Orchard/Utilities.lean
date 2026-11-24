@@ -144,7 +144,7 @@ theorem completeness :
     Completeness Fp main Assumptions := by
   circuit_proof_start [main, Assumptions, outputValue, ternary, Gate.circuit, Gate.Spec, IsBool]
   obtain ⟨hA, hB⟩ := h_env
-  rcases h_assumptions with hzero | hone <;> simp_all
+  rcases h_assumptions with hzero | hone <;> simp_all [Witgen.EqCond.eqCond, Witgen.BExprOver.eval, Witgen.FExprOver.eval, circuit_norm]
 
 def circuit : FormalCircuit Fp CondSwapInputs CondSwapOutput where
   main
@@ -429,7 +429,7 @@ theorem soundness : Soundness Fp main (fun _ => True) Spec := by
 
 theorem completeness : Completeness Fp main (fun _ => True) := by
   circuit_proof_start
-  exact ⟨trivial, by simpa [Gate.Spec] using h_env⟩
+  exact ⟨trivial, by simpa [Gate.circuit, Gate.Spec] using h_env⟩
 
 def circuit : FormalCircuit Fp fieldPair field where
   main
@@ -525,7 +525,7 @@ private theorem eval_rangeCheckFoldl
   | cons i xs ih =>
       simp only [List.foldl_cons]
       rw [ih]
-      simp [Expression.eval, sub_eq_add_neg]
+      simp [Expression.eval_sub, Expression.eval, sub_eq_add_neg]
 
 private theorem eval_rangeCheckPolyExpr
     (env : Environment F) (range : ℕ) (word : Expression F) :
@@ -563,8 +563,7 @@ def circuit (windowNumBits : ℕ) : FormalAssertion Fp Step where
         Expression.eval env
             (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext) =
           input_zCur - twoPowWindow windowNumBits * input_zNext := by
-      simp only [Expression.eval, hzCur, hzNext, twoPowWindow]
-      ring
+      simp only [Expression.eval_sub, Expression.eval, hzCur, hzNext, twoPowWindow]
     rw [hword] at h_holds
     exact (rangeCheckPoly_eq_zero_iff (2 ^ windowNumBits)
       (input_zCur - twoPowWindow windowNumBits * input_zNext)).mp h_holds
@@ -589,8 +588,7 @@ def circuit (windowNumBits : ℕ) : FormalAssertion Fp Step where
         Expression.eval env.toEnvironment
             (input_var_zCur - (twoPowWindow windowNumBits : Fp) * input_var_zNext) =
           input_zCur - twoPowWindow windowNumBits * input_zNext := by
-      simp only [Expression.eval, hzCur, hzNext, twoPowWindow]
-      ring
+      simp only [Expression.eval_sub, Expression.eval, hzCur, hzNext, twoPowWindow]
     rw [hword]
     exact (rangeCheckPoly_eq_zero_iff (2 ^ windowNumBits)
       (input_zCur - twoPowWindow windowNumBits * input_zNext)).mpr h_spec
@@ -767,7 +765,6 @@ def shortRangeCircuit (numBits : ℕ) (hNumBits : numBits ≤ K) :
     obtain ⟨hLookupWord, hRest⟩ := h_holds
     obtain ⟨hLookupShifted, hBitshift⟩ := hRest
     have hBitshift := hBitshift trivial
-    simp only [circuit_norm] at hLookupWord hLookupShifted hBitshift h_input
     constructor
     · exact shortRange_soundness_aux numBits hNumBits input_word (env.get i₀)
         hLookupWord hLookupShifted (by
@@ -1194,7 +1191,7 @@ theorem completeness (numWords : ℕ) :
       env.get (i₀ + 1 + j) = ((x.val / 2 ^ (K * (j + 1)) : ℕ) : Fp) := by
     intro j hj
     have h := h_zs ⟨j, hj⟩
-    simpa using h
+    simpa only [HDiv.hDiv, Div.div, Witgen.NExprOver.eval, circuit_norm, h_input] using h
   constructor
   · refine ⟨h_z0, fun i => ?_⟩
     rcases i with ⟨_ | j, hi⟩

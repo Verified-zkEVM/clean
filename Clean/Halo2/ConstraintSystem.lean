@@ -57,8 +57,8 @@ Verbatim-port counterparts of Rust `meta.query_*` inside `create_gate` closures.
 
 @[circuit_norm, query_correct]
 def querySelector (s : Selector) : Expression F Query := var (.selector s)
-/-- Rust `query_fixed` takes no rotation in this halo2 version (always the current row);
-the `Query.fixed` constructor keeps a rotation for generality of the compiled CS. -/
+/-- Rust `query_fixed(column, Rotation::cur())`. Other rotations are `.var (.fixed c r)`:
+gates may query fixed columns at any rotation, which `fixed_queries` registers in call order. -/
 @[circuit_norm, selector_free, query_correct]
 def queryFixed (c : Column .fixed) : Expression F Query := var (.fixed c 0)
 @[circuit_norm, selector_free, query_correct]
@@ -468,7 +468,7 @@ theorem Expression.selectorIndices_neg [Field F]
 theorem Expression.selectorIndices_sub
     [Field F] (left right : Expression F Query) :
     (left - right).selectorIndices = left.selectorIndices ++ right.selectorIndices := by
-  simp [Expression.selectorIndices]
+  rfl
 
 /-- Selector indices used by a lookup input other than its distinguished master
 selector. Multiplicity is harmless and keeps this a direct structural projection. -/
@@ -546,6 +546,112 @@ def LookupSelectorsCompatible
     lookups.Forall fun source =>
       lookups.Forall source.SelectorsCompatible
 
+/-!
+## midnight-zk extensions
+
+midnight-zk compiles some constructs differently from zcash: additive selectors become trash
+arguments and lookups are named LogUp batches. Most such constructs are also emitted as
+ordinary `gates`/`lookups` entries, their *shadows*, which carry their Clean meaning;
+`ConfigurationHolds` states the rest. An entry in `ConstraintSystem.extensions` says how
+midnight-zk compiles a construct and points at its shadows by position. The entries are in
+program order, so they also give the order across kinds, which the separate gate and lookup
+lists lose. Existing circuits emit no entries.
+-/
+
+/-- How midnight-zk compiles a gate (Rust `SelectorType`). -/
+inductive GateMode where
+  /-- `with_additive_selector`: a trash argument. The shadow is `q * c` over the complex
+  selector, the trash argument's per-row meaning. -/
+  | additive
+  /-- `without_selector`, owned by the shadow's selector: the shadow's polynomials verbatim. -/
+  | withoutSelector
+  /-- A `without_selector` body no one selector owns: selector-free or over several selectors.
+  It has no shadow; the entry carries the gate and `ConfigurationHolds` states it. -/
+  | rows
+  /-- The shadow is a constraint-free gate that synthesis enables to activate a selector a
+  `rows` gate or an unstated lookup reads. midnight-zk compiles nothing for it. -/
+  | handle
+deriving DecidableEq, Repr
+
+/-- A gate entry. Only `rows` entries use the payload fields. -/
+structure GateExtension (F : Type) where
+  mode : GateMode
+  /-- The shadow's index in `gates`; for `rows`, the number of gates before it. -/
+  position : ℕ := 0
+  name : String := ""
+  /-- The closure's column queries in call order. -/
+  queriedCells : List (Expression F Query) := []
+  /-- The polynomials, verbatim, as `without_selector` compiles them. -/
+  constraints : List (Constraint F) := []
+  /-- A `without_selector` closure's `query_selector` calls in call order, repeats kept, as
+  Rust's `queried_selectors` (circuit.rs:2323). Rust reads them only in an assertion and the
+  mock prover (circuit.rs:1942, dev/mod.rs:890), so the key does not. -/
+  queriedSelectors : List Selector := []
+
+/-- A named LogUp batch (`logup::BatchedArgument`). `columns` is width-major, as in Rust:
+column `i` holds the `i`-th input of every tuple and its table expression. -/
+structure LookupExtension (F : Type) where
+  name : String
+  /-- `batched_lookup_any`: the closure builds the table expressions. -/
+  any : Bool := false
+  /-- `none` is Rust's unselected batch, whose selector is `Constant(1)`. -/
+  selector : Option ComplexSelector
+  /-- The closure's queries in call order. -/
+  queriedCells : List (Expression F Query)
+  columns : List (List (Expression F Query) × Expression F Query)
+  /-- The first shadow's index in `lookups`. -/
+  position : ℕ := 0
+  /-- `lookups[position, position + shadows)` are the batch's tuples as Clean lookups. -/
+  shadows : ℕ := 0
+
+/-- One midnight-zk compilation entry. New data goes in defaulted payload fields rather than
+new constructors, so existing entries and matches stay valid. -/
+inductive ConfigureExtension (F : Type) where
+  | gate (entry : GateExtension F)
+  | lookup (entry : LookupExtension F)
+  /-- `set_minimum_degree`; the last entry wins, as Rust overwrites. -/
+  | minimumDegree (degree : ℕ)
+  /-- A checked closure refused its body and emitted nothing else. -/
+  | rejected (message : String)
+
+/-- The entry after `gates` gates and `lookups` lookups are placed before it. -/
+def ConfigureExtension.shift (gates lookups : ℕ) :
+    ConfigureExtension F → ConfigureExtension F
+  | .gate entry => .gate { entry with position := entry.position + gates }
+  | .lookup entry => .lookup { entry with position := entry.position + lookups }
+  | entry => entry
+
+/-- `shift` over a list. A map, so `[]` reduces without evaluating the counts. -/
+def ConfigureExtension.rebase (gates lookups : ℕ) (entries : List (ConfigureExtension F)) :
+    List (ConfigureExtension F) :=
+  entries.map (shift gates lookups)
+
+@[simp] theorem ConfigureExtension.rebase_nil (gates lookups : ℕ) :
+    rebase gates lookups ([] : List (ConfigureExtension F)) = [] :=
+  rfl
+
+theorem ConfigureExtension.shift_zero (entry : ConfigureExtension F) :
+    shift 0 0 entry = entry := by
+  cases entry <;> rfl
+
+@[simp] theorem ConfigureExtension.rebase_zero (entries : List (ConfigureExtension F)) :
+    rebase 0 0 entries = entries := by
+  rw [rebase, show shift (F := F) 0 0 = id from funext shift_zero, List.map_id]
+
+/-- A selected batch of fixed-column tables whose shadows state it tuple by tuple. -/
+def LookupExtension.stated (entry : LookupExtension F) : Bool :=
+  entry.selector.isSome && !entry.any && entry.shadows != 0
+
+/-- Whether Clean states the entry's whole meaning through its shadows. `ConfigurationHolds`
+gives the other entries their meaning, and is trivial when every entry is stated. -/
+def ConfigureExtension.stated : ConfigureExtension F → Bool
+  | .gate entry =>
+      match entry.mode with
+      | .additive | .withoutSelector | .handle => true
+      | .rows => false
+  | .lookup entry => entry.stated
+  | .minimumDegree _ | .rejected _ => true
+
 /--
 The constraint system under construction: the state of the `Configure` monad, mirroring
 the builder role of Rust's `ConstraintSystem<F>`. Allocation counters plus accumulated
@@ -567,13 +673,15 @@ structure ConstraintSystem (F : Type) where
   give `num_advice_queries` (the input to `blinding_factors`). -/
   adviceQueries : List (Column .advice × Rotation) := []
   /-- Registered fixed queries, mirroring `cs.fixed_queries` (`circuit.rs:1081-1094`).
-  Registration always inserts rotation 0 (`query_fixed` takes no rotation in this halo2
-  version, `circuit.rs:1495-1503`); the `Rotation` field maps directly onto the pinned
-  `fixedQueryLayout`. -/
+  Gate and lookup closures register any rotation (`VirtualCells::query_fixed`,
+  `circuit.rs:2329`); `enable_equality` registers rotation 0. The `Rotation` field maps
+  directly onto the pinned `fixedQueryLayout`. -/
   fixedQueries : List (Column .fixed × Rotation) := []
   /-- Registered instance queries, mirroring `cs.instance_queries`
   (`circuit.rs:1116-1126`). -/
   instanceQueries : List (Column .instance × Rotation) := []
+  /-- midnight-zk compilation of the gates and lookups above, in configure order. -/
+  extensions : List (ConfigureExtension F) := []
 
 /-- All fixed columns allocated in a completed constraint system. -/
 def ConstraintSystem.fixedColumns
@@ -611,8 +719,8 @@ def ConstraintSystem.queryAdviceIndex (cs : ConstraintSystem F) (c : Column .adv
   if (c, rot) ∈ cs.adviceQueries then cs
   else { cs with adviceQueries := cs.adviceQueries ++ [(c, rot)] }
 
-/-- Rust: `query_fixed_index` (`circuit.rs:1081-1094`); registration is always at
-rotation 0 (§1 of `query-registration-design.md`). -/
+/-- Rust: `query_fixed_index` (`circuit.rs:1081-1094`) at rotation 0, as `enable_equality`
+calls it; closure queries at other rotations register through `ConfigureDelta.queriedCell`. -/
 def ConstraintSystem.queryFixedIndex (cs : ConstraintSystem F) (c : Column .fixed) :
     ConstraintSystem F :=
   if (c, (0 : Rotation)) ∈ cs.fixedQueries then cs

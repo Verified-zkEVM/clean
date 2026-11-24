@@ -127,7 +127,7 @@ theorem lookup_values_eq (assignment : ProofAssignment F)
     apply List.map_congr_left
     intro expression hexpression
     exact Expression.eval_substValuation_eq_queryEval_of_selectorFree
-      top.selectorMap (top.environment assignment) lookup.selectorValue row expression
+      top.selectorMap (top.environment assignment) (fun _ => 0) row expression
       (lookup.argument.tablesFree expression hexpression)
 
 /-- Compiled tuple membership recovers every source lookup constraint. -/

@@ -463,6 +463,14 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
   simpa [Configured.permutationColumns, ConfigurationCertificate.configured] using
     certificate.permutationColumns column hcolumn
 
+-- `Configured` projections read only argument metadata, so keygen may unfold them without
+-- exposing synthesis.
+attribute [keygen_metadata_projection]
+  Configured.ofPure Configured.ofOutput
+  Configured.gates Configured.lookups Configured.fixedColumns
+  Configured.constantColumns Configured.permutationColumns
+  Configured.inputPermutationColumns Configured.inputCells
+
 @[simp, keygen_norm, grind =] theorem Configured.ofPure_gates
     (self : FormalRegionCircuit F Config Config Input Output)
     (config : Config)

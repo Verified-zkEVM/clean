@@ -990,9 +990,9 @@ theorem process_entry_selector_eq_of_singleton_column
         hleftCombination hrightCombination hcombinationColumn
     subst rightItems
     have hleftPosition : leftPosition < leftItems.length := by
-      simpa only using List.snd_lt_of_mem_zipIdx hleftIndexed
+      simpa only [Nat.add_zero] using List.snd_lt_of_mem_zipIdx hleftIndexed
     have hrightPosition : rightPosition < leftItems.length := by
-      simpa only using List.snd_lt_of_mem_zipIdx hrightIndexed
+      simpa only [Nat.add_zero] using List.snd_lt_of_mem_zipIdx hrightIndexed
     have hposition : leftPosition = rightPosition := by omega
     exact congrArg SelectorDescription.selector <|
       fst_eq_of_mem_zipIdx_of_snd_eq leftItems
@@ -1962,7 +1962,7 @@ theorem deriveSelCompressMap_lookup_packedColumn
   have hcolumn := process_entry_packedCol_lt_newFixedCols
     descriptions (csDegree cs) hsource
   refine ⟨source.packedCol, ?_, ?_⟩
-  · simpa [packing] using hcolumn
+  · simpa [deriveSelCompressMap, packing, descriptions, table, degrees] using hcolumn
   · change source.packedCol + cs.numFixedColumns =
       cs.numFixedColumns + source.packedCol
     omega

@@ -14,7 +14,7 @@ theorem sorted_eq_aboveKey_append_atMostKey
     (threshold : ℕ) (summaries : List RegionShapeSummary)
     (hSorted :
       (summaries.map fun summary =>
-        (summary.key : OrderDual ℕ)).SortedLE) :
+        (OrderDual.toDual summary.key)).SortedLE) :
     summaries = aboveKey threshold summaries ++ atMostKey threshold summaries := by
   induction summaries with
   | nil => rfl
@@ -31,7 +31,7 @@ theorem sorted_eq_aboveKey_append_atMostKey
       · have hTailAtMost : ∀ summary ∈ tail, summary.key ≤ threshold := by
           intro summary hSummary
           have hDescending : summary.key ≤ head.key :=
-            hSorted.1 (summary.key : OrderDual ℕ)
+            hSorted.1 (OrderDual.toDual summary.key)
               (List.mem_map.mpr ⟨summary, hSummary, rfl⟩)
           omega
         have hTailAbove : aboveKey threshold tail = [] := by
@@ -59,9 +59,9 @@ theorem filter_key_sorted
     (summaries : List RegionShapeSummary)
     (hSorted :
       (summaries.map fun summary =>
-        (summary.key : OrderDual ℕ)).SortedLE) :
+        (OrderDual.toDual summary.key)).SortedLE) :
     (((summaries.filter predicate).map fun summary =>
-      (summary.key : OrderDual ℕ))).SortedLE := by
+      (OrderDual.toDual summary.key))).SortedLE := by
   rw [List.sortedLE_iff_pairwise, List.pairwise_map] at hSorted ⊢
   exact hSorted.filter predicate
 

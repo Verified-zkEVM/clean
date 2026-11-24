@@ -331,18 +331,16 @@ theorem innerCopyDecompose_keygenRegistered
     (copyDecompose 3 22)
     (cfg.superConfig.runningSumConfig.qRangeCheck,
       cfg.superConfig.runningSumConfig.z) {} ()
-  · intro gate h
-    unfold copyDecompose at h
-    simp only [FormalRegionCircuit.keygenRequirements,
-      ElaboratedRegionCircuit.keygenRequirements] at h
-    simp [innerKeygenRequirements, runningSumKeygenRequirements,
-      DecomposeRunningSum.configure] at h ⊢
-    exact Or.inl h
-  · intro argument h
-    unfold copyDecompose at h
-    simp only [FormalRegionCircuit.keygenRequirements,
-      ElaboratedRegionCircuit.keygenRequirements] at h
-    simp [DecomposeRunningSum.configure] at h
+  · change ∀ gate, gate ∈ [DecomposeRunningSum.rangeCheckGate 3 cfg.superConfig.runningSumConfig] →
+        gate ∈ [DecomposeRunningSum.rangeCheckGate 3 cfg.superConfig.runningSumConfig,
+          coordsGate cfg.superConfig] ++ configured.1.gates
+    intro gate hgate
+    rcases List.mem_singleton.mp hgate with rfl
+    exact List.mem_append_left _ List.mem_cons_self
+  · change ∀ argument, argument ∈ ([] : List (LookupArgument Fp)) →
+        argument ∈ configured.1.lookups
+    intro argument h
+    exact (List.not_mem_nil h).elim
   · intro column h
     let configured := FormalRegionCircuit.Configured.ofOutput
       (copyDecompose 3 22)
@@ -364,7 +362,8 @@ theorem innerCopyDecompose_keygenRegistered
     rw [DecomposeRunningSum.copyDecompose_configured_permutationColumns_eq] at h'
     have hz : column ∈
         DecomposeRunningSum.permutationColumns cfg.superConfig.runningSumConfig := by
-      simpa [DecomposeRunningSum.configure] using h'
+      change column ∈ DecomposeRunningSum.permutationColumns cfg.superConfig.runningSumConfig at h'
+      exact h'
     simp only [innerKeygenRequirements, runningSumKeygenRequirements,
       List.mem_append]
     exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl hz))))
@@ -530,6 +529,18 @@ theorem innerRegion_msw_inputs_assigned
         w row self current)
     offset 22 (by norm_num)
     ((decomposeOps ++ fixedOps).assignedCellsAfter self available)
+  have chainOutput :
+      (MulFixed.windowChain cfg.superConfig
+        (processWindow B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude)
+        offset 22).output self =
+      ({ x := AssignedCell.of self (offset + 21) cfg.superConfig.addIncompleteConfig.xQR,
+         y := AssignedCell.of self (offset + 21) cfg.superConfig.addIncompleteConfig.yQR },
+       { x := AssignedCell.of self (offset + 21) cfg.superConfig.addConfig.xP,
+         y := AssignedCell.of self (offset + 21) cfg.superConfig.addConfig.yP }) := by
+    simp only [MulFixed.windowChain, MulFixed.processWindow, circuit_norm]
+  dsimp only at hchain
+  rw [chainOutput] at hchain
+  simp only [AssignedCell.of_cell] at hchain
   rw [innerRegion_output]
   simp only [innerOutCells, Vector.getElem_ofFn, AssignedCell.of_cell]
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
@@ -627,8 +638,9 @@ instance innerElab (B : FixedBaseData) :
         innerRegion B config offset input.alpha) where
   keygenRequirements := innerKeygenRequirements
   registered configInput _ configured offset input region := by
+    rcases input with ⟨alpha⟩
     simpa using innerRegion_keygenRegistered
-      B configInput offset input.alpha region configured
+      B configInput offset alpha region configured
   lookupActivationsWellFormed config offset input region := by
     simp only [innerRegion, RegionCircuit.operations_bind,
       RegionCircuit.operations_pure,
@@ -829,7 +841,6 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
       (by
         intro j hj1 hj20 hAssumptions
         obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-        dsimp only at hOnP hOnQ hne ⊢
         rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
         rcases Nat.lt_or_ge j 2 with hj2 | hj2
         · have hj : j = 1 := by omega
@@ -847,7 +858,6 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
           obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
           exact hOut)
     have hI20 := hLadder 20 (by norm_num)
-    dsimp only at hI20
     rw [if_neg (by norm_num : ¬(20 : ℕ) = 0), if_neg (by norm_num : ¬(20 : ℕ) = 0),
       show offset + 20 + 1 = offset + 21 from by omega] at hI20
     rw [← hOax, ← hOay]
@@ -1036,7 +1046,6 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
     (by
       intro j hj1 hj83 hAssumptions
       obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-      dsimp only at hOnP hOnQ hne ⊢
       rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
       rcases Nat.lt_or_ge j 2 with hj2 | hj2
       · -- j = 1: the explicit first chunk (window 1 + window 0)
@@ -1067,7 +1076,6 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
             (fun t => input_alpha.val / 2 ^ (3 * t) % 8) j • B.point).y := by
     intro j hj1 hj83
     have h := hLadder j hj83
-    dsimp only at h
     rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
     exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR

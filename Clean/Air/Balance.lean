@@ -77,7 +77,8 @@ lemma balanceOf_eq_of_const_mult {interactions : List (Interaction F)} {msg : Ar
   intro constant_mult
   set count : ℕ := interactions.countP (·.msg = msg)
   suffices (interactions.filter (·.msg = msg)).map (·.mult) = List.replicate count mult by
-    convert (congrArg List.sum this)
+    change ((interactions.filter (·.msg = msg)).map (·.mult)).sum = mult * (count : F)
+    rw [this]
     simp [mul_comm]
   apply List.ext_getElem
   · simp [count, List.countP_eq_length_filter]
@@ -137,8 +138,7 @@ lemma balanceOf_eq_of_mult_or_zero
   intro constant_mult
   set count : ℕ := interactions.countP fun i => i.msg = msg && i.mult ≠ 0
   suffices (interactions.filter (fun i => i.msg = msg && i.mult ≠ 0)).map (·.mult) = List.replicate count mult by
-    rw [balanceOf_eq_filter_ne_zero]
-    convert (congrArg List.sum this)
+    rw [balanceOf_eq_filter_ne_zero, this]
     simp [mul_comm]
   apply List.ext_getElem
   · simp [count, List.countP_eq_length_filter]
@@ -333,6 +333,7 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
       suffices grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         simp only [Interaction.Guarantees]
         convert fun _ => grt'
+        rfl
       apply RawChannel.Normal.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_zero one_ne_neg_one
       simp only [Interaction.Requirements, Interaction.msgVector, push_j_msg] at push_j_req
       convert push_j_req
@@ -515,8 +516,8 @@ lemma balanceOf_active_append_eq {pulls pushes : List (Interaction F)} {msg : Ar
           exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
         simp [activeInteractions, h_zero, h_push_ne_zero, balanceOf_append,
           balanceOf_cons] at ih' ⊢
-        ring_nf at ih' ⊢
-        exact congrArg (fun x => x + if push.msg = msg then push.mult else 0) ih'
+        simpa only [add_assoc, add_left_comm, add_comm] using
+          congrArg (fun x => x + if push.msg = msg then push.mult else 0) ih'
 
 lemma balancedInteractions_active_append {pulls pushes : List (Interaction F)}
     (balance : BalancedInteractions (pulls ++ pushes))

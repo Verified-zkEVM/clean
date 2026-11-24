@@ -146,14 +146,14 @@ theorem RegionOperations.rowOffset_succ_le_regionSynthesisSummary_of_mem_assigne
       simp only [RegionOperation.assignedCells, List.mem_singleton] at hcell
       subst cell
       exact ⟨Cell.of_regionIndex region row column, by
-        simpa only [Cell.of_rowOffset] using
+        simpa only [Cell.of_rowOffset, FloorPlanner.regionOperationRowExtent] using
           FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
             body (.assignAdvice column row compute) hoperation⟩
   | assignFixed column row value =>
       simp only [RegionOperation.assignedCells, List.mem_singleton] at hcell
       subst cell
       exact ⟨Cell.of_regionIndex region row column, by
-        simpa only [Cell.of_rowOffset] using
+        simpa only [Cell.of_rowOffset, FloorPlanner.regionOperationRowExtent] using
           FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
             body (.assignFixed column row value) hoperation⟩
   | enableGate gate row =>
@@ -208,7 +208,7 @@ theorem Operations.assignedCell_rowExtent_le_placementEnd
   rw [Cell.rowExtent, hcellRegion, Nat.add_assoc]
   exact (Nat.add_le_add_left hrow
     ((FloorPlanner.V1.starts operations).getD region 0)).trans (by
-      simpa only [FloorPlanner.measureRegion_rowCount] using
+      simpa only [FloorPlanner.measureRegion_rowCount, FloorPlanner.measureRegion] using
         FloorPlanner.V1.shape_end_le_placementEndFrom_of_mem
           (FloorPlanner.measureRegions operations)
           (FloorPlanner.V1.starts operations)
@@ -515,7 +515,7 @@ theorem absoluteRow_lt_usedRows_of_enableLookup_mem
         FloorPlanner.V1.placementEnd ops := by
     simpa only [regionEnd, FloorPlanner.V1.placementEnd,
       FloorPlanner.V1.placementEndFrom, FloorPlanner.measureRegions,
-      List.map_map, Function.comp_apply] using habsolute
+      List.map_map, Function.comp_def, Function.comp_apply, starts, regions, FloorPlanner.measureRegion] using habsolute
   unfold usedRows
   dsimp only
   exact habsolute'.trans_le

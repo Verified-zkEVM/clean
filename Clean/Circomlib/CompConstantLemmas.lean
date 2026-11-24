@@ -477,22 +477,25 @@ lemma exists_msb_win_position (ct : ℕ) (h_ct : ct < 2^254)
     have h_ab := h_above j hj
     simpa [h_sig, h_const] using h_ab
 
+private theorem pair_indices (i : Fin 127) :
+    i.val * 2 < 254 ∧ i.val * 2 + 1 < 254 := by omega
+
 omit [Fact (p < 2 ^ 254)] [Fact (p > 2 ^ 253)] in
 /-- When input ≤ ct, either all pairs are ties, or the MSB differing position is a loss. -/
 lemma msb_determines_le (ct : ℕ) (h_ct : ct < 2^254)
     (input : Vector (F p) 254)
     (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
     (h_le : fromBits (input.map ZMod.val) ≤ ct) :
-    (∀ i : Fin 127, signalPairValF input[i.val * 2] input[i.val * 2 + 1] = constPairValAt i.val ct) ∨
+    (∀ i : Fin 127, signalPairValF (input[i.val * 2]'((pair_indices i).1)) (input[i.val * 2 + 1]'((pair_indices i).2)) = constPairValAt i.val ct) ∨
     (∃ k : Fin 127,
-      signalPairValF input[k.val * 2] input[k.val * 2 + 1] < constPairValAt k.val ct ∧
+      signalPairValF (input[k.val * 2]'((pair_indices k).1)) (input[k.val * 2 + 1]'((pair_indices k).2)) < constPairValAt k.val ct ∧
       ∀ j : Fin 127, j > k →
-        signalPairValF input[j.val * 2] input[j.val * 2 + 1] = constPairValAt j.val ct) := by
+        signalPairValF (input[j.val * 2]'((pair_indices j).1)) (input[j.val * 2 + 1]'((pair_indices j).2)) = constPairValAt j.val ct) := by
   let x := fromBits (input.map ZMod.val)
   have hx_lt : x < 2^254 := fromBits_input_lt_pow input h_bits
 
   have h_signal_pair : ∀ i : Fin 127,
-      signalPairValF input[i.val * 2] input[i.val * 2 + 1] = (x >>> (i.val * 2)) % 4 :=
+      signalPairValF (input[i.val * 2]'((pair_indices i).1)) (input[i.val * 2 + 1]'((pair_indices i).2)) = (x >>> (i.val * 2)) % 4 :=
     fun i => signalPairValF_eq_shiftRight_mod4 input i h_bits
 
   have h_const_pair : ∀ i : Fin 127, constPairValAt i.val ct = (ct >>> (i.val * 2)) % 4 :=

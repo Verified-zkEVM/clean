@@ -98,37 +98,20 @@ def placeSelectorActivations (starts : List ℕ) :
         (selector, starts.getD index 0 + row)) ++
       placeSelectorActivations starts (index + 1) rest
 
-def regionActivationsAt (starts : List ℕ) (index : ℕ)
-    (body : RegionOperations F) : List (ℕ × ℕ) :=
-  body.flatMap fun operation =>
-    match operation with
-    | .enableGate gate row =>
-        [(gate.selector.index, starts.getD index 0 + row)]
-    | .enableLookup _ enabled row =>
-        enabled.map fun selector =>
-          (selector.index, starts.getD index 0 + row)
-    | _ => []
-
 theorem activations_cons (starts : List ℕ) (index : ℕ)
     (body : RegionOperations F) (rest : List (ℕ × RegionOperations F)) :
     activations starts ((index, body) :: rest) =
-      regionActivationsAt starts index body ++ activations starts rest := rfl
-
-theorem regionActivationsAt_eq_map_selectorActivations
-    (starts : List ℕ) (index : ℕ) (body : RegionOperations F) :
-    regionActivationsAt starts index body =
       (body.flatMap FloorPlanner.regionOperationSelectorActivations).map
-        fun (selector, row) =>
-          (selector, starts.getD index 0 + row) := by
+          (fun (selector, row) => (selector, starts.getD index 0 + row)) ++
+        activations starts rest := by
+  simp only [activations, List.flatMap_cons]
+  congr 1
   induction body with
   | nil => rfl
   | cons operation operations inductionHypothesis =>
-      simp only [regionActivationsAt, List.flatMap_cons, List.map_append]
-      rw [← regionActivationsAt]
-      rw [inductionHypothesis]
+      simp only [List.flatMap_cons, List.map_append, inductionHypothesis]
       cases operation <;>
-        simp [FloorPlanner.regionOperationSelectorActivations,
-          Function.comp_def]
+        simp [FloorPlanner.regionOperationSelectorActivations, Function.comp_def]
 
 /-- The exact selector-activation stream can be reconstructed from the reduced
 synthesis summary and the planner's region starts. -/
@@ -148,13 +131,14 @@ theorem activations_eq_placeSelectorActivations
             FloorPlanner.SynthesisSummary.ofRegion_regionSelectorActivations,
             List.singleton_append, placeSelectorActivations,
             FloorPlanner.regionSynthesisSummary_selectorActivations_eq_flatMap]
-          rw [regionActivationsAt_eq_map_selectorActivations,
-            inductionHypothesis]
+          rw [inductionHypothesis]
       | constrainInstance cell column row =>
-          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
+            FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
             inductionHypothesis initial
       | loadTable column values =>
-          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
+            FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
             inductionHypothesis initial
 
 /-- Membership in the selector-activation stream retains its source region,
@@ -554,10 +538,12 @@ theorem measureRegions_eq_synthesisSummary_regionShapes
             simpa only [measureRegion_eq_measureRegionSummary] using
               inductionHypothesis (initial + 1)
         | constrainInstance cell column row =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, SynthesisSummary.ofTableValues, List.nil_append] using
               inductionHypothesis initial
         | loadTable column values =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, SynthesisSummary.ofTableValues, List.nil_append] using
               inductionHypothesis initial
   exact general ops 0
 
@@ -731,5 +717,14 @@ def RegionShapeSummary.key (summary : RegionShapeSummary) : ℕ :=
 
 theorem RegionShape.toSummary_key (shape : RegionShape) :
     shape.toSummary.key = shape.key := rfl
+
+/-- A region's `constrain_constant` values in body order, as both planners collect them
+(`single_pass.rs:198-222`, `v1.rs:122`). -/
+def regionConstantValues (body : RegionOperations F) : List F :=
+  match body with
+  | [] => []
+  | .constrainConstant _ value :: rest =>
+      value :: regionConstantValues rest
+  | _ :: rest => regionConstantValues rest
 
 end Halo2.FloorPlanner

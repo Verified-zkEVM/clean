@@ -52,7 +52,7 @@ def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
   soundness := by circuit_proof_start [BytesTable]
   completeness := by circuit_proof_start
 
-instance Add8Channel : Channel (F p) fieldTriple where
+@[instance_reducible] def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
   Guarantees
   | (x, y, z), _ =>
@@ -104,8 +104,12 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
       · linarith [hx, hy, ‹Fact (p > 512)›.elim]
       · grw [Nat.mod_lt _ (by norm_num)]
         linarith [‹Fact (p > 512)›.elim]
+    change carry = (((input_var_x.eval env + input_var_y.eval env).val / 256 : ℕ) : F p) at h_env
+    simp_all only [circuit_norm]
     change carry = floorDiv (input_x + input_y) 256 at h_env
-    grind
+    constructor
+    · simpa only [floorDiv, PNat.val_ofNat] using add_completeness_bool
+    · simpa only [sub_sub, sub_eq_zero, floorDiv, PNat.val_ofNat] using add_completeness_add
 
 example (input : Var Add8Inputs (F p)) :
     ExplicitCircuit (add8.main input) := by
@@ -125,7 +129,7 @@ lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n → x < 256 ∧ y < 2
     specialize ih rfl
     simp_all [fibonacci, Nat.mod_lt]
 
-instance FibonacciChannel : Channel (F p) fieldTriple where
+@[instance_reducible] def FibonacciChannel : Channel (F p) fieldTriple where
   name := "fibonacci"
   -- when pulling, we want the guarantee that the input is a valid Fibonacci step
   Guarantees
@@ -159,6 +163,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     let z := var ⟨ i₀ ⟩
     expose FibonacciChannel [ pulledIf enabled (n, x, y), pushedIf enabled (n + 1, y, z) ]
   exposedChannels_eq input i₀ := by
+    rcases input with ⟨enabled, n, x, y⟩
     simp only [circuit_norm, FibonacciChannel, Add8Channel]
 
   ProverAssumptions
@@ -168,6 +173,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
 
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
   requirementsChannelsLawful input_var i₀ := by
+    rcases input_var with ⟨enabled, n, x, y⟩
     simp only [circuit_norm, FibonacciChannel, Add8Channel]
     grind
 

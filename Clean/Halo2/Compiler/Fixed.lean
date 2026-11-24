@@ -33,11 +33,7 @@ def Satisfied (place : RegionIndex → ℕ) (env : Environment F) :
     FixedRequirement F → Prop
   | .assignment region column row value =>
       env.fixed column (place region + row : ℕ) = value
-  | .table column values =>
-      (∀ row : ℕ, row < values.length →
-        env.fixed column.inner (row : ℤ) = values[row]!) ∧
-      (values ≠ [] → ∀ row : ℕ, values.length ≤ row → row < env.usableRows →
-        env.fixed column.inner (row : ℤ) = values[0]!)
+  | .table column values => TableLoaded env column values
 
 end FixedRequirement
 
@@ -432,7 +428,9 @@ theorem selectorAssignment_mem_raw {entry : Layout.FixedAssignment F}
     (hentry : entry ∈ Layout.selectorAssignments top.selectorMap top.selectorActivations) :
     entry ∈ Layout.rawAssignments (top.usableRowsAt top.domainExponent)
       top.selectorMap top.constraintSystem top.operations := by
-  simpa only [Layout.rawAssignments, List.mem_append] using Or.inl (Or.inr hentry)
+  simpa only [Layout.rawAssignments, List.mem_append, selectorActivations,
+    TopLevelCompilation.selectorActivations, TopLevelCompilation.regionStarts,
+    operations] using Or.inl (Or.inr hentry)
 
 end Halo2.TopLevelCircuit
 

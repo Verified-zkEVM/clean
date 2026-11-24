@@ -60,6 +60,28 @@ instance {V : Type} : Inv (FExprOver F V) := ⟨.inv⟩
 instance {V : Type} [Field F] : Neg (FExprOver F V) := ⟨.neg⟩
 instance {V : Type} [Field F] : Sub (FExprOver F V) := ⟨.sub⟩
 
+/-- Subtraction evaluates through its `a + (-1) * b` expansion in the witness IR. -/
+@[circuit_norm]
+theorem FExprOver.eval_sub {V Env : Type} [FiniteField F] [WitgenEnv F Env V]
+    (ctx : CtxOver F Env) (left right : FExprOver F V) :
+    (left - right).eval ctx = left.eval ctx - right.eval ctx := by
+  change left.eval ctx + (-1) * right.eval ctx = _
+  rw [neg_one_mul, sub_eq_add_neg]
+
+/-- Negation is multiplication by the constant minus one in the witness IR. -/
+@[circuit_norm]
+theorem FExprOver.eval_neg {V Env : Type} [FiniteField F] [WitgenEnv F Env V]
+    (ctx : CtxOver F Env) (value : FExprOver F V) :
+    (-value).eval ctx = -value.eval ctx := by
+  change (-1) * value.eval ctx = _
+  exact neg_one_mul _
+
+/-- The `⁻¹` authoring operator denotes the IR inverse constructor. -/
+@[circuit_norm]
+theorem FExprOver.eval_inv {V Env : Type} [FiniteField F] [WitgenEnv F Env V]
+    (ctx : CtxOver F Env) (value : FExprOver F V) :
+    (value⁻¹).eval ctx = (value.eval ctx)⁻¹ := rfl
+
 end Witgen
 
 namespace Clean
@@ -230,7 +252,7 @@ namespace Witgen
 `let`-steps, so shared values are written in `do`-notation via `letF` / `letN`.
 Main Clean's `M` instantiates `V := Expression F`; Halo2-Clean instantiates
 `V := AssignedCell F`. -/
-def MOver (F V : Type) (α : Type) : Type :=
+abbrev MOver (F V : Type) (α : Type) : Type :=
   Array (StepOver F V) → α × Array (StepOver F V)
 
 /-- Main Clean's witness-program builder (variables are circuit `Expression`s). -/
@@ -346,12 +368,12 @@ theorem eval_toIRLiteral (program : MOver F V (value (FExprOver F V))) (env : En
 `@[circuit_norm]` so witness facts land on the high-level `MOver.eval` atom during the
 pipeline's normalization — gadget proofs compare witness values against hint-program
 values without ever seeing the program run (`(p #[]).1/.2`) spelling. -/
-@[circuit_norm]
+@[circuit_norm ↓]
 theorem eval_toIRScalar (program : MOver F V (FExprOver F V)) (env : Env) :
     ((toIRScalar program (Env := Env)).eval env)[0]
       = MOver.eval (value := field) env program := by
   rcases h : program #[] with ⟨out, steps⟩
-  simp [toIRScalar, toIR, eval, WitgenIROver.eval, h, VExprOver.eval]
+  simp [toIRScalar, toIR, eval, WitgenIROver.eval, h, VExprOver.eval, Functor.map]
   with_unfolding_all rfl
 
 instance {α : Type} [Inhabited α] : Inhabited (MOver F V α) where

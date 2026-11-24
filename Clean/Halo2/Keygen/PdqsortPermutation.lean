@@ -106,7 +106,6 @@ theorem overwrite_get!
         array[index]! := by
   have heq := congrArg (fun values : List T => values[index]!)
     (overwrite_toList array start sub hfit)
-  dsimp only at heq
   rw [arrayToList_getElem!] at heq
   rw [heq]
   by_cases hinside : start ≤ index ∧ index < start + sub.size
@@ -120,9 +119,9 @@ theorem overwrite_get!
           start + sub.size := by simp [htake]
     rw [if_pos (by rw [hprefix]; omega), htake,
       if_neg (by omega)]
-    rw [List.getElem?_eq_getElem (by simp; omega), Option.getD_some]
+    rw [List.getElem?_eq_getElem (by simp only [List.length_append, htake, Array.length_toList]; omega), Option.getD_some]
     rw [getElem!_pos sub (index - start) (by omega)]
-    exact Array.getElem_toList (xs := sub) (by omega)
+    exact Array.getElem_toList (xs := sub) (by simpa only [Array.length_toList] using (show index - start < sub.size by omega))
   · rw [if_neg hinside]
     by_cases hbefore : index < start
     · simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
@@ -135,10 +134,10 @@ theorem overwrite_get!
       rw [if_pos (by rw [hprefix]; omega),
         if_pos (by rw [htake]; omega)]
       rw [List.getElem?_eq_getElem (by
-        simp only [List.length_take, Array.length_toList]
+        simp only [List.length_take, Array.length_toList, List.length_append, htake]
         omega), Option.getD_some, List.getElem_take]
       rw [getElem!_pos array index (by omega)]
-      exact Array.getElem_toList (xs := array) (by omega)
+      exact Array.getElem_toList (xs := array) (by simp only [Array.length_toList]; omega)
     · have hafter : start + sub.size ≤ index := by omega
       simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
       have htake : (array.toList.take start).length = start := by
@@ -877,320 +876,6 @@ private theorem adjusted_mod_lt (x len : ℕ) (hlen : 0 < len) :
   dsimp only
   split <;> omega
 
-/-
-private theorem breakPatterns_loop_perm :
-    ∀ (indices : List ℕ) (len : ℕ)
-      (random : UInt32) (a original : Array T),
-      8 ≤ len →
-      a.size = len →
-      (∀ i ∈ indices, i < 3) →
-      List.Perm a.toList original.toList →
-      let result : MProd UInt32 (Array T) := Id.run <|
-        forIn indices (⟨random, a⟩ : MProd UInt32 (Array T))
-          fun i (r : MProd UInt32 (Array T)) =>
-            let random₁ := r.fst ^^^ (r.fst <<< 13)
-            let random₂ := random₁ ^^^ (random₁ >>> 17)
-            let random₃ := random₂ ^^^ (random₂ <<< 5)
-            let hi := random₃
-            let random₄ := random₃ ^^^ (random₃ <<< 13)
-            let random₅ := random₄ ^^^ (random₄ >>> 17)
-            let random₆ := random₅ ^^^ (random₅ <<< 5)
-            let lo := random₆
-            let g : UInt64 :=
-              (hi.toUInt64 <<< 32) ||| lo.toUInt64
-            let raw : ℕ := g.toNat % nextPow2 len
-            let other := if raw ≥ len then raw - len else raw
-            pure (.yield ⟨random₆,
-              swp r.snd (len / 4 * 2 - 1 + i) other⟩)
-      List.Perm result.snd.toList original.toList := by
-  intro indices
-  induction indices with
-  | nil =>
-      intro len random a original hlen hsize hindices hperm
-      simpa using hperm
-  | cons i indices ih =>
-      intro len random a original hlen hsize hindices hperm
-      simp only [List.forIn_cons]
-      apply ih
-      · exact hlen
-      ·
-        have hpermStep := swp_perm a (len / 4 * 2 - 1 + i)
-          (if
-              (((((random ^^^ (random <<< 13)) ^^^
-                    ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                  (((random ^^^ (random <<< 13)) ^^^
-                    ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                ((((random ^^^ (random <<< 13)) ^^^
-                      ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                    (((random ^^^ (random <<< 13)) ^^^
-                      ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
-                (((((random ^^^ (random <<< 13)) ^^^
-                        ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                      (((random ^^^ (random <<< 13)) ^^^
-                        ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                    ((((random ^^^ (random <<< 13)) ^^^
-                          ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                        (((random ^^^ (random <<< 13)) ^^^
-                          ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17) ^^^
-              (((((random ^^^ (random <<< 13)) ^^^
-                        ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                      (((random ^^^ (random <<< 13)) ^^^
-                        ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                    ((((random ^^^ (random <<< 13)) ^^^
-                          ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                        (((random ^^^ (random <<< 13)) ^^^
-                          ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
-                    (((((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                          (((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                        ((((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                            (((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) <<< 5)).toUInt64.toNat %
-                nextPow2 len ≥ len then
-            (((((random ^^^ (random <<< 13)) ^^^
-                    ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                  (((random ^^^ (random <<< 13)) ^^^
-                    ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)).toUInt64 <<< 32 |||
-              (((((random ^^^ (random <<< 13)) ^^^
-                        ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                      (((random ^^^ (random <<< 13)) ^^^
-                        ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                    ((((random ^^^ (random <<< 13)) ^^^
-                          ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                        (((random ^^^ (random <<< 13)) ^^^
-                          ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
-                    (((((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                          (((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                        ((((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                            (((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) ^^^
-                  (((((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                          (((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                        ((((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                            (((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
-                        (((((random ^^^ (random <<< 13)) ^^^
-                                ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                              (((random ^^^ (random <<< 13)) ^^^
-                                ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                            ((((random ^^^ (random <<< 13)) ^^^
-                                  ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                                (((random ^^^ (random <<< 13)) ^^^
-                                  ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) <<< 5)).toUInt64).toNat %
-                nextPow2 len - len
-          else
-            (((((random ^^^ (random <<< 13)) ^^^
-                    ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                  (((random ^^^ (random <<< 13)) ^^^
-                    ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)).toUInt64 <<< 32 |||
-              (((((random ^^^ (random <<< 13)) ^^^
-                        ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                      (((random ^^^ (random <<< 13)) ^^^
-                        ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                    ((((random ^^^ (random <<< 13)) ^^^
-                          ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                        (((random ^^^ (random <<< 13)) ^^^
-                          ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
-                    (((((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                          (((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                        ((((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                            (((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) ^^^
-                  (((((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                          (((random ^^^ (random <<< 13)) ^^^
-                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                        ((((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                            (((random ^^^ (random <<< 13)) ^^^
-                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
-                        (((((random ^^^ (random <<< 13)) ^^^
-                                ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                              (((random ^^^ (random <<< 13)) ^^^
-                                ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
-                            ((((random ^^^ (random <<< 13)) ^^^
-                                  ((random ^^^ (random <<< 13)) >>> 17)) ^^^
-                                (((random ^^^ (random <<< 13)) ^^^
-                                  ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) <<< 5)).toUInt64).toNat %
-              nextPow2 len)
-          (by
-            rw [hsize]
-            have hi := hindices i (by simp)
-            omega)
-          (by
-            rw [hsize]
-            apply adjusted_mod_lt
-            omega)
-        exact array_size_eq_of_perm hpermStep
-      · intro j hj
-        exact hindices j (by simp [hj])
-      ·
-        apply (swp_perm a (len / 4 * 2 - 1 + i)
-          _ (by
-            rw [hsize]
-            have hi := hindices i (by simp)
-            omega) (by
-            rw [hsize]
-            apply adjusted_mod_lt
-            omega)).trans hperm
--/
-
-private def xorshift32 (random : UInt32) : UInt32 :=
-  let random := random ^^^ (random <<< 13)
-  let random := random ^^^ (random >>> 17)
-  random ^^^ (random <<< 5)
-
-private def breakNextRandom (random : UInt32) : UInt32 :=
-  xorshift32 (xorshift32 random)
-
-private def breakOther (random : UInt32) (len : ℕ) : ℕ :=
-  let hi := xorshift32 random
-  let lo := xorshift32 hi
-  let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
-  let raw := g.toNat % nextPow2 len
-  if raw ≥ len then raw - len else raw
-
-private def breakWord (random : UInt32) : ℕ :=
-  let hi := xorshift32 random
-  let lo := xorshift32 hi
-  let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
-  g.toNat
-
-private theorem breakOther_lt (random : UInt32) (len : ℕ)
-    (hlen : 0 < len) :
-    breakOther random len < len := by
-  unfold breakOther
-  apply adjusted_mod_lt
-  exact hlen
-
-private theorem breakPatterns_loop_perm_clean :
-    ∀ (indices : List ℕ) (len : ℕ)
-      (random : UInt32) (a original : Array T),
-      8 ≤ len →
-      a.size = len →
-      (∀ i ∈ indices, i < 3) →
-      List.Perm a.toList original.toList →
-      let result : MProd UInt32 (Array T) := Id.run <|
-        forIn indices (⟨random, a⟩ : MProd UInt32 (Array T))
-          fun i (r : MProd UInt32 (Array T)) =>
-            pure (.yield ⟨breakNextRandom r.fst,
-              swp r.snd (len / 4 * 2 - 1 + i)
-                (breakOther r.fst len)⟩)
-      List.Perm result.snd.toList original.toList := by
-  intro indices
-  induction indices with
-  | nil =>
-      intro len random a original hlen hsize hindices hperm
-      simpa using hperm
-  | cons i indices ih =>
-      intro len random a original hlen hsize hindices hperm
-      simp only [List.forIn_cons]
-      apply ih
-      · exact hlen
-      ·
-        have hstep := swp_perm a (len / 4 * 2 - 1 + i)
-          (breakOther random len)
-          (by
-            rw [hsize]
-            have hi := hindices i (by simp)
-            omega)
-          (by
-            rw [hsize]
-            exact breakOther_lt random len (by omega))
-        exact (array_size_eq_of_perm hstep).trans hsize
-      · intro j hj
-        exact hindices j (by simp [hj])
-      ·
-        exact (swp_perm a (len / 4 * 2 - 1 + i)
-          (breakOther random len)
-          (by
-            rw [hsize]
-            have hi := hindices i (by simp)
-            omega)
-          (by
-            rw [hsize]
-            exact breakOther_lt random len (by omega))).trans hperm
-
-private def breakChoice (random : UInt32) (len : ℕ) :
-    MProd UInt32 ℕ :=
-  let random := random ^^^ (random <<< 13)
-  let random := random ^^^ (random >>> 17)
-  let random := random ^^^ (random <<< 5)
-  let hi := random
-  let random := random ^^^ (random <<< 13)
-  let random := random ^^^ (random >>> 17)
-  let random := random ^^^ (random <<< 5)
-  let lo := random
-  let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
-  let raw := g.toNat % nextPow2 len
-  ⟨random, if raw ≥ len then raw - len else raw⟩
-
-private theorem breakChoice_other_lt (random : UInt32) (len : ℕ)
-    (hlen : 0 < len) :
-    (breakChoice random len).snd < len := by
-  unfold breakChoice
-  apply adjusted_mod_lt
-  exact hlen
-
-private theorem breakPatterns_loop_perm_choice :
-    ∀ (indices : List ℕ) (len : ℕ)
-      (random : UInt32) (a original : Array T),
-      8 ≤ len →
-      a.size = len →
-      (∀ i ∈ indices, i < 3) →
-      List.Perm a.toList original.toList →
-      let result : MProd UInt32 (Array T) := Id.run <|
-        forIn indices (⟨random, a⟩ : MProd UInt32 (Array T))
-          fun i (r : MProd UInt32 (Array T)) =>
-            let choice := breakChoice r.fst len
-            pure (.yield ⟨choice.fst,
-              swp r.snd (len / 4 * 2 - 1 + i) choice.snd⟩)
-      List.Perm result.snd.toList original.toList := by
-  intro indices
-  induction indices with
-  | nil =>
-      intro len random a original hlen hsize hindices hperm
-      simpa using hperm
-  | cons i indices ih =>
-      intro len random a original hlen hsize hindices hperm
-      simp only [List.forIn_cons]
-      apply ih
-      · exact hlen
-      ·
-        have hstep := swp_perm a (len / 4 * 2 - 1 + i)
-          (breakChoice random len).snd
-          (by
-            rw [hsize]
-            have hi := hindices i (by simp)
-            omega)
-          (by
-            rw [hsize]
-            exact breakChoice_other_lt random len (by omega))
-        exact (array_size_eq_of_perm hstep).trans hsize
-      · intro j hj
-        exact hindices j (by simp [hj])
-      ·
-        exact (swp_perm a (len / 4 * 2 - 1 + i)
-          (breakChoice random len).snd
-          (by
-            rw [hsize]
-            have hi := hindices i (by simp)
-            omega)
-          (by
-            rw [hsize]
-            exact breakChoice_other_lt random len (by omega))).trans hperm
-
 omit [Inhabited T] in
 private theorem state_forIn_perm
     (indices : List ℕ)
@@ -1304,59 +989,16 @@ theorem breakPatterns_perm (v : Array T) :
     List.Perm (breakPatterns v).toList v.toList := by
   simp only [breakPatterns]
   split
-  ·
-    simp only [Std.Legacy.Range.forIn_eq_forIn_range']
-    let body : ℕ → MProd UInt32 (Array T) →
-        Id (ForInStep (MProd UInt32 (Array T))) :=
-      fun i r => do
-        let mut a := r.snd
-        let mut random := r.fst
-        random := random ^^^ (random <<< 13)
-        random := random ^^^ (random >>> 17)
-        random := random ^^^ (random <<< 5)
-        let hi := random
-        random := random ^^^ (random <<< 13)
-        random := random ^^^ (random >>> 17)
-        random := random ^^^ (random <<< 5)
-        let lo := random
-        let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
-        let mut other : ℕ := g.toNat % nextPow2 v.size
-        if other ≥ v.size then other := other - v.size
-        a := swp a (v.size / 4 * 2 - 1 + i) other
-        pure PUnit.unit
-        pure (.yield ⟨random, a⟩)
-    have hbody :
-        ∀ i ∈ List.range' 0 3, ∀ r,
-          List.Perm r.snd.toList v.toList →
-          match body i r with
-          | .done s => List.Perm s.snd.toList v.toList
-          | .yield s => List.Perm s.snd.toList v.toList := by
-      intro i hi r hr
-      simp only [List.mem_range'] at hi
-      have hrsize : r.snd.size = v.size :=
-        array_size_eq_of_perm hr
-      simp only [body]
-      split_ifs with hother
-      ·
-        exact (swp_perm r.snd (v.size / 4 * 2 - 1 + i) _
-          (by rw [hrsize]; omega)
-          (by
-            rw [hrsize]
-            simpa only [breakWord, xorshift32, if_pos hother] using
-              (adjusted_mod_lt (breakWord r.fst) v.size
-                (by omega)))).trans hr
-      ·
-        exact (swp_perm r.snd (v.size / 4 * 2 - 1 + i) _
-          (by rw [hrsize]; omega)
-          (by
-            rw [hrsize]
-            simpa only [breakWord, xorshift32, if_neg hother] using
-              (adjusted_mod_lt (breakWord r.fst) v.size
-                (by omega)))).trans hr
-    have hmain := state_forIn_body_result_perm
-      (List.range' 0 3) body ⟨v.size.toUInt32, v⟩ v
-      hbody (List.Perm.refl _)
-    simpa only [body] using hmain
+  · have hloop := state_forIn_perm (List.range' 0 3)
+      (breakPatternsStep v.size (nextPow2 v.size) (v.size / 4 * 2))
+      ⟨v.size.toUInt32, v⟩ v (by
+        intro i hi state hperm
+        apply breakPatternsStep_perm v i
+        · simp only [List.mem_range'] at hi
+          omega
+        · omega
+        · exact hperm) (List.Perm.refl _)
+    simpa only [breakPatternsStep, Id.run, pure, bind] using hloop
   · simp
 
 private theorem partialInsertionMutation_perm
@@ -1426,14 +1068,14 @@ private theorem list_forIn_invariant
       cases b with
       | done s =>
           exact hbody i (by simp) initial s hinit
-            (Or.inl (by simpa using congrArg Id.run hb))
+            (Or.inl (by simpa only [Id.run] using congrArg Id.run hb))
       | yield s =>
           apply ih
           · intro j hj t t' ht hstep
             exact hbody j (by simp [hj]) t t' ht hstep
           ·
             exact hbody i (by simp) initial s hinit
-              (Or.inr (by simpa using congrArg Id.run hb))
+              (Or.inr (by simpa only [Id.run] using congrArg Id.run hb))
 
 private theorem bounded_scan
     (indices : List ℕ) (len i0 : ℕ)
@@ -1622,7 +1264,7 @@ theorem partialInsertionSort_perm (v : Array T)
       · rw [hstep] at h
         exact h)
     hinit
-  simpa only [body, Inv] using hloop.1
+  simpa only [body, Inv, Id.run, pure, bind] using hloop.1
 
 private theorem KeySorted.take_succ
     (array : Array T) (key : T → ℕ) (index : ℕ)
@@ -1641,13 +1283,13 @@ private theorem KeySorted.take_succ
     simp only [List.length_take, Array.length_toList]
     omega
   have hprefixBound := KeySorted.keysLE_last key
-    (array.toList.take index) hsorted (by omega)
+    (array.toList.take index) hsorted (by rw [hlength]; exact hpositive)
   have hleftLast := hprefixBound left hleft
   have hlast : (array.toList.take index)[index - 1]! =
       array[index - 1]! := by
     rw [getElem!_pos _ _ (by rw [hlength]; omega),
       List.getElem_take]
-    rw [Array.getElem_toList (by omega)]
+    rw [Array.getElem_toList (by simpa only [Array.length_toList] using (show index - 1 < array.size by omega))]
     rw [getElem!_pos array (index - 1) (by omega)]
   rw [hlength, hlast] at hleftLast
   exact hleftLast.trans hnext
@@ -1700,7 +1342,7 @@ private theorem swp_toList_take_before
       have := hindexRight
       simp only [List.length_take, Array.length_toList] at this
       omega
-    rw [Array.getElem_toList (by simpa only [swp_size] using hindex),
+    rw [Array.getElem_toList (by simpa only [Array.length_toList, swp_size] using hindex),
       Array.getElem_toList hindex,
       ← getElem!_pos (swp array left right) index
         (by simpa only [swp_size] using hindex),
@@ -2434,8 +2076,7 @@ private theorem partitionScanRight_forIn
       else
         pure (.done current)) =
       scanRight indices left right pivot array (dualLess isLess) := by
-  simpa only [dualLess] using
-    scanRight_forIn indices left right pivot array (dualLess isLess)
+  exact scanRight_forIn indices left right pivot array (dualLess isLess)
 
 private theorem partitionScanLeft_rangeAll
     (indices : List ℕ) (left right : ℕ)
@@ -3222,7 +2863,7 @@ private theorem partitionEqualStep_progress
           swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩)) |>.run).2.1 <
             right - left
         rw [if_neg hfinished]
-        simp only [ForInStep.run]
+        simp only [ForInStep.run, Id.run, pure]
         omega
 
 private theorem partitionEqualLoop_done_of_done

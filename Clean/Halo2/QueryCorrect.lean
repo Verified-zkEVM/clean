@@ -5,13 +5,14 @@ namespace Halo2
 
 variable {F : Type}
 
-attribute [query_correct] Expression.mulConstant
+attribute [query_correct] Expression.mulConstant Expression.sub_def Expression.neg_def
 
-/-- A declaration accepted by Halo 2's query-registration interface. -/
+/-- A declaration accepted by Halo 2's query-registration interface; every column kind takes
+a rotation (`VirtualCells::query_fixed`, circuit.rs:2329). -/
 @[query_correct]
 def Expression.QueryAtom : Expression F Query → Prop
   | .var (.advice _ _) => True
-  | .var (.fixed _ rotation) => rotation = 0
+  | .var (.fixed _ _) => True
   | .var (.instance _ _) => True
   | _ => False
 

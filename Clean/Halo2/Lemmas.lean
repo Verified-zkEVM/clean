@@ -242,8 +242,7 @@ theorem RegionOperation.constraints_enableLookup (place : RegionIndex → ℕ) (
       = ∃ tableRow : ℕ, tableRow < env.usableRows ∧
           arg.inputs.map (Expression.eval (Query.eval env
             (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (place self + row : ℕ)))
-          = arg.tables.map (Expression.eval (Query.eval env
-            (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (tableRow : ℤ))) := rfl
+          = arg.tables.map (Expression.eval (Query.eval env (fun _ => 0) (tableRow : ℤ))) := rfl
 
 @[circuit_norm]
 theorem RegionOperation.constraints_constrainEqual (place : RegionIndex → ℕ) (self : RegionIndex)
@@ -347,6 +346,18 @@ theorem output_assignAdviceFromInstance (instCol : Column .instance) (instRow : 
     (col : Column .advice) (row : ℕ) (self : RegionIndex) :
     (assignAdviceFromInstance (F := F) instCol instRow col row).output self =
       AssignedCell.of self row col := rfl
+
+@[circuit_norm]
+theorem operations_assignAdviceFromConstant (col : Column .advice) (row : ℕ) (value : F)
+    (self : RegionIndex) :
+    (assignAdviceFromConstant col row value).operations self
+      = [.assignAdvice col row (.ofFExpr (.const value)),
+         .constrainConstant (Cell.of self row col) value] := rfl
+
+@[circuit_norm, keygen_norm]
+theorem output_assignAdviceFromConstant (col : Column .advice) (row : ℕ) (value : F)
+    (self : RegionIndex) :
+    (assignAdviceFromConstant col row value).output self = AssignedCell.of self row col := rfl
 
 -- `List.Forall` over a concrete list decomposes into a conjunction; `add_zero` clears
 -- rotation-0 query offsets so cell reads share the row form `↑(place self + row)`.

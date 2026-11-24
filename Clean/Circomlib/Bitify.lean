@@ -95,7 +95,8 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
 
   completeness := by
     circuit_proof_start
-    simp only [lc_eq, Fin.forall_iff, mul_eq_zero] at h_env ⊢
+    simp only [HShiftRight.hShiftRight, ShiftRight.shiftRight, Witgen.NExprOver.eval,
+      circuit_norm, h_input, lc_eq, Fin.forall_iff, mul_eq_zero] at h_env ⊢
     let bits := Vector.mapRange n fun i => env.get (i₀ + i)
     constructor
     · intro i hi
@@ -106,6 +107,7 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
       rw [Vector.ext_iff]
       intro i hi
       simp only [bits, Vector.getElem_mapRange, h_env i hi, getElem_fieldToBits]
+      rfl
     rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p

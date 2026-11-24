@@ -108,7 +108,7 @@ theorem SummarySelectorsAnchoredBy.combine
   rw [RegionSynthesisSummary.toRegionShapeSummary_columns,
     RegionSynthesisSummary.combine_columns, mem_unionColumns_iff] at hselector
   rcases hselector with hselector | hselector
-  · have hanchor := hleft selector (by simpa using hselector)
+  · have hanchor := hleft selector (by simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hselector)
     have hanchor' : anchor selector ∈ physicalColumns left.columns := by
       simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hanchor
     obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hanchor
@@ -119,7 +119,7 @@ theorem SummarySelectorsAnchoredBy.combine
       mem_unionColumns_iff]
     exact Or.inl
       ((column_mem_physicalColumns_iff kind index left.columns).mp hphysical)
-  · have hanchor := hright selector (by simpa using hselector)
+  · have hanchor := hright selector (by simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hselector)
     have hanchor' : anchor selector ∈ physicalColumns right.columns := by
       simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hanchor
     obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hanchor
@@ -156,7 +156,7 @@ theorem SelectorAnchoredBy.ofRegion
     {summary : RegionSynthesisSummary} {anchor : ℕ → RegionColumn}
     (hsummary : SummarySelectorsAnchoredBy summary.toRegionShapeSummary anchor) :
     SelectorAnchoredBy (SynthesisSummary.ofRegion summary).regionShapes anchor := by
-  simpa [SelectorAnchoredBy] using hsummary
+  simpa [SelectorAnchoredBy, SynthesisSummary.ofRegion] using hsummary
 
 theorem SelectorAnchoredBy.combine
     {left right : SynthesisSummary} {anchor : ℕ → RegionColumn}
@@ -863,13 +863,16 @@ theorem placeSummary_physicalEquivalent
       simpa only [hresult, RegionShapeSummary.withoutSelectors] using
         hbefore kind index
   | some row =>
-      simp only [RegionShapeSummary.withoutSelectors]
-      have hmember := physical_mem_sorted_full_iff kind index
-        summary.columns
+      dsimp only
+      have hmember :
+          RegionColumn.column kind index ∈ sortRegionColumns summary.columns ↔
+          RegionColumn.column kind index ∈ sortRegionColumns summary.withoutSelectors.columns :=
+        physical_mem_sorted_full_iff kind index summary.columns
       by_cases hcolumn : RegionColumn.column kind index ∈
           sortRegionColumns summary.columns
       · rw [if_pos hcolumn, if_pos (hmember.mp hcolumn),
           hbefore kind index]
+        rfl
       · rw [if_neg hcolumn, if_neg (mt hmember.mpr hcolumn),
           hbefore kind index]
 

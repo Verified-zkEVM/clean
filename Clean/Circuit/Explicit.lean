@@ -225,9 +225,9 @@ instance ExplicitCircuits.from_pure {f : α → β} : ExplicitCircuits (fun a =>
   operations _ _ := []
   channelsWithGuarantees _ _ := []
 
--- `bind` of two explicit circuits yields an explicit circuit
-@[explicit_circuit_constructor]
-instance ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
+-- The tactic supplies these explicit instances; typeclass search cannot infer them.
+@[explicit_circuit_constructor, instance_reducible]
+def ExplicitCircuit.from_bind {f : Circuit F α} {g : α → Circuit F β}
     (f_explicit : ExplicitCircuit f) (g_explicit : ∀ a : α, ExplicitCircuit (g a)) : ExplicitCircuit (f >>= g) where
   output n :=
     let a := output f n
@@ -289,9 +289,9 @@ theorem ExplicitCircuit.from_bind_channelsWithGuarantees {f : Circuit F α} {g :
       ExplicitCircuit.channelsWithGuarantees f n ++
         ExplicitCircuit.channelsWithGuarantees (g (ExplicitCircuit.output f n)) (n + ExplicitCircuit.localLength f n) := rfl
 
--- `map` of an explicit circuit yields an explicit circuit
-@[explicit_circuit_constructor]
-instance ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
+-- Keep the explicit constructor available to the derivation tactic.
+@[explicit_circuit_constructor, instance_reducible]
+def ExplicitCircuit.from_map {f : α → β} {g : Circuit F α}
     (g_explicit : ExplicitCircuit g) : ExplicitCircuit (f <$> g) where
   output n := output g n |> f
   localLength n := localLength g n
@@ -832,7 +832,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
   -- Build a `dsimp` context from `[explicit_circuit_norm]` plus the user
   -- declarations found in the inferred explicit proof and the target circuit.
   let mkDsimpCtx (decls : Array Name) : MetaM Simp.Context := do
-    let mut thms := explicitThms
+    let mut thms ← explicitThms.addDeclToUnfold ``id
     for decl in decls do
       thms ← thms.addDeclToUnfold decl
     -- `instances := true`: since Lean 4.29, simp/dsimp no longer visit instance arguments or
@@ -849,6 +849,9 @@ elab "elaborate_circuit" : tactic => withMainContext do
     (some noUnfoldHeads) (some unfoldTypeHeads)
   let commonDsimpCtx ← mkDsimpCtx commonDecls
   let explicitMetadata := (← dsimp explicit commonDsimpCtx).1
+  -- Normalize the circuit index alongside its metadata so projection applications
+  -- remain well typed at the transparency level used by the simplifier.
+  let metadataMain := (← dsimp main commonDsimpCtx).1
 
   let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
     (simpTheorems := #[explicitThms]) congrThms
@@ -887,7 +890,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
   let (localLengthFun, localLengthNormProof) ← withLocalDeclD `input varInputType fun input => do
     let zero := mkNatLit 0
     let ll ←
-      mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, main, explicitMetadata, input, zero]
+      mkAppOptM ``ExplicitCircuits.localLength #[none, none, none, none, metadataMain, explicitMetadata, input, zero]
     let (ll, proof) ← normalizeExplicitSimp "localLength" ll
     let localLengthFun ← mkLambdaFVars #[input] ll
     let localLengthNormProof ← mkLambdaFVars #[input] proof
@@ -899,7 +902,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
   let (outputFun, outputNormProof) ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let out ←
-        mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, main, explicitMetadata, input, offset]
+        mkAppOptM ``ExplicitCircuits.output #[none, none, none, none, metadataMain, explicitMetadata, input, offset]
       let (out, proof) ← normalizeExplicitSimp "output" out
       let outputFun ← mkLambdaFVars #[input, offset] out
       let outputNormProof ← mkLambdaFVars #[input, offset] proof
@@ -956,7 +959,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
       withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let ch ← mkAppOptM ``ExplicitCircuits.channelsWithGuarantees
-        #[none, none, none, none, main, explicitMetadata, input, offset]
+        #[none, none, none, none, metadataMain, explicitMetadata, input, offset]
       let (ch, proof) ← normalizeExplicitSimp "channelsWithGuarantees" ch
       let channelsWithGuaranteesFun ← mkLambdaFVars #[input, offset] ch
       let channelsWithGuaranteesNormProof ← mkLambdaFVars #[input, offset] proof

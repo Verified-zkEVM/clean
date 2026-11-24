@@ -261,15 +261,19 @@ lemma channelInteraction_toRaw_inj {i j : ChannelInteraction channel} :
   constructor; swap
   · rintro rfl; rfl
   intro h
-  rcases i with ⟨ mult, msg, assumeGuarantees ⟩
-  rcases j with ⟨ mult', msg', assumeGuarantees' ⟩
-  simp only [ChannelInteraction.toRaw, AbstractInteraction.mk.injEq,
-    ChannelInteraction.mk.injEq, true_and] at h ⊢
-  rcases h with ⟨ h_mult, h_msg, h_assume ⟩
-  refine ⟨ h_mult, ?_, h_assume ⟩
-  have h_msg_eq : toElements msg = toElements msg' := eq_of_heq h_msg
-  rw [← ProvableType.fromElements_toElements msg,
-    ← ProvableType.fromElements_toElements msg', h_msg_eq]
+  have hmult := congrArg AbstractInteraction.mult h
+  have hvalues := congrArg (fun interaction => interaction.msg.toArray) h
+  have hassume := congrArg AbstractInteraction.assumeGuarantees h
+  have hmessage : i.msg = j.msg := by
+    have hv : toElements i.msg = toElements j.msg := Vector.toArray_inj.mp hvalues
+    simpa only [ProvableType.fromElements_toElements] using
+      congrArg (fun v => fromElements (M := Message) v) hv
+  cases i
+  cases j
+  cases hmult
+  cases hmessage
+  cases hassume
+  rfl
 
 @[circuit_norm]
 lemma mem_expose_pullIf_pushIf (enabled enabled' : Expression F)
@@ -390,37 +394,41 @@ lemma pushedIfValue_guarantees {channel : Channel F Message}
 
 lemma eval_pulled {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pulled msg).toRaw.eval env = channel.pulledValue (eval env msg) := by
-  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
-  simp only [and_true, true_and]
-  congr
-  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
-  rfl
+  dsimp only [pulled, pushed, pulledIf, pushedIf, ChannelInteraction.toRaw,
+    AbstractInteraction.eval, pulledValue, pushedValue, pulledIfValue, pushedIfValue]
+  congr 1
+  all_goals first
+    | exact congrArg Vector.toArray (ProvableType.Clean.toElements_eval env msg).symm
+    | simp only [circuit_norm]
 
 lemma eval_pushed {channel : Channel F Message} {msg : Message (Expression F)} {env : Environment F} :
      (channel.pushed msg).toRaw.eval env = channel.pushedValue (eval env msg) := by
-  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
-  simp only [and_true, true_and]
-  congr
-  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
-  rfl
+  dsimp only [pulled, pushed, pulledIf, pushedIf, ChannelInteraction.toRaw,
+    AbstractInteraction.eval, pulledValue, pushedValue, pulledIfValue, pushedIfValue]
+  congr 1
+  all_goals first
+    | exact congrArg Vector.toArray (ProvableType.Clean.toElements_eval env msg).symm
+    | simp only [circuit_norm]
 
 lemma eval_pulledIf {channel : Channel F Message} {enabled : Expression F}
     {msg : Message (Expression F)} {env : Environment F} :
      (channel.pulledIf enabled msg).toRaw.eval env = channel.pulledIfValue (eval env enabled) (eval env msg) := by
-  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
-  simp only [and_true, true_and]
-  apply congrArg Vector.toArray
-  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
-  rfl
+  dsimp only [pulled, pushed, pulledIf, pushedIf, ChannelInteraction.toRaw,
+    AbstractInteraction.eval, pulledValue, pushedValue, pulledIfValue, pushedIfValue]
+  congr 1
+  all_goals first
+    | exact congrArg Vector.toArray (ProvableType.Clean.toElements_eval env msg).symm
+    | simp only [circuit_norm]
 
 lemma eval_pushedIf {channel : Channel F Message} {enabled : Expression F}
     {msg : Message (Expression F)} {env : Environment F} :
      (channel.pushedIf enabled msg).toRaw.eval env = channel.pushedIfValue (eval env enabled) (eval env msg) := by
-  simp only [circuit_norm, AbstractInteraction.eval, Interaction.mk.injEq]
-  simp only [and_true, true_and]
-  congr
-  rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
-  rfl
+  dsimp only [pulled, pushed, pulledIf, pushedIf, ChannelInteraction.toRaw,
+    AbstractInteraction.eval, pulledValue, pushedValue, pulledIfValue, pushedIfValue]
+  congr 1
+  all_goals first
+    | exact congrArg Vector.toArray (ProvableType.Clean.toElements_eval env msg).symm
+    | simp only [circuit_norm]
 end Channel
 
 end Clean

@@ -379,8 +379,9 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
                   ((configure K configInput.1 configInput.2.1
                     configInput.2.2.1 configInput.2.2.2).output counts).adv0 }
               (i + 1) anchor (by
-                simpa only [LookupRangeCheck.lookupSelectorAnchorRequirements,
-                  SelectorAnchorRequirementsSatisfied] using hanchor)
+                change SelectorAnchorRequirementsSatisfied
+                  (LookupRangeCheck.lookupSelectorAnchorRequirements _) anchor
+                exact hanchor)
         · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
           simp only [gateRegion, circuit_norm, RegionOperation.IsNotLookup]
       lookupSelectorAssignmentsAgree_of_registered := by

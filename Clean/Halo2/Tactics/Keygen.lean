@@ -20,6 +20,8 @@ generic `call_keygenRegistered` lemmas.
 
 namespace Halo2
 
+attribute [keygen_norm, keygen_output_norm] Configure.plan_pure
+
 attribute [keygen_norm]
   RegionCircuit.Vector.map_getElem_mem_toList
   RegionCircuit.Vector.map_getElem!_mem_toList
@@ -98,7 +100,7 @@ attribute [keygen_spine]
   operations_assignRegion operations_assignAdvice operations_assignFixed
   operations_copyAdvice operations_enable operations_enableLookup
   operations_constrainEqual operations_constrainInstance operations_loadTable
-  operations_constrainConstant operations_assignAdviceFromInstance
+  operations_constrainConstant operations_assignAdviceFromInstance operations_assignAdviceFromConstant
   operations_cellAt operations_cellVec
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
   KeygenRequirements.inputPermutationColumns

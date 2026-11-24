@@ -416,8 +416,12 @@ theorem synth_keygenRegistered
   · apply (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
       |>.call_keygenRegistered
         (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) configured _ (self + 7)
-    case hgates => keygen_registration
-    case hlookups => keygen_registration
+    case hgates =>
+      intro gate hgate
+      exact List.mem_append_right _ hgate
+    case hlookups =>
+      intro argument hargument
+      exact List.mem_append_right _ hargument
     case hfixedColumns =>
       intro column hcolumn
       exact hcolumn
@@ -440,8 +444,16 @@ theorem synth_keygenRegistered
       (cfg.gate, cfg.lookupConfig) () (by rfl)
     apply child.call_keygenRegistered
       (cfg.gate, cfg.lookupConfig) childConfigured _ (self + 11)
-    case hgates => keygen_registration
-    case hlookups => keygen_registration
+    case hgates =>
+      intro gate hgate
+      change gate ∈ [CommitIvk.gate cfg.gate] at hgate
+      simp only [List.mem_singleton] at hgate
+      subst gate
+      exact List.mem_append_left _ (by simp)
+    case hlookups =>
+      intro argument hargument
+      change argument ∈ [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] at hargument
+      exact List.mem_append_left _ hargument
     case hfixedColumns =>
       intro column hcolumn
       simp only [childConfigured, child,
@@ -612,7 +624,7 @@ private theorem synth_copyCellsAssigned
           (List.mem_append_right _ hpieces.2.2.2.2.1)
       · exact List.mem_append_left _
           (List.mem_append_right _ hpieces.2.2.2.2.2.1)
-      · simpa only [zCell, commitInput, pcs, Nat.add_assoc] using
+      · simpa only [zCell, commitInput, pcs, AssignedCell.of_cell, Nat.add_assoc, Nat.reduceAdd] using
           List.mem_append_right
             ([input.ak.cell, input.nk.cell] ++
               Operations.assignedCellsFrom
@@ -623,7 +635,7 @@ private theorem synth_copyCellsAssigned
           (List.mem_append_right _ hpieces.2.2.2.1)
       · exact List.mem_append_left _
           (List.mem_append_right _ hpieces.2.2.2.2.2.2)
-      · simpa only [zCell, commitInput, pcs, Nat.add_assoc] using
+      · simpa only [zCell, commitInput, pcs, AssignedCell.of_cell, Nat.add_assoc, Nat.reduceAdd] using
           List.mem_append_right
             ([input.ak.cell, input.nk.cell] ++
               Operations.assignedCellsFrom

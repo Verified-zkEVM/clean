@@ -224,8 +224,26 @@ def commit (G : Generators) (ns : List ℕ)
           Operations.KeygenRegistered.append, circuit_norm]
         constructor
         · apply (Ecc.MulFixed.FullWidth.circuit R)
-            |>.call_keygenRegistered configInput.1 configured.1 input.r self <;>
-              keygen_registration
+            |>.call_keygenRegistered configInput.1 configured.1 input.r self
+          · intro gate hgate
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inl hgate)
+          · intro argument hargument
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inl hargument)
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.fixedColumns_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inl hcolumn)
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.delta_pure,
+              KeygenRequirements.inputPermutationColumns,
+              List.nil_append, List.mem_append]
+            exact Or.inl (Or.inl (Or.inl hcolumn))
+          · rw [Ecc.MulFixed.FullWidth.circuit_inputCells_eq]
+            simp only [List.forall_nil]
         constructor
         · apply (HashToPoint.hashCircuit G ns Q hQ hns)
             |>.call_keygenRegistered configInput.2.1 configured.2.1 _ (self + 2)
@@ -255,8 +273,42 @@ def commit (G : Generators) (ns : List ℕ)
             rcases List.mem_map.mp hcell with ⟨assigned, hassigned, rfl⟩
             exact Or.inr ⟨assigned.cell, ⟨assigned, hassigned, rfl⟩, rfl⟩
         · apply Ecc.Add.addFormal.call_keygenRegistered
-            configInput.2.2 configured.2.2 _ (self + 3) <;>
-              keygen_registration
+            configInput.2.2 configured.2.2 _ (self + 3)
+          · intro gate hgate
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inr hgate
+          · intro argument hargument
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inr hargument
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.fixedColumns_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inr hcolumn
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.delta_pure,
+              KeygenRequirements.inputPermutationColumns,
+              List.nil_append, List.mem_append]
+            exact Or.inl (Or.inr hcolumn)
+          · simp only [Ecc.Add.addFormal_inputCells,
+              HashToPoint.hashCircuit_output_point_x, HashToPoint.hashCircuit_output_point_y,
+              Ecc.MulFixed.FullWidth.circuit_output_cells, AssignedCell.of_cell,
+              Configure.output_pure, keygenRequirements, Configure.delta_pure,
+              KeygenRequirements.inputPermutationColumns, List.nil_append,
+              List.forall_cons, List.forall_nil, Cell.of_column, and_true, List.mem_append]
+            refine ⟨Or.inl (Or.inl (Or.inr ?_)), Or.inl (Or.inl (Or.inr ?_)),
+              Or.inl (Or.inl (Or.inl ?_)), Or.inl (Or.inl (Or.inl ?_))⟩
+            · rw [HashToPoint.Configured.permutationColumns_eq G ns Q hQ hns configured.2.1]
+              simp
+            · rw [HashToPoint.Configured.permutationColumns_eq G ns Q hQ hns configured.2.1]
+              simp
+            · apply hmulAdd
+              simp only [Ecc.Add.permutationColumns, List.mem_cons, List.not_mem_nil]
+              tauto
+            · apply hmulAdd
+              simp only [Ecc.Add.permutationColumns, List.mem_cons, List.not_mem_nil]
+              tauto
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
         simp only [operations, program, Configure.output_pure, synthesize,

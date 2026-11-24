@@ -2,6 +2,7 @@ import Clean.Orchard.Ecc.MulFixed
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Utilities
+import Clean.Gadgets.WitnessEvaluation
 
 open Clean
 
@@ -952,14 +953,25 @@ theorem completeness (B : MulFixed.FixedBase) :
   simp only [List.sum_cons, List.sum_nil, Nat.reduceAdd, Nat.reduceSub] at h_env ⊢
   obtain ⟨h_z0w, h_t0, ⟨⟨h_t1, h_inc1⟩, h_seg1_loop⟩, h_t43, h_inc43,
     ⟨⟨h_t44, h_inc44⟩, h_seg2_loop⟩, h_t84, h_add⟩ := h_env
-  simp only [h_input] at h_t44 h_seg2_loop
   simp only [AddIncomplete.Assumptions, AddIncomplete.Spec] at h_inc44 h_seg2_loop
+  let ctx : Ctx Fp := {env}
+  have h_read (w : ℕ) (xs : Vector Fp 8) :
+      (xs[(input_var.val / Witgen.NExprOver.const (8^w) % 8 : NExpr Fp)]).eval ctx =
+        xs[(show Fp from input).val / 8^w % 8] := by
+    rw [Witgen.eval_vector_const_read ctx xs _ (by
+      change (input_var.val.eval ctx / 8^w) % 8 < 8
+      exact Nat.mod_lt _ (by decide))]
+    simp only [Witgen.eval_div, Witgen.eval_mod, circuit_norm, ctx, h_input]
+  simp only [h_read, Witgen.eval_div, Witgen.eval_mod, circuit_norm, ctx,
+    h_input, Vector.getElem_ofFn] at h_t0 h_t1 h_t43 h_t44 h_t84 h_seg1_loop h_seg2_loop
+  have h_program (w : ℕ) := rowProgram_value B input w
+  simp only [dif_pos (Nat.mod_lt _ (by decide : 0 < 8))] at h_program
   -- bridge the witness-IR row values to the honest `rowTailValue`s, at literal windows
-  replace h_t0 := h_t0.trans (rowProgram_value B input 0)
-  replace h_t1 := h_t1.trans (rowProgram_value B input 1)
-  replace h_t43 := h_t43.trans (rowProgram_value B input 43)
-  replace h_t44 := h_t44.trans (rowProgram_value B input 44)
-  replace h_t84 := h_t84.trans (rowProgram_value B input 84)
+  replace h_t0 := h_t0.trans (h_program 0)
+  replace h_t1 := h_t1.trans (h_program 1)
+  replace h_t43 := h_t43.trans (h_program 43)
+  replace h_t44 := h_t44.trans (h_program 44)
+  replace h_t84 := h_t84.trans (h_program 84)
   have hα := h_assumptions
   -- per-window witnessed row values (windows `1..83`, window `j + 1`), gluing both foldl
   -- segments and the explicit window 43
@@ -975,7 +987,7 @@ theorem completeness (B : MulFixed.FixedBase) :
       exact env_get_rowTail (n := i₀ + 1 + 4 + 0 * 10) (by simpa using h_t1)
     rcases Nat.lt_or_ge j 42 with hj42 | hj42'
     · have hb := ((h_seg1_loop (j - 1) (by omega)).1).trans
-        (rowProgram_value B input (j - 1 + 1 + 1))
+        (h_program (j - 1 + 1 + 1))
       rw [show (j - 1 + 1) * 10 = j * 10 from by omega] at hb
       simp only [show j - 1 + 1 + 1 = j + 1 from by omega] at hb
       exact env_get_rowTail hb
@@ -990,7 +1002,7 @@ theorem completeness (B : MulFixed.FixedBase) :
       rw [hje, show i₀ + 1 + 4 + 420 + 4 + 6 = i₀ + 1 + 4 + j * 10 from by omega] at hb
       exact env_get_rowTail hb
     · have hb := ((h_seg2_loop (j - 44) (by omega)).1).trans
-        (rowProgram_value B input (j - 44 + 1 + 44))
+        (h_program (j - 44 + 1 + 44))
       rw [show i₀ + 1 + 4 + 420 + 4 + 6 + (j - 44 + 1) * 10 = i₀ + 1 + 4 + j * 10 from by omega] at hb
       simp only [show j - 44 + 1 + 44 = j + 1 from by omega] at hb
       exact env_get_rowTail hb
@@ -1288,7 +1300,7 @@ theorem completeness (B : MulFixed.FixedBase) :
   · intro i hi
     have h := hB (i + 1) (by omega)
     rw [zCell_pos i₀ (by omega), zCell_succ, accPt_pos env.toEnvironment i₀ (by omega)] at h
-    convert h using 6
+    convert h using 6 <;> simp only [Nat.add_sub_cancel]
   -- foldl2 (windows 45..83)
   · intro i hi
     have h := hB (i + 44) (by omega)
@@ -1615,10 +1627,13 @@ theorem soundness (B : MulFixed.FixedBase) :
 
 theorem completeness (B : MulFixed.FixedBase) :
     Completeness Fp (main B) Assumptions := by
-  circuit_proof_start [main, Assumptions, RunningSumMul.circuit,
+  circuit_proof_start [main, Assumptions,
     RunningSumMul.ProverSpec, Utilities.LookupRangeCheck.CopyCheck.circuit,
     Utilities.LookupRangeCheck.CopyCheck.ProverSpec, Gate.circuit,
     Gate.Spec]
+  obtain ⟨out, hout⟩ : ∃ out, (RunningSumMul.circuit B).output input_var i₀ = out := ⟨_, rfl⟩
+  rcases out with ⟨result, z43, z44, z84⟩
+  simp only [hout, circuit_norm, explicit_provable_type] at h_env ⊢
   obtain ⟨hRSM, hap0, hCC, ha1, ha2, hz84c, hz44c, hz43c⟩ := h_env
   have hpa : RunningSumMul.ProverAssumptions input env.data env.hint := by
     unfold RunningSumMul.ProverAssumptions; exact ZMod.val_lt (show Fp from input)
@@ -1631,6 +1646,8 @@ theorem completeness (B : MulFixed.FixedBase) :
   have hd8 : (show Fp from input).val / 8 ^ 84 < 8 :=
     Nat.div_lt_of_lt_mul (by rw [show (8 : ℕ) ^ 84 * 8 = 8 ^ 85 from by ring]; exact hvlt)
   -- the honest top window `d = α.val / 8^84 < 8`, used in `α1`, `α2`, `α0'`
+  simp only [HDiv.hDiv, Div.div, Witgen.NExprOver.eval, Expression.val,
+    Witgen.FExprOver.eval, circuit_norm] at ha2
   rw [hz84v] at ha1 ha2 hap0
   rw [ZMod.val_natCast_of_lt (lt_trans hd8 hp8)] at ha1 ha2
   refine ⟨hpa, hz84c, hz44c, hz43c, ?_, ?_, ?_⟩
@@ -1642,7 +1659,12 @@ theorem completeness (B : MulFixed.FixedBase) :
   · -- IsBool α2
     rw [ha2]
     have hd4 : (show Fp from input).val / 8 ^ 84 / 4 < 2 := by omega
-    interval_cases h : (show Fp from input).val / 8 ^ 84 / 4 <;> simp [IsBool]
+    have cast_bool (n : Nat) (bound : n < 2) : IsBool (n : Fp) := by
+      have cases_n : n = 0 ∨ n = 1 := by
+        clear * - n bound
+        omega
+      rcases cases_n with h | h <;> simp only [IsBool, h] <;> norm_num
+    exact cast_bool _ hd4
   · -- DecomposesBaseFieldElem ∧ CanonicalHighBit, via the abstract-row lemma (keeps the
     -- giant `m.z84` foldl out of the def-unfolding whnf).
     refine honest_canon_spec (α := input) hpa rfl (hz84c.trans hz84v) ha1 ha2 hap0

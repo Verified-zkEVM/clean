@@ -486,19 +486,19 @@ theorem innerRegion_copyCellsAssignedFrom_and_outputAssigned
     simpa only [RegionOperations.assignedCellsAfter_append,
       witnessOps, fixedOps] using hchain.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.2.2
 
@@ -852,7 +852,6 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
     (by
       intro j hj1 hj83 hAssumptions
       obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-      dsimp only at hOnP hOnQ hne ⊢
       rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
       rcases Nat.lt_or_ge j 2 with hj2 | hj2
       · have hj : j = 1 := by omega
@@ -880,7 +879,6 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
             • B.point).y := by
     intro j hj1 hj83
     have h := hLadder j hj83
-    dsimp only at h
     rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
     exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
@@ -1252,7 +1250,6 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
       (by
         intro j hj1 hj83 hAssumptions
         obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-        dsimp only at hOnP hOnQ hne ⊢
         rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
         rcases Nat.lt_or_ge j 2 with hj2 | hj2
         · -- j = 1: the explicit first chunk (window 1 + window 0)
@@ -1272,7 +1269,6 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
           obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
           exact hOut)
     have hI83 := hLadder 83 (by norm_num)
-    dsimp only at hI83
     rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
       show offset + 83 + 1 = offset + 84 from by omega] at hI83
     rw [← hOax, ← hOay]
@@ -1539,7 +1535,8 @@ def circuit (B : FixedBase) :
         constructor
         · simpa only [synthesize, Circuit.operations_bind, operations_assignRegion,
             List.forall_append, List.forall_cons, List.forall_nil, and_true,
-            windows] using And.intro hinner hadd
+            windows, cfg, Operation.FixedAssignmentsAgree, output_assignRegion,
+            nextRegionIndex_assignRegion] using And.intro hinner hadd
         · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
             Operations.loadedTableColumns]
         · simp [synthesize, Circuit.operations_bind, operations_assignRegion,

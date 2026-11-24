@@ -35,14 +35,14 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         intro configInput counts hconfig input region
         have hregistered := child.elaborated.registered
           configInput counts hconfig 0 input region
-        simpa only [assignRegion, Circuit.operations,
+        simpa only [assignRegion, Circuit.operations, RegionCircuit.operations,
           Operations.KeygenRegistered, Operation.KeygenRegistered,
           List.Forall, and_true] using hregistered
       copyCellsAssigned := by
         intro configInput counts hconfig input region
         have hassigned := child.elaborated.copyCellsAssigned
           configInput counts hconfig 0 input region
-        simp only [assignRegion, Circuit.operations,
+        simp only [assignRegion, Circuit.operations, RegionCircuit.operations,
           Operations.CopyCellsAssigned]
         rw [
           Operations.copyCellsAssignedFrom_region_iff]
@@ -50,21 +50,21 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
       fixedWritesLawful := by
         intro configInput counts hconfig input region
         refine ⟨?_, ?_, ?_, ?_⟩
-        · simp only [assignRegion, Circuit.operations, List.forall_cons,
+        · simp only [assignRegion, Circuit.operations, RegionCircuit.operations, List.forall_cons,
             List.forall_nil, and_true]
           exact child.elaborated.fixedAssignmentsAgree
             configInput counts hconfig 0 input region
-        · simp [assignRegion, Circuit.operations,
+        · simp [assignRegion, Circuit.operations, RegionCircuit.operations,
             Operations.loadedTableColumns]
-        · simp [assignRegion, Circuit.operations,
+        · simp [assignRegion, Circuit.operations, RegionCircuit.operations,
             Operations.loadedTableColumns]
-        · simp [assignRegion, Circuit.operations,
+        · simp [assignRegion, Circuit.operations, RegionCircuit.operations,
             Operations.loadedTableColumns]
       lookupActivationsWellFormed := by
         intro config input region
         have hlawful := child.elaborated.lookupActivationsWellFormed
           config 0 input region
-        simpa only [assignRegion, Circuit.operations,
+        simpa only [assignRegion, Circuit.operations, RegionCircuit.operations,
           Operations.LookupActivationsWellFormed,
           Operation.LookupActivationsWellFormed, List.Forall, and_true] using hlawful
       lookupSelectorAssignmentsAgree_of_registered := by
@@ -73,7 +73,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         intro _hregistered
         have hagrees := child.elaborated.lookupSelectorAssignmentsAgree
           configInput counts hconfig 0 input region
-        simpa only [assignRegion, Circuit.operations,
+        simpa only [assignRegion, Circuit.operations, RegionCircuit.operations,
           Operations.LookupSelectorAssignmentsAgree,
           Operation.LookupSelectorAssignmentsAgree, List.Forall, and_true] using hagrees
       lookupSelectorAnchorRequirements config input region :=
@@ -84,7 +84,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
           configInput counts hconfig 0 input region anchor hanchor
           (child.elaborated.registered
             configInput counts hconfig 0 input region)
-        simpa only [assignRegion, Circuit.operations,
+        simpa only [assignRegion, Circuit.operations, RegionCircuit.operations,
           Operations.LookupSelectorsAnchoredBy, List.forall_cons,
           List.forall_nil, and_true] using hchild
       output config input i :=
@@ -99,10 +99,10 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         exact child.elaborated.output_eq config 0 input i
       regionCount_eq := by
         intro _ _ _
-        simp only [assignRegion, Circuit.operations, Operations.regionCount]
+        simp only [assignRegion, Circuit.operations, RegionCircuit.operations, Operations.regionCount]
       synthesisSummary_eq := by
         intro config input region
-        simp only [assignRegion, Circuit.operations,
+        simp only [assignRegion, Circuit.operations, RegionCircuit.operations,
           FloorPlanner.synthesisSummary]
         have hsummary :
             child.elaborated.synthesisSummary config 0 input region =
@@ -127,7 +127,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     intro i₀ env input_var input output h_in h_out hE hA hC
     -- the wrapping region's layouter `Constraints` peels to the child's region `Constraints`
     -- at the freshly-allocated region index `i₀` (offset 0)
-    simp only [Circuit.operations, assignRegion, Halo2.Constraints] at hC
+    simp only [Circuit.operations, RegionCircuit.operations, assignRegion, Halo2.Constraints] at hC
     subst h_in h_out
     -- instantiate the child's region-level soundness at `self := i₀`
     exact child.soundness config 0 i₀ env input_var hE hA hC.1
@@ -136,7 +136,7 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
     intro config
     rw [FormalCircuit.completeness_iff]
     intro i₀ env input_var input output h_in h_out hW hE hA hpa
-    simp only [Circuit.operations, assignRegion,
+    simp only [Circuit.operations, RegionCircuit.operations, assignRegion,
       Halo2.ExtendsWitnesses, Halo2.Constraints] at hW ⊢
     subst h_in h_out
     -- instantiate the child's region-level completeness at `self := i₀`
@@ -245,7 +245,7 @@ theorem KeygenLawful.toFormal
     have hregistered :=
       FormalRegionCircuit.KeygenLawful.registered
         hlawful configInput counts hconfig 0 input region
-    simpa only [toFormal, assignRegion, Circuit.operations,
+    simpa only [FormalRegionCircuit.toFormal, assignRegion, Circuit.operations, RegionCircuit.operations,
       Operations.KeygenRegistered, Operation.KeygenRegistered,
       List.Forall, and_true] using hregistered
 

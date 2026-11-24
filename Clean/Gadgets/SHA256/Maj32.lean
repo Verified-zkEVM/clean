@@ -1,3 +1,4 @@
+import Clean.Gadgets.WitnessEvaluation
 import Clean.Gadgets.SHA256.BitwiseOps
 import Clean.Specs.SHA256
 
@@ -242,13 +243,18 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [maj32]
-  simp only [Fin.isLt, reduceDIte] at h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have := (h_env.1) i
-    simp only [circuit_norm] at this
+    have h_read (v : Vector (Expression (F p)) 32) :
+        (v[(Witgen.NExprOver.idx : NExpr (F p))]).eval {env, idx := i.val} = Expression.eval env.toEnvironment v[i.val] :=
+      Witgen.eval_vector_read {env, idx := i.val} v (Witgen.NExprOver.idx : NExpr (F p)) i.isLt
+    simp only [h_read, circuit_norm] at this
     rw [this]; ring
   · have := (h_env.2.1) i
-    simp only [circuit_norm] at this
+    have h_read (v : Vector (Expression (F p)) 32) :
+        (v[(Witgen.NExprOver.idx : NExpr (F p))]).eval {env, idx := i.val} = Expression.eval env.toEnvironment v[i.val] :=
+      Witgen.eval_vector_read {env, idx := i.val} v (Witgen.NExprOver.idx : NExpr (F p)) i.isLt
+    simp only [h_read, circuit_norm] at this
     rw [this]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where

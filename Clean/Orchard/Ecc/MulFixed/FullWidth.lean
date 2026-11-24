@@ -1,3 +1,4 @@
+import Clean.Gadgets.WitnessEvaluation
 import Clean.Orchard.Ecc.MulFixed
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
@@ -459,14 +460,27 @@ theorem completeness (B : FixedBase) :
     Fin.foldl_const, Fin.val_last, circuit_norm,
     ] at h_add_env ⊢
   rw [show (if _ : 0 < 83 then (830 : ℕ) else 0) = 830 from rfl] at h_add_env ⊢
+  -- Normalize symbolic scalar reads before composing with the row-value certificate.
+  let ctx : Ctx Fp := {env, locals := Witgen.evalSteps env (input_var #[]).2.toList}
+  have h_read (w : ℕ) (xs : Vector Fp 8) :
+      (xs[((input_var #[]).1 / Witgen.NExprOver.const (8^w) % 8 : NExpr Fp)]).eval ctx =
+        xs[input / 8^w % 8] := by
+    rw [Witgen.eval_vector_const_read ctx xs _ (by
+      change ((input_var #[]).1.eval ctx / 8^w) % 8 < 8
+      exact Nat.mod_lt _ (by decide))]
+    simp only [Witgen.eval_div, Witgen.eval_mod, circuit_norm, ctx, h_input]
+  simp only [h_read, Witgen.eval_div, Witgen.eval_mod, circuit_norm, ctx,
+    h_input, Vector.getElem_ofFn] at h_w0 h_loop_env h_w84
+  have h_program (w : ℕ) := rowProgram_value B input w
+  simp only [dif_pos (Nat.mod_lt _ (by decide : 0 < 8))] at h_program
   -- witnessed row values
-  obtain ⟨h0w, h0x, h0y, h0u⟩ := env_get_row (h_w0.trans (rowProgram_value B input 0))
+  obtain ⟨h0w, h0x, h0y, h0u⟩ := env_get_row (h_w0.trans (h_program 0))
   have hrow : ∀ (j : ℕ) (hj : j < 83),
       env.get (i₀ + 4 + j * 10) = (rowValue B input (j + 1)).window ∧
         env.get (i₀ + 4 + j * 10 + 1) = (rowValue B input (j + 1)).xP ∧
         env.get (i₀ + 4 + j * 10 + 1 + 1) = (rowValue B input (j + 1)).yP ∧
         env.get (i₀ + 4 + j * 10 + 1 + 1 + 1) = (rowValue B input (j + 1)).u :=
-    fun j hj => env_get_row ((h_loop_env ⟨j, hj⟩).1.trans (rowProgram_value B input (j + 1)))
+    fun j hj => env_get_row ((h_loop_env ⟨j, hj⟩).1.trans (h_program (j + 1)))
   have hrowW := fun j hj => (hrow j hj).1
   have hrowX := fun j hj => (hrow j hj).2.1
   have hrowY := fun j hj => (hrow j hj).2.2.1
@@ -475,7 +489,7 @@ theorem completeness (B : FixedBase) :
       env.get (830 + (i₀ + 4) + 1) = (rowValue B input 84).xP ∧
         env.get (830 + (i₀ + 4) + 1 + 1) = (rowValue B input 84).yP ∧
         env.get (830 + (i₀ + 4) + 1 + 1 + 1) = (rowValue B input 84).u :=
-    env_get_row (h_w84.trans (rowProgram_value B input 84))
+    env_get_row (h_w84.trans (h_program 84))
   rw [Nat.add_comm 830 (i₀ + 4)] at h84
   obtain ⟨h84w, h84x, h84y, h84u⟩ := h84
   have hrow84 : rowValue B input 84
