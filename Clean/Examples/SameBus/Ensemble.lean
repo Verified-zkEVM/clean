@@ -15,9 +15,11 @@ it travels under one channel name.
 
 The bus here carries `(tag, a, b)`. At `tag = 0` the channel guarantees `b = a * a`, at `tag = 1`
 it guarantees `b = a⁴`. Every interaction is a plain push or pull: multiplicity is what
-`Clean/Examples/CountedSquares` is about, and it is orthogonal to the ordering question here. A squaring chip provides the squares. A fourth-power chip pulls a square
-and pushes a fourth power, on the same bus: its push owes `b = a⁴`, and it pays for it with the
-guarantee it got from its pull, plus one constraint of its own.
+`Clean/Examples/CountedSquares` is about, and it is orthogonal to the ordering question here.
+
+A squaring chip provides the squares. A fourth-power chip pulls a square and pushes a fourth
+power, on the same bus: its push owes `b = a⁴`, and it pays for it with the guarantee it got
+from its pull, plus one constraint of its own.
 
 Ordering whole channels cannot express that — `powers` would have to come before itself. Ordering
 *stages*, a channel together with a class of its messages, can: the squares are finished before
