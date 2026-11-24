@@ -17,3 +17,5 @@
 **Robust, explicit proof steps**. Targeted `simp only`/`rw` steps are preferred over defeq-based terms like `exact congrArg _ ih`. Concrete proofs contain no `try`: each case states the facts it needs, so the proof shows its dependencies (`grind`/`omega` as terminal closers are fine).
 
 **Clean, efficient meta/tactic code**. Meta code inspects the goal and runs the matching stage instead of trying tactic sequences until one succeeds; backtracking is a last-resort failure path. Rewrite rules and simprocs live in labelled simp sets (e.g. `computable_witnesses`), not in lemma lists hard-coded in meta code. A tactic feature pays for itself across the corpus: deleting an already short manual proof or handling a rare, fully abstract composition doesn't justify it.
+
+**Userland proof experience is not a minor concern**. Easy proofs of user circuits are one of the main value props of Clean. A framework change that makes user proofs harder, for example a weaker default tactic for a side condition like `ConstantLength`, is a major review finding.
