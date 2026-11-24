@@ -1,0 +1,1 @@
+{"expect": "lean-rejects-unrepresentable", "rust_error": "unrepresentable", "lean_error": "in-region instance copy"}

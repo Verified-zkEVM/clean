@@ -28,6 +28,11 @@ lean_lib Midnight where
 lean_lib MidnightExport where
   globs := #[.submodules `MidnightExport]
 
+-- Lowering replay fixtures (scripts/lowering-replay), one directory each; not a default target.
+lean_lib LoweringFixtures where
+  srcDir := "scripts/lowering-replay"
+  globs := #[.submodules `LoweringFixtures]
+
 -- ethereum/EthLib at 3bd2b3c, BLAKE2b compression only, vendored with per-file hashes
 -- (scripts/ethlib-vendor/vendor.py --check); Midnight's key hash runs on its compression function.
 lean_lib EthLib where

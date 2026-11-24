@@ -1,0 +1,1 @@
+{"expect": "both-reject", "rust_error": "circuit.rs:1993", "lean_error": "additive gates require complex selectors"}

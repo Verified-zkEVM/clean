@@ -1,0 +1,1 @@
+{"expect": "both-reject", "rust_error": "NotEnoughColumnsForConstants", "lean_error": "deferred constant"}

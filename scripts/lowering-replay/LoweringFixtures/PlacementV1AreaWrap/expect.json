@@ -1,0 +1,1 @@
+{"expect": "both-reject", "rust_error": "NotEnoughRowsAvailable", "lean_error": "out of bounds", "v1": {"expect": "exact", "format": "halo2", "rust_error": null, "lean_error": null}}

@@ -1,0 +1,1 @@
+{"expect": "exact", "format": "halo2", "v1": {"expect": "both-reject", "format": null, "rust_error": "NotEnoughColumnsForConstants", "lean_error": "deferred constant"}}

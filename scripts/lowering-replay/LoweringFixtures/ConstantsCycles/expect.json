@@ -1,0 +1,1 @@
+{"expect": "exact", "format": "halo2", "v1": {"expect": "both-reject", "format": null, "note": "V1 has fewer constant positions below first_unassigned_row than constants (NotEnoughColumnsForConstants on both sides)", "rust_error": "NotEnoughColumnsForConstants", "lean_error": "deferred constant"}}

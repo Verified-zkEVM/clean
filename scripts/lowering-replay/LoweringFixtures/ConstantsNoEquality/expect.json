@@ -1,0 +1,1 @@
+{"expect": "both-reject", "rust_error": "ColumnNotInPermutation", "lean_error": "outside the equality columns", "v1": {"rust_error": "NotEnoughColumnsForConstants", "lean_error": "deferred constant"}}

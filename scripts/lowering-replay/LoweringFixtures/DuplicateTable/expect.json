@@ -1,0 +1,1 @@
+{"expect": "both-reject", "rust_error": "UsedColumn", "lean_error": "UsedColumn"}

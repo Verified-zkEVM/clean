@@ -1,0 +1,14 @@
+# One lockfile for the native tools. midnight-zk at 1e39c120 sits next to this repository (../midnight-zk).
+[workspace]
+resolver = "3"
+members = ["lowering-replay/native", "vk-export/native"]
+
+[patch.crates-io]
+midnight-proofs = { path = "../../midnight-zk/proofs" }
+midnight-curves = { path = "../../midnight-zk/curves" }
+midnight-circuits = { path = "../../midnight-zk/circuits" }
+
+[patch."https://github.com/midnightntwrk/midnight-zk"]
+midnight-proofs = { path = "../../midnight-zk/proofs" }
+midnight-curves = { path = "../../midnight-zk/curves" }
+midnight-circuits = { path = "../../midnight-zk/circuits" }

@@ -1,0 +1,1 @@
+{"expect": "both-reject", "v1": {"expect": "exact", "rust_error": null, "lean_error": null}, "rust_error": "single_pass.rs:469", "lean_error": "not yet laid out"}
