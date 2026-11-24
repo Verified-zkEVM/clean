@@ -380,7 +380,8 @@ where the obligation takes it apart. Then every leaf is closed by the contextual
 with its premises as rewrite rules. -/
 def run (hints : Array Term) : TacticM Unit := do
   liftMetaTactic fun g => do
-    let t ← instantiateMVars (← g.getType)
+    -- a preceding `have` wraps the goal in metadata
+    let t := (← instantiateMVars (← g.getType)).cleanupAnnotations
     -- the circuit's own `main` (through its wrapper chain) is expanded before simp runs, as
     -- `circuit_proof_start` does: the `↓` lemmas of the outermost combinator (loops) then see it
     -- before its body unfolds
@@ -436,7 +437,7 @@ def run (hints : Array Term) : TacticM Unit := do
 
 end ComputableWitnesses
 
-attribute [computable_witnesses] Vector.get_eq_getElem Vector.append_eq_hAppend
+attribute [computable_witnesses] Vector.get_eq_getElem Vector.append_eq_hAppend Nat.add_eq
   List.getElem_singleton Vector.getElem_mapIdx Vector.getElem_zip Bool.and_eq_true Bool.or_eq_true Bool.not_eq_true' decide_eq_true_eq
 
 attribute [computable_witnesses_congr] Vector.mapRange_congr Vector.ofFn_congr

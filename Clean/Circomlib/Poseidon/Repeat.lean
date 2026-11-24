@@ -106,21 +106,8 @@ def circuit {t : ℕ} (params : Params t) (matrix : Vector (Vector ℕ t) t)
   soundness := soundness params matrix nRounds offset hOffset
   completeness := completeness params matrix nRounds offset hOffset
   computableWitnesses := by
-    run_tac ComputableWitnesses.run #[← `(FullRound.circuit)]
-    · apply FormalCircuit.toSubcircuit_computableWitnesses
-      · simp
-      · intro h_agrees
-        simp only [circuit_norm]
-        ext j hj
-        simp only [Vector.getElem_mapRange]
-        apply h_agrees.get_eq
-        have : (i + 1) * (t * 3 + t) = i * (t * 3 + t) + (t * 3 + t) := by ring
-        omega
-    · intro j hj
-      apply h_agrees.get_eq
-      have := Nat.mul_le_mul_right (t * 3 + t) (NeZero.one_le (n:=nRounds))
-      simp only [Nat.sub_mul, one_mul] at this ⊢
-      omega
+    have := Nat.le_mul_of_pos_left (t * 3 + t) (NeZero.pos nRounds)
+    computable_witnesses [FullRound.circuit, add_one_mul, Nat.sub_one_mul]
 
 end ApplyFullRounds
 
@@ -217,21 +204,8 @@ def circuit {t : ℕ} (params : Params t) (nRounds cOffset sRound : ℕ) [NeZero
   soundness := soundness params nRounds cOffset sRound hRounds hOffset
   completeness := completeness params nRounds cOffset sRound hRounds hOffset
   computableWitnesses := by
-    run_tac ComputableWitnesses.run #[← `(PartialRound.circuit)]
-    · apply FormalCircuit.toSubcircuit_computableWitnesses
-      · simp
-      · intro h_agrees
-        simp only [circuit_norm]
-        ext j hj
-        simp only [Vector.getElem_mapRange]
-        apply h_agrees.get_eq
-        have : (i + 1) * (3 + (1 + t)) = i * (3 + (1 + t)) + (3 + (1 + t)) := by ring
-        omega
-    · intro j hj
-      apply h_agrees.get_eq
-      have := Nat.mul_le_mul_right (3 + (1 + t)) (NeZero.one_le (n:=nRounds))
-      simp only [Nat.sub_mul, one_mul] at this ⊢
-      omega
+    have := Nat.le_mul_of_pos_left (3 + (1 + t)) (NeZero.pos nRounds)
+    computable_witnesses [PartialRound.circuit, add_one_mul, Nat.sub_one_mul]
 
 end ApplyPartialRounds
 
