@@ -182,6 +182,14 @@ lemma pulledIf_one_eq_pulled (msg : Message (Expression F)) :
 @[circuit_norm]
 lemma pushedIf_one_eq_pushed (msg : Message (Expression F)) :
   (pushedIf 1 msg : ChannelInteraction channel) = pushed msg := rfl
+@[circuit_norm]
+lemma pulled_inj {msg msg' : Message (Expression F)} :
+    (pulled msg : ChannelInteraction channel) = pulled msg' ↔ msg = msg' := by
+  simp [pulled]
+@[circuit_norm]
+lemma pushed_inj {msg msg' : Message (Expression F)} :
+    (pushed msg : ChannelInteraction channel) = pushed msg' ↔ msg = msg' := by
+  simp [pushed]
 
 @[circuit_norm] lemma pulled_direction (msg : Message (Expression F)) :
   (pulled msg : ChannelInteraction channel).direction = .pull := rfl

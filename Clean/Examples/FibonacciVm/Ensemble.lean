@@ -129,12 +129,14 @@ lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n → x < 256 ∧ y < 2
     specialize ih rfl
     simp_all [fibonacci, Nat.mod_lt]
 
+/-- The Fibonacci state `(n, x, y)` reached after `k` steps, which counts them with `n`. -/
+def FibonacciReached (k : ℕ) : fieldTriple (F p) → Prop
+  | (n, x, y) => (x.val, y.val) = fibonacci k ∧ n = k
+
+/-- The Fibonacci states, which `FibonacciReached` describes. -/
 def fibonacciChannel : Channel (F p) fieldTriple where
   name := "fibonacci"
-  -- when pulling, we want the guarantee that the input is a valid Fibonacci step
-  Guarantees
-  | (n, x, y), _ =>
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
+  Guarantees _ _ := True
 
 structure Fib8Input F where
   enabled : F
@@ -143,7 +145,7 @@ structure Fib8Input F where
   y : F
 deriving ProvableStruct
 
-def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
+def fib8 : GeneralFormalCircuit (F p) Fib8Input field where
   name := "fibonacci"
   main input := do
     -- boolean constraint for `enabled`
@@ -157,6 +159,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     add8Channel.pullIf input.enabled (input.x, input.y, z)
     -- push the next Fibonacci state
     fibonacciChannel.pushIf input.enabled (input.n + 1, input.y, z)
+    return z
 
   -- expose interactions
   exposedChannels
@@ -168,37 +171,34 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     simp only [circuit_norm, fibonacciChannel, add8Channel]
 
   ProverAssumptions
-  | { enabled, n, x, y }, _, _ =>
-    enabled = 0 ∨ (enabled = 1 ∧ ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
-  Spec _ _ _ := True
+  | { enabled, n, x, y }, _, _ => enabled = 0 ∨ (enabled = 1 ∧ ∃ k, FibonacciReached k (n, x, y))
+  -- an enabled step takes the state after `k` steps to the state after `k + 1` steps
+  Spec
+  | { enabled, n, x, y }, z, _ =>
+    enabled = 1 → ∀ k, FibonacciReached k (n, x, y) → FibonacciReached (k + 1) (n + 1, y, z)
 
-  channelsWithRequirements := [ fibonacciChannel.toRaw ]
   requirementsChannelsLawful input_var i₀ := by
     obtain ⟨enabled, n, x, y⟩ := input_var
     simp only [circuit_norm, fibonacciChannel, add8Channel]
     grind
 
   soundness := by
-    circuit_proof_start [fibonacciChannel, add8Channel]
+    circuit_proof_start [fibonacciChannel, add8Channel, FibonacciReached]
     set z := env.get i₀
-    obtain ⟨ h_bool, h_fib, h_add ⟩ := h_holds
+    obtain ⟨ h_bool, h_add ⟩ := h_holds
     rw [mul_eq_zero, sub_eq_zero] at h_bool
-    rcases h_bool with rfl | rfl
-    · grind
-    simp_all only [circuit_norm]
-    obtain ⟨k, fiby, hk⟩ := h_fib
+    refine ⟨ ?_, h_bool ⟩
+    rintro rfl k ⟨ fiby, rfl ⟩
     have ⟨ hx, hy ⟩ := fibonacci_bytes fiby
-    use k + 1
     simp only [fibonacci, ← fiby]
-    rw [ZMod.val_add, ← hk, Nat.mod_add_mod, ZMod.val_one]
     simp_all
 
   completeness := by
-    circuit_proof_start [fibonacciChannel, add8Channel]
-    rcases h_assumptions with rfl | ⟨ rfl, h_fib ⟩
+    circuit_proof_start [fibonacciChannel, add8Channel, FibonacciReached]
+    rcases h_assumptions with rfl | ⟨ rfl, k, h_fib, rfl ⟩
     · simp
+    have ⟨ hx, hy ⟩ := fibonacci_bytes h_fib
     simp_all
-    intro hx hy
     rw [Nat.mod_eq_of_lt (by grind), ZMod.val_add_of_lt]
     linarith [hx, hy, ‹Fact (p > 512)›.elim]
 
@@ -218,20 +218,19 @@ def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
     -- push initial state, pull the final state
     Verifier.pull fibonacciChannel (n, x, y)
     Verifier.push fibonacciChannel (0, 0, 1)
-  Spec
-  | (n, x, y), _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
-  soundness := by simp_all [circuit_norm, fibonacciChannel]
 
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := fibonacciChannel
+  Reached k state _ := FibonacciReached k state
+  guarantees_of_reached := by simp [fibonacciChannel]
   tables := [fib8Component]
   unique_names := by simp
   verifier := fibonacciVerifier
-  tables_channel := by simp [circuit_norm, fib8, sub_eq_zero]
-  verifier_channel := by simp [circuit_norm, fibonacciVerifier]
-  verifier_requirements env := by
-    simp only [circuit_norm, fibonacciVerifier, fibonacciChannel, ZMod.val_zero, ZMod.val_one]
-    exact ⟨ 0, rfl, rfl ⟩
+  final := id
+  tables_channel := by simp [circuit_norm, explicit_provable_type, fib8, sub_eq_zero]
+  verifier_channel := by
+    simp [circuit_norm, fibonacciVerifier, FibonacciReached, fibonacci, ZMod.val_one,
+      ProverData.getPublicInput_eq_eval]
 
 def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple .logUp
   |>.addLookup bytes
@@ -247,10 +246,17 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple .logUp
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
       add8Channel, fibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, add8, bytes])
-  |>.toFormal (fun _ _ => True)
-    (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
+  |>.toFormal (fun _ _ => True) (fun (n, x, y) => (x.val, y.val) = fibonacci n.val)
     (by simp [circuit_norm, fibonacciVm, bytes])
-    (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
+    (by
+      -- the number of steps `k` is less than `p`, so the step counter is `k`
+      rintro witness - - ⟨ k, count, count_lt, k_lt, reached ⟩
+      generalize witness.publicInput = publicInput at reached ⊢
+      obtain ⟨ n, x, y ⟩ := publicInput
+      obtain ⟨ fib, rfl ⟩ := reached
+      simp only [Balance.logUp, decide_eq_true_eq, ComputableRingChar.char_eq, ZMod.ringChar_zmod_n]
+        at count_lt
+      simp only [ZMod.val_cast_of_lt (show k < p by omega), fib])
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
 def fibonacciGenerate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
@@ -260,32 +266,13 @@ def fibonacciGenerate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
 
 /--
 Fibonacci soundness, concretely: if someone gives you a proof of the ensemble statement,
-then you know that the public input is a Fibonacci number.
-
-TODO: find a generic strategy to show that k < p, so the statement simplifies to
-`(x.val, y.val) = fibonacci n.val`
-The problem is that the row-transition circuit currently can't prove this: it receives any field
-elements n and
-pushes n+1, so a priori it can overflow.
-
-It would make sense to provide a guarantee that mentions the total interaction length "before"
-running the row circuit,
-and prove a requirement about the total interaction length after:
-pre: 2*n ≤ total_length_before
-post: 2*(n + 1) ≤ total_length_after = total_length_before + 2 :check_mark:
-But that massively complicates the guarantees/requirements system, since they now need access to
-global information.
-
-And idea could be to define a "global state" per channel, and define how every interaction
-transforms that state.
-Then let the guarantees/requirements access that state (the guarantees _before_ and the requiremtns
-_after_ the interaction).
+then you know that the public input is a Fibonacci state, whose step counter `n` is the number of
+steps.
 -/
 theorem fibonacci_soundness : ∀ (n x y : F p) heights,
-  fibonacciEnsemble.ensemble.Statement .logUp (n, x, y) heights →
-    ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
-  intro n x y heights statement
-  exact fibonacciEnsemble.soundness (n, x, y) heights trivial statement
+    fibonacciEnsemble.ensemble.Statement .logUp (n, x, y) heights →
+      (x.val, y.val) = fibonacci n.val :=
+  fun n x y heights => fibonacciEnsemble.soundness (n, x, y) heights trivial
 
 /-
 Fun fact! We can prove end-to-end soundness of a component that proves `False`.
