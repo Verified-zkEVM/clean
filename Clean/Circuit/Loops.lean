@@ -7,7 +7,8 @@ under `circuit_norm` in every way we need them to.
 
 `foldl` and `foldlRange` require `ConstantOutput`: the body's output must not depend on the loop state.
 `foldlDynamic` and `foldlRangeDynamic` drop that requirement, at the price of weaker simplification:
-their output stays a `Fin.foldl` and their constraints mention `FoldlM.foldlAcc`.
+their output stays a `Fin.foldl`, and the loop state in each step is a `FoldlM.foldlAcc` instead of
+the previous step's output.
 -/
 module
 
@@ -378,11 +379,10 @@ theorem foldlAcc_const_succ (constant : ConstantLength (prod circuit))
   (h_const_out : ConstantOutput fun (t : β × α) => circuit t.1 t.2)
   (i : ℕ) (hi : i + 1 < m) :
   foldlAcc n xs circuit init ⟨ i + 1, hi ⟩ =
-    (circuit default xs[i]).output (n + i * (circuit default default).localLength) := by
+    (circuit default default).output (n + i * (circuit default default).localLength) := by
   simp only [foldlAcc]
   conv => lhs; lhs; intro acc i; rw [h_const_out (acc, _),
     ConstantLength.length_eq_default constant (acc, _)]
-  rw [h_const_out (_, xs[i])]
   simp only [prod, Fin.foldl_const, Fin.val_last]
   rfl
 
@@ -391,7 +391,8 @@ theorem foldlAcc_const (constant : ConstantLength (prod circuit))
   (i : ℕ) (hi : i < m) :
   foldlAcc n xs circuit init ⟨ i, hi ⟩ = match i with
     | 0 => init
-    | i + 1 => (circuit default xs[i]).output (n + i * (circuit default default).localLength) := by
+    | i + 1 =>
+      (circuit default default).output (n + i * (circuit default default).localLength) := by
   rcases i with _ | i
   · simp [foldlAcc]
   · rw [foldlAcc_const_succ constant h_const_out]
@@ -400,10 +401,10 @@ theorem operations_eq_const [NeZero m] (constant : ConstantLength (prod circuit)
     (h_const_out : ConstantOutput (prod circuit)) :
   (Vector.foldlM circuit init xs).operations n =
   (circuit init (xs[0]'(NeZero.pos m))).operations n ++
-  (List.ofFn fun (⟨i, _⟩ : Fin (m - 1)) =>
+  (List.ofFn fun (i : Fin (m - 1)) =>
     let k := (circuit default default).localLength
-    let acc := (circuit default xs[i]).output (n + i*k)
-    (circuit acc xs[i + 1]).operations (n + (i + 1)*k)).flatten := by
+    let acc := (circuit default default).output (n + i*k)
+    (circuit acc (xs[i.val + 1]'(by omega))).operations (n + (i + 1)*k)).flatten := by
   rw [operations_eq]
   simp only
   set k := (circuit default default).localLength
@@ -426,7 +427,7 @@ theorem forAll_iff_const [NeZero m] (constant : ConstantLength (prod circuit))
   (xs.foldlM circuit init).forAll n prop ↔
   (circuit init (xs[0]'(NeZero.pos m))).forAll n prop ∧
   ∀ (i : ℕ) (hi : i + 1 < m),
-    let acc := (circuit default xs[i]).output (n + i*(circuit default default).localLength);
+    let acc := (circuit default default).output (n + i*(circuit default default).localLength);
     (circuit acc xs[i + 1]).forAll (n + (i + 1)*(circuit default default).localLength) prop := by
   rw [forAll_iff (constant:=constant)]
   set k := (circuit default default).localLength
@@ -459,7 +460,7 @@ theorem forAllNoOffset_iff_const [NeZero m] (constant : ConstantLength (prod cir
   ((xs.foldlM circuit init).operations n).forAllNoOffset prop' ↔
   ((circuit init (xs[0]'(NeZero.pos m))).operations n).forAllNoOffset prop' ∧
   ∀ (i : ℕ) (hi : i + 1 < m),
-    let acc := (circuit default xs[i]).output (n + i*(circuit default default).localLength);
+    let acc := (circuit default default).output (n + i*(circuit default default).localLength);
     ((circuit acc xs[i + 1]).operations (n + (i + 1)*(circuit default default).localLength)).forAllNoOffset prop' := by
   rw [forAllNoOffset_iff (constant:=constant)]
   set k := (circuit default default).localLength
@@ -523,11 +524,7 @@ def foldlRange (m : ℕ) [NeZero m] [Inhabited β] (init : β) (body : β → Fi
     simp only [circuit_norm]
     intros
     rfl)
-  (_constant : ConstantLength (fun (s, a) => body s a) := by
-    apply Circuit.ConstantLength.fromConstantLength'
-    try simp only [circuit_norm]
-    try intros
-    try ac_rfl) : Circuit F β :=
+  (_constant : ConstantLength (fun (s, a) => body s a) := by infer_constant_length) : Circuit F β :=
   (Vector.finRange m).foldlM body init
 
 /-- Variant of `foldl` that does not require `ConstantOutput`: the body's output may depend on the loop state. -/
@@ -803,64 +800,67 @@ lemma foldl.localLength_eq :
 @[circuit_norm ↓]
 lemma foldl.output_eq [NeZero m] :
   (foldl xs init body const_out constant).output n =
-    (body default (xs[m-1]'(Nat.pred_lt (NeZero.ne m)))).output (n + (m-1)*(body default default).localLength) := by
+    (body default default).output (n + (m-1)*(body default default).localLength) := by
   rw [foldl, FoldlM.output_eq]
   unfold FoldlM.prod
   rw [constant.localLength_eq (default, default) 0]
   set k := constant.localLength
   have : m-1 < m := Nat.pred_lt (NeZero.ne m)
-  rw [const_out (_, xs[m-1])]
   conv => lhs; lhs; intro acc i; rw [const_out (acc, _)]
   rcases m with _ | m
   · nomatch this
   simp only [Fin.foldl_const, Fin.val_last, add_tsub_cancel_right]
+  rfl
 
-lemma foldl.operations_eq :
+lemma foldl.operations_eq [NeZero m] :
     (foldl xs init body const_out constant).operations n =
-      (List.ofFn fun (i : Fin m) =>
-        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
-          (n + i * (body default default).localLength)).flatten := by
-  rw [foldl, FoldlM.operations_eq]
-  congr! 4
-  rw [constant.localLength_eq (_, _) _]
+      (body init (xs[0]'(NeZero.pos m))).operations n ++
+      (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (body default default).localLength
+        let acc := (body default default).output (n + i*k)
+        (body acc (xs[i.val + 1]'(by omega))).operations (n + (i + 1)*k)).flatten := by
+  rw [foldl, FoldlM.operations_eq_const constant const_out]
 
 @[circuit_norm ↓]
-lemma foldl.subcircuitChannelsWithGuarantees :
+lemma foldl.subcircuitChannelsWithGuarantees [NeZero m] :
     ((foldl xs init body const_out constant).operations n).subcircuitChannelsWithGuarantees =
-      (List.ofFn fun (i : Fin m) =>
-        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
-          (n + i * (body default default).localLength) |>.subcircuitChannelsWithGuarantees).flatten := by
+      ((body init (xs[0]'(NeZero.pos m))).operations n).subcircuitChannelsWithGuarantees ++
+      (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (body default default).localLength
+        let acc := (body default default).output (n + i*k)
+        (body acc (xs[i.val + 1]'(by omega))).operations (n + (i + 1)*k)
+          |>.subcircuitChannelsWithGuarantees).flatten := by
   rw [foldl.operations_eq]
-  simp only [Operations.subcircuitChannelsWithGuarantees]
-  rw [List.map_flatten, List.flatten_flatten]
-  apply congrArg List.flatten
-  rw [List.map_ofFn, List.map_ofFn]
+  simp only [Operations.subcircuitChannelsWithGuarantees, List.map_append, List.flatten_append]
+  rw [List.map_flatten, List.flatten_flatten, List.map_ofFn, List.map_ofFn]
   rfl
 
 @[circuit_norm ↓]
-lemma foldl.subcircuitChannelsWithRequirements :
+lemma foldl.subcircuitChannelsWithRequirements [NeZero m] :
     ((foldl xs init body const_out constant).operations n).subcircuitChannelsWithRequirements =
-      (List.ofFn fun (i : Fin m) =>
-        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
-          (n + i * (body default default).localLength) |>.subcircuitChannelsWithRequirements).flatten := by
+      ((body init (xs[0]'(NeZero.pos m))).operations n).subcircuitChannelsWithRequirements ++
+      (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (body default default).localLength
+        let acc := (body default default).output (n + i*k)
+        (body acc (xs[i.val + 1]'(by omega))).operations (n + (i + 1)*k)
+          |>.subcircuitChannelsWithRequirements).flatten := by
   rw [foldl.operations_eq]
-  simp only [Operations.subcircuitChannelsWithRequirements]
-  rw [List.map_flatten, List.flatten_flatten]
-  apply congrArg List.flatten
-  rw [List.map_ofFn, List.map_ofFn]
+  simp only [Operations.subcircuitChannelsWithRequirements, List.map_append, List.flatten_append]
+  rw [List.map_flatten, List.flatten_flatten, List.map_ofFn, List.map_ofFn]
   rfl
 
 @[circuit_norm ↓]
-lemma foldl.shallowChannels :
+lemma foldl.shallowChannels [NeZero m] :
     ((foldl xs init body const_out constant).operations n).shallowChannels =
-      (List.ofFn fun (i : Fin m) =>
-        (body (FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
-          (n + i * (body default default).localLength) |>.shallowChannels).flatten := by
+      ((body init (xs[0]'(NeZero.pos m))).operations n).shallowChannels ++
+      (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (body default default).localLength
+        let acc := (body default default).output (n + i*k)
+        (body acc (xs[i.val + 1]'(by omega))).operations (n + (i + 1)*k)
+          |>.shallowChannels).flatten := by
   rw [foldl.operations_eq]
-  simp only [Operations.shallowChannels]
-  rw [List.map_flatten, List.flatten_flatten]
-  apply congrArg List.flatten
-  rw [List.map_ofFn, List.map_ofFn]
+  simp only [Operations.shallowChannels, List.map_append, List.flatten_append]
+  rw [List.map_flatten, List.flatten_flatten, List.map_ofFn, List.map_ofFn]
   rfl
 
 @[circuit_norm ↓]
@@ -869,7 +869,7 @@ lemma foldl.forAll [NeZero m] :
     (body init (xs[0]'(NeZero.pos m)) |>.forAll n prop) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default default).localLength;
-      let acc := (body default xs[i]).output (n + i*k);
+      let acc := (body default default).output (n + i*k);
       (body acc xs[i + 1]).forAll (n + (i + 1)*k) prop := by
   simp only [foldl, ←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
@@ -880,7 +880,7 @@ lemma foldl.forAllNoOffset [NeZero m] :
     ((body init (xs[0]'(NeZero.pos m))).operations n).forAllNoOffset prop' ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default default).localLength;
-      let acc := (body default xs[i]).output (n + i*k);
+      let acc := (body default default).output (n + i*k);
       ((body acc xs[i + 1]).operations (n + (i + 1)*k)).forAllNoOffset prop' := by
   simp only [foldl]
   rw [FoldlM.forAllNoOffset_iff_const constant const_out]
@@ -891,7 +891,7 @@ lemma foldl.usesLocalWitnesses [NeZero m] :
     env.UsesLocalWitnessesCompleteness n (body init (xs[0]'(NeZero.pos m)) |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default default).localLength;
-      let acc := (body default xs[i]).output (n + i*k);
+      let acc := (body default default).output (n + i*k);
       env.UsesLocalWitnessesCompleteness (n + (i + 1)*k) (body acc xs[i + 1] |>.operations (n + (i + 1)*k)) := by
   simp only [foldl, env.usesLocalWitnessesCompleteness_iff_forAll, ←forAll_def]
   rw [FoldlM.forAll_iff_const constant const_out]
@@ -914,88 +914,87 @@ lemma foldlRange.localLength_eq :
 @[circuit_norm ↓]
 lemma foldlRange.output_eq :
   (foldlRange m init body const_out constant).output n =
-    (body default ⟨m-1, Nat.pred_lt (NeZero.ne m)⟩).output (n + (m-1)*(body default 0).localLength) := by
-  rw [foldlRange.eq_foldl, foldl.output_eq, Vector.getElem_finRange, Fin.default_eq_zero]
+    (body default 0).output (n + (m-1)*(body default 0).localLength) := by
+  rw [foldlRange.eq_foldl, foldl.output_eq, Fin.default_eq_zero]
 
 lemma foldlRange.operations_eq :
     (foldlRange m init body const_out constant).operations n =
-      (List.ofFn fun (i : Fin m) =>
-        (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
-          (n + i * (body default 0).localLength)).flatten := by
+      (body init 0).operations n ++
+      (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (body default 0).localLength
+        let acc := (body default 0).output (n + i*k)
+        (body acc ⟨i + 1, by omega⟩).operations (n + (i + 1)*k)).flatten := by
   rw [foldlRange.eq_foldl, foldl.operations_eq]
-  simp only [Vector.getElem_finRange, Fin.eta, Fin.default_eq_zero]
+  simp only [Vector.getElem_finRange, Fin.mk_zero', Fin.default_eq_zero]
 
 @[circuit_norm ↓]
 lemma foldlRange.subcircuitChannelsWithGuarantees :
     ((foldlRange m init body const_out constant).operations n).subcircuitChannelsWithGuarantees =
-      (List.ofFn fun (i : Fin m) =>
-        (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
-          (n + i * (body default 0).localLength) |>.subcircuitChannelsWithGuarantees).flatten := by
-  rw [foldlRange.operations_eq]
-  simp only [Operations.subcircuitChannelsWithGuarantees]
-  rw [List.map_flatten, List.flatten_flatten]
-  apply congrArg List.flatten
-  rw [List.map_ofFn, List.map_ofFn]
-  rfl
+      ((body init 0).operations n).subcircuitChannelsWithGuarantees ++
+      (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (body default 0).localLength
+        let acc := (body default 0).output (n + i*k)
+        (body acc ⟨i + 1, by omega⟩).operations (n + (i + 1)*k)
+          |>.subcircuitChannelsWithGuarantees).flatten := by
+  rw [foldlRange.eq_foldl, foldl.subcircuitChannelsWithGuarantees]
+  simp only [Vector.getElem_finRange, Fin.mk_zero', Fin.default_eq_zero]
 
 @[circuit_norm ↓]
 lemma foldlRange.subcircuitChannelsWithRequirements :
     ((foldlRange m init body const_out constant).operations n).subcircuitChannelsWithRequirements =
-      (List.ofFn fun (i : Fin m) =>
-        (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
-          (n + i * (body default 0).localLength) |>.subcircuitChannelsWithRequirements).flatten := by
-  rw [foldlRange.operations_eq]
-  simp only [Operations.subcircuitChannelsWithRequirements]
-  rw [List.map_flatten, List.flatten_flatten]
-  apply congrArg List.flatten
-  rw [List.map_ofFn, List.map_ofFn]
-  rfl
+      ((body init 0).operations n).subcircuitChannelsWithRequirements ++
+      (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (body default 0).localLength
+        let acc := (body default 0).output (n + i*k)
+        (body acc ⟨i + 1, by omega⟩).operations (n + (i + 1)*k)
+          |>.subcircuitChannelsWithRequirements).flatten := by
+  rw [foldlRange.eq_foldl, foldl.subcircuitChannelsWithRequirements]
+  simp only [Vector.getElem_finRange, Fin.mk_zero', Fin.default_eq_zero]
 
 @[circuit_norm ↓]
 lemma foldlRange.shallowChannels :
     ((foldlRange m init body const_out constant).operations n).shallowChannels =
-      (List.ofFn fun (i : Fin m) =>
-        (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
-          (n + i * (body default 0).localLength) |>.shallowChannels).flatten := by
-  rw [foldlRange.operations_eq]
-  simp only [Operations.shallowChannels]
-  rw [List.map_flatten, List.flatten_flatten]
-  apply congrArg List.flatten
-  rw [List.map_ofFn, List.map_ofFn]
-  rfl
+      ((body init 0).operations n).shallowChannels ++
+      (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (body default 0).localLength
+        let acc := (body default 0).output (n + i*k)
+        (body acc ⟨i + 1, by omega⟩).operations (n + (i + 1)*k)
+          |>.shallowChannels).flatten := by
+  rw [foldlRange.eq_foldl, foldl.shallowChannels]
+  simp only [Vector.getElem_finRange, Fin.mk_zero', Fin.default_eq_zero]
 
 @[circuit_norm ↓]
 lemma foldlRange.forAll :
   Operations.forAll n prop (foldlRange m init body const_out constant |>.operations n) ↔
-    (body init ⟨0, NeZero.pos m⟩ |>.forAll n prop) ∧
+    (body init 0 |>.forAll n prop) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default 0).localLength;
-      let acc := (body default ⟨i, Nat.lt_of_succ_lt hi⟩).output (n + i*k);
+      let acc := (body default 0).output (n + i*k);
       (body acc ⟨i + 1, hi⟩).forAll (n + (i + 1)*k) prop := by
   rw [foldlRange.eq_foldl, foldl.forAll]
-  simp only [Vector.getElem_finRange, Fin.default_eq_zero]
+  simp only [Vector.getElem_finRange, Fin.mk_zero', Fin.default_eq_zero]
 
 @[circuit_norm ↓]
 lemma foldlRange.forAllNoOffset :
   ((foldlRange m init body const_out constant).operations n).forAllNoOffset prop' ↔
-    ((body init ⟨0, NeZero.pos m⟩).operations n).forAllNoOffset prop' ∧
+    ((body init 0).operations n).forAllNoOffset prop' ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default 0).localLength;
-      let acc := (body default ⟨i, Nat.lt_of_succ_lt hi⟩).output (n + i*k);
+      let acc := (body default 0).output (n + i*k);
       ((body acc ⟨i + 1, hi⟩).operations (n + (i + 1)*k)).forAllNoOffset prop' := by
   rw [foldlRange.eq_foldl, foldl.forAllNoOffset]
-  simp only [Vector.getElem_finRange, Fin.default_eq_zero]
+  simp only [Vector.getElem_finRange, Fin.mk_zero', Fin.default_eq_zero]
 
 @[circuit_norm ↓]
 lemma foldlRange.usesLocalWitnesses :
   env.UsesLocalWitnessesCompleteness n (foldlRange m init body const_out constant |>.operations n) ↔
-    env.UsesLocalWitnessesCompleteness n (body init ⟨0, NeZero.pos m⟩ |>.operations n) ∧
+    env.UsesLocalWitnessesCompleteness n (body init 0 |>.operations n) ∧
     ∀ (i : ℕ) (hi : i + 1 < m),
       let k := (body default 0).localLength;
-      let acc := (body default ⟨i, Nat.lt_of_succ_lt hi⟩).output (n + i*k);
+      let acc := (body default 0).output (n + i*k);
       env.UsesLocalWitnessesCompleteness (n + (i + 1)*k) (body acc ⟨i + 1, hi⟩ |>.operations (n + (i + 1)*k)) := by
   rw [foldlRange.eq_foldl, foldl.usesLocalWitnesses]
-  simp only [Vector.getElem_finRange, Fin.default_eq_zero]
+  simp only [Vector.getElem_finRange, Fin.mk_zero', Fin.default_eq_zero]
 end foldlRange
 
 section foldlDynamic
@@ -1410,9 +1409,8 @@ def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
     {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} :
     ExplicitCircuit (foldl xs init body const_out constant) where
-  output n := if h : m > 0 then
-    (explicit default (xs[m-1]'(Nat.pred_lt (Nat.ne_of_gt h)))).output
-      (n + (m-1)*((explicit default default).localLength 0))
+  output n := if m > 0 then
+    (explicit default default).output (n + (m-1)*((explicit default default).localLength 0))
     else init
   localLength _ := m * (explicit default default).localLength 0
   operations n := (List.ofFn fun (i : Fin m) =>
@@ -1424,14 +1422,14 @@ def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
   output_eq n := by
     by_cases h : m > 0
     · have : NeZero m := NeZero.of_pos h
-      simp only [h, ↓reduceDIte]
+      simp only [h, ↓reduceIte]
       rw [foldl.output_eq]
-      rw [(explicit default (xs[m-1])).output_eq]
+      rw [(explicit default default).output_eq]
       congr 1
       rw [(explicit default default).localLength_eq]
     · have hm : m = 0 := Nat.eq_zero_of_not_pos h
       subst m
-      simp only [h, ↓reduceDIte]
+      simp only [h, ↓reduceIte]
       rw [foldl]
       cases xs with
       | mk toArray hsize =>
@@ -1443,30 +1441,24 @@ def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     rw [foldl.localLength_eq]
     rw [(explicit default default).localLength_eq]
   operations_eq n := by
-    rw [foldl.operations_eq]
+    rw [foldl, Circuit.FoldlM.operations_eq (constant:=constant)]
     congr with i
     rw [(explicit (Circuit.FoldlM.foldlAcc n xs body init i) xs[i.val]).operations_eq]
-    rw [(explicit default default).localLength_eq]
+    rw [← (explicit default default).localLength_eq 0,
+      ← constant.localLength_eq (default, default) 0]
   subcircuitsConsistent n := by
-    rw [foldl.operations_eq, Operations.SubcircuitsConsistent]
-    rw [show (List.ofFn fun i : Fin m =>
-        (body (Circuit.FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
-          (n + ↑i * (body default default).localLength)).flatten =
-        (List.ofFn fun i : Fin m =>
-        (body (Circuit.FoldlM.foldlAcc n xs body init i) xs[i.val]).operations
-          (n + ↑i * constant.localLength)).flatten by
-      congr! with i
-      rw [constant.localLength_eq (default, default) 0]]
+    rw [foldl, Circuit.FoldlM.operations_eq (constant:=constant), Operations.SubcircuitsConsistent]
     rw [Circuit.FoldlM.forAll_flatten_foldl (circuit:=body) (constant:=constant)]
     intro i
     exact (explicit (Circuit.FoldlM.foldlAcc n xs body init i) xs[i.val]).subcircuitsConsistent (n + i * constant.localLength)
   channelsLawful n := by
-    rw [foldl.operations_eq]
+    rw [foldl, Circuit.FoldlM.operations_eq (constant:=constant)]
     apply Operations.channelsLawful_flatten_of_forall
     intro i
     convert (explicit (Circuit.FoldlM.foldlAcc n xs body init i) xs[i.val]).channelsLawful
       (n + i * ((explicit default default).localLength 0)) using 1
-    · rw [(explicit default default).localLength_eq]
+    · rw [← (explicit default default).localLength_eq 0,
+        ← constant.localLength_eq (default, default) 0]
 
 @[explicit_circuit_constructor, implicit_reducible, explicit_circuit_norm]
 def from_foldlRange {m : ℕ} [NeZero m] [Inhabited β]
@@ -1474,42 +1466,41 @@ def from_foldlRange {m : ℕ} [NeZero m] [Inhabited β]
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
     {const_out : ConstantOutput (fun (t : β × Fin m) => body t.1 t.2)} :
     ExplicitCircuit (foldlRange m init body const_out constant) where
-  output n := (explicit default ⟨m-1, Nat.pred_lt (NeZero.ne m)⟩).output
-    (n + (m-1)*((explicit default 0).localLength 0))
+  output n := (explicit default 0).output (n + (m-1)*((explicit default 0).localLength 0))
   localLength _ := m * (explicit default 0).localLength 0
-  operations n := (List.ofFn fun (i : Fin m) =>
-    (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
-      (n + i * ((explicit default 0).localLength 0))).flatten
-  channelsWithGuarantees n := (List.ofFn fun (i : Fin m) =>
-    (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).channelsWithGuarantees
-      (n + i * ((explicit default 0).localLength 0))).flatten
+  operations n := (explicit init 0).operations n ++ (List.ofFn fun (i : Fin (m - 1)) =>
+    let k := (explicit default 0).localLength 0
+    (explicit ((explicit default 0).output (n + i*k)) ⟨i + 1, by omega⟩).operations
+      (n + (i + 1)*k)).flatten
+  channelsWithGuarantees n := (explicit init 0).channelsWithGuarantees n ++
+    (List.ofFn fun (i : Fin (m - 1)) =>
+      let k := (explicit default 0).localLength 0
+      (explicit ((explicit default 0).output (n + i*k)) ⟨i + 1, by omega⟩).channelsWithGuarantees
+        (n + (i + 1)*k)).flatten
   output_eq n := by
-    rw [foldlRange.output_eq]
-    rw [(explicit default ⟨m-1, Nat.pred_lt (NeZero.ne m)⟩).output_eq]
-    congr 1
-    rw [(explicit default 0).localLength_eq]
+    rw [foldlRange.output_eq, (explicit default 0).output_eq, (explicit default 0).localLength_eq]
   localLength_eq n := by
-    rw [foldlRange.localLength_eq]
-    rw [(explicit default 0).localLength_eq]
+    rw [foldlRange.localLength_eq, (explicit default 0).localLength_eq]
   operations_eq n := by
-    rw [foldlRange.operations_eq]
+    rw [foldlRange.operations_eq, (explicit init 0).operations_eq]
     congr with i
-    rw [(explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations_eq]
-    rw [(explicit default 0).localLength_eq]
+    simp only [(explicit default 0).localLength_eq, (explicit default 0).output_eq,
+      (explicit _ _).operations_eq]
   subcircuitsConsistent n := by
     rw [Operations.SubcircuitsConsistent]
-    change (foldlRangeDynamic m init body constant).forAll n { subcircuit := fun offset {n} x => n = offset }
-    rw [Circuit.forAll_def, foldlRangeDynamic.forAll]
-    intro i
-    exact (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).subcircuitsConsistent
-      (n + i * (body default i).localLength)
+    change (foldlRange m init body const_out constant).forAll n
+      { subcircuit := fun offset {n} x => n = offset }
+    rw [Circuit.forAll_def, foldlRange.forAll]
+    exact ⟨(explicit init 0).subcircuitsConsistent n,
+      fun i hi => (explicit _ _).subcircuitsConsistent _⟩
   channelsLawful n := by
     rw [foldlRange.operations_eq]
+    apply Operations.channelsLawful_append_of_channelsLawful
+    · exact (explicit init 0).channelsLawful n
     apply Operations.channelsLawful_flatten_of_forall
     intro i
-    convert (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).channelsLawful
-      (n + i * ((explicit default 0).localLength 0)) using 1
-    · rw [(explicit default 0).localLength_eq]
+    simp only [(explicit default 0).localLength_eq, (explicit default 0).output_eq]
+    exact (explicit _ _).channelsLawful _
 
 @[explicit_circuit_constructor, implicit_reducible, explicit_circuit_norm]
 def from_foldlDynamic {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
@@ -1611,9 +1602,8 @@ theorem from_foldl_output {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector �
     {constant : ConstantLength fun (t : β × α) => body t.1 t.2}
     {const_out : ConstantOutput (fun (t : β × α) => body t.1 t.2)} (n : ℕ) :
     (from_foldl (xs:=xs) explicit (init:=init) (constant:=constant) (const_out:=const_out)).output n =
-      (if h : m > 0 then
-        (explicit default (xs[m-1]'(Nat.pred_lt (Nat.ne_of_gt h)))).output
-          (n + (m-1)*((explicit default default).localLength 0))
+      (if m > 0 then
+        (explicit default default).output (n + (m-1)*((explicit default default).localLength 0))
         else init) := rfl
 
 @[circuit_norm, explicit_circuit_norm]
@@ -1640,8 +1630,7 @@ theorem from_foldlRange_output {m : ℕ} [NeZero m] [Inhabited β]
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
     {const_out : ConstantOutput (fun (t : β × Fin m) => body t.1 t.2)} (n : ℕ) :
     (from_foldlRange explicit (init:=init) (constant:=constant) (const_out:=const_out)).output n =
-      (explicit default ⟨m-1, Nat.pred_lt (NeZero.ne m)⟩).output
-        (n + (m-1)*((explicit default 0).localLength 0)) := rfl
+      (explicit default 0).output (n + (m-1)*((explicit default 0).localLength 0)) := rfl
 
 @[circuit_norm, explicit_circuit_norm]
 theorem from_foldlRange_localLength {m : ℕ} [NeZero m] [Inhabited β]
@@ -1657,9 +1646,10 @@ theorem from_foldlRange_operations {m : ℕ} [NeZero m] [Inhabited β]
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
     {const_out : ConstantOutput (fun (t : β × Fin m) => body t.1 t.2)} (n : ℕ) :
     (from_foldlRange explicit (init:=init) (constant:=constant) (const_out:=const_out)).operations n =
-      (List.ofFn fun (i : Fin m) =>
-        (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
-          (n + i * ((explicit default 0).localLength 0))).flatten := rfl
+      (explicit init 0).operations n ++ (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (explicit default 0).localLength 0
+        (explicit ((explicit default 0).output (n + i*k)) ⟨i + 1, by omega⟩).operations
+          (n + (i + 1)*k)).flatten := rfl
 
 @[circuit_norm, explicit_circuit_norm]
 theorem from_foldlRange_channelsWithGuarantees {m : ℕ} [NeZero m] [Inhabited β]
@@ -1667,9 +1657,10 @@ theorem from_foldlRange_channelsWithGuarantees {m : ℕ} [NeZero m] [Inhabited �
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2}
     {const_out : ConstantOutput (fun (t : β × Fin m) => body t.1 t.2)} (n : ℕ) :
     (from_foldlRange explicit (init:=init) (constant:=constant) (const_out:=const_out)).channelsWithGuarantees n =
-      (List.ofFn fun (i : Fin m) =>
-        (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).channelsWithGuarantees
-          (n + i * ((explicit default 0).localLength 0))).flatten := rfl
+      (explicit init 0).channelsWithGuarantees n ++ (List.ofFn fun (i : Fin (m - 1)) =>
+        let k := (explicit default 0).localLength 0
+        (explicit ((explicit default 0).output (n + i*k)) ⟨i + 1, by omega⟩).channelsWithGuarantees
+          (n + (i + 1)*k)).flatten := rfl
 
 @[circuit_norm, explicit_circuit_norm]
 theorem from_foldlDynamic_output {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}

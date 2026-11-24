@@ -30,6 +30,9 @@ structure Params (t : ℕ) where
   P : Vector (Vector ℕ t) t
   S : Vector ℕ (nPartial * (2 * t - 1))
   two_le_width : 2 ≤ t
+  nPartial_pos : 0 < nPartial := by decide
+
+instance {t : ℕ} (params : Params t) : NeZero params.nPartial := ⟨params.nPartial_pos.ne'⟩
 
 /-- Optimized circomlib parameters for one input and state width 2. -/
 def params_t2 : Params 2 where

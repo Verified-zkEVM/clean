@@ -27,6 +27,7 @@ structure Params (t : ℕ) where
   P : Vector (Vector ℕ t) t
   S : Vector ℕ (nPartial * (2 * t - 1))
   two_le_width : 2 ≤ t
+  nPartial_pos : 0 < nPartial := by decide
 ```
 
 The vector lengths encode the constant-index bounds used by the proof. The
