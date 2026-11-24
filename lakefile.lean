@@ -7,7 +7,6 @@ package Clean where
     ⟨`autoImplicit, false⟩,
     ⟨`relaxedAutoImplicit, false⟩]
 
-@[default_target]
 lean_lib Clean where
 
 lean_lib Zcash where
@@ -20,6 +19,7 @@ lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
 -- The proof roots, plus every module under Midnight.
+@[default_target]
 lean_lib Midnight where
   roots := #[`Midnight.SHA256.Semantics.Formal, `Midnight.SHA256.WitnessComplete, `Midnight.SHA256.Admission.Certificate]
   globs := #[.submodules `Midnight, .one `Midnight]
