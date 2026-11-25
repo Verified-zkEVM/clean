@@ -313,12 +313,11 @@ theorem actionCircuit_lookupActivationCount_eq :
   calc
     _ = (Circuit.mainPostSynthesisSummary
           Internal.actionCircuitImpl.config).lookupActivationCount := by
-      simpa only [TopLevelCircuit.synthesisSummary,
-        Internal.actionCircuitImpl] using
-          congrArg (fun summary => summary.lookupActivationCount)
-            (Circuit.circuit_synthesisSummary_eq
-              Specs.Sinsemilla.orchardGenerators orchardBases
-              Internal.actionCircuitImpl.config () 0)
+      rw [TopLevelCircuit.synthesisSummary]
+      exact congrArg (fun summary => summary.lookupActivationCount)
+        (Circuit.circuit_synthesisSummary_eq
+          Specs.Sinsemilla.orchardGenerators orchardBases
+          Internal.actionCircuitImpl.config () 0)
     _ = 2424 :=
       Circuit.mainPostSynthesisSummary_lookupActivationCount _
 

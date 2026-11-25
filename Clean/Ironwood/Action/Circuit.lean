@@ -1406,7 +1406,7 @@ private def natHint (key : String) :
 
 /-- A Merkle sibling hint at layer `i`. -/
 private def merkleSiblingHint (i : ℕ) : WitgenIR Fp 1 :=
-  .ofFExpr (.hintGet "orchard.action.merkle_sibling" 1 (.const i) 0)
+  .ofFExpr (.hintGet "orchard.action.merkle_sibling" 1 (.const i.toUInt64) 0)
 
 /--
 A Merkle swap hint at layer `i`.  This remains the existing native escape hatch for
@@ -1417,7 +1417,7 @@ private def merkleSwapHint (i : ℕ) :
     Placed ProverEnvironment Fp → Bool := fun env =>
   Witgen.FExprOver.eval
       ({ env := env } : Witgen.CtxOver Fp (Placed ProverEnvironment Fp))
-      ((.hintGet "orchard.action.merkle_swap" 1 (.const i) 0) : FExpr Fp) == 1
+      ((.hintGet "orchard.action.merkle_swap" 1 (.const i.toUInt64) 0) : FExpr Fp) == 1
 
 /--
 The one fixed private-witness program of the top-level Action circuit.  All actual
