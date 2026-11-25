@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Gadgets.ByteLookup
-import Clean.Gadgets.Boolean
-import Clean.Gadgets.Addition8.Theorems
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.ByteLookup
+public import Clean.Gadgets.Boolean
+public import Clean.Gadgets.Addition8.Theorems
+
+@[expose] public section
 
 open Clean
 
@@ -22,17 +26,15 @@ structure Outputs (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨x, y, carryIn⟩ := input
-
   -- witness the result
-  let z ← witness ((x + y + carryIn).val % 256).toField
+  let z ← witness ((input.x + input.y + input.carryIn).val % 256).toField
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witness ((x + y + carryIn).val / 256).toField
+  let carryOut ← witness ((input.x + input.y + input.carryIn).val / 256).toField
   assertBool carryOut
 
-  assertZero (x + y + carryIn - z - carryOut * 256)
+  assertZero (input.x + input.y + input.carryIn - z - carryOut * 256)
 
   return { z, carryOut }
 
@@ -88,15 +90,20 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     replace h_inputs : x_var.eval env = x ∧ y_var.eval env = y ∧ carry_in_var.eval env = carry_in := by
       simpa [circuit_norm] using h_inputs
 
+    obtain ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
+    have carry_in_bound := IsBool.val_lt_two as_carry_in
+
+    -- the sum fits in a `u64`, so the witness IR's `u64` arithmetic doesn't wrap
+    have sum_val : (x + y + carry_in).val = x.val + y.val + carry_in.val := by field_to_nat
+    have sum_lt : (x + y + carry_in).val < 2 ^ 64 := by
+      rw [sum_val]; omega
+
     -- simplify assumptions and goal
-    simp only [circuit_norm, h_inputs, Assumptions, main, ByteTable] at *
+    simp only [circuit_norm, h_inputs, main, ByteTable] at *
 
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
-
-    -- now it's just mathematics!
-    guard_hyp h_assumptions : x.val < 256 ∧ y.val < 256 ∧ IsBool carry_in
 
     let goal_byte := z.val < 256
     let goal_bool := IsBool carry_out
@@ -107,9 +114,6 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
     have completeness1 : z.val < 256 := by
       rw [hz, ByteUtils.mod256, FieldUtils.mod_val]
       exact Nat.mod_lt _ (by norm_num)
-
-    have ⟨as_x, as_y, as_carry_in⟩ := h_assumptions
-    have carry_in_bound := IsBool.val_lt_two as_carry_in
 
     have completeness2 : IsBool carry_out := by
       rw [hcarry_out]
@@ -127,9 +131,6 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
   circuit with
   name := "Addition8FullCarry"
 
-  computableWitnesses n input := by
-    simp_all only [circuit_norm, circuit, main, FormalAssertion.toSubcircuit,
-      Operations.forAllFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 
 end Gadgets.Addition8FullCarry

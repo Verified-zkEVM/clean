@@ -1,5 +1,15 @@
-import Clean.Circuit.Operations
-import Mathlib.Control.Monad.Writer
+module
+
+public import Clean.Circuit.Operations
+public import Mathlib.Control.Monad.Writer
+
+-- `attribute [circuit_norm]` below registers core simprocs, which are `meta` declarations.
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Fin
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Nat
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Core
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.String
+
+@[expose] public section
 
 namespace Clean
 
@@ -121,36 +131,31 @@ def lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)  (entry : Ro
 
 end Circuit
 
-/-- Emit an interaction to the channel -/
+/-- Push a message `mult` times. -/
 @[circuit_norm]
 def Channel.emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ mult, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.emitted mult msg).toRaw])
 
 @[circuit_norm]
 def Channel.pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ -1, msg, true ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pulled msg).toRaw])
 
 @[circuit_norm]
 def Channel.pullIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ -enabled, msg, true ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pulledIf enabled msg).toRaw])
 
 @[circuit_norm]
 def Channel.push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ 1, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pushed msg).toRaw])
 
 @[circuit_norm]
 def Channel.pushIf {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (enabled : Expression F) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
-  let interaction : ChannelInteraction channel := ⟨ enabled, msg, false ⟩
-  ((), [.interact interaction.toRaw])
+  ((), [.interact (channel.pushedIf enabled msg).toRaw])
 
 /-- Low-level method to create a new variable of an arbitrary "provable type" from raw `WitgenIR`. -/
 @[circuit_norm]
@@ -266,7 +271,7 @@ class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : T
   witnessIR : WitgenIR F (size value) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
   witness_def (xs : value (FExpr F)) :
-    witness xs = var_eq ▸ Clean.witnessIR value (.ofFExprs (toElements xs)) := by intros; rfl
+    witness xs = var_eq ▸ Clean.witnessIR value (.ofCompositeFExpr xs) := by intros; rfl
   witnessIR_def (code : WitgenIR F (size value)) :
     witnessIR code = var_eq ▸ Clean.witnessIR value code := by intros; rfl
 
@@ -331,12 +336,12 @@ theorem ProverEnvironment.extendsVector_nativeValue {value : TypeMap} [ProvableT
 provable values: the witnessed variable evaluates to the value of the given expressions.
 See `ProverEnvironment.extendsVector_toIRLiteral`. -/
 @[circuit_norm ↓ high]
-theorem ProverEnvironment.extendsVector_ofFExprs {value : TypeMap} [ProvableType value]
+theorem ProverEnvironment.extendsVector_ofCompositeFExpr {value : TypeMap} [ProvableType value]
     (env : ProverEnvironment F) (xs : value (FExpr F)) (n : ℕ) :
-    env.ExtendsVector ((WitgenIR.ofFExprs (toElements xs)).eval env) n ↔
+    env.ExtendsVector ((WitgenIR.ofCompositeFExpr xs).eval env) n ↔
       Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
         = Witgen.eval { env := env } xs := by
-  rw [show WitgenIR.ofFExprs (toElements xs) = Witgen.M.toIRLiteral (pure xs) from rfl,
+  rw [show WitgenIR.ofCompositeFExpr (value:=value) xs = Witgen.M.toIRLiteral (pure xs) from rfl,
     ProverEnvironment.extendsVector_toIRLiteral,
     show Witgen.M.eval env (pure xs) = Witgen.eval { env := env } xs from rfl]
 
@@ -349,56 +354,255 @@ instance {m : ℕ} : Witnessable F (fields m) (Var (fields m)) where
   witnessIR := witnessIR _
 
 instance (M : TypeMap) [ProvableType M] : Witnessable F M (Var M) where
-  witness xs := witnessIR M (.ofFExprs (toElements xs))
+  witness xs := witnessIR M (.ofCompositeFExpr xs)
   witnessIR := witnessIR M
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
-  witness xs := witnessIR (ProvableVector α m) (.ofFExprs (toElements xs))
+  witness xs := witnessIR (ProvableVector α m) (.ofCompositeFExpr xs)
   witnessIR := witnessIR (ProvableVector α m)
+
+/- simp does not unfold the `Witnessable.witness`/`witnessIR` class projections applied to
+the instances above; expose per-instance `@[circuit_norm]` rfl-lemmas keyed on the
+projection instead. -/
+
+@[circuit_norm]
+theorem Witnessable.witness_field (e : FExpr F) :
+    Witnessable.witness (F := F) (value := field) (var := Expression) e =
+      fun offset => (var ⟨offset⟩, [.witness 1 (.ofFExpr e)]) := rfl
+
+@[circuit_norm]
+theorem Witnessable.witness_fields {m : ℕ} (v : fields m (FExpr F)) :
+    Witnessable.witness (F := F) (value := fields m) (var := Var (fields m)) v =
+      Circuit.witnessVector m v := rfl
+
+@[circuit_norm]
+theorem Witnessable.witness_provable (M : TypeMap) [ProvableType M] (xs : M (FExpr F)) :
+    Witnessable.witness (F := F) (value := M) (var := Var M) xs =
+      Clean.witnessIR M (.ofCompositeFExpr xs) := rfl
+
+@[circuit_norm]
+theorem Witnessable.witness_provableVector {m : ℕ} (α : TypeMap) [NonEmptyProvableType α]
+    (xs : ProvableVector α m (FExpr F)) :
+    Witnessable.witness (F := F) (value := ProvableVector α m)
+      (var := Var (ProvableVector α m)) xs =
+      Clean.witnessIR (ProvableVector α m) (.ofCompositeFExpr xs) := rfl
+
+@[circuit_norm]
+theorem Witnessable.witnessIR_field (code : WitgenIR F 1) :
+    Witnessable.witnessIR (F := F) (value := field) (var := Expression) code =
+      fun offset => (var ⟨offset⟩, [.witness 1 code]) := rfl
+
+@[circuit_norm]
+theorem Witnessable.witnessIR_fields {m : ℕ} (code : WitgenIR F (size (fields m))) :
+    Witnessable.witnessIR (F := F) (value := fields m) (var := Var (fields m)) code =
+      Clean.witnessIR (fields m) code := rfl
+
+@[circuit_norm]
+theorem Witnessable.witnessIR_provable (M : TypeMap) [ProvableType M] (code : WitgenIR F (size M)) :
+    Witnessable.witnessIR (F := F) (value := M) (var := Var M) code = Clean.witnessIR M code := rfl
+
+@[circuit_norm]
+theorem Witnessable.witnessIR_provableVector {m : ℕ} (α : TypeMap) [NonEmptyProvableType α]
+    (code : WitgenIR F (size (ProvableVector α m))) :
+    Witnessable.witnessIR (F := F) (value := ProvableVector α m)
+      (var := Var (ProvableVector α m)) code = Clean.witnessIR (ProvableVector α m) code := rfl
 
 -- witness generation
 
-/-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/
-def ProverEnvironment.fromList (witnesses : List F) (hint : ProverHint F) : ProverEnvironment F where
+/-- Build a `ProverEnvironment` from a witness list, prover data and a prover hint. -/
+def ProverEnvironment.fromList (witnesses : List F) (data : ProverData F) (hint : ProverHint F) :
+    ProverEnvironment F where
   get i := witnesses[i]?.getD 0
-  data _ _ := #[]
+  data
   hint
 
-def FlatOperation.dynamicWitness (hint : ProverHint F) (op : FlatOperation F) (acc : List F) : List F := match op with
-  | .witness _ compute => (compute.eval (.fromList acc hint)).toList
+def FlatOperation.dynamicWitness (data : ProverData F) (hint : ProverHint F) (op : FlatOperation F)
+    (acc : List F) : List F := match op with
+  | .witness _ compute => (compute.eval (.fromList acc data hint)).toList
   | .assert _ => []
   | .lookup _ => []
   | .interact _ => []
 
-def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) : List F :=
-  ops.foldl (fun acc op => acc ++ op.dynamicWitness hint acc) init
+def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (data : ProverData F)
+    (hint : ProverHint F) (init : List F) : List F :=
+  ops.foldl (fun acc op => acc ++ op.dynamicWitness data hint acc) init
 
-def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) :=
-  ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
-
-def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
-  ∀ i < n, env.get i = env'.get i
-
-def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) :=
-  ∀ env env', env.AgreesBelow n env' → f env = f env'
+def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (data : ProverData F)
+    (hint : ProverHint F) (init : List F) :=
+  ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops data hint init) data hint
 
 /--
-A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
+Two prover environments are indistinguishable to a witness generator running at offset `n`.
+
+A `ProverEnvironment` has three channels a witness generator can read: cells (`get`, via
+`Expression.eval`), prover hints (`hint`, via `FExpr.hintGet`) and committed prover data (`data`,
+via `FExpr.dataGet`). All three appear here, but not in the same way: cells are determined
+incrementally by witness generation, so only those *below* the current offset are constrained,
+whereas `hint` and `data` are ambient inputs fixed before generation begins, so they are
+constrained in full.
+-/
+def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
+  (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
+
+namespace ProverEnvironment.AgreesBelow
+variable {env env' : ProverEnvironment F}
+
+omit [FiniteField F] in
+theorem get_eq (h : env.AgreesBelow n env') {i : ℕ} (hi : i < n) : env.get i = env'.get i := h.1 i hi
+
+omit [FiniteField F] in
+theorem hint_eq (h : env.AgreesBelow n env') : env.hint = env'.hint := h.2.1
+
+omit [FiniteField F] in
+theorem data_eq (h : env.AgreesBelow n env') : env.data = env'.data := h.2.2
+
+omit [FiniteField F] in
+theorem of_le {m : ℕ} (h : env.AgreesBelow n env') (hm : m ≤ n) : env.AgreesBelow m env' :=
+  ⟨fun i hi => h.1 i (Nat.lt_of_lt_of_le hi hm), h.2.1, h.2.2⟩
+
+/-! Transport laws of `computable_witnesses`: the cells, hints and data an evaluation under `env`
+reads are those of `env'`. The agreement premise comes first: proving it determines `env'`. -/
+
+omit [FiniteField F] in
+@[computable_witnesses_law]
+theorem get_congr {i : ℕ} (h : env.AgreesBelow (i + 1) env') : env.get i = env'.get i :=
+  h.get_eq (Nat.lt_succ_self i)
+
+omit [FiniteField F] in
+@[computable_witnesses_law]
+theorem hint_congr (h : env.AgreesBelow 0 env') : env.hint = env'.hint := h.hint_eq
+
+omit [FiniteField F] in
+@[computable_witnesses_law]
+theorem data_congr (h : env.AgreesBelow 0 env') : env.data = env'.data := h.data_eq
+
+/-- A window of witness cells, for value types whose size is not a numeral (where the window does
+not decompose into cells). -/
+@[computable_witnesses_law]
+theorem eval_varFromOffset_congr {M : TypeMap} [ProvableType M]
+    (h : env.AgreesBelow (n + size M) env') :
+    eval env.toEnvironment (varFromOffset M n : M (Expression F)) =
+      eval env'.toEnvironment (varFromOffset M n : M (Expression F)) := by
+  simp only [ProvableType.Clean.eval_varFromOffset]
+  congr 1
+  ext i hi
+  simp only [Vector.getElem_mapRange]
+  exact h.get_eq (by omega)
+
+end ProverEnvironment.AgreesBelow
+
+/-- The default value of a provable type is a constant: it reads no cells. -/
+@[computable_witnesses_law]
+theorem ProverEnvironment.eval_default_congr {env env' : ProverEnvironment F} {M : TypeMap}
+    [ProvableType M] :
+    eval env.toEnvironment (default : M (Expression F)) =
+      eval env'.toEnvironment (default : M (Expression F)) := by
+  simp only [default, CircuitType.eval_expression, ProvableType.Clean.eval,
+    ProvableType.toElements_fromElements, Vector.map_replicate]
+  rfl
+
+/-- A fold over provable values transports when its initial value does and each step transports
+its accumulator. -/
+@[computable_witnesses_law]
+theorem ProverEnvironment.foldl_congr {env env' : ProverEnvironment F} {M : TypeMap}
+    [ProvableType M] {n : ℕ} (f : M (Expression F) → Fin n → M (Expression F))
+    (init : M (Expression F)) (hinit : eval env.toEnvironment init = eval env'.toEnvironment init)
+    (hf : ∀ a i, eval env.toEnvironment a = eval env'.toEnvironment a →
+      eval env.toEnvironment (f a i) = eval env'.toEnvironment (f a i)) :
+    eval env.toEnvironment (Fin.foldl n f init) = eval env'.toEnvironment (Fin.foldl n f init) := by
+  induction n with
+  | zero => simpa only [Fin.foldl_zero] using hinit
+  | succ n ih =>
+    rw [Fin.foldl_succ_last]
+    exact hf _ _ (ih (fun a i => f a i.castSucc) (fun a i => hf a i.castSucc))
+
+/-- A fold over pairs of expressions transports when its initial value does and each step
+transports its accumulator. -/
+theorem ProverEnvironment.foldl_pair_congr {env env' : ProverEnvironment F} {n : ℕ}
+    (f : Expression F × Expression F → Fin n → Expression F × Expression F)
+    (init : Expression F × Expression F)
+    (hinit : Expression.eval env.toEnvironment init.1 = Expression.eval env'.toEnvironment init.1 ∧
+      Expression.eval env.toEnvironment init.2 = Expression.eval env'.toEnvironment init.2)
+    (hf : ∀ a i, Expression.eval env.toEnvironment a.1 = Expression.eval env'.toEnvironment a.1 →
+      Expression.eval env.toEnvironment a.2 = Expression.eval env'.toEnvironment a.2 →
+      Expression.eval env.toEnvironment (f a i).1 = Expression.eval env'.toEnvironment (f a i).1 ∧
+        Expression.eval env.toEnvironment (f a i).2 = Expression.eval env'.toEnvironment (f a i).2) :
+    Expression.eval env.toEnvironment (Fin.foldl n f init).1 =
+        Expression.eval env'.toEnvironment (Fin.foldl n f init).1 ∧
+      Expression.eval env.toEnvironment (Fin.foldl n f init).2 =
+        Expression.eval env'.toEnvironment (Fin.foldl n f init).2 := by
+  induction n with
+  | zero => simpa only [Fin.foldl_zero] using hinit
+  | succ n ih =>
+    rw [Fin.foldl_succ_last]
+    obtain ⟨h1, h2⟩ := ih (fun a i => f a i.castSucc) (fun a i => hf a i.castSucc)
+    exact hf _ _ h1 h2
+
+@[computable_witnesses_law]
+theorem ProverEnvironment.foldl_fst_congr {env env' : ProverEnvironment F} {n : ℕ}
+    (f : Expression F × Expression F → Fin n → Expression F × Expression F)
+    (init : Expression F × Expression F)
+    (hinit : Expression.eval env.toEnvironment init.1 = Expression.eval env'.toEnvironment init.1 ∧
+      Expression.eval env.toEnvironment init.2 = Expression.eval env'.toEnvironment init.2)
+    (hf : ∀ a i, Expression.eval env.toEnvironment a.1 = Expression.eval env'.toEnvironment a.1 →
+      Expression.eval env.toEnvironment a.2 = Expression.eval env'.toEnvironment a.2 →
+      Expression.eval env.toEnvironment (f a i).1 = Expression.eval env'.toEnvironment (f a i).1 ∧
+        Expression.eval env.toEnvironment (f a i).2 = Expression.eval env'.toEnvironment (f a i).2) :
+    Expression.eval env.toEnvironment (Fin.foldl n f init).1 =
+      Expression.eval env'.toEnvironment (Fin.foldl n f init).1 :=
+  (foldl_pair_congr f init hinit hf).1
+
+@[computable_witnesses_law]
+theorem ProverEnvironment.foldl_snd_congr {env env' : ProverEnvironment F} {n : ℕ}
+    (f : Expression F × Expression F → Fin n → Expression F × Expression F)
+    (init : Expression F × Expression F)
+    (hinit : Expression.eval env.toEnvironment init.1 = Expression.eval env'.toEnvironment init.1 ∧
+      Expression.eval env.toEnvironment init.2 = Expression.eval env'.toEnvironment init.2)
+    (hf : ∀ a i, Expression.eval env.toEnvironment a.1 = Expression.eval env'.toEnvironment a.1 →
+      Expression.eval env.toEnvironment a.2 = Expression.eval env'.toEnvironment a.2 →
+      Expression.eval env.toEnvironment (f a i).1 = Expression.eval env'.toEnvironment (f a i).1 ∧
+        Expression.eval env.toEnvironment (f a i).2 = Expression.eval env'.toEnvironment (f a i).2) :
+    Expression.eval env.toEnvironment (Fin.foldl n f init).2 =
+      Expression.eval env'.toEnvironment (Fin.foldl n f init).2 :=
+  (foldl_pair_congr f init hinit hf).2
+
+omit [FiniteField F] in
+theorem ProverEnvironment.agreesBelow_rfl (n : ℕ) (env : ProverEnvironment F) :
+    env.AgreesBelow n env :=
+  ⟨fun _ _ => rfl, rfl, rfl⟩
+
+@[computable_witnesses]
+def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=
+  env.AgreesBelow n env' → f env = f env'
+
+def Subcircuit.ComputableWitnesses {m : ℕ} (s : Subcircuit F m) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
+  FlatOperation.forAll n {
+    witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
+  } s.ops.toFlat
+
+/--
+A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset,
+plus the shared `hint` and `data` (which witnesses can be computed from as well).
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
-  ops.forAllFlat n { witness n _ compute := env.AgreesBelow n env' → compute.eval env = compute.eval env' }
+  ops.forAll n {
+    witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
+    subcircuit n' _ s := s.ComputableWitnesses n' env env'
+  }
 
-def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
-  ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
+def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) (env env' : ProverEnvironment F) :=
+  (circuit.operations n).ComputableWitnesses n env env'
 
 /--
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
 that satisfies `UsesLocalWitnesses`. (Proof in `Theorems`.)
 -/
-def Circuit.proverEnvironment (circuit : Circuit F α) (hint : ProverHint F) (init : List F := []) : ProverEnvironment F :=
-  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat hint init) hint
+def Circuit.proverEnvironment (circuit : Circuit F α) (data : ProverData F) (hint : ProverHint F)
+    (init : List F := []) : ProverEnvironment F :=
+  .fromList (FlatOperation.dynamicWitnesses (circuit.operations init.length).toFlat data hint init)
+    data hint
 
 -- witness generators used for AIR trace export
 -- TODO unify with the definitions above
@@ -496,7 +700,7 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} {prop : Conditi
   ((f >>= g).operations n).forAll n prop ↔
     (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.localLength n)).forAll (n + f.localLength n)) prop := by
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
-  rw [h_ops, Operations.forAll_append, add_comm n]
+  rw [h_ops, Operations.forAll_append]
 
 end Circuit
 
@@ -538,17 +742,16 @@ because they would sometimes be applied too eagerly where using the correspondin
 
 -- simplify Vector.mapFinRange
 attribute [circuit_norm]
-    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc Fin.reduceCastSucc
+    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc
 
 -- simplify stuff like (3 : Fin 8).val = 3 % 8
 attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 
 -- simplify `vector[i]` (which occurs in ProvableType definitions) and similar
-attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
+attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero zero_add neg_zero neg_eq_zero one_ne_zero zero_ne_one
-  Nat.reduceAdd
 
 attribute [circuit_norm] List.append_nil
 
@@ -568,6 +771,19 @@ lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
     (List.ofFn fun _ : Fin m => ([] : List α)).flatten = [] := by
   simp
 
-attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false
+attribute [circuit_norm] forall_eq decide_false
+
+/- Core builtin simprocs that `circuit_norm` needs. `attribute [circuit_norm] Fin.reduceCastSucc`
+would be the direct spelling, but a simp set may only be given a declaration marked `meta`, and
+core's `builtin_(d)simproc`s are declared in a plain `public section`. Re-exporting each one as a
+local `meta` simproc with the same pattern is equivalent and is the only spelling the module
+system accepts. -/
+public meta section
+dsimproc [circuit_norm] finReduceCastSucc (Fin.castSucc _) := Fin.reduceCastSucc
+dsimproc [circuit_norm] finIsValue ((OfNat.ofNat _ : Fin _)) := Fin.isValue
+dsimproc [circuit_norm] natReduceAdd ((_ + _ : ℕ)) := Nat.reduceAdd
+simproc ↓ [circuit_norm] iteReduce (ite _ _ _) := reduceIte
+simproc [circuit_norm] stringReduceEq ((_ : String) = _) := String.reduceEq
+end
 
 end Clean

@@ -1,7 +1,11 @@
-import Clean.Specs.Keccak256
-import Clean.Gadgets.Keccak.ThetaC
-import Clean.Gadgets.Keccak.ThetaD
-import Clean.Gadgets.Keccak.ThetaXor
+module
+
+public import Clean.Specs.Keccak256
+public import Clean.Gadgets.Keccak.ThetaC
+public import Clean.Gadgets.Keccak.ThetaD
+public import Clean.Gadgets.Keccak.ThetaXor
+
+@[expose] public section
 
 open Clean
 

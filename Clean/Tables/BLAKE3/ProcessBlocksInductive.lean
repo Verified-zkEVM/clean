@@ -4,13 +4,17 @@ This table has exactly 17 rows:
 - Rows 0-15: Process up to 16 blocks (64 bytes each)
 - Row 16: Final output containing the result of processBlocks
 -/
-import Clean.Table.Inductive
-import Clean.Circuit.Loops
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Specs.BLAKE3
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Conditional
-import Clean.Gadgets.IsZero
+module
+
+public import Clean.Table.Inductive
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Specs.BLAKE3
+public import Clean.Gadgets.Addition32.Addition32
+public import Clean.Gadgets.Conditional
+public import Clean.Gadgets.IsZero
+
+@[expose] public section
 
 open Clean
 
@@ -76,17 +80,10 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
-    simp_all [← h_input, eval_vector]
+    simp_all
 
   completeness := by
-    circuit_proof_start [U32.AssertNormalized.circuit, getElem_eval_vector] -- provable_vector_simp wanted
-    simp only [ProcessBlocksState.Normalized] at h_spec
-    constructor
-    · rintro ⟨i, h_i⟩
-      rcases h_spec with ⟨h_spec, _⟩
-      specialize h_spec ⟨ i, h_i ⟩
-      convert h_spec
-    simp_all
+    circuit_proof_all [U32.AssertNormalized.circuit, ProcessBlocksState.Normalized]
 
 end BLAKE3ProcessBlocksStateNormalized
 
@@ -116,17 +113,11 @@ def circuit : FormalAssertion (F p) BlockInput where
 
   soundness := by
     circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
-    constructor
-    · simp_all
-    simp only [←h_input, eval_vector] -- provable_vector_simp wanted
     simp_all
 
   completeness := by
     circuit_proof_start [U32.AssertNormalized.circuit]
     simp only [BlockInput.Normalized] at h_spec
-    constructor
-    · simp_all
-    simp only [←h_input, eval_vector] at h_spec -- provable_vector_simp wanted
     simp_all
 
 end BLAKE3BlockInputNormalized
@@ -214,15 +205,13 @@ private lemma takeShort8_normalized {v : BLAKE3.BLAKE3State (F p)} (h8 : 8 < 16)
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro _ _ env acc_var x_var acc x _ _ h_input h_holds spec_previous inputs_short
-  simp only [circuit_norm, step] at inputs_short spec_previous h_holds ⊢
-  simp only [circuit_norm] at h_input
-  specialize spec_previous (by omega)
-  have input_normalized : x.Normalized := by
-    simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at h_holds
-    provable_struct_simp
-    simp_all
   provable_struct_simp
+  simp only [circuit_norm, step] at inputs_short spec_previous h_holds h_input ⊢
+  have input_normalized : BlockInput.Normalized (⟨x_block_exists, x_block_data⟩ : BlockInput (F p)) := by
+    simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at h_holds
+    simp_all
   simp only [h_input] at h_holds spec_previous ⊢
+  specialize spec_previous (by omega)
   simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit, IsZero.circuit,
     BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3.Compress.circuit, Addition32.circuit,
     seval] at inputs_short spec_previous h_holds ⊢
@@ -236,7 +225,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   · intro input
     rintro (_ | _) <;> simp_all
   by_cases h_x : x_block_exists = 1
-  · simp only [h_x, decide_true, cond_true, circuit_norm] at *
+  · simp only [h_x, decide_true, Bool.cond_true, circuit_norm] at *
     have h_state_norm := h_holds.1
     have h_input_norm := h_holds.2.1
     have h_iszero := h_holds.2.2.1
@@ -244,10 +233,6 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     have h_addition := h_holds.2.2.2.2.1
     have h_cv_cond := h_holds.2.2.2.2.2.1
     have h_blocks_cond := h_holds.2.2.2.2.2.2
-    -- On 4.30, `fromComponents` projections no longer reduce during `simp` matching,
-    -- so resolve the Conditional spec by definitional equality instead.
-    replace h_cv_cond : _ = Vector.takeShort _ 8 step._proof_2 :=
-      (h_cv_cond (Or.inr rfl)).trans (if_pos rfl)
     simp only [ProcessBlocksState.Normalized] at h_state_norm
     simp only [BlockInput.Normalized] at h_input_norm
     specialize h_compress (by
@@ -317,12 +302,12 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         simp only [Vector.getElem_takeShort]
         rfl
     constructor
-    · exact takeShort8_normalized step._proof_2 h_compress_norm
+    · exact takeShort8_normalized (by norm_num) h_compress_norm
     constructor
     · exact h_state_norm.2.1
     change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
     exact h_add_norm
-  · simp only [h_x, decide_false, cond_false]
+  · simp only [h_x, decide_false, Bool.cond_false]
     simp only [circuit_norm] at h_holds
     have x_block_exists_zero : x_block_exists = 0 := by
       simp only [BlockInput.Normalized] at input_normalized
@@ -331,10 +316,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
       | inr _ => contradiction
     simp only [x_block_exists_zero] at *
     simp only [circuit_norm] at h_holds ⊢
-    -- Same 4.30 workaround: resolve the chaining-value Conditional spec definitionally.
-    have h_cv_eq : _ = acc_chaining_value :=
-      (h_holds.2.2.2.2.2.1 (Or.inl rfl)).trans (if_neg (by exact zero_ne_one))
-    simp only [circuit_norm, h_holds, h_cv_eq, ProcessBlocksState.toChunkState] at ⊢ spec_previous
+    simp only [circuit_norm, h_holds, ProcessBlocksState.toChunkState] at ⊢ spec_previous
     norm_num at h_holds ⊢
     simp_all only [circuit_norm]
     omega
@@ -352,8 +334,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_assumptions, h_input ⟩⟩
-    simp only [circuit_norm, step] at ⊢ h_witnesses h_eval
     provable_struct_simp
+    simp only [circuit_norm, step] at ⊢ h_witnesses h_eval
     simp only [circuit_norm, h_eval] at ⊢ h_witnesses
     dsimp only [ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
@@ -414,9 +396,7 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
             simp [ZMod.val_zero]
         · norm_num)
       simp_all [circuit_norm]
-    -- 4.30: `(fromComponents _).selector` no longer reduces for `assumption`/`trivial`;
-    -- provide the boolean fact by definitional unfolding instead.
-    exact ⟨h_input.1, trivial⟩
+    trivial
 
 /--
 The InductiveTable for processBlocks.
@@ -430,6 +410,5 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   completeness
   subcircuitsConsistent := by
     simp only [step, circuit_norm]
-    omega
 end
 end Tables.BLAKE3.ProcessBlocksInductive

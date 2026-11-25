@@ -1,7 +1,9 @@
-import Clean.Utils.Vector
-import Clean.Utils.Bitwise
-import Clean.Utils.Field
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Utils.Vector
+public import Clean.Utils.Bitwise
+public import Clean.Utils.Field
+public import Clean.Gadgets.Boolean
 
 open Clean
 
@@ -11,6 +13,8 @@ open Clean
 This file contains general lemmas about binary operations on lists and vectors,
 particularly for AND operations on binary values (0 or 1).
 -/
+
+@[expose] public section
 
 namespace BinaryOps
 

@@ -1,6 +1,10 @@
-import Clean.Types.U64
-import Clean.Gadgets.Rotation64.Theorems
-import Clean.Utils.Primes
+module
+
+public import Clean.Types.U64
+public import Clean.Gadgets.Rotation64.Theorems
+public import Clean.Utils.Primes
+
+@[expose] public section
 
 open Clean
 
@@ -50,10 +54,11 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
     | 6 => ⟨ x6, x7, x0, x1, x2, x3, x4, x5 ⟩
     | 7 => ⟨ x7, x0, x1, x2, x3, x4, x5, x6 ⟩
   subcircuitsConsistent x i0 := by
+    obtain ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := x
     simp only [main]
-    fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, Fin.reduceFinMk, Fin.reduceEq]
   channelsLawful := by
-    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, main, Fin.reduceFinMk, Fin.reduceEq]
 
   output_eq := by
     intros
@@ -67,8 +72,7 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
 theorem soundness (off : Fin 8) : Soundness (F p) (main off) Assumptions (Spec off) := by
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ h_inputs as h
 
-  simp only [circuit_norm, explicit_provable_type, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-    fromElements, U64.mk.injEq] at h_inputs
+  simp only [circuit_norm, explicit_provable_type, U64.mk.injEq] at h_inputs
   obtain ⟨h_x0, h_x1, h_x2, h_x3, h_x4, h_x5, h_x6, h_x7⟩ := h_inputs
   clear h
 
@@ -88,9 +92,11 @@ def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
   main := main off
   elaborated := elaborated off
   requirementsChannelsLawful := by
-    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, main, Fin.reduceFinMk, Fin.reduceEq]
   Assumptions
   Spec := Spec off
+  computableWitnesses := by
+    fin_cases off <;> computable_witnesses [reduceIte, Fin.reduceFinMk, Fin.reduceEq]
   soundness := soundness off
   completeness := completeness off
 }

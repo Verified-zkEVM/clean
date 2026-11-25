@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Circomlib.Bitify
-import Mathlib.Data.Int.Basic
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Circomlib.Bitify
+public import Mathlib.Data.Int.Basic
+
+@[expose] public section
 
 open Clean
 /-
@@ -135,9 +139,8 @@ structure Inputs (F : Type) where
 deriving ProvableStruct
 
 def main (inputs : Var Inputs (F p)) := do
-  let { enabled, inp } := inputs
-  let isz ← IsZero.circuit (inp.2 - inp.1)
-  enabled * (1 - isz) === 0
+  let isz ← IsZero.circuit (inputs.inp.2 - inputs.inp.1)
+  inputs.enabled * (1 - isz) === 0
 
 def circuit : FormalAssertion (F p) Inputs where
   main
@@ -404,6 +407,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds
+    obtain ⟨input1, input2⟩ := input
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by
@@ -428,6 +432,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     intro i env input h_env (x, y) h_input h_assumptions
+    obtain ⟨input1, input2⟩ := input
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by
@@ -474,6 +479,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds
+    obtain ⟨input1, input2⟩ := input
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have hx_le : x.val ≤ 2^n := Nat.le_of_lt h_assumptions.left
@@ -482,6 +488,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     intro i env input h_env (x, y) h_input h_assumptions
+    obtain ⟨input1, input2⟩ := input
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have hx_le : x.val ≤ 2^n := Nat.le_of_lt h_assumptions.left
@@ -511,6 +518,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   soundness := by
     intro i env input (x, y) h_input h_assumptions h_holds
+    obtain ⟨input1, input2⟩ := input
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by
@@ -535,6 +543,7 @@ def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field w
 
   completeness := by
     intro i env input h_env (x, y) h_input h_assumptions
+    obtain ⟨input1, input2⟩ := input
     simp_all only [circuit_norm, LessThan.circuit, Prod.mk.injEq]
 
     have two_exp_n_lt_p : 2^n < p := by

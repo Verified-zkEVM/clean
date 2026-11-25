@@ -1,12 +1,19 @@
 -- This file imports all test modules
-import Clean.Utils.Test.TestDecomposeProvableStruct
-import Clean.Utils.Test.TestSplitProvableStructEq
+import Clean.Utils.Test.TestProvableStructSimp
 import Clean.Utils.Test.TestCircuitProofStart
-import Clean.Utils.Test.TestSimplifyProvableStructEval
 import Clean.Utils.Test.TestWitgenEvalProjection
+import Clean.Utils.Test.TestU64Wrap
 import Clean.Utils.Test.TestElaborateCircuit
 import Clean.Utils.Test.TestCircuitStructDeriving
 import Clean.Utils.Test.TestMixedCircuitType
+import Clean.Utils.Test.TestComputableWitnesses
+import Clean.Backends.Circom.TestWasmCompile
+import Clean.Backends.Circom.TestWasmSemantics
+import Clean.Utils.Test.TestExpressionPolynomial
+import Clean.Examples.FibonacciVm.WitnessGenerationTest
+import Clean.Examples.FemtoCairo.FlatAirTest
+import Clean.Examples.OpcodeVm.WitnessGenerationTest
+import Clean.Examples.BinaryFibonacci.WitnessGenerationTest
 import Clean.Utils.Test.TestLookup
 import Clean.Utils.Test.SimpMatchRegression
 import Clean.Halo2.Tests.TestProvableTypeSimp

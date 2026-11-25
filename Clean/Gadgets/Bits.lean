@@ -1,7 +1,11 @@
-import Clean.Gadgets.Equality
-import Clean.Gadgets.Boolean
-import Clean.Utils.Bits
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.Equality
+public import Clean.Gadgets.Boolean
+public import Clean.Utils.Bits
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 open Clean
 
@@ -11,7 +15,7 @@ variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]
 
 def main (n : ℕ) (x : Expression (F p)) : Circuit (F p) (Vector (Expression (F p)) n) := do
   -- witness the bits of `x`
-  let bits ← witnessVector n (.range n fun i => ((x.val >>> i) % 2).toField)
+  let bits ← witnessVector n (x.bits n)
 
   -- add boolean constraints on all bits
   Circuit.forEach bits assertBool
@@ -30,6 +34,7 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
   Spec (x : F p) (bits : Vector (F p) n) _ :=
     x.val < 2^n ∧ bits = fieldToBits n x
 
+  computableWitnesses := by computable_witnesses [fieldFromBitsExpr]
   soundness := by
     circuit_proof_start
     obtain ⟨ h_bits, h_eq ⟩ := h_holds
@@ -43,7 +48,8 @@ def toBits (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n
 
     change input = env (fieldFromBitsExpr bit_vars) at h_eq
     rw [h_eq, fieldFromBits_eval bit_vars, fieldToBits_fieldFromBits hn bits h_bits]
-    use fieldFromBits_lt _ h_bits
+    refine ⟨fieldFromBits_lt _ h_bits, ?_⟩
+    simp only [bits, bit_vars, circuit_norm]
 
   completeness := by
     circuit_proof_start

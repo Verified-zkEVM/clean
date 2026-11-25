@@ -1,8 +1,12 @@
-import Clean.Gadgets.Xor.Xor32
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Specs.BLAKE3
-import Clean.Circuit.Provable
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.Xor.Xor32
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Specs.BLAKE3
+public import Clean.Circuit.Provable
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 open Clean
 
@@ -18,27 +22,25 @@ structure Inputs (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
-  let { state, chaining_value } := input
-
   -- XOR first 8 words with last 8 words
-  let s0 ← Xor32.circuit ⟨state[0], state[8]⟩
-  let s1 ← Xor32.circuit ⟨state[1], state[9]⟩
-  let s2 ← Xor32.circuit ⟨state[2], state[10]⟩
-  let s3 ← Xor32.circuit ⟨state[3], state[11]⟩
-  let s4 ← Xor32.circuit ⟨state[4], state[12]⟩
-  let s5 ← Xor32.circuit ⟨state[5], state[13]⟩
-  let s6 ← Xor32.circuit ⟨state[6], state[14]⟩
-  let s7 ← Xor32.circuit ⟨state[7], state[15]⟩
+  let s0 ← Xor32.circuit ⟨input.state[0], input.state[8]⟩
+  let s1 ← Xor32.circuit ⟨input.state[1], input.state[9]⟩
+  let s2 ← Xor32.circuit ⟨input.state[2], input.state[10]⟩
+  let s3 ← Xor32.circuit ⟨input.state[3], input.state[11]⟩
+  let s4 ← Xor32.circuit ⟨input.state[4], input.state[12]⟩
+  let s5 ← Xor32.circuit ⟨input.state[5], input.state[13]⟩
+  let s6 ← Xor32.circuit ⟨input.state[6], input.state[14]⟩
+  let s7 ← Xor32.circuit ⟨input.state[7], input.state[15]⟩
 
   -- XOR last 8 words with chaining value
-  let s8 ← Xor32.circuit ⟨chaining_value[0], state[8]⟩
-  let s9 ← Xor32.circuit ⟨chaining_value[1], state[9]⟩
-  let s10 ← Xor32.circuit ⟨chaining_value[2], state[10]⟩
-  let s11 ← Xor32.circuit ⟨chaining_value[3], state[11]⟩
-  let s12 ← Xor32.circuit ⟨chaining_value[4], state[12]⟩
-  let s13 ← Xor32.circuit ⟨chaining_value[5], state[13]⟩
-  let s14 ← Xor32.circuit ⟨chaining_value[6], state[14]⟩
-  let s15 ← Xor32.circuit ⟨chaining_value[7], state[15]⟩
+  let s8 ← Xor32.circuit ⟨input.chaining_value[0], input.state[8]⟩
+  let s9 ← Xor32.circuit ⟨input.chaining_value[1], input.state[9]⟩
+  let s10 ← Xor32.circuit ⟨input.chaining_value[2], input.state[10]⟩
+  let s11 ← Xor32.circuit ⟨input.chaining_value[3], input.state[11]⟩
+  let s12 ← Xor32.circuit ⟨input.chaining_value[4], input.state[12]⟩
+  let s13 ← Xor32.circuit ⟨input.chaining_value[5], input.state[13]⟩
+  let s14 ← Xor32.circuit ⟨input.chaining_value[6], input.state[14]⟩
+  let s15 ← Xor32.circuit ⟨input.chaining_value[7], input.state[15]⟩
 
   return #v[s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15]
 
@@ -56,7 +58,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Xor32.circuit, Xor32.elaborated]
 
-  simp only [Xor32.Assumptions, getElem_eval_vector, h_input, Xor32.Spec, and_imp] at h_holds
+  simp only [Xor32.Assumptions, Xor32.Spec, and_imp] at h_holds
 
   ring_nf at h_holds
 
@@ -81,7 +83,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
 
-  simp [circuit_norm, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
+  simp [circuit_norm, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf
   simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, and_self,
     true_and]
@@ -97,8 +99,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨state_norm, chaining_value_norm⟩ := h_assumptions
 
   dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_env ⊢
-  simp only [h_input_state, h_input_cv, circuit_norm, and_imp,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at h_env ⊢
+  simp only [circuit_norm, and_imp,
+    Xor32.Assumptions, Xor32.Spec] at h_env ⊢
 
   -- Prove all normalization facts from the universal hypotheses
   refine ⟨⟨state_norm 0, state_norm 8⟩, ⟨state_norm 1, state_norm 9⟩,
