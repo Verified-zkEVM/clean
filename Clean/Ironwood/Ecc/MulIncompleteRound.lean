@@ -487,7 +487,7 @@ private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp} {obase
     have hYP : 2 * (m • P).y - 2 * l1 * ((m • P).x - P.x) = 2 * (stepPoint P k).y := by
       unfold stepPoint
       rcases k with _ | _ <;>
-        simp only [Bool.false_eq_true, if_false, if_true] at hkv ⊢
+        simp only [Bool.false_eq_true, ite_false, ite_true] at hkv ⊢
       · show _ = 2 * (-P).y
         rw [Point.neg_y]
         linear_combination (-2) * hg1 - 2 * hay + 2 * l1 * hax + 4 * P.y * hkv
@@ -513,10 +513,10 @@ private theorem sound_step {z xA l1 l2 bx yb oz oxA ol1 ol2 obx oby : Fp} {obase
       linear_combination hYB
     rw [hyB, hxB]
   rcases mul_eq_zero.mp hbool with hk | hk
-  · exact ⟨false, by simp only [Bool.false_eq_true, if_false]; linear_combination hk,
-      rfl, core false (by simp only [Bool.false_eq_true, if_false]; linear_combination hk)⟩
-  · exact ⟨true, by simp only [if_true]; linear_combination -hk,
-      rfl, core true (by simp only [if_true]; linear_combination -hk)⟩
+  · exact ⟨false, by simp only [Bool.false_eq_true, ite_false]; linear_combination hk,
+      rfl, core false (by simp only [Bool.false_eq_true, ite_false]; linear_combination hk)⟩
+  · exact ⟨true, by simp only [ite_true]; linear_combination -hk,
+      rfl, core true (by simp only [ite_true]; linear_combination -hk)⟩
 
 /-- The step keeps the base point. -/
 private theorem step_base (w : State Fp) (k k' : Bool) : (w.step k k').base = w.base := rfl
@@ -588,7 +588,7 @@ private theorem step_honest {w : State Fp} {m : ℕ} {k : Bool} (k' : Bool)
   obtain ⟨hOn, h2m, hMb, -, -, -⟩ := hH
   refine ⟨?_, ?_, hBound', ?_, ?_, ?_⟩
   · rw [step_base]; exact hOn
-  · rcases k with _ | _ <;> simp only [Bool.false_eq_true, if_false, if_true] <;> omega
+  · rcases k with _ | _ <;> simp only [Bool.false_eq_true, ite_false, ite_true] <;> omega
   · rw [hc1, step_base]
   · rw [hc2, step_base]
   · rw [hc3, step_base]
@@ -619,19 +619,19 @@ private theorem step_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest
   set l := lambdaCellsValue P.x P.y (m • P).x (m • P).y k with hldef
   set m' := 2 * m + (if k then 1 else 0) * 2 - 1 with hm'
   have h2m' : 2 ≤ m' := by
-    rcases k with _ | _ <;> simp only [Bool.false_eq_true, if_false, if_true, hm'] <;> omega
+    rcases k with _ | _ <;> simp only [Bool.false_eq_true, ite_false, ite_true, hm'] <;> omega
   have hMb1' : 2 * m' + 1 < PALLAS_SCALAR_CARD := by
-    rcases k with _ | _ <;> simp only [Bool.false_eq_true, if_false, if_true, hm'] <;> omega
+    rcases k with _ | _ <;> simp only [Bool.false_eq_true, ite_false, ite_true, hm'] <;> omega
   have hs2' := (honest_step hOn (fun _ => k') h2m' hMb1' 0).2.1
   rw [hs3] at hs4
   refine ⟨by rw [step_base]; ring, by rw [step_base]; ring, ?_, ?_, ?_, ?_⟩
   · -- bool_check
     rw [step_z]
-    rcases k with _ | _ <;> simp only [Bool.false_eq_true, if_false, if_true] <;> ring
+    rcases k with _ | _ <;> simp only [Bool.false_eq_true, ite_false, ite_true] <;> ring
   · -- gradient_1
     rw [step_z, hxA, hl1, hl2]
     rcases k with _ | _ <;>
-      simp only [Bool.false_eq_true, if_false, if_true] at hs1 ⊢
+      simp only [Bool.false_eq_true, ite_false, ite_true] at hs1 ⊢
     · rw [show (stepPoint P false).y = -P.y from by unfold stepPoint; simp [Point.neg_y]] at hs1
       linear_combination (norm := (field_simp; ring))
         (-(2 : Fp)⁻¹) * hs1 + (2 : Fp)⁻¹ * hs2
@@ -777,7 +777,7 @@ theorem honest_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)
     have hBound' : 4 * (2 * accScalar m bits v + (if bits v then 1 else 0) * 2 - 1) + 3
         < PALLAS_SCALAR_CARD := by
       have h254 := pow254_lt_card
-      rcases hb : bits v <;> simp only [Bool.false_eq_true, if_false, if_true] <;> omega
+      rcases hb : bits v <;> simp only [Bool.false_eq_true, ite_false, ite_true] <;> omega
     have := step_honest (bits (v + 1)) hprev hBound'
     rw [← hstep ⟨v, hv⟩] at this
     simpa [accScalar] using this
@@ -820,7 +820,7 @@ theorem sound_last_step {z xA l1 l2 bx yb oz oxA oy : Fp}
     have hYP : 2 * (m • P).y - 2 * l1 * ((m • P).x - P.x) = 2 * (stepPoint P k).y := by
       unfold stepPoint
       rcases k with _ | _ <;>
-        simp only [Bool.false_eq_true, if_false, if_true] at hkv ⊢
+        simp only [Bool.false_eq_true, ite_false, ite_true] at hkv ⊢
       · show _ = 2 * (-P).y
         rw [Point.neg_y]
         linear_combination (-2) * hg1 - 2 * hay + 2 * l1 * hax + 4 * P.y * hkv
@@ -842,10 +842,10 @@ theorem sound_last_step {z xA l1 l2 bx yb oz oxA oy : Fp}
       linear_combination hYB
     rw [hyB, hxB]
   rcases mul_eq_zero.mp hbool with hk | hk
-  · exact ⟨false, by simp only [Bool.false_eq_true, if_false]; linear_combination hk,
-      core false (by simp only [Bool.false_eq_true, if_false]; linear_combination hk)⟩
-  · exact ⟨true, by simp only [if_true]; linear_combination -hk,
-      core true (by simp only [if_true]; linear_combination -hk)⟩
+  · exact ⟨false, by simp only [Bool.false_eq_true, ite_false]; linear_combination hk,
+      core false (by simp only [Bool.false_eq_true, ite_false]; linear_combination hk)⟩
+  · exact ⟨true, by simp only [ite_true]; linear_combination -hk,
+      core true (by simp only [ite_true]; linear_combination -hk)⟩
 
 /-- The honest final row satisfies `q_mul_3`'s polynomials (completeness counterpart). -/
 theorem last_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest m k) :

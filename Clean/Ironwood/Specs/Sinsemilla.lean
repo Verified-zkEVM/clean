@@ -121,15 +121,15 @@ theorem step_ne_zero {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
     {m : ℕ} (hm : m < 2 ^ K) (h : step G.S m A = some B) : B ≠ 0 := by
   simp only [step, Point.doubleAndAdd, Option.bind_eq_bind] at h
   by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₁] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₁] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₁] at h
   rw [show ((some (A + G.S m)).bind fun t => Point.incompleteAdd t A)
     = Point.incompleteAdd (A + G.S m) A from rfl] at h
   by_cases hc₂ : A + G.S m = 0 ∨ A = 0 ∨ (A + G.S m).x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₂] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₂] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₂] at h
   push Not at hc₂
   obtain rfl : A + G.S m + A = B := Option.some.inj h
   intro h0
@@ -146,15 +146,15 @@ theorem step_valid {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
     {m : ℕ} (hm : m < 2 ^ K) (h : step G.S m A = some B) : B.Valid := by
   simp only [step, Point.doubleAndAdd, Option.bind_eq_bind] at h
   by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₁] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₁] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₁] at h
   rw [show ((some (A + G.S m)).bind fun t => Point.incompleteAdd t A)
     = Point.incompleteAdd (A + G.S m) A from rfl] at h
   by_cases hc₂ : A + G.S m = 0 ∨ A = 0 ∨ (A + G.S m).x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₂] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₂] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₂] at h
   obtain rfl : A + G.S m + A = B := Option.some.inj h
   exact Point.valid_add (Point.valid_add a_valid (G.valid hm)) a_valid
 

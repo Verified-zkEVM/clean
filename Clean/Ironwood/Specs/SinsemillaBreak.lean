@@ -211,15 +211,15 @@ private theorem step_valid_of_valid {S : ℕ → Point Fp} {m : ℕ} {A B : Poin
     (hA : A.Valid) (hSm : (S m).Valid) (h : step S m A = some B) : B.Valid := by
   simp only [step, Point.doubleAndAdd, Option.bind_eq_bind] at h
   by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₁] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₁] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₁] at h
   rw [show ((some (A + S m)).bind fun t => Point.incompleteAdd t A)
     = Point.incompleteAdd (A + S m) A from rfl] at h
   by_cases hc₂ : A + S m = 0 ∨ A = 0 ∨ (A + S m).x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₂] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₂] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₂] at h
   rw [Option.some.injEq] at h
   exact h ▸ Point.valid_add (Point.valid_add hA hSm) hA
 
@@ -276,13 +276,13 @@ private theorem collision_resolve {acc P : Point Fp} {neg : Bool}
     have hyy : acc.y = P.y := by
       by_contra hne
       exact absurd (hneg.mpr hne) (by simp)
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     rcases acc with ⟨ax, ay⟩; rcases P with ⟨px, py⟩
     simp_all
   | true =>
     have hne : acc.y ≠ P.y := hneg.mp rfl
     have hyy : acc.y = -P.y := hy.resolve_left hne
-    simp only [if_true]
+    simp only [ite_true]
     apply Point.ext_coords
     simp only [Point.coords, Point.neg_x, Point.neg_y]
     rw [hx, hyy]

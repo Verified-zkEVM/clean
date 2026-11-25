@@ -107,7 +107,7 @@ theorem rowValue_spec {input : Input Fp}
   · intro hxdiff
     unfold rowValue lambdaValue
     simp at hxdiff ⊢
-    rw [if_neg]
+    rw [ite_eq_right]
     · have hden : input.q.x - input.p.x ≠ 0 := hxdiff
       field_simp [hden]
     · intro hx

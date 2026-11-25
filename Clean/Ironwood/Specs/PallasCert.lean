@@ -57,8 +57,8 @@ theorem double_of_witness {p r : Point Fp} (l : Fp)
     rw [h]
     rfl
   have hyy0 : p.coords.2 + p.coords.2 ≠ 0 := hyy
-  rw [add_def, ShortWeierstrass.add, if_neg hp0, if_neg hp0,
-    if_pos rfl, if_neg hyy0]
+  rw [add_def, ShortWeierstrass.add, ite_eq_right hp0, ite_eq_right hp0,
+    ite_eq_left rfl, ite_eq_right hyy0]
   cases r with
   | mk rx ry =>
       simp only [ofCoords, coords, hl, mk.injEq]

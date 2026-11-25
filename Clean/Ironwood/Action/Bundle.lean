@@ -950,7 +950,7 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
     | skip
   all_goals simp_all only [keygen_norm, keygen_output_norm,
     synthWitness_output, actionConfigureContext_permutationColumns,
-    Nat.reduceEqDiff, if_false]
+    Nat.reduceEqDiff, ite_false]
   all_goals
     intro column hcolumn
     rcases hcolumn with ⟨cell, hcell, rfl⟩
@@ -1000,7 +1000,7 @@ private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
   all_goals simp_all only [keygen_norm, keygen_output_norm,
     synthWitness_output, synthChecks_output,
     actionConfigureContext_permutationColumns,
-    Nat.reduceEqDiff, if_false]
+    Nat.reduceEqDiff, ite_false]
 
 private theorem synthChecks_regionFixedColumns_forall
     (G : Generators) (B : Bases) (counts : ConfigureCounts)
@@ -2425,7 +2425,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     have hstep := hs j hj
     by_cases h16 : j < 16
     · simp only [merkleLeftEncoding, merkleRightEncoding, merkleSide,
-        dif_pos hj, h16, if_true] at ⊢
+        dite_eq_left hj, h16, ite_true] at ⊢
       simpa [Sinsemilla.Merkle.CalculateRoot.circuit,
         Sinsemilla.Merkle.CalculateRoot.extractWitness,
         Sinsemilla.Merkle.HashLayer.circuit,
@@ -2433,7 +2433,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
         Sinsemilla.Merkle.HashLayer.rightEncoding, circuit_norm,
         Nat.add_assoc, h16] using hstep
     · simp only [merkleLeftEncoding, merkleRightEncoding, merkleSide,
-        dif_pos hj, h16, if_false] at ⊢
+        dite_eq_left hj, h16, ite_false] at ⊢
       simpa [Sinsemilla.Merkle.CalculateRoot.circuit,
         Sinsemilla.Merkle.CalculateRoot.extractWitness,
         Sinsemilla.Merkle.HashLayer.circuit,
@@ -2655,7 +2655,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
               (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
             (h := by
               intro j hj
-              simp only [extract, cellRead, if_pos hj]
+              simp only [extract, cellRead, ite_eq_left hj]
               with_unfolding_all rfl)]
           rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
               (fun j => (extract cfg input_var i₀
@@ -2691,7 +2691,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
         (h := by
           intro j hj
-          simp only [extract, cellRead, if_pos hj]
+          simp only [extract, cellRead, ite_eq_left hj]
           try simp only [circuit_norm, explicit_provable_type])]
       rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
           (fun j => (extract cfg input_var i₀
@@ -2721,7 +2721,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             (hw := by
               intro j hj
               simp only [extract, cellRead,
-                show ¬(16 + j < 16) from by omega, if_false,
+                show ¬(16 + j < 16) from by omega, ite_false,
                 show 16 + j - 16 = j from by omega]
               try with_unfolding_all rfl)
             (hn := by with_unfolding_all exact hM1mid)]
@@ -2758,7 +2758,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         (hw := by
           intro j hj
           simp only [extract, cellRead,
-            show ¬(16 + j < 16) from by omega, if_false,
+            show ¬(16 + j < 16) from by omega, ite_false,
             show 16 + j - 16 = j from by omega]
           try with_unfolding_all rfl)
         (hn := by with_unfolding_all exact hM1mid)]
@@ -3049,7 +3049,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                    (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
                  (h := by
                    intro j hj
-                   simp only [extract, cellRead, if_pos hj]
+                   simp only [extract, cellRead, ite_eq_left hj]
                    try with_unfolding_all rfl)]
                rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
                    (fun j => (extract cfg input_var i₀
@@ -3078,7 +3078,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                  (hw := by
                    intro j hj
                    simp only [extract, cellRead,
-                     show ¬(16 + j < 16) from by omega, if_false,
+                     show ¬(16 + j < 16) from by omega, ite_false,
                      show 16 + j - 16 = j from by omega]
                    try with_unfolding_all rfl)
                  (hn := by with_unfolding_all exact hM1mid)]

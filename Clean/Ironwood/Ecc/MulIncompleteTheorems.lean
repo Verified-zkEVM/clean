@@ -189,7 +189,7 @@ theorem step_nsmul {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
     exact h
   rw [Point.doubleAndAdd]
   by_cases hb : bits b
-  · rw [if_pos hb,
+  · rw [ite_eq_left hb,
       Point.incompleteAdd_some (p := m • P) (q := P)
         hA0 (Point.ne_zero_of_onCurve hP) hxm1,
       Point.nsmul_add_one hP m]
@@ -200,11 +200,11 @@ theorem step_nsmul {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
         (Point.nsmul_ne_zero hP (by omega) (by omega)) hA0
         (Point.nsmul_x_ne hP (s := m) (t := m + 1) (by omega) (by omega) (by omega)),
       Point.nsmul_add_nsmul hP (m + 1) m]
-    rw [if_pos hb]
+    rw [ite_eq_left hb]
     norm_num
     congr 1
     omega
-  · rw [if_neg hb,
+  · rw [ite_eq_right hb,
       Point.incompleteAdd_some (p := m • P) (q := -P)
         hA0 (Point.neg_ne_zero_of_ne_zero (Point.ne_zero_of_onCurve hP))
         hxm1,
@@ -217,7 +217,7 @@ theorem step_nsmul {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
         (Ne.symm (Point.nsmul_x_ne hP (s := m - 1) (t := m) (by omega) (by omega)
           (by omega))),
       Point.nsmul_add_nsmul hP (m - 1) m]
-    rw [if_neg hb]
+    rw [ite_eq_right hb]
     norm_num
     congr 1
     omega
@@ -382,7 +382,7 @@ theorem soundness_aux (n : ℕ) (P : Point Fp) (hP : P.OnCurve)
       unfold stepPoint
       rcases Bool.dichotomy (bits v) with hb | hb <;>
         rw [hb] at h ⊢ <;>
-        simp only [Bool.false_eq_true, if_false, if_true] at h ⊢
+        simp only [Bool.false_eq_true, ite_false, ite_true] at h ⊢
       · show _ = 2 * (-P).y
         rw [Point.neg_y]
         linear_combination -h - ihy - 2 * hyp v hv
@@ -446,7 +446,7 @@ theorem honest_step {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
       = 2 * (stepPoint P (bits b)).y := by
     rw [hl]
     unfold stepPoint lambdaCellsValue
-    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> simp only [if_true]
+    rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> simp only [ite_true]
     · show _ = 2 * (-P).y
       rw [Point.neg_y]
       field_simp
@@ -464,9 +464,9 @@ theorem honest_step {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
   rw [Point.doubleAndAdd] at hstep
   have hS0 : stepPoint P (bits b) ≠ 0 := by
     by_cases hb : bits b
-    · rw [stepPoint, if_pos hb]
+    · rw [stepPoint, ite_eq_left hb]
       exact Point.ne_zero_of_onCurve hP
-    · rw [stepPoint, if_neg hb]
+    · rw [stepPoint, ite_eq_right hb]
       exact Point.neg_ne_zero_of_ne_zero (Point.ne_zero_of_onCurve hP)
   have hxSP : (stepPoint P (bits b)).x = P.x := by
     unfold stepPoint
@@ -484,10 +484,10 @@ theorem honest_step {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
   have hRne : R ≠ 0 ∧ R.x ≠ (m • P).x := by
     constructor
     · intro h0
-      rw [Point.incompleteAdd_def, if_pos (Or.inl h0)] at hstep
+      rw [Point.incompleteAdd_def, ite_eq_left (Or.inl h0)] at hstep
       simp at hstep
     · intro hx
-      rw [Point.incompleteAdd_def, if_pos (Or.inr (Or.inr hx))] at hstep
+      rw [Point.incompleteAdd_def, ite_eq_left (Or.inr (Or.inr hx))] at hstep
       simp at hstep
   have hRadd := Point.nondegenerateAdd_eq_add
     (p := m • P)

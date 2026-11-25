@@ -736,18 +736,18 @@ private theorem merkleChunks_eq {dA dB dC : ℕ → ℕ}
       Finset.sum_congr rfl fun j hj => by
         have hj' : j < 25 := Finset.mem_range.mp hj
         simp only [hD]
-        rw [if_pos hj']
+        rw [ite_eq_left hj']
     have e2 : ∑ j ∈ Finset.range 2, D (25 + j) * 2 ^ (K * j)
         = ∑ j ∈ Finset.range 2, dB j * 2 ^ (K * j) :=
       Finset.sum_congr rfl fun j hj => by
         have hj' : j < 2 := Finset.mem_range.mp hj
         simp only [hD]
-        rw [if_neg (by omega), if_pos (by omega), Nat.add_sub_cancel_left]
+        rw [ite_eq_right (by omega), ite_eq_left (by omega), Nat.add_sub_cancel_left]
     have e3 : ∑ j ∈ Finset.range 25, D (27 + j) * 2 ^ (K * j)
         = ∑ j ∈ Finset.range 25, dC j * 2 ^ (K * j) :=
       Finset.sum_congr rfl fun j hj => by
         simp only [hD]
-        rw [if_neg (by omega), if_neg (by omega), Nat.add_sub_cancel_left]
+        rw [ite_eq_right (by omega), ite_eq_right (by omega), Nat.add_sub_cancel_left]
     rw [e1, e2, e3]
   apply List.ext_getElem
   · simp [merkleChunks]
@@ -762,17 +762,17 @@ private theorem merkleChunks_eq {dA dB dC : ℕ → ℕ}
   rcases Nat.lt_or_ge i 25 with h25 | h25
   · rw [List.getElem_append_left (by simpa using h25)]
     simp only [hD]
-    rw [if_pos h25]
+    rw [ite_eq_left h25]
     simp
   rw [List.getElem_append_right (by simpa using h25)]
   rcases Nat.lt_or_ge i 27 with h27 | h27
   · rw [List.getElem_append_left (by simp; omega)]
     simp only [hD]
-    rw [if_neg (by omega), if_pos h27]
+    rw [ite_eq_right (by omega), ite_eq_left h27]
     simp
   · rw [List.getElem_append_right (by simp; omega)]
     simp only [hD]
-    rw [if_neg (by omega), if_neg (by omega)]
+    rw [ite_eq_right (by omega), ite_eq_right (by omega)]
     simp only [List.getElem_map, List.getElem_range]
     congr 1
 
@@ -3223,15 +3223,15 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     constructor
     · refine ⟨_, _, hlv, hrv, ?_, houtputContract⟩
       rcases hbool with h0 | h1
-      · rw [if_neg (show ¬ _ = (1 : Fp) from by rw [h0]; decide)] at hleftEq
+      · rw [ite_eq_right (show ¬ _ = (1 : Fp) from by rw [h0]; decide)] at hleftEq
         exact Or.inl hleftEq
-      · rw [if_pos h1] at hrightEq
+      · rw [ite_eq_left h1] at hrightEq
         exact Or.inr hrightEq
     · refine ⟨hlv, hrv, ?_, houtputContract⟩
       rcases hbool with h0 | h1
-      · simp only [h0, zero_ne_one, if_false] at hleftEq ⊢
+      · simp only [h0, zero_ne_one, ite_false] at hleftEq ⊢
         exact hleftEq
-      · simp only [h1, if_true] at hrightEq ⊢
+      · simp only [h1, ite_true] at hrightEq ⊢
         exact hrightEq
 
   completeness := by
@@ -3270,11 +3270,11 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           (ZMod.val (AssignedCell.eval place env.toEnvironment x_gen_out_0.bSwapped))) = some B0
       rw [hAread, hBread, hASw, hBSw]
       by_cases hs : env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) = 1
-      · rw [if_pos hs, if_pos hs]
+      · rw [ite_eq_left hs, ite_eq_left hs]
         rw [show decide (env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) = 1)
             = true from by simp [hs]] at hB0
         simpa [proverChunks] using hB0
-      · rw [if_neg hs, if_neg hs]
+      · rw [ite_eq_right hs, ite_eq_right hs]
         rw [show decide (env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) = 1)
             = false from by simp [hs]] at hB0
         simpa [proverChunks] using hB0
@@ -3289,11 +3289,11 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           (ZMod.val (AssignedCell.eval place env.toEnvironment x_gen_out_0.bSwapped))) = some B
       rw [hAread, hBread, hASw, hBSw]
       by_cases hs : env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) = 1
-      · rw [if_pos hs, if_pos hs]
+      · rw [ite_eq_left hs, ite_eq_left hs]
         rw [show decide (env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) = 1)
             = true from by simp [hs]] at hB
         simpa [proverChunks] using hB
-      · rw [if_neg hs, if_neg hs]
+      · rw [ite_eq_right hs, ite_eq_right hs]
         rw [show decide (env.advice cfg.1.swap ((place i₀ : ℕ) : ℤ) = 1)
             = false from by simp [hs]] at hB
         simpa [proverChunks] using hB)

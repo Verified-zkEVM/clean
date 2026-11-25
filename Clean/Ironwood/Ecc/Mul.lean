@@ -258,7 +258,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
   have hPv : P.Valid := Or.inl hP
   cases bit
   · -- bit = false: the step point is −P
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     apply (ext_toSW_iff
       (valid_add (valid_nsmul hPv a) (valid_add (valid_neg hPv) (valid_nsmul hPv a)))
       (valid_nsmul hPv _)).mpr
@@ -267,7 +267,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
       toSW_nsmul hPv a, toSW_nsmul hPv]
     simpa using Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
   · -- bit = true: the step point is P
-    simp only [if_true]
+    simp only [ite_true]
     apply (ext_toSW_iff
       (valid_add (valid_nsmul hPv a) (valid_add hPv (valid_nsmul hPv a)))
       (valid_nsmul hPv _)).mpr
@@ -403,7 +403,7 @@ private theorem zChain_split {n : ℕ} {zin : Fp} {zs : Vector Fp (n + 1)} {bits
   · intro b
     have hb := h ⟨b.val + 1, by omega⟩
     simp only [Fin.getElem_fin] at hb
-    rw [dif_neg (show ¬ (b.val + 1 = 0) by omega)] at hb
+    rw [dite_eq_right (show ¬ (b.val + 1 = 0) by omega)] at hb
     simpa using hb
 
 /-- Prover-side `acc`-component of an evaluated `MulComplete.Output 3` literal. -/
@@ -1182,7 +1182,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     simp only [keygen_output_norm] at hLoZ125
     simp only [circuit_norm, Vector.getElem_ofFn] at hLoZ125
     have hCompZ0 := hCompChain ⟨0, by omega⟩
-    simp only [if_pos] at hCompZ0
+    simp only [ite_eq_left] at hCompZ0
     have hCompCells := chain_cast (n := 2) _ _
       (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC
       (by rw [hLoZ125]) hCompZ0
@@ -1271,7 +1271,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       refine ⟨bitsHi, bitsLo, bitsC, true, hK254bit, hOZ130.symm.trans hHiZ124, ?_, ?_, ?_⟩
       · -- z₀ = 2·z₁ + 1
         push_cast
-        simp only [if_true]
+        simp only [ite_true]
         rw [hz1read] at hk1
         linear_combination -hk1
       · have hcx : env.advice cfg.addConfig.xP ((place self + offLsb : ℕ) : ℤ) = 0 := by
@@ -1394,7 +1394,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     simp only [MulComplete.RoundInvariant, hW251] at hCompPS
     obtain ⟨hCompChain, -⟩ := hCompPS
     have hCompZ0 := hCompChain ⟨0, by omega⟩
-    simp only [if_pos] at hCompZ0
+    simp only [ite_eq_left] at hCompZ0
     have hCompCells := chain_cast (n := 2) _ _
       (chainNat (chainNat 0 bits 125) (fun i => bits (125 + i)) 126) (fun i => bits (251 + i))
       (by rw [hLoZ125]) hCompZ0
@@ -1447,24 +1447,24 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     · -- bool_check on the honest bit
       rw [hz0v, hz1read, hsplit, hbits]
       rcases Bool.dichotomy (kBits input_alpha 254) with h | h <;>
-        simp only [h, Bool.false_eq_true, if_false, if_true] <;> ring
+        simp only [h, Bool.false_eq_true, ite_false, ite_true] <;> ring
     · -- x-switch on the honest correction point
       rw [hz0v, hz1read, hsplit, hbits, region_4, region_2]
       rcases Bool.dichotomy (kBits input_alpha 254) with h | h <;>
-        simp only [h, Bool.false_eq_true, if_false, if_true] <;> ring
+        simp only [h, Bool.false_eq_true, ite_false, ite_true] <;> ring
     · -- y-switch on the honest correction point
       rw [hz0v, hz1read, hsplit, hbits, region_5, region_3]
       rcases Bool.dichotomy (kBits input_alpha 254) with h | h <;>
-        simp only [h, Bool.false_eq_true, if_false, if_true] <;> ring
+        simp only [h, Bool.false_eq_true, ite_false, ite_true] <;> ring
     · -- the honest correction point is valid (identity or −base)
       rw [region_4, region_5]
       rcases Bool.dichotomy (kBits input_alpha 254) with h | h <;> rw [h]
-      · simp only [Bool.false_eq_true, if_false]
+      · simp only [Bool.false_eq_true, ite_false]
         rw [show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -{ x := input_base_x, y := input_base_y } from rfl]
         simpa only [Point.neg_def, Point.ofCoords, Point.coords,
                 CompElliptic.CurveForms.ShortWeierstrass.neg] using Point.valid_neg hbaseV
-      · simp only [if_true]
+      · simp only [ite_true]
         exact Point.valid_zero
 
 /-- The main region exposes its reduced synthesis footprint. -/
@@ -2121,7 +2121,7 @@ def mul :
       exact point_card_reduce hOnC _
     -- ── assemble ──
     rcases Bool.dichotomy k0 with hk | hk <;> rw [hk] at hZ0 hResEq <;>
-      simp only [Bool.false_eq_true, if_false, if_true] at hZ0 hResEq
+      simp only [Bool.false_eq_true, ite_false, ite_true] at hZ0 hResEq
     · -- k₀ = 0
       have hK := hKpart 0 (by omega) (by
         push_cast

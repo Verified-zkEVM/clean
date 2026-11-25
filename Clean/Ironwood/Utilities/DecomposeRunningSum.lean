@@ -393,7 +393,7 @@ theorem chain_shifts (W n : ℕ) (f : ℕ → Fp)
   -- totalize the digit choice (only indices < n are read)
   set ks' : ℕ → ℕ := fun i => if h : i < n then ks i h else 0 with hks'
   have hks'lt : ∀ i, i < n → ks' i < 2 ^ W := fun i hi => by
-    simp only [hks', dif_pos hi]; exact hks i hi
+    simp only [hks', dite_eq_left hi]; exact hks i hi
   refine ⟨tailVal W n ks' 0, by simpa using tailVal_lt W n ks' hks'lt n 0 (by omega), ?_⟩
   -- `f w = ↑(tailVal w)` by downward induction, then the shift lemma
   suffices hfw : ∀ d w, w + d = n → f w = ((tailVal W n ks' w : ℕ) : Fp) by
@@ -408,7 +408,7 @@ theorem chain_shifts (W n : ℕ) (f : ℕ → Fp)
     intro w hw
     have hwn : w < n := by omega
     rw [hchain w hwn, ih (w + 1) (by omega), tailVal_step W n ks' hwn]
-    push_cast [hks', dif_pos hwn]
+    push_cast [hks', dite_eq_left hwn]
     ring
 
 /-- The word of consecutive shift values is the base-`2^W` digit:

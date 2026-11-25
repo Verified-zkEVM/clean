@@ -616,7 +616,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           cases ns with
           | nil => exact absurd rfl hns
           | cons a l => rfl] at henter
-      simp only [Sinsemilla.Chain.enterYA, Bool.false_eq_true, if_false,
+      simp only [Sinsemilla.Chain.enterYA, Bool.false_eq_true, ite_false,
         Ecc.DoubleAndAdd.yA, Ecc.DoubleAndAdd.xR] at henter
       have hfirst : (ProvableStruct.Halo2.eval place env.toEnvironment out).first
           = ({ xA := env.advice cfg.xA ((place self + offset : ℕ) : ℤ),

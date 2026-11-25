@@ -255,9 +255,9 @@ private theorem qS3_yRhs (b : Bool) (row : DoubleAndAddRow Fp) :
       + qS2Boundary b * (qS2Boundary b - 1) * 2 * row.lambda1
     = 2 * enterYA b row := by
   cases b
-  · simp only [enterYA, HashPiece.qS2Boundary, Bool.false_eq_true, if_false]
+  · simp only [enterYA, HashPiece.qS2Boundary, Bool.false_eq_true, ite_false]
     ring
-  · simp only [enterYA, HashPiece.qS2Boundary, if_true]
+  · simp only [enterYA, HashPiece.qS2Boundary, ite_true]
     norm_num
     ring
 
@@ -904,7 +904,7 @@ private theorem chain_fold (G : Generators) (N : ℕ)
     rw [show chunksOf msF [] i0 = [] from rfl,
       Specs.Sinsemilla.hashToPoint_nil] at hB
     obtain rfl : A = B := Option.some.inj hB
-    simp only [List.isEmpty_nil, enterYA, if_true] at hAyA
+    simp only [List.isEmpty_nil, enterYA, ite_true] at hAyA
     refine ⟨?_, ?_⟩
     · simpa using hAx.symm
     · have h2 : (2 : Fp) ≠ 0 := by decide
@@ -984,7 +984,7 @@ private theorem chain_fold (G : Generators) (N : ℕ)
     · -- the chain contract
       intro A hAon hAx hAyA B hB
       have hAyA' : 2 * A.y = yA (dR base) := by
-        simpa only [List.isEmpty_cons, enterYA, Bool.false_eq_true, if_false] using hAyA
+        simpa only [List.isEmpty_cons, enterYA, Bool.false_eq_true, ite_false] using hAyA
       rw [show chunksOf msF (n :: rest) i0
           = (List.range (n + 1)).map (msF i0) ++ chunksOf msF rest (i0 + 1) from rfl,
         Specs.Sinsemilla.hashToPoint_append] at hB
@@ -1753,15 +1753,15 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         intro j r
         beta_reduce
         by_cases h : j < ns.length
-        · rw [dif_pos h]
+        · rw [dite_eq_left h]
           exact hbF ⟨j, h⟩ r
-        · rw [dif_neg h]
+        · rw [dite_eq_right h]
           norm_num [K])
       ns 0 offset input.pieces (by omega)
       (by
         intro j
         beta_reduce
-        simp only [Nat.zero_add, dif_pos j.isLt]
+        simp only [Nat.zero_add, dite_eq_left j.isLt]
         have hzsv := hzsF j
         rw [eval_cells (M := fields (ns.getD j.val 0 + 1)),
           eval_fields_eq_map] at hzsv
@@ -1882,7 +1882,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             : Fp) = _
           simp only [Nat.add_zero, prefixRows_zero]
           with_unfolding_all rfl
-        · rw [slotEnterVal, if_pos rfl, hAy]
+        · rw [slotEnterVal, ite_eq_left rfl, hAy]
       | succ m ih =>
         intro hm1
         obtain ⟨Cm, hCon, hCx, hCy, hCchain⟩ := ih (by omega)
@@ -1952,7 +1952,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           refine ⟨Dm, hDmOn, ?_, ?_, ?_⟩
           · rw [hrowstep]
             exact hnx.symm
-          · rw [slotEnterVal, if_neg (by omega : ¬ m + 1 = 0)]
+          · rw [slotEnterVal, ite_eq_right (by omega : ¬ m + 1 = 0)]
             have h2 : (2 : Fp) ≠ 0 := by decide
             simp only [boundaryYA, nextYA, slotReads, AssignedCell.eval,
               AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
@@ -2042,7 +2042,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         · simp only [dRowP]
           exact hlsec
         · -- the exit `2·y` is the (i+1)-boundary entering value — pure boundary algebra
-          rw [slotEnterVal, if_neg (by omega : ¬ m + 1 = 0)]
+          rw [slotEnterVal, ite_eq_right (by omega : ¬ m + 1 = 0)]
           have hrowstep : offset + prefixRows ns (m + 1)
               = offset + prefixRows ns m + ns.getD m 0 + 1 := by
             rw [prefixRows_step ns m hm]
@@ -2099,9 +2099,9 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             by_cases hb : m = ns.length - 1
             · -- the final boundary: the trailing row's witnessed `y_a`
               rw [show (decide (m = ns.length - 1)) = true from by simp [hb]]
-              simp only [enterYA, if_true]
+              simp only [enterYA, ite_true]
               rw [show m + 1 = ns.length from by omega]
-              rw [slotEnterVal, if_neg (by omega : ¬ ns.length = 0)]
+              rw [slotEnterVal, ite_eq_right (by omega : ¬ ns.length = 0)]
               rw [show offset + prefixRows ns m + ns.getD m 0 + 1
                   = offset + prefixRows ns ns.length from by
                 rw [show ns.length = m + 1 from by omega, prefixRows_step ns m hm]
@@ -2113,7 +2113,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
                 Placed.toEnvironment_place, Placed.toEnvironment_env]
             · -- an interior boundary: the next slot's first-row `Y_A`
               rw [show (decide (m = ns.length - 1)) = false from by simp [hb]]
-              simp only [enterYA, Bool.false_eq_true, if_false]
+              simp only [enterYA, Bool.false_eq_true, ite_false]
               have h := (hSlotData ⟨m + 1, by omega⟩).2.1
               rw [show offset + prefixRows ns (m + 1)
                   = offset + prefixRows ns m + ns.getD m 0 + 1 from by
@@ -2152,15 +2152,15 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       simp only []
       refine ⟨?_, ?_, ?_⟩
       · exact hCx.symm
-      · rw [hCy, slotEnterVal, if_neg hlen0, hWyFin]
+      · rw [hCy, slotEnterVal, ite_eq_right hlen0, hWyFin]
         simp only [boundaryYA, nextYA, slotReads, HashPiece.reads,
           AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
           Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
           Placed.toEnvironment_place, Placed.toEnvironment_env]
       · rw [show ns.isEmpty = false from by simp [hns]]
-        simp only [enterYA, Bool.false_eq_true, if_false]
+        simp only [enterYA, Bool.false_eq_true, ite_false]
         have h := (hSlotData ⟨0, by omega⟩).2.1
-        rw [slotEnterVal, if_pos rfl] at h
+        rw [slotEnterVal, ite_eq_left rfl] at h
         simp only [prefixRows_zero, Nat.add_zero, dRowP] at h
         rw [h, hAy]
 

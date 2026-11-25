@@ -517,17 +517,17 @@ theorem recursePartitionPlanned_sound
               simp only
               split
               · rw [hrec leftPlan left pred limit true true leftResult
-                    (by simpa only [if_pos ‹left.size < right.size›] using hleft),
+                    (by simpa only [ite_eq_left ‹left.size < right.size›] using hleft),
                   hrec rightPlan right (some pivotValue) limit balanced
                     wasPartitioned rightResult
-                    (by simpa only [if_pos ‹left.size < right.size›] using hright)]
+                    (by simpa only [ite_eq_left ‹left.size < right.size›] using hright)]
                 simp
               · rw [hrec rightPlan right (some pivotValue) limit true true
                     rightResult
-                    (by simpa only [if_neg ‹¬left.size < right.size›] using hright),
+                    (by simpa only [ite_eq_right ‹¬left.size < right.size›] using hright),
                   hrec leftPlan left pred limit balanced wasPartitioned
                     leftResult
-                    (by simpa only [if_neg ‹¬left.size < right.size›] using hleft)]
+                    (by simpa only [ite_eq_right ‹¬left.size < right.size›] using hleft)]
                 simp
 
 theorem recursePredPlanned_sound
@@ -600,7 +600,7 @@ theorem recurseAfterPivotPlanned_sound
   unfold recurseAfterPivotPlanned at hresult
   unfold recurseAfterPivot
   cases wasBalanced <;> cases wasPartitioned <;> cases likelySorted <;>
-    simp only [Bool.false_and, Bool.true_and, if_true] at hresult ⊢
+    simp only [Bool.false_and, Bool.true_and, ite_true] at hresult ⊢
   all_goals first
   | exact recursePredPlanned_sound plannedRec actualRec hrec plan v isLess
       pred limit len _ _ pivot result hresult
@@ -654,7 +654,7 @@ theorem recurseLongPlanned_sound
   unfold recurseLongPlanned at hresult
   unfold recurseLong
   cases wasBalanced <;> simp only [Bool.not_false, Bool.not_true,
-    if_true] at hresult ⊢
+    ite_true] at hresult ⊢
   · exact recurseChoosePlanned_sound plannedRec actualRec hrec plan
       (breakPatterns v) isLess pred (limit - 1) len false
       wasPartitioned result hresult

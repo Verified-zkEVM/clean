@@ -176,17 +176,17 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
       · exact Or.inr (by linear_combination -h)
     refine ⟨hboolv, ?_, ?_⟩
     · rcases hboolv with h0 | h1
-      · rw [if_neg (show ¬ sw = 1 from by rw [h0]; decide)]
+      · rw [ite_eq_right (show ¬ sw = 1 from by rw [h0]; decide)]
         rw [h0] at hACheck
         linear_combination hACheck + hCopy
-      · rw [if_pos h1]
+      · rw [ite_eq_left h1]
         rw [h1] at hACheck
         linear_combination hACheck
     · rcases hboolv with h0 | h1
-      · rw [if_neg (show ¬ sw = 1 from by rw [h0]; decide)]
+      · rw [ite_eq_right (show ¬ sw = 1 from by rw [h0]; decide)]
         rw [h0] at hBCheck
         linear_combination hBCheck
-      · rw [if_pos h1]
+      · rw [ite_eq_left h1]
         rw [h1] at hBCheck
         linear_combination hBCheck + hCopy
 
@@ -194,14 +194,14 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
     circuit_proof_start [swapGate]
     obtain ⟨hOA, hOB⟩ := h_output
     rcases Bool.eq_false_or_eq_true (wswap { place := place, env := env }) with hs | hs <;>
-      simp only [hs, Bool.false_eq_true, if_false, if_true] at hOA hOB ⊢
+      simp only [hs, Bool.false_eq_true, ite_false, ite_true] at hOA hOB ⊢
     · refine ⟨⟨by ring, by ring, by norm_num⟩, ?_, ?_⟩
       · linear_combination -hOA
       · linear_combination -hOB
     · refine ⟨⟨by ring, by ring, by norm_num⟩, ?_, ?_⟩
-      · rw [if_neg (show ¬ (0 : Fp) = 1 from by decide)]
+      · rw [ite_eq_right (show ¬ (0 : Fp) = 1 from by decide)]
         linear_combination -hOA
-      · rw [if_neg (show ¬ (0 : Fp) = 1 from by decide)]
+      · rw [ite_eq_right (show ¬ (0 : Fp) = 1 from by decide)]
         linear_combination -hOB
 
 @[synthesis_summary_norm]

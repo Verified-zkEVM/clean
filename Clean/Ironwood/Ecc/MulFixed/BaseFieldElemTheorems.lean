@@ -245,7 +245,7 @@ theorem windowScalar_partialSum (ks : ℕ → ℕ) :
       = (∑ j ∈ Finset.range 84, ks j * 8 ^ j) + ks 84 * 8 ^ 84 from
     Finset.sum_range_succ _ _]
   unfold MulFixed.windowScalar
-  rw [if_pos rfl, hsplit]
+  rw [ite_eq_left rfl, hsplit]
   push_cast
   ring
 
@@ -401,7 +401,7 @@ private theorem rowProgram_value (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
         B.u w (FiniteField.val α / 8 ^ w % 8) else 0)
     = rowTailValue B α w := by
   have h8 : FiniteField.val α / 8 ^ w % 8 < 8 := Nat.mod_lt _ (by norm_num)
-  simp only [dif_pos h8]
+  simp only [dite_eq_left h8]
   rfl
 
 /-- The running sum step relation on honest values. -/

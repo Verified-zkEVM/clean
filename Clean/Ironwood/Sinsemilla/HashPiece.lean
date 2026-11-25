@@ -282,9 +282,9 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
     · intro r
       beta_reduce
       by_cases hr : r < n
-      · rw [dif_pos hr]
+      · rw [dite_eq_left hr]
         exact hm ⟨r, hr⟩
-      · rw [dif_neg hr]
+      · rw [dite_eq_right hr]
         norm_num [K]
 
     · -- the running-word chain, from the per-round word relations
@@ -295,10 +295,10 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
       rw [show offset + ↑j + 1 = offset + 1 + ↑j from by omega,
         h_output_zs ↑j j.isLt] at hz
       rcases Nat.eq_zero_or_pos j.val with h0 | hpos
-      · rw [dif_pos h0]
+      · rw [dite_eq_left h0]
         rw [show offset + ↑j = offset from by omega] at hz
         exact hz
-      · rw [dif_neg (by omega)]
+      · rw [dite_eq_right (by omega)]
         rw [show offset + ↑j = offset + 1 + (↑j - 1) from by omega,
           h_output_zs (↑j - 1) (by omega)] at hz
         exact hz
@@ -317,11 +317,11 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
         (fun j => if h : j < n then m ⟨j, h⟩ else 0)
         (fun i => by
           beta_reduce
-          rw [dif_pos i.isLt]
+          rw [dite_eq_left i.isLt]
           exact hm i)
         (fun i => by
           beta_reduce
-          rw [dif_pos i.isLt]
+          rw [dite_eq_left i.isLt]
           have ha := (hspec i).2.2.2
           rw [show offset + (↑i + 1) = offset + ↑i + 1 from by omega]
           exact ha)
@@ -830,9 +830,9 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
     · intro r
       beta_reduce
       by_cases hr : r < w
-      · rw [if_pos hr]
+      · rw [ite_eq_left hr]
         exact hms0 r
-      · rw [if_neg hr]
+      · rw [ite_eq_right hr]
         exact hmw
     · -- the piece recombines from its words
       have hkey := chain_eq_sum (n := w + 1)
@@ -842,28 +842,28 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
         (by
           intro r hr
           beta_reduce
-          rw [if_pos (show r ≤ w by omega)]
+          rw [ite_eq_left (show r ≤ w by omega)]
           rcases Nat.lt_or_ge r w with hrw | hrw
-          · rw [if_pos hrw, if_pos (show r + 1 ≤ w by omega)]
+          · rw [ite_eq_left hrw, ite_eq_left (show r + 1 ≤ w by omega)]
             have hj := hwc ⟨r, hrw⟩
             simp only [circuit_norm] at hj
             rcases Nat.eq_zero_or_pos r with h0r | hposr
             · subst h0r
-              rw [dif_pos rfl] at hj
+              rw [dite_eq_left rfl] at hj
               simpa using hj
-            · rw [dif_neg (by omega)] at hj
+            · rw [dite_eq_right (by omega)] at hj
               rw [show offset + 1 + (r - 1) = offset + r from by omega,
                 show offset + 1 + r = offset + (r + 1) from by omega] at hj
               exact hj
           · obtain rfl : r = w := by omega
-            rw [if_neg (by omega), if_neg (by omega)]
+            rw [ite_eq_right (by omega), ite_eq_right (by omega)]
             rw [hzw]
             ring)
         (by
           beta_reduce
-          rw [if_neg (by omega)])
+          rw [ite_eq_right (by omega)])
       beta_reduce at hkey ⊢
-      rw [if_pos (by omega : 0 ≤ w), Nat.add_zero] at hkey
+      rw [ite_eq_left (by omega : 0 ≤ w), Nat.add_zero] at hkey
       rw [← region_0]
       exact hkey
     · -- the running sums are the suffix recombinations
@@ -877,31 +877,31 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
         (by
           intro sIdx hs
           beta_reduce
-          rw [if_pos hs]
+          rw [ite_eq_left hs]
           have hj := hwc ⟨sIdx, hs⟩
           simp only [circuit_norm] at hj
           rcases Nat.eq_zero_or_pos sIdx with h0r | hposr
           · subst h0r
-            rw [dif_pos rfl] at hj
+            rw [dite_eq_left rfl] at hj
             simpa using hj
-          · rw [dif_neg (by omega)] at hj
+          · rw [dite_eq_right (by omega)] at hj
             rw [show offset + 1 + (sIdx - 1) = offset + sIdx from by omega,
               show offset + 1 + sIdx = offset + (sIdx + 1) from by omega] at hj
             exact hj)
         (by
           beta_reduce
-          rw [if_neg (by omega)]
+          rw [ite_eq_right (by omega)]
           exact hzw)
         (w - i) i (by omega)
       rw [show w - i + 1 = w + 1 - i from by omega] at hsfx
       exact hsfx
     · -- the last row's x_p lands on the generator
       beta_reduce
-      rw [if_neg (show ¬ w < w by omega)]
+      rw [ite_eq_right (show ¬ w < w by omega)]
       linear_combination h1
     · -- the last row's y_p derivation lands on the generator
       beta_reduce
-      rw [if_neg (show ¬ w < w by omega)]
+      rw [ite_eq_right (show ¬ w < w by omega)]
       simp only [yA, xR]
       linear_combination h2y
     · -- the chain contract, from the loop's fold
@@ -910,7 +910,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       rw [← h_output_first_xA] at hAx
       rw [← h_output_first_xA, ← h_output_first_xP, ← h_output_first_lambda1,
         ← h_output_first_lambda2] at hAyA
-      rw [map_range_congr w _ ms0 (fun j hj => if_pos hj)] at hB
+      rw [map_range_congr w _ ms0 (fun j hj => ite_eq_left hj)] at hB
       exact hfold A hAon hAx hAyA B hB
 
   completeness := by

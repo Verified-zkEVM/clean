@@ -848,11 +848,11 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
       obtain ⟨hx, hy, -⟩ := hPW ⟨w, by omega⟩
       rw [MulFixed.windowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
       exact ⟨hx, hy⟩)
-    ⟨if_pos rfl, if_pos rfl⟩
+    ⟨ite_eq_left rfl, ite_eq_left rfl⟩
     (by
       intro j hj1 hj83 hAssumptions
       obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-      rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+      rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)]
       rcases Nat.lt_or_ge j 2 with hj2 | hj2
       · have hj : j = 1 := by omega
         subst hj
@@ -860,11 +860,11 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
         exact hOut
       · have h := hLoopD ⟨j - 2, by omega⟩
         rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
-        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
-        rw [if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega] at hne
-        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega]
         obtain ⟨⟨-, hOut⟩, -⟩ := h ⟨hOnP, hOnQ, hne⟩
         exact hOut)
@@ -879,7 +879,7 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
             • B.point).y := by
     intro j hj1 hj83
     have h := hLadder j hj83
-    rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
+    rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)] at h
     exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 84) : ℕ) : ℤ)
@@ -1161,7 +1161,7 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
     intro w
     rw [hks_def]
     dsimp only
-    rw [dif_pos w.isLt]
+    rw [dite_eq_left w.isLt]
     exact hkf_eq w
   -- ── the per-row window points (the coords rows) ──
   have hWP : ∀ w : Fin 85,
@@ -1246,11 +1246,11 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
         obtain ⟨hx, hy⟩ := hWP ⟨w, by omega⟩
         rw [MulFixed.windowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
         exact ⟨hx, hy⟩)
-      ⟨if_pos rfl, if_pos rfl⟩
+      ⟨ite_eq_left rfl, ite_eq_left rfl⟩
       (by
         intro j hj1 hj83 hAssumptions
         obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-        rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+        rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)]
         rcases Nat.lt_or_ge j 2 with hj2 | hj2
         · -- j = 1: the explicit first chunk (window 1 + window 0)
           have hj : j = 1 := by omega
@@ -1260,16 +1260,16 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
         · -- j ≥ 2: loop chunk j − 2
           have h := hLoopS ⟨j - 2, by omega⟩
           rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
-          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
-          rw [if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega] at hne
-          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega]
           obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
           exact hOut)
     have hI83 := hLadder 83 (by norm_num)
-    rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
+    rw [ite_eq_right (by norm_num : ¬(83 : ℕ) = 0), ite_eq_right (by norm_num : ¬(83 : ℕ) = 0),
       show offset + 83 + 1 = offset + 84 from by omega] at hI83
     rw [← hOax, ← hOay]
     rcases hP : Ecc.MulFixed.partialSum ks 83 • B.point with ⟨px, py⟩

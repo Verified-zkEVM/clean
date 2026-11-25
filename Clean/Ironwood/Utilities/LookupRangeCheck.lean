@@ -731,7 +731,7 @@ def shortRangeCheck (K numBits : ℕ) :
     obtain ⟨hNumBits, hCard⟩ := hA
     -- the short-row valuation: `q_running ∉ [q_lookup]` (distinct indices), so the gated
     -- input reduces to `z_cur` at both rows
-    rw [if_neg (fun h => hDistinct h.symm)] at hc
+    rw [ite_eq_right (fun h => hDistinct h.symm)] at hc
     -- destructure: two memberships (the element cell IS the output — positional), the
     -- `invTwoPowS` constant, the bitshift gate
     obtain ⟨hMemWord, hMemShift, hInvConst, hGate⟩ := hc
@@ -772,7 +772,7 @@ def shortRangeCheck (K numBits : ℕ) :
     obtain ⟨hNumBits, hCard⟩ := hA
     simp only [Placed.toEnvironment_env] at hTableEq hUsable
     -- `q_running` OFF (distinct selectors): the gated rows read `z_cur` (the plain element)
-    rw [if_neg (fun h => hDistinct h.symm)]
+    rw [ite_eq_right (fun h => hDistinct h.symm)]
     -- the caller-assigned element's `.val` bound, off the honest-prover assumption on the
     -- extraction data (the positional cell's verifier-view value = the advice read)
     have hEltLt : (env.advice cfg.runningSum
@@ -1424,7 +1424,7 @@ def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
     output_eq := by
       intro cfg offset input self
       cases strict <;> simp only [rangeCheckBody, circuit_norm, Bool.false_eq_true,
-        if_false, if_true]
+        ite_false, ite_true]
     synthesisSummary_eq := by
       intro cfg offset input self
       apply FloorPlanner.RegionSynthesisSummary.ext
@@ -1459,10 +1459,10 @@ def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
       cases strict with
       | false =>
           keygen_registration [rangeCheckBody]
-          simp only [Bool.false_eq_true, if_false,
+          simp only [Bool.false_eq_true, ite_false,
             RegionOperations.copyCellsAssignedFrom_nil_iff]
       | true =>
-          simp only [rangeCheckBody, if_true, RegionCircuit.operations_bind,
+          simp only [rangeCheckBody, ite_true, RegionCircuit.operations_bind,
             RegionCircuit.operations_pure, operations_copyAdvice, operations_cellAt,
             operations_constrainConstant, RegionOperations.CopyCellsAssigned,
             RegionOperations.copyCellsAssignedFrom_append_iff,
@@ -1570,7 +1570,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     -- resolve the output cells (case on `strict` to compute the tail ops)
     rcases hbstrict : strict with _ | _ <;>
       simp only [hbstrict, circuit_norm,
-        Bool.false_eq_true, if_true, if_false] at _hTailC ⊢ <;>
+        Bool.false_eq_true, ite_true, ite_false] at _hTailC ⊢ <;>
       rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
         show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain]]
     · -- strict = false: telescoped decomposition, strict conjunct already discharged by simp
@@ -1785,7 +1785,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
         intro configInput counts hconfig offset input region
         cases hb : strict with
         | false =>
-            simp only [rangeCheckAtBody, Bool.false_eq_true, if_false,
+            simp only [rangeCheckAtBody, Bool.false_eq_true, ite_false,
               Configure.output_pure, RegionCircuit.operations_bind,
               RegionCircuit.operations_pure, operations_cellAt,
               RegionOperations.CopyCellsAssigned,
@@ -1797,7 +1797,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
               (AssignedCell.of region offset configInput.runningSum)
               offset numWords region []
         | true =>
-            simp only [rangeCheckAtBody, if_true, Configure.output_pure,
+            simp only [rangeCheckAtBody, ite_true, Configure.output_pure,
               RegionCircuit.operations_bind, RegionCircuit.operations_pure,
               operations_cellAt, operations_constrainConstant,
               RegionOperations.CopyCellsAssigned,
@@ -1852,7 +1852,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
     obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hwords
     rcases hbstrict : strict with _ | _ <;>
       simp only [hbstrict, circuit_norm,
-        Bool.false_eq_true, if_true, if_false] at _hTailC h_output ⊢ <;>
+        Bool.false_eq_true, ite_true, ite_false] at _hTailC h_output ⊢ <;>
       obtain ⟨hOz0, hOzLast⟩ := h_output <;>
       rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
         show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain],
@@ -1900,7 +1900,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
         rw [hzn, Nat.div_eq_of_lt heInputLt, Nat.cast_zero]
     · -- ProverSpec, first conjunct: `output_z0` is the positional cell
       cases strict <;>
-        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true] at h_output
+        · simp only [circuit_norm, Bool.false_eq_true, ite_false, ite_true] at h_output
           rw [heCell]
           exact h_output.1.symm
     · -- ProverSpec, C6: `output_zLast = ↑(elt.val / 2^{K·numWords})`
@@ -1908,7 +1908,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
       simp only [zChain] at hzn
       rw [← hzn]
       cases strict <;>
-        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true] at h_output
+        · simp only [circuit_norm, Bool.false_eq_true, ite_false, ite_true] at h_output
           exact h_output.2.symm
 
 @[keygen_norm, keygen_spine]

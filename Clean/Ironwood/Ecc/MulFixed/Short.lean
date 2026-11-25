@@ -838,11 +838,11 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
         obtain ⟨hx, hy⟩ := hWP ⟨w, by omega⟩
         rw [shortWindowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
         exact ⟨hx, hy⟩)
-      ⟨if_pos rfl, if_pos rfl⟩
+      ⟨ite_eq_left rfl, ite_eq_left rfl⟩
       (by
         intro j hj1 hj20 hAssumptions
         obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-        rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+        rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)]
         rcases Nat.lt_or_ge j 2 with hj2 | hj2
         · have hj : j = 1 := by omega
           subst hj
@@ -850,16 +850,16 @@ private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : �
           exact hOut
         · have h := hLoopS ⟨j - 2, by omega⟩
           rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
-          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
-          rw [if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega] at hne
-          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega]
           obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
           exact hOut)
     have hI20 := hLadder 20 (by norm_num)
-    rw [if_neg (by norm_num : ¬(20 : ℕ) = 0), if_neg (by norm_num : ¬(20 : ℕ) = 0),
+    rw [ite_eq_right (by norm_num : ¬(20 : ℕ) = 0), ite_eq_right (by norm_num : ¬(20 : ℕ) = 0),
       show offset + 20 + 1 = offset + 21 from by omega] at hI20
     rw [← hOax, ← hOay]
     rcases hP : Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) 20
@@ -1043,11 +1043,11 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
       obtain ⟨hx, hy, -⟩ := hPW ⟨w, by omega⟩
       rw [shortWindowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
       exact ⟨hx, hy⟩)
-    ⟨if_pos rfl, if_pos rfl⟩
+    ⟨ite_eq_left rfl, ite_eq_left rfl⟩
     (by
       intro j hj1 hj83 hAssumptions
       obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-      rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+      rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)]
       rcases Nat.lt_or_ge j 2 with hj2 | hj2
       · -- j = 1: the explicit first chunk (window 1 + window 0)
         have hj : j = 1 := by omega
@@ -1057,11 +1057,11 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
       · -- j ≥ 2: loop chunk j − 2
         have h := hLoopD ⟨j - 2, by omega⟩
         rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
-        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
-        rw [if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega] at hne
-        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega]
         obtain ⟨⟨-, hOut⟩, -⟩ := h ⟨hOnP, hOnQ, hne⟩
         exact hOut)
@@ -1077,7 +1077,7 @@ private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset 
             (fun t => input_alpha.val / 2 ^ (3 * t) % 8) j • B.point).y := by
     intro j hj1 hj83
     have h := hLadder j hj83
-    rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
+    rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)] at h
     exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 21) : ℕ) : ℤ)
@@ -1929,19 +1929,19 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
       rcases hSignPM with hs | hs <;> rw [hs] <;> ring
     · -- y check
       rcases hSignPM with hs | hs
-      · rw [hs, if_neg hone_ne] at hWyVar
+      · rw [hs, ite_eq_right hone_ne] at hWyVar
         rw [hWyVar]
         ring
-      · rw [hs, if_pos rfl] at hWyVar
+      · rw [hs, ite_eq_left rfl] at hWyVar
         rw [hWyVar]
         ring
     · -- negation check
       rw [hWSign]
       rcases hSignPM with hs | hs
-      · rw [hs, if_neg hone_ne] at hWyVar
+      · rw [hs, ite_eq_right hone_ne] at hWyVar
         rw [hWyVar, hs]
         ring
-      · rw [hs, if_pos rfl] at hWyVar
+      · rw [hs, ite_eq_left rfl] at hWyVar
         rw [hWyVar, hs]
         ring
 

@@ -81,7 +81,7 @@ A circuit body may branch mid-do-block (`do … if c then A else B; …`); the d
 branch to an `ite` of `RegionCircuit`s that otherwise blocks `operations`/`output`/`Constraints`
 from descending. These `apply_ite` companions push each eliminator into both branches so
 `circuit_norm` normalizes them, landing the hypothesis as `if c then P₁ else P₂` over value-level
-props (which `by_cases`/`simp [if_pos]` consumers handle). `bind_ite` floats the branch above a
+props (which `by_cases`/`simp [ite_eq_left]` consumers handle). `bind_ite` floats the branch above a
 `>>=` so the bind-of-`ite` spelling reduces too. -/
 
 @[circuit_norm]

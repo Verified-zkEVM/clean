@@ -615,7 +615,7 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
     rw [region_0, region_1, hzPrev, zRunValue_step input_z (kBitsWindow input_alpha w) iter]
     rcases Bool.dichotomy (kBitsWindow input_alpha w iter) with hb | hb <;>
       rw [hb] at region_2 ⊢ <;>
-      simp only [if_false, Bool.false_eq_true, if_true] at region_2 <;>
+      simp only [ite_false, Bool.false_eq_true, ite_true] at region_2 <;>
       rw [region_2] at tmp_spec ⊢
     · -- bit 0: U = (base.x, −base.y)
       have hUv : ({ x := input_base_x, y := -input_base_y } : Point Fp).Valid := by
@@ -740,8 +740,8 @@ theorem fold_sound {base A0 : Point Fp} (hA0 : A0.Valid) (hbase : base.Valid)
     refine ⟨fun j => if j = k then b else bits' j, ?_, ?_, ?_⟩
     · intro j hj
       rcases Nat.lt_succ_iff_lt_or_eq.mp hj with hj' | rfl
-      · simpa only [if_neg (Nat.ne_of_lt hj')] using hchain j hj'
-      · simpa only [if_pos rfl, ite_true] using hstep
+      · simpa only [ite_eq_right (Nat.ne_of_lt hj')] using hchain j hj'
+      · simpa only [ite_eq_left rfl, ite_true] using hstep
     · rw [houtr, hout, hacc_succ]
     · rw [hacc_succ, ← hout]
       rw [houtr] at hvalidr
@@ -782,7 +782,7 @@ theorem fold_complete {base A0 : Point Fp} (hA0 : A0.Valid) (hbase : base.Valid)
       rcases Nat.eq_zero_or_pos k with hk0 | hkpos
       · subst hk0
         simpa using hz0
-      · rw [if_neg (by omega), show k = (k - 1) + 1 from by omega]
+      · rw [ite_eq_right (by omega), show k = (k - 1) + 1 from by omega]
         exact hzk (k - 1) (by omega)
     obtain ⟨hCk, hacc_succ, hz_succ⟩ := hround ⟨k, by omega⟩ hpre
     dsimp only [] at hCk hacc_succ hz_succ
@@ -1193,10 +1193,10 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       beta_reduce at hstep
       rw [show (b.val + 1) * 2 = 2 * b.val + 2 from by ring] at hstep
       rcases Nat.eq_zero_or_pos b.val with hb0 | hbpos
-      · rw [if_pos hb0]
+      · rw [ite_eq_left hb0]
         rw [show offset + b.val * 2 = offset from by omega, region_0] at hstep
         exact hstep
-      · rw [if_neg (by omega)]
+      · rw [ite_eq_right (by omega)]
         rw [h_output_zs (b.val - 1) (by have := b.isLt; omega),
           show offset + 2 * (b.val - 1) + 2 = offset + b.val * 2 from by omega]
         exact hstep
@@ -1275,10 +1275,10 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         show offset + 2 * b.val + 2 = offset + (b.val + 1) * 2 from by ring, hzb,
         zRunValue_step input_z (kBitsWindow input_alpha w) b.val]
       rcases Nat.eq_zero_or_pos b.val with hb0 | hbpos
-      · rw [if_pos hb0, if_pos hb0]
+      · rw [ite_eq_left hb0, ite_eq_left hb0]
       · have hzb1 := hzN (b.val - 1) (by have := b.isLt; omega)
         beta_reduce at hzb1
-        rw [if_neg (show ¬(b.val = 0) by omega), if_neg (show ¬(b.val = 0) by omega),
+        rw [ite_eq_right (show ¬(b.val = 0) by omega), ite_eq_right (show ¬(b.val = 0) by omega),
           h_output_zs (b.val - 1) (by have := b.isLt; omega),
           show offset + 2 * (b.val - 1) + 2 = offset + (b.val - 1 + 1) * 2 from by ring, hzb1]
     · -- accumulator validity

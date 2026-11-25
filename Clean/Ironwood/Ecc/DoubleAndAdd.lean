@@ -56,17 +56,17 @@ theorem coordinates_of_constraints {A S B : Point Fp}
     mul_left_cancel₀ (by decide : (2 : Fp) ≠ 0) (by linear_combination hYP)
   unfold Point.doubleAndAdd at hstep
   by_cases hc₁ : A = 0 ∨ S = 0 ∨ A.x = S.x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₁] at hstep
     simp at hstep
-  rw [Point.incompleteAdd_def, if_neg hc₁] at hstep
+  rw [Point.incompleteAdd_def, ite_eq_right hc₁] at hstep
   push Not at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S with hR_def
   change Point.incompleteAdd R A = some B at hstep
   by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at hstep
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₂] at hstep
     simp at hstep
-  rw [Point.incompleteAdd_def, if_neg hc₂] at hstep
+  rw [Point.incompleteAdd_def, ite_eq_right hc₂] at hstep
   push Not at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by

@@ -203,7 +203,7 @@ theorem windowScalar_ne_zero {w k : ℕ} (hk : k < 8) :
   have hcard : 9 < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
   unfold windowScalar
   by_cases h84 : w = 84
-  · rw [if_pos h84]
+  · rw [ite_eq_left h84]
     apply offsetWindowScalar_ne_zero (by norm_num) hk
     · rw [offsetAcc_eq]
       exact offsetSum_lt_pow 83
@@ -212,7 +212,7 @@ theorem windowScalar_ne_zero {w k : ℕ} (hk : k < 8) :
     · norm_num [PALLAS_SCALAR_CARD]
     · norm_num [PALLAS_SCALAR_CARD]
     · norm_num [PALLAS_SCALAR_CARD]
-  · rw [if_neg h84]
+  · rw [ite_eq_right h84]
     apply mul_ne_zero
     · rw [show (k : Fq) + 2 = ((k + 2 : ℕ) : Fq) by push_cast; ring,
         Ne, ZMod.natCast_eq_zero_iff]
@@ -228,7 +228,7 @@ theorem windowScalar_val {w k : ℕ} (hw : w < 84) (hk : k < 8) :
           Nat.mul_le_mul (by omega) (Nat.pow_le_pow_right (by norm_num) (by omega))
       _ < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
   unfold windowScalar
-  rw [if_neg (by omega),
+  rw [ite_eq_right (by omega),
     show ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) by push_cast; ring,
     ZMod.val_natCast_of_lt hbound]
 
