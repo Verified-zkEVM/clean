@@ -1159,7 +1159,10 @@ def wbWit (left right : AssignedCell Fp) : WitgenIR Fp 1 :=
 def wcWit (right : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[((bitrange (Sinsemilla.HashPiece.readCell env right).val 5 250 : ℕ) : Fp)]
 
-/-- The MerkleCRH piece widths (25/2/25 words). -/
+/-- The MerkleCRH piece widths (25/2/25 words). Implicit-reducible: `merkleNs.length`
+indexes the hash input's piece vector while the piece literal `#v[a, b, c]` has length `3`,
+so Lean must unfold it while checking implicit arguments. -/
+@[implicit_reducible]
 def merkleNs : List ℕ := [24, 1, 24]
 
 /-- `MerkleInstructions::hash_layer`, layouter-level, in the Rust region sequence: witness `a`,
@@ -1720,17 +1723,11 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                   · apply (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
                       (by decide)).call_copyCellsAssignedFrom _ hconfig.2.1
                     intro cell hcell
-                    rw [HashToPoint.hashCircuit_inputCells, List.mem_map] at hcell
-                    rcases hcell with ⟨assigned, hassigned, rfl⟩
-                    rw [List.mem_iff_getElem] at hassigned
-                    obtain ⟨j, hj, hvalue⟩ := hassigned
-                    have hjcases : j = 0 ∨ j = 1 ∨ j = 2 := by
-                      have : j < 3 := by simpa using hj
-                      omega
-                    rcases hjcases with rfl | rfl | rfl
-                    · simp at hvalue
-                      subst assigned
-                      simp only [List.mem_append]
+                    rw [HashToPoint.hashCircuit_inputCells] at hcell
+                    simp only [Vector.toList_mk, List.map_cons, List.map_nil, List.mem_cons,
+                      List.not_mem_nil, or_false] at hcell
+                    rcases hcell with rfl | rfl | rfl
+                    · simp only [List.mem_append]
                       apply Or.inl
                       apply Or.inl
                       apply Or.inl
@@ -1739,9 +1736,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                       simpa using
                         HashToPoint.witnessMessagePiece_output_cell_assigned
                           configInput.1.sinsemilla (waWit l input.left) i
-                    · simp at hvalue
-                      subst assigned
-                      simp only [List.mem_append]
+                    · simp only [List.mem_append]
                       apply Or.inl
                       apply Or.inr
                       simpa only [HashToPoint.witnessMessagePiece_regionCount,
@@ -1750,9 +1745,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                         HashToPoint.witnessMessagePiece_output_cell_assigned
                           configInput.1.sinsemilla
                             (wbWit input.left input.right) (i + 1 + 2)
-                    · simp at hvalue
-                      subst assigned
-                      simp only [List.mem_append]
+                    · simp only [List.mem_append]
                       apply Or.inr
                       simpa only [HashToPoint.witnessMessagePiece_regionCount,
                         LookupRangeCheck.witnessShortCheck_regionCount,
@@ -3482,7 +3475,9 @@ theorem honestNode_isSome_le (G : Generators) (Q : Point Fp)
 /-! #### The 32-layer fold (`MerklePath::calculate_root`), on `FormalCircuit.foldCall` -/
 
 /-- The layer family: layer `i` is `Layer.circuit` at `l = i` (`% 2 ^ 10` totalizer —
-identity on the 32 layers used). -/
+identity on the 32 layers used). Implicit-reducible: configured handles of a layer are
+typed at either spelling of its circuit. -/
+@[implicit_reducible]
 def layerAt (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ : ℕ)
     (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool) (i : ℕ) :
     FormalCircuit Fp
@@ -3706,7 +3701,9 @@ private theorem retargetLayerConfigured_permutationColumns
   rcases gateConfigured with ⟨gateInput, gateCounts, gateLawful, gateOutput⟩
   rfl
 
-@[keygen_norm]
+/-- Implicit-reducible: its provenance `configLawful` is the first layer's configured
+handle, and handles are checked against that type at implicit transparency. -/
+@[keygen_norm, implicit_reducible]
 def keygenRequirements :
     KeygenRequirements Fp
       (CondSwap.Config × Config × LookupRangeCheck.Config 10)
