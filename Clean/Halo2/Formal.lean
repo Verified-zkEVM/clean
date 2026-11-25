@@ -318,9 +318,9 @@ def configuredProjectionSimproc (reductions : List (Name × Name)) (e : Expr) :
     (handle.getAppArgs ++ args.extract (handleIndex + 1))
   let some (_, lhs, rhs) := (← instantiateMVars (← inferType proof)).eq?
     | return .continue
-  unless lhs == e do
+  unless ← withDefault <| isDefEq lhs e do
     throwError "{reduction} does not reduce {projection} on {constructor}"
-  return .visit { expr := rhs, proof? := some proof }
+  return .visit { expr := rhs, proof? := some (← mkExpectedTypeHint proof (← mkEq e rhs)) }
 
 namespace FormalCircuit
 variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
