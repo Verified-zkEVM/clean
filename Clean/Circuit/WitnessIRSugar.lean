@@ -121,29 +121,29 @@ instance : Coe (FExpr F) (WitgenIR F 1) := ⟨.ofFExpr⟩
 so evaluation would get stuck on operator-sugared IR. Desugar to constructors in
 `circuit_norm` via per-operator rfl-lemmas; the evaluators' own match equations then apply. -/
 
-@[circuit_norm] theorem FExpr.add_def (x y : FExpr F) : x + y = .add x y := rfl
-@[circuit_norm] theorem FExpr.mul_def (x y : FExpr F) : x * y = .mul x y := rfl
-@[circuit_norm] theorem FExpr.inv_def (x : FExpr F) : x⁻¹ = .inv x := rfl
-@[circuit_norm] theorem FExpr.neg_def [Field F] (x : FExpr F) : -x = Witgen.FExprOver.neg x := rfl
-@[circuit_norm] theorem FExpr.sub_def [Field F] (x y : FExpr F) : x - y = Witgen.FExprOver.sub x y := rfl
+@[circuit_norm] theorem FExpr.add_def {V : Type} (x y : Witgen.FExprOver F V) : x + y = .add x y := rfl
+@[circuit_norm] theorem FExpr.mul_def {V : Type} (x y : Witgen.FExprOver F V) : x * y = .mul x y := rfl
+@[circuit_norm] theorem FExpr.inv_def {V : Type} (x : Witgen.FExprOver F V) : x⁻¹ = .inv x := rfl
+@[circuit_norm] theorem FExpr.neg_def {V : Type} [Field F] (x : Witgen.FExprOver F V) : -x = Witgen.FExprOver.neg x := rfl
+@[circuit_norm] theorem FExpr.sub_def {V : Type} [Field F] (x y : Witgen.FExprOver F V) : x - y = Witgen.FExprOver.sub x y := rfl
 
-@[circuit_norm] theorem U64Expr.add_def (x y : U64Expr F) : x + y = .add x y := rfl
-@[circuit_norm] theorem U64Expr.mul_def (x y : U64Expr F) : x * y = .mul x y := rfl
-@[circuit_norm] theorem U64Expr.div_def (x y : U64Expr F) : x / y = .div x y := rfl
-@[circuit_norm] theorem U64Expr.hDiv_def (x : U64Expr F) (m : ℕ) :
-  x / m = U64Expr.div x (.const (UInt64.ofNat m)) := rfl
-@[circuit_norm] theorem U64Expr.mod_def (x y : U64Expr F) : x % y = .mod x y := rfl
-@[circuit_norm] theorem U64Expr.hMod_def (x : U64Expr F) (m : ℕ) :
-  x % m = U64Expr.mod x (.const (UInt64.ofNat m)) := rfl
-@[circuit_norm] theorem U64Expr.land_def (x y : U64Expr F) : x &&& y = .land x y := rfl
-@[circuit_norm] theorem U64Expr.lor_def (x y : U64Expr F) : x ||| y = .lor x y := rfl
-@[circuit_norm] theorem U64Expr.lxor_def (x y : U64Expr F) : x ^^^ y = .lxor x y := rfl
-@[circuit_norm] theorem U64Expr.shiftL_def (x y : U64Expr F) : x <<< y = .shiftL x y := rfl
-@[circuit_norm] theorem U64Expr.shiftR_def (x y : U64Expr F) : x >>> y = .shiftR x y := rfl
-@[circuit_norm] theorem U64Expr.hShiftL_def (x : U64Expr F) (m : ℕ) :
-  x <<< m = U64Expr.shiftL x (.const (UInt64.ofNat m)) := rfl
-@[circuit_norm] theorem U64Expr.hShiftR_def (x : U64Expr F) (m : ℕ) :
-  x >>> m = U64Expr.shiftR x (.const (UInt64.ofNat m)) := rfl
+@[circuit_norm] theorem U64Expr.add_def {V : Type} (x y : Witgen.U64ExprOver F V) : x + y = .add x y := rfl
+@[circuit_norm] theorem U64Expr.mul_def {V : Type} (x y : Witgen.U64ExprOver F V) : x * y = .mul x y := rfl
+@[circuit_norm] theorem U64Expr.div_def {V : Type} (x y : Witgen.U64ExprOver F V) : x / y = .div x y := rfl
+@[circuit_norm] theorem U64Expr.hDiv_def {V : Type} (x : Witgen.U64ExprOver F V) (m : ℕ) :
+  x / m = Witgen.U64ExprOver.div x (.const (UInt64.ofNat m)) := rfl
+@[circuit_norm] theorem U64Expr.mod_def {V : Type} (x y : Witgen.U64ExprOver F V) : x % y = .mod x y := rfl
+@[circuit_norm] theorem U64Expr.hMod_def {V : Type} (x : Witgen.U64ExprOver F V) (m : ℕ) :
+  x % m = Witgen.U64ExprOver.mod x (.const (UInt64.ofNat m)) := rfl
+@[circuit_norm] theorem U64Expr.land_def {V : Type} (x y : Witgen.U64ExprOver F V) : x &&& y = .land x y := rfl
+@[circuit_norm] theorem U64Expr.lor_def {V : Type} (x y : Witgen.U64ExprOver F V) : x ||| y = .lor x y := rfl
+@[circuit_norm] theorem U64Expr.lxor_def {V : Type} (x y : Witgen.U64ExprOver F V) : x ^^^ y = .lxor x y := rfl
+@[circuit_norm] theorem U64Expr.shiftL_def {V : Type} (x y : Witgen.U64ExprOver F V) : x <<< y = .shiftL x y := rfl
+@[circuit_norm] theorem U64Expr.shiftR_def {V : Type} (x y : Witgen.U64ExprOver F V) : x >>> y = .shiftR x y := rfl
+@[circuit_norm] theorem U64Expr.hShiftL_def {V : Type} (x : Witgen.U64ExprOver F V) (m : ℕ) :
+  x <<< m = Witgen.U64ExprOver.shiftL x (.const (UInt64.ofNat m)) := rfl
+@[circuit_norm] theorem U64Expr.hShiftR_def {V : Type} (x : Witgen.U64ExprOver F V) (m : ℕ) :
+  x >>> m = Witgen.U64ExprOver.shiftR x (.const (UInt64.ofNat m)) := rfl
 
 /-- The `u64` value of a circuit expression, as a witness-IR expression: `x.val`. -/
 abbrev Expression.val (e : Expression F) : U64Expr F := .val (.expr e)
