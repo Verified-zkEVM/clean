@@ -1804,7 +1804,7 @@ private theorem synthesize_keygenRegistered
         input i
     case hgates =>
       intro gate hgate
-      simp only [mainConfigured, FormalCircuit.Configured.ofPure_gates,
+      simp only [mainConfigured, FormalCircuit.Configured.reduceGates,
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hgate
@@ -1815,7 +1815,7 @@ private theorem synthesize_keygenRegistered
       aesop
     case hlookups =>
       intro argument hargument
-      simp only [mainConfigured, FormalCircuit.Configured.ofPure_lookups,
+      simp only [mainConfigured, FormalCircuit.Configured.reduceLookups,
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hargument
@@ -1826,7 +1826,7 @@ private theorem synthesize_keygenRegistered
       aesop
     case hfixedColumns =>
       intro column hcolumn
-      simp only [mainConfigured, FormalCircuit.Configured.ofPure_fixedColumns,
+      simp only [mainConfigured, FormalCircuit.Configured.reduceFixedColumns,
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hcolumn
@@ -1838,7 +1838,7 @@ private theorem synthesize_keygenRegistered
     case hpermutationColumns =>
       intro column hcolumn
       simp only [mainConfigured,
-        FormalCircuit.Configured.ofPure_permutationColumns,
+        FormalCircuit.Configured.reducePermutationColumns,
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hcolumn
@@ -1957,7 +1957,7 @@ private theorem synthesize_copyCellsAssigned
         (mainConfigured configInput counts hconfig) input self
     intro cell hcell
     simp only [mainConfigured,
-      FormalCircuit.Configured.ofPure_inputCells,
+      FormalCircuit.Configured.reduceInputCells,
       FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
       FormalRegionCircuit.keygenRequirements,
       ElaboratedRegionCircuit.keygenRequirements,

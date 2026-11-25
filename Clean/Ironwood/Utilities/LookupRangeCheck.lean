@@ -2286,10 +2286,6 @@ theorem witnessCheckDecomposed_lookupSelectorAssignmentsAgree
     ((witnessCheckDecomposed cfg w).operations i)
       |>.LookupSelectorAssignmentsAgree := by
   simp only [witnessCheckDecomposed, circuit_norm, keygen_norm, keygen_spine]
-  apply (RegionOperations.forall_lookupSelectorAssignmentsAgreeWith_cons_iff
-    (by trivial)).mpr
-  exact (rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).call_lookupSelectorAssignmentsAgree cfg
-    (FormalRegionCircuit.Configured.ofOutput (rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)) cfg {} ()) 0 () i
 
 /-- The decomposed witness wrapper preserves the range-check lookup's physical
 selector anchor. -/
@@ -2524,10 +2520,6 @@ theorem witnessShortCheck_lookupSelectorAssignmentsAgree
     ((witnessShortCheck K numBits cfg w).operations i)
       |>.LookupSelectorAssignmentsAgree := by
   simp only [witnessShortCheck, circuit_norm, keygen_norm, keygen_spine]
-  apply (RegionOperations.forall_lookupSelectorAssignmentsAgreeWith_cons_iff
-    (by trivial)).mpr
-  exact (shortRangeCheck K numBits).call_lookupSelectorAssignmentsAgree cfg
-    (FormalRegionCircuit.Configured.ofOutput (shortRangeCheck K numBits) cfg {} ()) 0 () i
 
 /-- The short witness wrapper preserves the range-check lookup's physical
 selector anchor. -/
@@ -2823,10 +2815,6 @@ theorem witnessCheck_lookupSelectorAssignmentsAgree
     ((witnessCheck K numWords strict cfg w hstrict).operations i)
       |>.LookupSelectorAssignmentsAgree := by
   simp only [witnessCheck, circuit_norm, keygen_norm, keygen_spine]
-  apply (RegionOperations.forall_lookupSelectorAssignmentsAgreeWith_cons_iff
-    (by trivial)).mpr
-  exact (rangeCheckAt K numWords strict hstrict).call_lookupSelectorAssignmentsAgree cfg
-    (FormalRegionCircuit.Configured.ofOutput (rangeCheckAt K numWords strict hstrict) cfg {} ()) 0 () i
 
 /-- The witness wrapper preserves the range-check lookup's physical selector
 anchor. -/

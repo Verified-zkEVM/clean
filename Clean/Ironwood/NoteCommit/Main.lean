@@ -1383,16 +1383,16 @@ private theorem pureRegionCall_keygenRegistered
   let configured := FormalCircuit.Configured.ofPure
     lifted cfg hconfigured hliftedConfigure
   apply lifted.call_keygenRegistered cfg configured input self
-  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_gates,
+  · simpa only [configured, lifted, FormalCircuit.Configured.reduceGates,
       FormalRegionCircuit.toFormal_keygenRequirements] using hgates
-  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_lookups,
+  · simpa only [configured, lifted, FormalCircuit.Configured.reduceLookups,
       FormalRegionCircuit.toFormal_keygenRequirements] using hlookups
-  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_fixedColumns,
+  · simpa only [configured, lifted, FormalCircuit.Configured.reduceFixedColumns,
       FormalRegionCircuit.toFormal_keygenRequirements] using hfixedColumns
   · simpa only [configured, lifted,
-      FormalCircuit.Configured.ofPure_permutationColumns,
+      FormalCircuit.Configured.reducePermutationColumns,
       FormalRegionCircuit.toFormal_keygenRequirements] using hpermutationColumns
-  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_inputCells,
+  · simpa only [configured, lifted, FormalCircuit.Configured.reduceInputCells,
       FormalRegionCircuit.toFormal_keygenRequirements] using hinputCells
 
 private theorem pureRegionCall_lookupSelectorAssignmentsAgree
@@ -2161,7 +2161,7 @@ private theorem pureRegionCall_copyCellsAssignedFrom
   let configured := FormalCircuit.Configured.ofPure
     lifted cfg hconfigured hliftedConfigure
   apply lifted.call_copyCellsAssignedFrom cfg configured input self
-  simpa only [configured, lifted, FormalCircuit.Configured.ofPure_inputCells,
+  simpa only [configured, lifted, FormalCircuit.Configured.reduceInputCells,
     FormalRegionCircuit.toFormal_keygenRequirements,
     List.forall_iff_forall_mem] using
       List.forall_iff_forall_mem.mp hinputCells

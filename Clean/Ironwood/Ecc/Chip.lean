@@ -816,11 +816,12 @@ def configureCertificate (advices : Fin 10 → Column .advice)
   let fullCounts := fullProgram.finalCounts mulFixedCounts
   let shortProgram := MulFixed.Short.configure mulFixedConfig
   let shortCounts := shortProgram.finalCounts fullCounts
-  have hrunningColumns : ∀ column,
-      column ∈ MulFixed.runningSumKeygenRequirements.permutationColumns
-        mulFixedConfig core.addIncomplete.configured →
-      column ∈ (configureContext advices lagrangeCoeffs rangeCheck counts).permutationColumns := by
-    intro column hcolumn
+  have hrunningColumns :
+      ∀ (configured : MulFixed.runningSumKeygenRequirements.configLawful mulFixedConfig) column,
+        column ∈ MulFixed.runningSumKeygenRequirements.permutationColumns
+          mulFixedConfig configured →
+        column ∈ (configureContext advices lagrangeCoeffs rangeCheck counts).permutationColumns := by
+    intro configured column hcolumn
     rw [MulFixed.configure_output_runningSumPermutationColumns] at hcolumn
     have haddColumns : Add.permutationColumns addConfig =
         ([advices 0, advices 1, advices 2, advices 3] : List AnyColumn) :=
@@ -1030,7 +1031,7 @@ def configureCertificate (advices : Fin 10 → Column .advice)
       simp only [MulFixed.Short.circuit, FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements, List.mem_append] at hcolumn
       rcases hcolumn with (hrunning | hadd) | hshort
-      · exact hrunningColumns column hrunning
+      · exact hrunningColumns _ column hrunning
       · exact core.add.permutationColumns_of_configured column hadd
       · apply List.mem_cons_of_mem
         unfold configure
@@ -1101,7 +1102,7 @@ def configureCertificate (advices : Fin 10 → Column .advice)
       simp only [MulFixed.FullWidth.circuit, FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements, List.mem_append] at hcolumn
       rcases hcolumn with (hrunning | hadd) | hfull
-      · exact hrunningColumns column hrunning
+      · exact hrunningColumns _ column hrunning
       · exact core.add.permutationColumns_of_configured column hadd
       · apply List.mem_cons_of_mem
         unfold configure
@@ -1187,7 +1188,7 @@ def configureCertificate (advices : Fin 10 → Column .advice)
         FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
         MulFixed.BaseFieldElem.keygenRequirements, List.mem_append] at hcolumn
       rcases hcolumn with ((hrunning | hadd) | hrange) | hbase
-      · exact hrunningColumns column hrunning
+      · exact hrunningColumns _ column hrunning
       · exact core.add.permutationColumns_of_configured column hadd
       · simp only [List.mem_singleton] at hrange
         rw [hrange]

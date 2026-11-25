@@ -1032,28 +1032,8 @@ def assign_region (numBits : ℕ) (w : ℕ) :
               · change Add.add.Configured configInput.2
                 exact hconfig
               · rfl
-            case hgates =>
-              intro gate hgate
-              simp only [FormalRegionCircuit.Configured.ofPure_gates,
-                FormalRegionCircuit.keygenRequirements,
-                ElaboratedRegionCircuit.keygenRequirements, round,
-                List.mem_append, List.mem_cons, List.not_mem_nil,
-                or_false] at hgate
-              simp only [configure_delta_gates, List.mem_append,
-                List.mem_singleton]
-              rcases hgate with hgate | hgate
-              · exact Or.inr hgate
-              · exact Or.inl hgate
-            case hlookups =>
-              intro argument hargument
-              set_option backward.isDefEq.respectTransparency true in
-              simpa only [FormalRegionCircuit.Configured.ofPure_lookups,
-                FormalRegionCircuit.keygenRequirements,
-                ElaboratedRegionCircuit.keygenRequirements,
-                configure_delta_lookups, List.mem_append, List.not_mem_nil,
-                or_false, round, FormalRegionCircuit.Configured.lookups,
-                FormalRegionCircuit.Configured.ofPure, Configure.delta_pure,
-                List.mem_append, List.not_mem_nil, or_false, id] using hargument
+            case hgates => keygen_registration
+            case hlookups => keygen_registration
             case hfixedColumns => keygen_registration
             case hpermutationColumns => keygen_registration
             case hinputCells =>

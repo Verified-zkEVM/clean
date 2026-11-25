@@ -457,12 +457,12 @@ theorem synth_keygenRegistered
     case hfixedColumns =>
       intro column hcolumn
       simp only [childConfigured, child,
-        FormalCircuit.Configured.ofPure_fixedColumns] at hcolumn
+        FormalCircuit.Configured.reduceFixedColumns] at hcolumn
       contradiction
     case hpermutationColumns =>
       intro column hcolumn
       simpa only [childConfigured, child,
-        FormalCircuit.Configured.ofPure_permutationColumns] using
+        FormalCircuit.Configured.reducePermutationColumns] using
           hCanonicity column hcolumn
     case hinputCells => keygen_registration
 
