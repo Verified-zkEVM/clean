@@ -9,7 +9,7 @@ The shared witgen IR (`Clean/Circuit/WitnessIR.lean`), instantiated for halo2: v
 atoms are cell references, environments are placed prover environments. Witness
 generation is thereby exportable for halo2 circuits exactly as for main Clean ones.
 
-The main-Clean-specific atoms are inert here: `envGet` (no tape indices) and `dataGet`
+The main-Clean-specific atoms are inert here: `envRange` (no tape indices) and `dataGet`
 (no committed prover data — lookup tables are fixed columns) evaluate to junk and are
 rejected by export well-formedness. `hintGet` works, reading the prover hints.
 -/
@@ -23,7 +23,7 @@ variable {F : Type}
 instance [Field F] : Witgen.WitgenEnv F (Placed ProverEnvironment F) (AssignedCell F) where
   readVar pe c := c.eval pe.place pe.env.toEnvironment
   get _ _ := 0
-  data _ := fun _ _ => #[]
+  data _ := .empty F
   hint pe := pe.env.hint
 
 /-- Halo2-instance witness reads normalize to the assigned-cell eval (the counterpart of
@@ -38,8 +38,8 @@ lemma WitgenEnv.readVar_halo2 [Field F] (pe : Placed ProverEnvironment F)
 abbrev FExpr (F : Type) := Witgen.FExprOver F (AssignedCell F)
 
 instance [Field F] : Inhabited (FExpr F) := ⟨.const 0⟩
-/-- Halo2 Nat-sorted witness expressions. -/
-abbrev NExpr (F : Type) := Witgen.NExprOver F (AssignedCell F)
+/-- Halo2 u64-sorted witness expressions. -/
+abbrev U64Expr (F : Type) := Witgen.U64ExprOver F (AssignedCell F)
 /-- Halo2 witness conditions. -/
 abbrev BExpr (F : Type) := Witgen.BExprOver F (AssignedCell F)
 /-- Halo2 witness-generation programs. -/
@@ -157,61 +157,60 @@ end Unconstrained
 
 export Unconstrained (unconstrained)
 
-/-- Prover-only Nat-sorted scalar input (a value the prover knows, entering witgen at
-Nat sort — halo2's `Value<pallas::Scalar>`-style, e.g. a fixed-base mul scalar): the
-`Var` view is a builder computation yielding a Nat-sorted witness expression, the
+/-- Prover-only u64-sorted input (a value the prover knows, entering witgen at u64 sort):
+the `Var` view is a builder computation yielding a u64-sorted witness expression, the
 prover value is the number. -/
-structure UnconstrainedNat (F : Type) where
-  program : Witgen.MOver F (AssignedCell F) (NExpr F)
+structure UnconstrainedU64 (F : Type) where
+  program : Witgen.MOver F (AssignedCell F) (U64Expr F)
 
-namespace UnconstrainedNat
+namespace UnconstrainedU64
 
-@[reducible] instance : CircuitType UnconstrainedNat where
-  Var F := Witgen.MOver F (AssignedCell F) (NExpr F)
+@[reducible] instance : CircuitType UnconstrainedU64 where
+  Var F := Witgen.MOver F (AssignedCell F) (U64Expr F)
   Value := unit
-  ProverValue _ := ℕ
+  ProverValue _ := UInt64
   evalVerifier _ _ := ()
-  evalProver pe program := Witgen.MOver.evalNat pe program
+  evalProver pe program := Witgen.MOver.evalU64 pe program
 
-instance : ProvableType (Halo2.Value UnconstrainedNat) :=
+instance : ProvableType (Halo2.Value UnconstrainedU64) :=
   (inferInstance : ProvableType unit)
 
-@[circuit_norm] lemma var_of_unconstrainedNat {F : Type} :
-    Halo2.Var UnconstrainedNat F = Witgen.MOver F (AssignedCell F) (NExpr F) := rfl
-@[circuit_norm] lemma value_of_unconstrainedNat {F : Type} :
-    Halo2.Value UnconstrainedNat F = Unit := rfl
-@[circuit_norm] lemma proverValue_of_unconstrainedNat {F : Type} :
-    Halo2.ProverValue UnconstrainedNat F = ℕ := rfl
+@[circuit_norm] lemma var_of_unconstrainedU64 {F : Type} :
+    Halo2.Var UnconstrainedU64 F = Witgen.MOver F (AssignedCell F) (U64Expr F) := rfl
+@[circuit_norm] lemma value_of_unconstrainedU64 {F : Type} :
+    Halo2.Value UnconstrainedU64 F = Unit := rfl
+@[circuit_norm] lemma proverValue_of_unconstrainedU64 {F : Type} :
+    Halo2.ProverValue UnconstrainedU64 F = UInt64 := rfl
 
-instance {F : Type} : Inhabited (Var UnconstrainedNat F) :=
-  ⟨(pure (.const 0) : Witgen.MOver F (AssignedCell F) (NExpr F))⟩
+instance {F : Type} : Inhabited (Var UnconstrainedU64 F) :=
+  ⟨(pure (.const 0) : Witgen.MOver F (AssignedCell F) (U64Expr F))⟩
 
 variable {F : Type} [FiniteField F]
 
 @[reducible] instance : Eval (Placed Environment F)
-    (Witgen.MOver F (AssignedCell F) (NExpr F)) Unit :=
-  CircuitType.verifierEval UnconstrainedNat
+    (Witgen.MOver F (AssignedCell F) (U64Expr F)) Unit :=
+  CircuitType.verifierEval UnconstrainedU64
 @[reducible] instance : Eval (Placed ProverEnvironment F)
-    (Witgen.MOver F (AssignedCell F) (NExpr F)) ℕ :=
-  CircuitType.proverEval UnconstrainedNat
+    (Witgen.MOver F (AssignedCell F) (U64Expr F)) UInt64 :=
+  CircuitType.proverEval UnconstrainedU64
 
-@[circuit_norm] lemma eval_unconstrainedNat
-    (pe : Placed Environment F) (v : Var UnconstrainedNat F) :
-    eval pe (v : Var UnconstrainedNat F) = () := rfl
+@[circuit_norm] lemma eval_unconstrainedU64
+    (pe : Placed Environment F) (v : Var UnconstrainedU64 F) :
+    eval pe (v : Var UnconstrainedU64 F) = () := rfl
 
-@[circuit_norm] lemma eval_unconstrainedNat_prover
-    (pe : Placed ProverEnvironment F) (v : Var UnconstrainedNat F) :
-    eval pe v = Witgen.MOver.evalNat pe v := by
+@[circuit_norm] lemma eval_unconstrainedU64_prover
+    (pe : Placed ProverEnvironment F) (v : Var UnconstrainedU64 F) :
+    eval pe v = Witgen.MOver.evalU64 pe v := by
   with_unfolding_all rfl
 
-@[circuit_norm] lemma eval_unconstrainedNat_prover' :
+@[circuit_norm] lemma eval_unconstrainedU64_prover' :
     @Eval.eval (Placed ProverEnvironment F)
-        (Witgen.MOver F (AssignedCell F) (NExpr F)) ℕ
-        (CircuitType.proverEval UnconstrainedNat)
-      = Witgen.MOver.evalNat := by
+        (Witgen.MOver F (AssignedCell F) (U64Expr F)) UInt64
+        (CircuitType.proverEval UnconstrainedU64)
+      = Witgen.MOver.evalU64 := by
   with_unfolding_all rfl
 
-end UnconstrainedNat
+end UnconstrainedU64
 
 /-- Prover-only Bool-sorted input: the `Var` view is a builder computation yielding a
 witness condition, the prover value is the boolean. -/
@@ -312,9 +311,9 @@ theorem WitgenIROver.getElem_eval_ofFExpr (e : FExprOver F V) (env : Env) (i : �
   simp [WitgenIROver.ofFExpr, WitgenIROver.eval, VExprOver.eval, evalSteps]
 
 @[circuit_norm ↓]
-theorem WitgenIROver.getElem_eval_ofFExprs {n : ℕ} (es : Vector (FExprOver F V) n) (env : Env)
-    (i : ℕ) (hi : i < n) :
-    ((WitgenIROver.ofFExprs es).eval env)[i] = es[i].eval { env } := by
-  simp [WitgenIROver.ofFExprs, WitgenIROver.eval, VExprOver.eval, evalSteps]
+theorem WitgenIROver.getElem_eval_ofCompositeFExpr {value : TypeMap} [ProvableType value]
+    (e : value (FExprOver F V)) (env : Env) (i : ℕ) (hi : i < size value) :
+    ((WitgenIROver.ofCompositeFExpr e).eval env)[i] = (toElements e)[i].eval { env } := by
+  simp [WitgenIROver.ofCompositeFExpr, WitgenIROver.eval, VExprOver.eval, evalSteps]
 
 end Witgen
