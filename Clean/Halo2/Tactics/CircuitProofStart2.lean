@@ -726,14 +726,13 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     else
       if sound then ``FormalCircuit.soundness_iff else ``FormalCircuit.completeness_iff
   let idx : Name := if region then `self else `i₀
+  CircuitProofStart.applyIffMpr iffName
   if sound then
-    run? (← `(tactic| rw [$(mkIdent iffName):ident]))
     run? (← `(tactic| intro $(mkIdent idx):ident $(mkIdent `env):ident
       $(mkIdent `input_var):ident $(mkIdent `input):ident $(mkIdent `output):ident
       $(mkIdent `input_eq):ident $(mkIdent `output_eq):ident $(mkIdent `env_assumptions):ident
       $(mkIdent `assumptions):ident $(mkIdent `constraints):ident))
   else
-    run? (← `(tactic| rw [$(mkIdent iffName):ident]))
     run? (← `(tactic| intro $(mkIdent idx):ident $(mkIdent `env):ident
       $(mkIdent `input_var):ident $(mkIdent `input):ident $(mkIdent `output):ident
       $(mkIdent `input_eq):ident $(mkIdent `output_eq):ident $(mkIdent `witnesses):ident
