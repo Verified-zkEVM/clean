@@ -1049,7 +1049,6 @@ def rangeCheckRound (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (idx 
   let _z ← assignAdvice cfg.runningSum (row + 1) (zWitness K (idx + 1) element)
   return ()
 
-
 /-- The running row enforces membership of its adjacent-advice difference. -/
 theorem rangeCheckRound_constraints (K : ℕ) (cfg : Config K)
     (element : AssignedCell Fp) (idx row self : ℕ)
@@ -2292,7 +2291,6 @@ theorem witnessCheckDecomposed_lookupSelectorAssignmentsAgree
   exact (rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).call_lookupSelectorAssignmentsAgree cfg
     (FormalRegionCircuit.Configured.ofOutput (rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)) cfg {} ()) 0 () i
 
-
 /-- The decomposed witness wrapper preserves the range-check lookup's physical
 selector anchor. -/
 @[keygen_norm, keygen_spine]
@@ -2530,7 +2528,6 @@ theorem witnessShortCheck_lookupSelectorAssignmentsAgree
     (by trivial)).mpr
   exact (shortRangeCheck K numBits).call_lookupSelectorAssignmentsAgree cfg
     (FormalRegionCircuit.Configured.ofOutput (shortRangeCheck K numBits) cfg {} ()) 0 () i
-
 
 /-- The short witness wrapper preserves the range-check lookup's physical
 selector anchor. -/
@@ -2831,7 +2828,6 @@ theorem witnessCheck_lookupSelectorAssignmentsAgree
   exact (rangeCheckAt K numWords strict hstrict).call_lookupSelectorAssignmentsAgree cfg
     (FormalRegionCircuit.Configured.ofOutput (rangeCheckAt K numWords strict hstrict) cfg {} ()) 0 () i
 
-
 /-- The witness wrapper preserves the range-check lookup's physical selector
 anchor. -/
 @[keygen_norm, keygen_spine]
@@ -2886,7 +2882,6 @@ theorem witnessCheck_keygenRegistered
   unfold witnessCheck
   keygen_registration
 
-
 @[keygen_norm, keygen_helper]
 theorem witnessCheckDecomposed_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
@@ -2899,7 +2894,6 @@ theorem witnessCheckDecomposed_keygenRegistered
       gates lookups fixedColumns permutationColumns := by
   unfold witnessCheckDecomposed
   keygen_registration
-
 
 /-- A short-range-check capability exported by the shared range-check configurer. -/
 def shortRangeConfigureCertificate (K numBits : ℕ)
