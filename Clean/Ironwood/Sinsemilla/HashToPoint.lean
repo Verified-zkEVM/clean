@@ -425,57 +425,20 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
             input.pieces.toList.map (·.cell) }
       registered := by
         intro cfg counts hconfig offset input region
-        let hchain : (Sinsemilla.Chain.circuit G ns fun _ => Q.y).Configured cfg :=
-          FormalRegionCircuit.Configured.ofPure _ cfg () rfl
         keygen_registration [hashRegionSynthesize]
-        apply (Sinsemilla.Chain.circuit G ns fun _ => Q.y)
-          |>.callPacked_keygenRegistered cfg hchain offset input region
-        · simp only [hchain, FormalRegionCircuit.Configured.ofPure_gates,
-            FormalRegionCircuit.keygenRequirements,
-            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
-            List.mem_cons] at *
-          aesop
-        · simp only [hchain, FormalRegionCircuit.Configured.ofPure_lookups,
-            FormalRegionCircuit.keygenRequirements,
-            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
-            List.mem_cons] at *
-          aesop
-        · simp only [hchain,
-            FormalRegionCircuit.Configured.ofPure_fixedColumns,
-            FormalRegionCircuit.keygenRequirements,
-            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
-            List.mem_singleton] at *
-          simp_all
-        · simp only [hchain,
-            FormalRegionCircuit.Configured.ofPure_permutationColumns,
-            FormalRegionCircuit.keygenRequirements,
-            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
-            List.mem_cons, List.mem_append, List.mem_map] at *
-          aesop
-        · simp only [hchain, FormalRegionCircuit.Configured.ofPure_inputCells,
-            FormalRegionCircuit.keygenRequirements,
-            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
-            List.forall_iff_forall_mem]
-          intro cell hcell
-          simp only [List.mem_append, List.mem_cons, List.mem_map]
-          right
-          rcases List.mem_map.mp hcell with ⟨assigned, hassigned, rfl⟩
-          exact ⟨assigned.cell, ⟨assigned, hassigned, rfl⟩, rfl⟩
+        apply (Sinsemilla.Chain.circuit G ns fun _ => Q.y).callPacked_keygenRegistered cfg
+          (.ofPure _ cfg () rfl) offset input region
+        case hgates => keygen_registration
+        case hlookups => keygen_registration
+        case hfixedColumns => keygen_registration
+        case hpermutationColumns => keygen_registration
+        case hinputCells =>
+          keygen_registration
+          grind [List.forall_iff_forall_mem]
       copyCellsAssigned := by
         intro cfg counts hconfig offset input region
-        let hchain : (Sinsemilla.Chain.circuit G ns fun _ => Q.y).Configured cfg :=
-          FormalRegionCircuit.Configured.ofPure _ cfg () rfl
         keygen_registration [hashRegionSynthesize, z1Cells]
-        · apply (Sinsemilla.Chain.circuit G ns fun _ => Q.y)
-            |>.callPacked_copyCellsAssignedFrom cfg hchain offset input region
-          intro cell hcell
-          simp only [hchain, FormalRegionCircuit.Configured.ofPure_inputCells,
-            FormalRegionCircuit.keygenRequirements,
-            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
-            List.mem_map] at hcell
-          simp only [List.mem_cons]
-          exact Or.inr (Or.inr (List.mem_map.mpr hcell))
-        · exact RegionOperations.CopyCellsAssignedFrom.nil _
+        exact RegionOperations.CopyCellsAssignedFrom.nil _
       fixedAssignmentsAgree := by
         intro cfg counts hconfig offset input region
         let child := Sinsemilla.Chain.circuit G ns fun _ => Q.y
@@ -483,6 +446,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           FormalRegionCircuit.Configured.ofPure _ cfg () rfl
         have hchild := child.call_fixedAssignmentsAgree
           cfg hchain offset input region
+        have hchildColumns : hchain.fixedColumns = [cfg.qS2] := rfl
         unfold RegionOperations.FixedAssignmentsAgree at hchild ⊢
         intro column row left right hleft hright
         rw [hashRegionSynthesize_assignFixed_mem_iff] at hleft hright
@@ -490,25 +454,15 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           rcases hright with hright | hright
         · exact hleft.2.2.trans hright.2.2.symm
         · have hcolumn : column = cfg.qS2 := by
-            have := child.fixedColumn_mem_of_mem_call
-              cfg hchain offset input region column row right hright
-            simpa only [hchain,
-              FormalRegionCircuit.Configured.ofPure_fixedColumns,
-              FormalRegionCircuit.keygenRequirements, child,
-              Sinsemilla.Chain.circuit,
-              ElaboratedRegionCircuit.keygenRequirements,
-              List.mem_singleton] using this
+            simpa only [hchildColumns, List.mem_singleton] using
+              child.fixedColumn_mem_of_mem_call cfg hchain offset input region column row
+                right hright
           exact False.elim (hconfig.qS2_ne_fixedYQ
             (hcolumn.symm.trans hleft.1))
         · have hcolumn : column = cfg.qS2 := by
-            have := child.fixedColumn_mem_of_mem_call
-              cfg hchain offset input region column row left hleft
-            simpa only [hchain,
-              FormalRegionCircuit.Configured.ofPure_fixedColumns,
-              FormalRegionCircuit.keygenRequirements, child,
-              Sinsemilla.Chain.circuit,
-              ElaboratedRegionCircuit.keygenRequirements,
-              List.mem_singleton] using this
+            simpa only [hchildColumns, List.mem_singleton] using
+              child.fixedColumn_mem_of_mem_call cfg hchain offset input region column row
+                left hleft
           exact False.elim (hconfig.qS2_ne_fixedYQ
             (hcolumn.symm.trans hright.1))
         · exact hchild column row left right hleft hright
@@ -537,8 +491,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
         exact (hashRegionSynthesize_output G ns Q config offset input self).symm }
 
   Witness := Sinsemilla.Chain.ChainWit ns
-  extract cfg offset input self env :=
-    (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).extract cfg offset input self env
+  extract cfg offset _ self env := Sinsemilla.Chain.extract ns (fun _ => Q.y) cfg offset self env
 
   EnvAssumptions cfg env :=
     Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env
@@ -563,17 +516,14 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
         = (fun _ : Placed Environment Fp => ({ x := Q_x, y := Q_y } : Point Fp).y)
       from rfl] at hSpec
     rw [chainC_spec_eq] at hSpec
+    rw [Sinsemilla.Chain.circuit_extract] at wit_out_eq
+    subst wit_out_eq
     obtain ⟨chunks, hPC, hZs, hContract⟩ := hSpec
     simp only [Spec]
     refine ⟨chunks, hPC, hZs, ?_, ?_⟩
     · -- the z_1 view of the running sums
       intro hpos
-      rw [← ho_z1s, ← wit_out_eq]
-      rw [show ((Sinsemilla.Chain.circuit G ns fun _ => Q_y).extract cfg offset
-            input_var self (⟨place, env⟩ : Placed Environment Fp)).zs
-          = eval (⟨place, env⟩ : Placed Environment Fp)
-              (Sinsemilla.Chain.zsCellsVal cfg self ns offset) from rfl,
-        Sinsemilla.Chain.eval_zsCellsVal, z1View_zsFam _ _ _ hpos]
+      rw [← ho_z1s, Sinsemilla.Chain.eval_zsCellsVal, z1View_zsFam _ _ _ hpos]
       ext j hj
       simp only [circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
         AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
@@ -582,7 +532,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     · -- the hash from `Q`
       intro B hB
       have hout := Sinsemilla.Chain.circuit_output_eval G ns (fun _ => Q_y)
-        cfg offset input_var self (⟨place, env⟩ : Placed Environment Fp)
+        cfg offset { pieces := input_var_pieces } self (⟨place, env⟩ : Placed Environment Fp)
       rw [eval_cells_eq_eval, out_eq] at hout
       have hfirst : (ProvableStruct.Halo2.eval place env out).first
           = ({ xA := env.advice cfg.xA ((place self + offset : ℕ) : ℤ),
@@ -633,9 +583,9 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     -- the chain's honest-prover precondition, transported to the minted witness
     have hPAchain : (Sinsemilla.Chain.circuit G ns
           fun _ => ({ x := Q_x, y := Q_y } : Point Fp).y).ProverAssumptions
-        input wit_out env.hint := by
+        { pieces := input_pieces } wit_out env.hint := by
       rw [← wit_out_eq, chainC_proverAssumptions_eq]
-      show Sinsemilla.Chain.ProverAssumptions G ns input _
+      show Sinsemilla.Chain.ProverAssumptions G ns { pieces := input_pieces } _
       refine ⟨hns, hbounds, { x := Q_x, y := Q_y }, B0, hQ, ?_, rfl, hchain0⟩
       show Q_x = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         (AssignedCell.of self offset cfg.xA : Var field Fp) : Fp)
@@ -656,7 +606,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
         exact region_1.symm) rfl hchain0
     obtain ⟨hpx, hpy, henter⟩ := hfacts
     have hout := Sinsemilla.Chain.circuit_output_eval G ns (fun _ => Q_y)
-      cfg offset input_var self (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+      cfg offset { pieces := input_var_pieces } self (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
     rw [eval_cells_eq_eval, out_eq] at hout
     refine ⟨⟨?_, region_0, region_1,
       ⟨by rw [chainC_envAssumptions_eq]; exact env_assumptions, trivial, hPAchain⟩,
@@ -843,10 +793,8 @@ theorem hashCircuit_synthesisSummary_constantSiteCount
     (region : RegionIndex) :
     ((hashCircuit G ns Q hQ hns).elaborated.synthesisSummary
       config input region).constantSiteCount = 1 := by
-  simpa only [hashCircuit, hashRegion_synthesisSummary_constantSiteCount] using
-    FormalRegionCircuit.toFormal_synthesisSummary_constantSiteCount
-      (hashRegion G ns Q hQ hns) (hashRegion G ns Q hQ hns).name
-      config input region
+  rw [hashCircuit_synthesisSummary]
+  simp only [hashCircuitSynthesisSummary, hashRegionSynthesisSummary, synthesis_summary_norm]
 
 attribute [keygen_metadata_projection] hashCircuit hashRegion
 

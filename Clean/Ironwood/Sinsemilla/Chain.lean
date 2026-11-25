@@ -1579,6 +1579,15 @@ theorem circuitSynthesisSummary_constantSiteCount
     List.map_ofFn, Function.comp_def]
   simp
 
+/-- The chain's extraction data at the region placed at `offset`: the entering `x_a`
+cell, the `yaIn` value and the running sums of every piece. Reducible, so that proofs about
+the chain and its callers see the record's fields. -/
+abbrev extract (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (self : RegionIndex) (env : Placed Environment Fp) : ChainWit ns Fp :=
+  { xIn := eval env (AssignedCell.of self offset cfg.xA : Var field Fp),
+    yIn := yaIn env,
+    zs := eval env (zsCellsVal cfg self ns offset) }
+
 def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) :
     FormalRegionCircuit Fp Config Config (Inputs ns.length) Output where
   name := "sinsemilla hash_all_pieces"
@@ -1696,10 +1705,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           · simp only [circuit_norm, synthesis_summary_norm] }
 
   Witness := ChainWit ns
-  extract cfg offset _ self env :=
-    { xIn := eval env (AssignedCell.of self offset cfg.xA : Var field Fp),
-      yIn := yaIn env,
-      zs := eval env (zsCellsVal cfg self ns offset) }
+  extract cfg offset _ self env := extract ns yaIn cfg offset self env
 
   EnvAssumptions cfg env := GeneratorTableLoaded G cfg.generatorTable env.env
 
@@ -1818,7 +1824,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     refine ⟨chunksOf (fun j r => if h : j < ns.length then msF ⟨j, h⟩ r else 0) ns 0,
       hPC, ?_, ?_⟩
     · -- the running sums (the extraction data)
-      rw [eval_zsCellsVal]
+      rw [extract, eval_zsCellsVal]
       exact hZs
     · -- the chain contract
       intro A hAon hAx hAyA B hB
@@ -2180,6 +2186,13 @@ theorem circuit_synthesisSummary_constantSiteCount
       config offset input region).constantSiteCount = 0 := by
   rw [circuit_synthesisSummary_eq]
   simp only [synthesis_summary_norm]
+
+/-- The chain's extraction data, stated on the folded circuit. -/
+theorem circuit_extract (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (iv : Var (Inputs ns.length) Fp) (self : RegionIndex) (env : Placed Environment Fp) :
+    (circuit G ns yaIn).extract cfg offset iv self env = extract ns yaIn cfg offset self env :=
+  rfl
 
 /-- The chain's eval'd output, landed on raw advice reads (the public composition lemma —
 what `hash_message`-level consumers rewrite `(circuit …).output` with). -/
