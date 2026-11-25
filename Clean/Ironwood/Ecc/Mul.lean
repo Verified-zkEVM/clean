@@ -546,47 +546,26 @@ theorem mainCircuitSynthesisSummary_hasNoFixedColumns (cfg : Config) :
     MulComplete.circuitSynthesisSummary_hasNoFixedColumns]
   simp
 
-section
-attribute [local irreducible] FloorPlanner.unionColumns Add.synthesisSummary
-  MulIncomplete.doubleAndAddSynthesisSummary MulComplete.circuitSynthesisSummary
-
 theorem mainCircuitSynthesisSummary_eq (cfg : Config)
     (input : Var Inputs Fp) (self : RegionIndex) :
     mainCircuitSynthesisSummary cfg =
       FloorPlanner.regionSynthesisSummary
         ((mainSynthesize cfg input).operations self) := by
-  simp only [mainCircuitSynthesisSummary, mainSynthesize,
-    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-    operations_assignAdvice, operations_constrainConstant, operations_cellAt,
-    operations_copyAdvice, operations_enable, synthesis_summary_norm,
-    configure_selector_norm]
-  have constantSummary (cell : Cell) (value : Fp) :
-      FloorPlanner.regionSynthesisSummary [.constrainConstant cell value] =
-        FloorPlanner.RegionSynthesisSummary.ofColumns [] 0 1 := by
-    with_unfolding_all rfl
-  simp only [constantSummary]
-  generalize Add.synthesisSummary cfg.addConfig offInit = initial
-  generalize MulIncomplete.doubleAndAddSynthesisSummary 124 cfg.hiConfig offHi = hi
-  generalize MulIncomplete.doubleAndAddSynthesisSummary 125 cfg.loConfig offLo = lo
-  generalize MulComplete.circuitSynthesisSummary 3 cfg.completeConfig offComp = complete
-  generalize Add.synthesisSummary cfg.addConfig offLsb = last
-  generalize offLsb = row
+  unfold mainSynthesize
   apply FloorPlanner.RegionSynthesisSummary.ext
-  all_goals simp only [FloorPlanner.RegionSynthesisSummary.combine,
-    FloorPlanner.RegionSynthesisSummary.ofColumns,
-    FloorPlanner.unionColumns_nil_right, FloorPlanner.unionColumns_normalize_right,
-    Nat.zero_max, Nat.zero_add, List.nil_append]
-  · simp only [FloorPlanner.unionColumns_collapse_normalized, List.singleton_append]
-  · simp only [Nat.add_assoc, Nat.reduceAdd]
-    congr 1
-    congr 1
-    congr 1
-    congr 1
-    congr 1
-    have hmax : max (row + 2) (row + 1) = row + 2 := max_eq_left (by omega)
-    simp only [← Nat.max_assoc, Nat.max_self, hmax]
-
-end
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+    omega
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm, lsbGate]
 
 def mainKeygenRequirements : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=

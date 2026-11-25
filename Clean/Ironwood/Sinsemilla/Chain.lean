@@ -1919,7 +1919,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             (by rw [slotC_proverAssumptions_eq]; exact hPAm)
           rw [slotC_proverSpec_eq] at hder
           obtain ⟨-, hPS⟩ := hder
-          delta SlotPS at hPS
+          unfold SlotPS at hPS
           rw [slotC_extract_cells, slotReads_eval] at hPS
           simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
             Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hPS
@@ -2026,7 +2026,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           (by rw [slotC_proverAssumptions_eq]; exact hPAi)
         rw [slotC_proverSpec_eq] at hder
         obtain ⟨-, hPS⟩ := hder
-        delta SlotPS at hPS
+        unfold SlotPS at hPS
         rw [slotC_extract_cells, slotReads_eval] at hPS
         simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
           Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hPS
