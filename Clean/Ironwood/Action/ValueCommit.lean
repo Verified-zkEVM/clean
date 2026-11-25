@@ -222,7 +222,6 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
   elaborated :=
     { keygenRequirements := keygenRequirements V R
       registered := by
-        set_option backward.isDefEq.respectTransparency true in
           intro cfg counts hconfig input self
           simp only [Circuit.operations_bind, Circuit.operations_pure,
             Operations.KeygenRegistered.append, FormalCircuit.call_regionCount',

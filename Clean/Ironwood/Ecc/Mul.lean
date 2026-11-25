@@ -550,7 +550,6 @@ section
 attribute [local irreducible] FloorPlanner.unionColumns Add.synthesisSummary
   MulIncomplete.doubleAndAddSynthesisSummary MulComplete.circuitSynthesisSummary
 
-set_option backward.isDefEq.respectTransparency true in
 theorem mainCircuitSynthesisSummary_eq (cfg : Config)
     (input : Var Inputs Fp) (self : RegionIndex) :
     mainCircuitSynthesisSummary cfg =
@@ -1128,7 +1127,6 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     out.k254 = ((kNat input.alpha / 2 ^ 254 : ℕ) : Fp)
 
   soundness := by
-    set_option backward.isDefEq.respectTransparency true in
     circuit_proof_start2 [mainSynthesize, Add.add, MulIncomplete.double_and_add,
       MulComplete.assign_region, lsbGate]
     have hi_acc_eq := congrArg (fun o => o.acc) hi_eq
@@ -1314,7 +1312,6 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
               exact Point.valid_zero, hCompAccV⟩
         exact hResV
   completeness := by
-    set_option backward.isDefEq.respectTransparency true in
     circuit_proof_start2 [mainSynthesize, Add.add, MulIncomplete.double_and_add,
       MulComplete.assign_region, lsbGate]
     have hi_acc_eq := congrArg (fun o => o.acc) hi_eq

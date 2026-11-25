@@ -130,7 +130,6 @@ theorem configure_output_mulFixedBaseField_lookupConfig
   unfold configure
   infer_instance
 
-set_option backward.isDefEq.respectTransparency true in
 private theorem configure_selectorRequirements
     (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
@@ -146,7 +145,6 @@ private theorem configure_selectorRequirements
     MulFixed.FullWidth.configure,
     MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
-set_option backward.isDefEq.respectTransparency true in
 instance (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) :

@@ -376,7 +376,6 @@ def hash (capacity : Fp) :
       regionCount _ := 3
       synthesisSummary cfg _ _ := hashSynthesisSummary cfg
       registered := by
-        set_option backward.isDefEq.respectTransparency true in
           intro configInput counts hconfig input i
           simp only [synthesize, Circuit.operations_bind, operations_assignRegion,
             Circuit.operations_pure, Operations.KeygenRegistered.append,

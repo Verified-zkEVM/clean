@@ -339,7 +339,6 @@ theorem configure_constraintDegree (K : ℕ)
   unfold configure
   infer_instance
 
-set_option backward.isDefEq.respectTransparency true in
 private theorem configure_selectorRequirements
     (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) (counts) :
     (configureInferred K runningSum tableIdx).selectorRequirements counts := by
@@ -353,7 +352,6 @@ private theorem configure_selectorRequirements
   simp [Expression.selectorBound]
   omega
 
-set_option backward.isDefEq.respectTransparency true in
 private theorem configure_externalSelectorSummary
     (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) (counts) :
     ((configureInferred K runningSum tableIdx).selectorSummary counts).externalAt

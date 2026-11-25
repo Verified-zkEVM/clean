@@ -458,7 +458,6 @@ def innerKeygenRequirements :
     runningSumKeygenRequirements.permutationColumns cfg.superConfig configured.1
   inputCells _ _ input := [input.alpha.cell]
 
-set_option backward.isDefEq.respectTransparency true in
 @[keygen_helper]
 theorem innerCopyDecompose_keygenRegistered
     (cfg : Config) (offset : ℕ) (alpha : AssignedCell Fp)
@@ -1781,7 +1780,6 @@ def keygenRequirements : KeygenRequirements Fp
         ([input.2.1.runningSum] : List AnyColumn)
   inputCells _ _ input := [input.cell]
 
-set_option backward.isDefEq.respectTransparency true in
 @[keygen_helper]
 theorem synthesize_keygenRegistered
     (B : FixedBase)
