@@ -796,8 +796,8 @@ namespace Ensemble
 
 theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balance : Balance F}
       -- given a sound channels ensemble with a list of finished, consistent channels
-    {finished : List (RawChannel F)} (soundChannels : ens.SoundChannels finished)
-    (consistent : ∀ channel ∈ finished, channel.Consistent)
+    {finished : List (RawChannel F)} (soundChannels : ens.SoundChannels balance.pullBound finished)
+    (consistent : ∀ channel ∈ finished, channel.ConsistentUpTo balance.pullBound)
     (finished_subset : finished ⊆ ens.channels)
     -- and given a VM channel + tables + verifier
     (vm : VmTables F PublicIO)
@@ -814,7 +814,7 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
     (ens.addVm vm fits).SoundVmChannel balance := by
   intro not_mem_vm_channel grts_subset reqs_disjoint (witness : VmWitness ens vm fits) assumptions
     constraints fit balanced
-  have balance := witness.balancedChannels_of_balanced fit balanced
+  have balance_upTo := witness.balancedChannels_of_balanced fit balanced
   /-
   the high level plan is to apply
   `verifier_guarantees_of_requirements_of_requirements_of_guarantees`.
@@ -830,8 +830,7 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
   -/
   -- the vm channel interactions are constrained to vm tables, which lets us supply the balance
   -- condition
-  have vm_balance := balance vm.channel.toRaw (by simp [Ensemble.addVm])
-  simp only [circuit_norm] at vm_balance
+  have vm_balance := (balance_upTo vm.channel.toRaw (by simp [Ensemble.addVm])).toBalancedInteractions
   rw [witness.interactionsWith_eq_vmInteractionsWith not_mem_vm_channel] at vm_balance
   set vmChannel := vm.channel.toRaw
   -- next, we work on instantiating `requirements_of_partial_guarantees_of_constraints`
@@ -856,13 +855,13 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
     clear * - ordered no_requirements
     simp_all [circuit_norm, orderedChannel_of_no_requirements, orderedChannelLt_of_no_requirements]
   have partial_balance : ∀ channel ∈ finished,
-      PartialBalancedChannel witness.toTables channel := by
+      PartialBalancedChannel balance.pullBound witness.toTables channel := by
     intro channel channel_mem
     apply Ensemble.partialBalancedChannel_of_balancedChannel
     · exact ordered_finished channel channel_mem
-    · exact balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])
+    · exact balance_upTo channel (by simp [Ensemble.addVm, finished_subset channel_mem])
   have old_partial_balance : ∀ channel ∈ finished,
-      PartialBalancedChannel witness.oldContext channel := by
+      PartialBalancedChannel balance.pullBound witness.oldContext channel := by
     intro channel channel_mem
     apply partialBalancedChannel_of_sublist (partial_balance _ channel_mem)
     exact ⟨witness.vmContext.tables, witness.toTables_perm, vm_constraints,
@@ -876,7 +875,7 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
       (witness.oldContext_constraints_of_constraints constraints) old_partial_balance
       table table_mem
       |>.right channel channel_mem |>.right
-    have old_sound_channels : _root_.SoundChannels ens.tables finished := ⟨
+    have old_sound_channels : _root_.SoundChannels ens.tables balance.pullBound finished := ⟨
       ens.channelsWithGuarantees_subset_iff.mp soundChannels.left |>.right,
       fun channel h_channel => (soundChannels.right.left channel h_channel).right.left,
       soundChannels.right.right⟩
@@ -885,7 +884,7 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
   have finished_grts : ∀ table ∈ witness.vmTables, ∀ channel ∈ finished,
       table.ChannelGuarantees channel := by
     intro table table_mem channel channel_mem
-    have : channel.Consistent := consistent channel channel_mem
+    have : channel.ConsistentUpTo balance.pullBound := consistent channel channel_mem
     apply guarantees_of_requirements_append (ts := witness.vmContext) (ss := witness.oldContext) rfl
       vm_constraints (vm_reqs_disjoint _ channel_mem)
       (witness.vmContext_append_oldContext ▸ partial_balance _ channel_mem)
@@ -905,10 +904,10 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
   have finished_verifier_guarantees : ∀ channel ∈ finished,
       (ens.addVm vm fits).VerifierChannelGuarantees witness.data channel := by
     intro channel channel_mem
-    let : channel.Consistent := consistent channel channel_mem
-    apply Ensemble.verifierChannelGuarantees_of_tableRequirements
+    let : channel.ConsistentUpTo balance.pullBound := consistent channel channel_mem
+    apply Ensemble.verifierChannelGuarantees_of_tableRequirements (N := balance.pullBound)
     · exact .inr (reqs_disjoint channel channel_mem).1
-    · exact balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])
+    · exact balance_upTo channel (by simp [Ensemble.addVm, finished_subset channel_mem])
     intro table h_table
     by_cases h_vm : table ∈ witness.vmTables
     · exact table.requirements_of_not_mem_of_constraints (vm_constraints table h_vm)

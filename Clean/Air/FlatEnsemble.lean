@@ -333,16 +333,18 @@ lemma interactionsWith_of_verifier_empty {ens : Ensemble F PublicIO} {witness : 
   simp [interactionsWith, verifierInteractionsWith, Tables.interactionsWith,
     circuit_norm, h_verifier_empty, Verifier.Program.empty]
 
-/-- The ensemble interactions with a particular channel are balanced. -/
+/-- The ensemble interactions with a particular channel are balanced, with pulls of multiplicity up
+to `N` matched by a push. -/
 @[circuit_norm]
-abbrev BalancedChannel {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
+abbrev BalancedChannel {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) (N : ℕ)
     (channel : RawChannel F) : Prop :=
-  BalancedInteractions (witness.interactionsWith channel)
+  BalancedUpTo N (witness.interactionsWith channel)
 
-/-- All ensemble interactions with all ensemble channels are balanced. -/
+/-- All ensemble interactions with all ensemble channels are balanced, with pulls of multiplicity up
+to `N` matched by a push. -/
 @[circuit_norm]
-def BalancedChannels {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
-  ∀ channel ∈ ens.channels, BalancedChannel witness channel
+def BalancedChannels {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) (N : ℕ) : Prop :=
+  ∀ channel ∈ ens.channels, BalancedChannel witness N channel
 
 /-- The number of rows of each table, in the order of the ensemble's components. -/
 def heights {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List ℕ :=
@@ -360,9 +362,9 @@ def InteractionsFit {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
 
 lemma balancedChannels_of_balanced {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
     {balance : Balance F} (fit : witness.InteractionsFit balance)
-    (balanced : witness.Balanced balance) : witness.BalancedChannels :=
+    (balanced : witness.Balanced balance) : witness.BalancedChannels balance.pullBound :=
   fun channel h_channel =>
-    balance.balancedInteractions_of_balanced _ (fit channel h_channel) (balanced channel h_channel)
+    balance.balancedUpTo_of_balanced (fit channel h_channel) (balanced channel h_channel)
 end EnsembleWitness
 
 /--
