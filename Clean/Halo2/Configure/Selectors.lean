@@ -175,7 +175,7 @@ theorem ConfigureDelta.selectorSummary_externalAt_eq_empty_of_fresh
     (hfresh : delta.SelectorsFreshFrom boundary) :
     delta.selectorSummary.externalAt boundary = {} := by
   apply ConfigureSelectorSummary.externalAt_eq_empty_of_fresh
-  · simpa [ConfigureDelta.selectorSummary, List.forall_map_iff]
+  · simpa [Function.comp_def, Gate.selector, LookupArgument.selectorUsage, ConfigureDelta.selectorSummary, List.forall_map_iff]
       using hfresh.gates
   · rw [List.forall_iff_forall_mem]
     intro usage husage
@@ -415,18 +415,20 @@ theorem ConfigureDelta.LookupSelectorsCrossCompatible.ofSelectorSummary
   rcases hsummary.facts with ⟨hleftGates, hrightGates,
     hleftLookups, hrightLookups⟩
   refine ⟨?_, ?_, ?_, ?_⟩
-  · simpa [ConfigureDelta.selectorSummary,
+  · simpa [Function.comp_def, Gate.selector, LookupArgument.selectorUsage, ConfigureDelta.selectorSummary,
       Gate.LookupSelectorsCompatible, LookupArgument.selectorUsage] using
       hleftGates
-  · simpa [ConfigureDelta.selectorSummary,
+  · simpa [Function.comp_def, Gate.selector, LookupArgument.selectorUsage, ConfigureDelta.selectorSummary,
       Gate.LookupSelectorsCompatible, LookupArgument.selectorUsage] using
       hrightGates
-  · simpa [ConfigureDelta.selectorSummary,
-      LookupArgument.SelectorsCompatible,
-      LookupArgument.selectorUsage] using hleftLookups
-  · simpa [ConfigureDelta.selectorSummary,
-      LookupArgument.SelectorsCompatible,
-      LookupArgument.selectorUsage] using hrightLookups
+  · change left.lookups.Forall (fun source => right.lookups.Forall
+      (fun target => source.selectorUsage.SelectorsCompatible target.selectorUsage))
+    simpa only [ConfigureDelta.selectorSummary, List.forall_map_iff,
+      Function.comp_def] using hleftLookups
+  · change right.lookups.Forall (fun source => left.lookups.Forall
+      (fun target => source.selectorUsage.SelectorsCompatible target.selectorUsage))
+    simpa only [ConfigureDelta.selectorSummary, List.forall_map_iff,
+      Function.comp_def] using hrightLookups
 
 @[simp] theorem ConfigureDelta.empty_lookupSelectorsCrossCompatible
     (delta : ConfigureDelta F) :
@@ -577,7 +579,7 @@ theorem ConfigureDelta.selectorSummary_bounded
     (hbounded : delta.SelectorsBounded bound) :
     delta.selectorSummary.Bounded bound := by
   constructor
-  · simpa [ConfigureDelta.selectorSummary] using hbounded.gates
+  · simpa [Function.comp_def, Gate.selector, LookupArgument.selectorUsage, ConfigureDelta.selectorSummary] using hbounded.gates
   · rw [ConfigureDelta.selectorSummary, List.forall_map_iff,
       List.forall_iff_forall_mem]
     intro argument hargument

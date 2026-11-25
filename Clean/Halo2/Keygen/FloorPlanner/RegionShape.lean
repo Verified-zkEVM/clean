@@ -151,10 +151,12 @@ theorem activations_eq_placeSelectorActivations
           rw [regionActivationsAt_eq_map_selectorActivations,
             inductionHypothesis]
       | constrainInstance cell column row =>
-          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
+            FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
             inductionHypothesis initial
       | loadTable column values =>
-          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
+            FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
             inductionHypothesis initial
 
 /-- Membership in the selector-activation stream retains its source region,
@@ -256,7 +258,7 @@ private theorem orderedInsert_append_of_rel_right
       | nil => rfl
       | cons head tail =>
           simp only [List.nil_append, List.orderedInsert_cons]
-          rw [if_pos (hrel head (by simp))]
+          rw [ite_eq_left (hrel head (by simp))]
           simp only [List.orderedInsert_nil, List.singleton_append]
   | cons head tail inductionHypothesis =>
       simp only [List.cons_append, List.orderedInsert_cons]
@@ -275,7 +277,7 @@ private theorem orderedInsert_append_of_not_rel_left
   | nil => rfl
   | cons head tail inductionHypothesis =>
       simp only [List.cons_append, List.orderedInsert_cons]
-      rw [if_neg (hrel head (by simp)), inductionHypothesis]
+      rw [ite_eq_right (hrel head (by simp)), inductionHypothesis]
       intro candidate hcandidate
       exact hrel candidate (by simp [hcandidate])
 
@@ -554,10 +556,12 @@ theorem measureRegions_eq_synthesisSummary_regionShapes
             simpa only [measureRegion_eq_measureRegionSummary] using
               inductionHypothesis (initial + 1)
         | constrainInstance cell column row =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, SynthesisSummary.ofTableValues, List.nil_append] using
               inductionHypothesis initial
         | loadTable column values =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, SynthesisSummary.ofTableValues, List.nil_append] using
               inductionHypothesis initial
   exact general ops 0
 

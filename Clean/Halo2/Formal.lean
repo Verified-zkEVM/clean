@@ -487,6 +487,13 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
   simpa [Configured.permutationColumns, ConfigurationCertificate.configured] using
     certificate.permutationColumns column hcolumn
 
+-- Configured handles expose only argument metadata during call routing.
+attribute [keygen_metadata_projection]
+  Configured.ofPure Configured.ofOutput
+  Configured.gates Configured.lookups Configured.fixedColumns
+  Configured.constantColumns Configured.permutationColumns
+  Configured.inputPermutationColumns Configured.inputCells
+
 @[simp, keygen_norm, grind =] theorem Configured.ofPure_gates
     (self : FormalCircuit F Config Config Input Output)
     (config : Config)

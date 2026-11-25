@@ -318,7 +318,8 @@ where
 theorem eval_eq_eval (place : RegionIndex → ℕ) (env : Environment F) (x : α (AssignedCell F)) :
     ProvableType.Halo2.eval place env x = ProvableStruct.Halo2.eval place env x := by
   symm
-  simp only [eval, ProvableType.Halo2.eval, fromElements, toElements, size]
+  simp only [eval, ProvableType.Halo2.eval, fromElements, toElements, size,
+    _root_.ProvableStruct.structToElements_eq, _root_.ProvableStruct.structFromElements_eq]
   congr 1
   apply eval_eq_eval_aux
 where
@@ -330,7 +331,7 @@ where
     | [], .nil => rfl
     | c :: cs, .cons a as => by
       simp only [componentsToElements, componentsFromElements, eval.go,
-        combinedSize', List.map_cons, List.sum_cons]
+        combinedSize']
       simp only [Vector.map_append, Vector.cast_take_append_of_eq_length,
         Vector.cast_drop_append_of_eq_length]
       congr 1

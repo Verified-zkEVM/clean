@@ -90,7 +90,7 @@ theorem omega_pow_injective :
   exact Fin.ext ((CircuitFieldSupport.omega_isPrimitiveRoot top).pow_inj i.isLt j.isLt h)
 
 theorem n_cast_ne_zero : (top.n : F) ≠ 0 := by
-  letI : NeZero top.n := ⟨top.n_pos.ne'⟩
+  let : NeZero top.n := ⟨top.n_pos.ne'⟩
   exact (CircuitFieldSupport.omega_isPrimitiveRoot top).neZero'.out
 
 /-- Transport row injectivity when another domain has the same exponent. -/

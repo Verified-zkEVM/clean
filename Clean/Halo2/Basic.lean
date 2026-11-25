@@ -39,6 +39,7 @@ variable {F : Type} [FiniteField F] {α β : Type}
 
 /-- A circuit fragment inside one region: knows its region's index, accumulates
 region-level operations. -/
+@[implicit_reducible]
 def RegionCircuit (F : Type) [FiniteField F] (α : Type) :=
   RegionIndex → α × RegionOperations F
 
@@ -127,12 +128,11 @@ theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
 /-- Read an input cell's value in a placed prover environment — the standard accessor for
 witness programs that derive values from earlier cells. (Promoted from the per-gadget
 copies in `MulIncompleteRound`/`HashPieceRound` — the friction-twice rule.) -/
-def readCell [Field F] (env : Placed ProverEnvironment F) (c : AssignedCell F) : F :=
+def readCell (env : Placed ProverEnvironment F) (c : AssignedCell F) : F :=
   c.eval env.place env.env.toEnvironment
 
-omit [FiniteField F] in
 @[circuit_norm]
-theorem readCell_of [Field F] (env : Placed ProverEnvironment F) (self : RegionIndex)
+theorem readCell_of (env : Placed ProverEnvironment F) (self : RegionIndex)
     (row : ℕ) (col : Column .advice) :
     readCell env (AssignedCell.of self row col)
       = env.env.advice col ((env.place self + row : ℕ) : ℤ) := rfl
@@ -176,6 +176,7 @@ def LookupArgument.enable (arg : LookupArgument F) (auxiliarySelectors : List Se
 
 /-- A layouter-level circuit: threads the next region index (like Clean's `offset`) and
 accumulates layouter operations. -/
+@[implicit_reducible]
 def Circuit (F : Type) [FiniteField F] (α : Type) :=
   RegionIndex → α × Operations F × RegionIndex
 

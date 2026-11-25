@@ -281,9 +281,9 @@ def Gate.withSelector
         · intro _ _
           rfl
       simp only [querySelector, Expression.eval,
-        Expression.replaceSelectorValue, if_pos] at hzero
+        Expression.replaceSelectorValue, ite_eq_left] at hzero
       simp only [querySelector, Expression.eval,
-        Expression.enabledGateValuation, if_pos, one_mul]
+        Expression.enabledGateValuation, ite_eq_left, one_mul]
       rw [← hpolyEval]
       exact (mul_eq_zero.mp hzero).resolve_left hscale
 
@@ -468,7 +468,7 @@ theorem Expression.selectorIndices_neg [Field F]
 theorem Expression.selectorIndices_sub
     [Field F] (left right : Expression F Query) :
     (left - right).selectorIndices = left.selectorIndices ++ right.selectorIndices := by
-  simp [Expression.selectorIndices]
+  rfl
 
 /-- Selector indices used by a lookup input other than its distinguished master
 selector. Multiplicity is harmless and keeps this a direct structural projection. -/

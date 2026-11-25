@@ -159,7 +159,7 @@ theorem FormalCircuit.operationsKeygenCoherent
       (program.finalCounts counts) (by
         intro column hcolumn
         exact (Configure.mem_fixedColumns_iff program counts column).mp hcolumn |>.2)
-  simpa only [program, counts, Configure.run,
+  simpa only [program, counts, Configure.run, Configure.output, Configure.delta, Configure.finalCounts, Configure.countDelta, OperationsKeygenCoherent,
     ConfigureCounts.ofConstraintSystem] using happlied
 
 /-- A circuit with no caller requirements assigns every copied cell before use. -/
@@ -176,7 +176,7 @@ theorem FormalCircuit.operationsCopyCellsAssigned
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
   have hassigned :=
     c.elaborated.copyCellsAssigned ci counts hconfig input 0
-  simpa only [counts, Configure.run, ConfigureCounts.ofConstraintSystem,
+  simpa only [counts, Configure.run, Configure.output, Configure.delta, Configure.finalCounts, Configure.countDelta, OperationsKeygenCoherent, ConfigureCounts.ofConstraintSystem,
     hinputCells input] using hassigned
 
 /-- A circuit meeting its configure requirements allocates every lookup-input selector. -/
@@ -192,7 +192,7 @@ theorem FormalCircuit.lookupSelectorsAllocated
   have hallocated :=
     (c.selectorsAllocated ci counts hrequirements).lookups
   simpa only [ConstraintSystem.LookupSelectorsAllocated, program, counts,
-    Configure.run, ConfigureCounts.ofConstraintSystem,
+    Configure.run, Configure.output, Configure.delta, Configure.finalCounts, Configure.countDelta, OperationsKeygenCoherent, ConfigureCounts.ofConstraintSystem,
     ConfigureDelta.apply, List.nil_append] using hallocated
 
 end FormalCircuit

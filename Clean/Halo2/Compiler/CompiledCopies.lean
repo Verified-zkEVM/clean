@@ -85,7 +85,7 @@ theorem region_copy_constraints_iff
   | cons op rest ih =>
       cases op <;>
         simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
-          regionDeclaredCopies, regionOperationDeclaredCopy?,
+          regionDeclaredCopies, List.filterMap_cons, regionOperationDeclaredCopy?,
           DeclaredCopy.Satisfied, CopyEndpoint.eval]
 
 /-- The complete copy-family projection is exactly satisfaction of the copies extracted from the
@@ -222,7 +222,7 @@ theorem regionDeclaredCopies_permutationColumns
   cases op <;> simp only [regionOperationDeclaredCopy?, reduceCtorEq] at hCopy
   all_goals obtain rfl := Option.some.inj hCopy
   all_goals simpa [CopyEndpoint.PermutationColumnRegistered,
-    RegionOperation.KeygenCoherent] using hRegistered
+    RegionOperation.KeygenCoherent, RegionOperation.KeygenRegistered] using hRegistered
 
 /-- Both endpoints of every coherent layouter copy use registered permutation
 columns. -/
@@ -841,6 +841,6 @@ theorem copy_constraints_of_compiled (assignment : ProofAssignment F)
       apply Or.inl
       apply Or.inr
       exact List.mem_map.mpr ⟨(value, column, row), hentry, rfl⟩
-    simpa only [FiniteField.fromNat_val] using top.environment_fixed_of_mem_raw assignment hraw
+    simpa only [FiniteField.fromNat_val, Environment.fixed, Column.toAny] using top.environment_fixed_of_mem_raw assignment hraw
 
 end Halo2.TopLevelCircuit

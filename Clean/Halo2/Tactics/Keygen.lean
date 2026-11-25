@@ -20,6 +20,8 @@ generic `call_keygenRegistered` lemmas.
 
 namespace Halo2
 
+attribute [keygen_norm, keygen_output_norm] Configure.plan_pure
+
 attribute [keygen_norm]
   RegionCircuit.Vector.map_getElem_mem_toList
   RegionCircuit.Vector.map_getElem!_mem_toList

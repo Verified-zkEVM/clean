@@ -52,6 +52,5 @@ example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp
               (place self + row : ℕ)) = env.fixed c2 (tableRow : ℤ) := by
   simp only [RegionOperation.constraints_enableLookup, List.map_cons, List.map_nil,
     List.cons.injEq, and_true, queryFixed, Expression.eval, Query.eval, add_zero]
-  rfl
 
 end Halo2.TupleLookup.Test

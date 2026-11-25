@@ -374,7 +374,7 @@ theorem mem_appendFirstEncounters {α : Type} [DecidableEq α]
           value ∈ initial ∨ value ∈ request :: requests
       rw [ih]
       by_cases hrequest : request ∈ initial
-      · simp only [hrequest, if_pos, List.mem_cons]
+      · simp only [hrequest, ite_eq_left, List.mem_cons]
         constructor
         · intro h
           exact h.elim Or.inl (fun htail => Or.inr (Or.inr htail))
@@ -395,7 +395,7 @@ theorem nodup_appendFirstEncounters {α : Type} [DecidableEq α]
       apply inductionHypothesis
       by_cases hrequest : request ∈ initial
       · simpa [hrequest] using hinitial
-      · simp only [hrequest, if_false]
+      · simp only [hrequest, ite_false]
         exact hinitial.append (by simp : [request].Nodup)
           (by simpa using hrequest)
 

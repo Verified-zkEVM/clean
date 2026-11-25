@@ -45,8 +45,7 @@ theorem forIn_ignored_eq_runSteps
   induction indices generalizing state with
   | nil => rfl
   | cons index indices inductionHypothesis =>
-      simp only [runSteps]
-      cases hstep : step state <;> simp [hstep, inductionHypothesis]
+      cases hstep : step state <;> simp [runSteps, hstep, inductionHypothesis]
 
 structure PartitionSetup (T : Type) where
   values : Array T
