@@ -98,7 +98,7 @@ attribute [keygen_spine]
   RegionCircuit.operations_bind RegionCircuit.operations_pure
   Circuit.operations_bind Circuit.operations_pure
   operations_assignRegion operations_assignAdvice operations_assignFixed
-  operations_copyAdvice operations_enable operations_enableLookup
+  operations_copyAdvice operations_enable operations_enableLookup reduceOperationsEnableLookup
   operations_constrainEqual operations_constrainInstance operations_loadTable
   operations_constrainConstant operations_assignAdviceFromInstance
   operations_cellAt operations_cellVec
@@ -270,6 +270,18 @@ theorem assignAdvice_keygenRegistered
 open Lean Elab Tactic Meta
 
 namespace KeygenRegistration
+
+/--
+Run registration proof search with Lean's pre-4.35 type check for assigned metavariables.
+The registration lemmas match configured handles and lookup enables that carry proof
+arguments, and those proofs' types mention the circuit bundle or lookup argument in the
+folded form the proof was elaborated against. Matching them against the normalized goal
+needs to unfold that bundle, which `backward.isDefEq.respectTransparency.types` (on by
+default since 4.35) forbids at reducible transparency.
+-/
+def withBundleProofUnification {m : Type → Type} {α : Type} [MonadWithOptions m]
+    (x : m α) : m α :=
+  withOptions (·.setBool `backward.isDefEq.respectTransparency.types false) x
 
 /-- Find a transparent configure-program head below an output/delta projection. -/
 def configureHead? (target : Expr) : Option Name := do
@@ -1307,7 +1319,8 @@ recognizes the call and chooses the certificate; ordinary `keygen_norm` simp lem
 prove the gate/lookup inclusions, so standard facts such as `true_or` remain fully
 composable with circuit-local simp lemmas.
 -/
-def callRegistrationSimproc (target : Expr) : SimpM Simp.Step := do
+def callRegistrationSimproc (target : Expr) : SimpM Simp.Step :=
+  withBundleProofUnification do
   let bundles ← taggedCallBundles target
   if bundles.isEmpty then
     return .continue
@@ -1542,7 +1555,8 @@ It first applies the shared structural simp sets, then selectively unfolds named
 configure/synthesis heads that still block a registration goal. Formal-circuit calls
 stay opaque for explicit discharge through the compositional registration lemmas.
 -/
-elab "keygen_registration" : tactic => do
+elab "keygen_registration" : tactic =>
+  KeygenRegistration.withBundleProofUnification do
   if (← getGoals).isEmpty then
     return
   trace[Halo2.keygen] "keygen_registration: introductions"
