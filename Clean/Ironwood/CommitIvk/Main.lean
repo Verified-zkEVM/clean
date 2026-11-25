@@ -38,7 +38,10 @@ open Specs.Sinsemilla (Generators)
 open NoteCommit.Main (brWit currentRegion)
 
 /-- Piece word counts minus one, per the chain convention: `a` = 25 words, `b` = 1,
-`c` = 24, `d` = 1 (`I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)` split at `250/10/240/10` bits). -/
+`c` = 24, `d` = 1 (`I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)` split at `250/10/240/10` bits).
+Implicit-reducible: `ns.length` indexes the hash input's piece vector while the piece literal
+`#v[…]` has its literal length, so Lean must unfold it while checking implicit arguments. -/
+@[implicit_reducible]
 def ns : List ℕ := [24, 0, 23, 0]
 
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
@@ -322,7 +325,9 @@ theorem zCell_column_mem_permutationColumns (cfg : Config)
       permutationColumns cfg childColumns := by
   simp [zCell, AssignedCell.of_cell, Cell.of_column, permutationColumns]
 
-@[keygen_norm]
+/-- Implicit-reducible: its provenance `configLawful` is the commit handle, and handles are
+checked against that type at implicit transparency. -/
+@[keygen_norm, implicit_reducible]
 def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=

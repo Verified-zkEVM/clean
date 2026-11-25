@@ -190,20 +190,6 @@ private theorem zsFacts_donor_iff :
     · rintro ⟨h1, h2⟩
       exact ⟨h1, (ih _ _).mpr h2⟩
 
-/-- The hash child's extracted running sums are the `bits`-column reads. -/
-private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (cfg : Sinsemilla.HashPiece.Config)
-    (inp : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (iH : RegionIndex)
-    (place : RegionIndex → ℕ) (env : Environment Fp) :
-    ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract cfg inp iH
-        (⟨place, env⟩ : Placed Environment Fp)).zs
-      = Sinsemilla.Chain.zsFam
-          (fun r => env.advice cfg.bits ((place iH + r : ℕ) : ℤ)) ns 0 := by
-  show (eval (⟨place, env⟩ : Placed Environment Fp)
-    (Sinsemilla.Chain.zsCellsVal cfg iH ns 0)
-    : Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) = _
-  exact Sinsemilla.Chain.eval_zsCellsVal cfg iH _ ns 0
-
 private theorem zs_get_zero (f : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ) :
     Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths (n :: rest))
       (Sinsemilla.Chain.zsFam f (n :: rest) base) ⟨0, by simp [Sinsemilla.Chain.zLengths]⟩
@@ -702,9 +688,9 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
       Sinsemilla.Chain.PieceChunks ns
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) inp).pieces chunks ∧
       Sinsemilla.Chain.ZsFacts ns chunks
-        ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract c.2.1
-          { pieces := inp.pieces } (i + 2)
-          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).zs ∧
+        (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+          (Sinsemilla.Chain.zsCellsVal c.2.1 (i + 2) ns 0)
+          : Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) ∧
       ∀ B, hashToPoint G.S Q chunks = some B →
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
           ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output
@@ -901,7 +887,7 @@ theorem soundness (G : Generators) (R : FixedBase)
     ] at hGbS hGdS hGeS hGgS hGhS hY1S hY2S hCmS
   -- ── the six hash running-sum value facts ──
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
-  rw [hashExtract_zs] at hZs
+  rw [Sinsemilla.Chain.eval_zsCellsVal] at hZs
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
   have hz13a := NoteCommit.zsFacts_cell ns _ chunks _
@@ -1327,7 +1313,7 @@ theorem completeness (G : Generators) (R : FixedBase)
     (by rw [Sinsemilla.CommitDomain.commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
     hPB2 hHon2
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
-  rw [hashExtract_zs] at hZs
+  rw [Sinsemilla.Chain.eval_zsCellsVal] at hZs
   rw [pieces_eval_eq_env] at hPC
   simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_zero, Nat.add_assoc,
