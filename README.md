@@ -1,33 +1,100 @@
-# Midnight SHA-256 in Clean
+<p align="center"> <img src="images/logo-w-subtitle-rect.png" width="400" alt="Clean logo"> </p>
 
-Circuits written as Clean programs, proved in Lean, compiled to midnight-zk; Lean derives the same verifying key as Rust.
+<div align="center">
 
-## What is proved
+[![Chat on Telegram][ico-telegram]][link-telegram]
+[![Ask DeepWiki][ico-deep-wiki]][link-deep-wiki]
 
-About midnight-zk `1e39c120`'s `sha_preimage` (k = 13):
+</div>
 
-- [`Preimage.formal_instance_sha256`](Midnight/SHA256/Semantics/Formal.lean): soundness, the instance column holds the SHA-256 of the message.
-- [`WitnessComplete.exists_for_message`](Midnight/SHA256/WitnessComplete.lean): completeness, for every 24-byte message.
-- [`KeyCheck.rust_key`](Midnight/SHA256/KeyCheck.lean): Lean's key hashes to Rust's `ShaPreImageCircuitVk`; `KeyCheck.srs_anchor` ties the setup to Filecoin's.
-- [`CS.Checked.additive_selector_clean`](Midnight/Additive.lean): the additive-selector (trashcan) check equals the trashcans' gates, outside a bounded set of challenges.
+`clean` is an embedded Lean DSL for writing zk circuits, targeting popular arithmetizations like AIR, PLONK and R1CS.
 
-## Build
+**Check out our blog post for an introduction: https://blog.zksecurity.xyz/posts/clean**
 
-Needs Linux, Lean 4.35, Rust 1.90+, Python 3.
+`clean` is developed by [zkSecurity](https://zksecurity.xyz/), currently as part of a Verified-zkEVM grant.
 
-1. Check out midnight-zk `1e39c120` as `../midnight-zk`.
-2. Derive the k = 13 setup:
-   ```bash
-   cd ../midnight-zk/zk_stdlib
-   curl -L -o examples/assets/bls_filecoin_2p19 \
-     https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com/bls_filecoin_2p19
-   cargo run --release --example sha_preimage
-   ```
-3. Build all proofs and key checks (~40 min on 16 cores): `lake build Midnight`.
+We intend to build out `clean` into a universal zk framework that produces **formally verified, bug-free circuits** for the entire ecosystem. See the [roadmap](#roadmap).
 
-## Tools
+## Community
 
-- [`scripts/vk-export`](scripts/vk-export): export a [challenge](https://github.com/zksecurity/midnight-sha256-challenge) submission and compare Lean's key with Rust's.
-- [`scripts/lowering-replay`](scripts/lowering-replay): check Lean's lowering against Rust's on 191 fixtures.
+Public Telegram group to discuss `clean`: [t.me/clean_zk](https://t.me/clean_zk)
 
-Fork of [Verified-zkEVM/clean](https://github.com/Verified-zkEVM/clean) at `e4f973bf`.
+Please join if you want to use `clean`, or contribute, or if you have any questions!
+
+We always welcome contributors! Check out our [good first issues](https://github.com/Verified-zkEVM/clean/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22).
+
+## Using the repo
+
+Follow [official instructions](https://lean-lang.org/lean4/doc/setup.html) to install `elan` (the package manager) and Lean4.
+
+Clone this repo, and test that everything works by building:
+
+```bash
+lake build
+```
+
+After that, we recommend open the repo in VSCode to get immediate inline feedback from the compiler while writing theorems.
+
+Make sure to install the `lean4` extension for VSCode!
+
+## Documentation
+
+We are actively working on creating proper documentation for `clean`. In the meantime, we recommend checking out our [AI-generated DeepWiki](https://deepwiki.com/Verified-zkEVM/clean).
+
+⚠️ **Disclaimer:** The wiki may contain inaccuracies or outdated details. Please take all information with a grain of salt until the official documentation is released.
+
+## Code Style
+
+We follow standard Lean/Mathlib conventions with some local variations. See [doc/conventions.md](doc/conventions.md) for details.
+
+## Proof Finding Guide
+
+Some heuristics for finding proofs are in [doc/proving-guide.md](doc/proving-guide.md).
+
+## Roadmap
+
+The following is a rough, longer-term roadmap for clean. Note that some of the bullets below could be multi-month projects!
+
+Reach out [on TG](https://t.me/clean_zk) if you are looking for long-term contribution opportunities and you are interested in any of these!
+
+- ✅ More general lookups + VM-like table ensembles
+  - main refactor merged as https://github.com/Verified-zkEVM/clean/pull/328
+  - subproject (TODO): support in plonky3 backend
+- Polish plonky3 backend, generate constraint evaluation Rust code
+  - currently worked on by [zkSecurity](https://zksecurity.xyz/) https://github.com/Verified-zkEVM/clean/pull/192
+- clean documentation
+  - will be worked on by [zkSecurity](https://zksecurity.xyz/)
+- ✅ Witness generation: compile (subset of) Lean to IR, to generate fast WG code in backends
+  - solved by moving to a witness generation IR https://github.com/Verified-zkEVM/clean/pull/403
+- Create clean circuits from LLZK
+  - this gives us frontends like Circom
+  - subproject: demonstrate actual e2e extraction from Circom
+- Verifier challenges https://github.com/Verified-zkEVM/clean/issues/162
+  - prove lookup protocols end to end
+  - should be optional, should be able to abstract
+- Explore if we can compose with ArkLib to get e2e verification
+- More backends
+  - stwo?
+  - some R1CS
+- Support PLONK circuits with custom gates
+- Good AGENTS.md / CLAUDE.md
+- AIR table foundation, more low-level, no monad
+  - different entry points for different kinds of tables
+- Support Binius
+- Proof automation:
+  - `circuit_proof_start` should handle vectors and general ProvableTypes
+  - `circuit_proof_start` could detect subcircuits to unfold (in the right places)
+  - better automation for `localLength_eq`, `subcircuitsConsistent` etc
+- Advanced: Mixed proof systems like Longfellow-ZK
+- MORE GADGETS
+- MORE INTEGRATIONS
+-
+
+## Attribution
+
+The Lean name and logo are trademarks of Lean FRO.
+
+[ico-telegram]: https://img.shields.io/badge/@clean__zk-2CA5E0.svg?style=flat-square&logo=telegram&label=Telegram
+[link-telegram]: https://t.me/clean_zk
+[ico-deep-wiki]: https://deepwiki.com/badge.svg
+[link-deep-wiki]: https://deepwiki.com/Verified-zkEVM/clean
