@@ -1028,10 +1028,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
               List.append_nil]
             apply FormalRegionCircuit.call_keygenRegistered (round w i)
             case hconfigured =>
-              apply FormalRegionCircuit.Configured.ofPure
-              · change Add.add.Configured configInput.2
-                exact hconfig
-              · rfl
+              exact .ofPure _ _ hconfig rfl
             case hgates => keygen_registration
             case hlookups => keygen_registration
             case hfixedColumns => keygen_registration
@@ -1096,10 +1093,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
               simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
                 List.append_nil]
               have hround : (round w i).Configured cfg := by
-                apply FormalRegionCircuit.Configured.ofPure
-                · change Add.add.Configured configInput.2
-                  exact hconfig
-                · rfl
+                exact .ofPure _ _ hconfig rfl
               apply FormalRegionCircuit.call_copyCellsAssignedFrom
                 (self := round w i) (hconfigured := hround)
               intro cell hcell

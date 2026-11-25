@@ -373,9 +373,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
           (if i = 0 then yaIn else boundaryYA
             (HashPiece.reads configInput (base - 1) region).row
             (AssignedCell.of region base configInput.xA))
-        have hchild : child.keygenRequirements.configLawful configInput := by
-          change Unit
-          exact hconfig
+        have hchild : child.keygenRequirements.configLawful configInput := hconfig
         have hconfigure : child.configure = pure := rfl
         have hfixed := child.elaborated.fixedAssignmentsAgree
           configInput counts hchild base input region
@@ -397,9 +395,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
           (if i = 0 then yaIn else boundaryYA
             (HashPiece.reads configInput (base - 1) region).row
             (AssignedCell.of region base configInput.xA))
-        have hchild : child.keygenRequirements.configLawful configInput := by
-          change Unit
-          exact hconfig
+        have hchild : child.keygenRequirements.configLawful configInput := hconfig
         apply child.call_copyCellsAssignedFrom configInput
           (FormalRegionCircuit.Configured.ofPure child configInput hchild rfl)
         intro cell hcell

@@ -1805,9 +1805,8 @@ theorem synthesize_keygenRegistered
       (by
         change innerKeygenRequirements.configLawful cfg
         exact ⟨configured.1, configured.2.2⟩) rfl
-  let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
-    change Add.add.Configured configInput.2.2.addConfig
-    exact configured.2.1
+  let addConfigured : Add.add.Configured cfg.superConfig.addConfig :=
+    configured.2.1
   simp only [synthesize, Circuit.operations_bind,
     Circuit.operations_pure, operations_assignRegion,
     Operations.KeygenRegistered, List.forall_append,
@@ -1988,9 +1987,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp
             (by
               change innerKeygenRequirements.configLawful cfg
               exact ⟨configured.1, configured.2.2⟩) rfl
-        let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
-          change Add.add.Configured configInput.2.2.addConfig
-          exact configured.2.1
+        let addConfigured : Add.add.Configured cfg.superConfig.addConfig :=
+          configured.2.1
         simp only [operations, synthesize, Circuit.operations_bind,
           Circuit.operations_pure, operations_assignRegion,
           output_assignRegion, nextRegionIndex_assignRegion,
@@ -2017,9 +2015,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp
             (by
               change innerKeygenRequirements.configLawful cfg
               exact ⟨configured.1, configured.2.2⟩) rfl
-        let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
-          change Add.add.Configured configInput.2.2.addConfig
-          exact configured.2.1
+        let addConfigured : Add.add.Configured cfg.superConfig.addConfig :=
+          configured.2.1
         simp only [synthesize, Circuit.operations_bind,
           Circuit.operations_pure, operations_assignRegion, List.append_nil]
         apply Operations.LookupSelectorsAnchoredBy.append
@@ -2062,9 +2059,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp
             (by
               change innerKeygenRequirements.configLawful cfg
               exact ⟨hconfig.1, hconfig.2.2⟩) rfl
-        let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
-          change Add.add.Configured configInput.2.2.addConfig
-          exact hconfig.2.1
+        let addConfigured : Add.add.Configured cfg.superConfig.addConfig :=
+          hconfig.2.1
         let innerStep := assignRegion
           "Base-field elem fixed-base mul (incomplete addition)"
           ((inner B).call cfg 0 ⟨alpha⟩)
