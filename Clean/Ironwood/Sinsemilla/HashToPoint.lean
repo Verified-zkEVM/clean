@@ -1180,6 +1180,15 @@ theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Poi
   simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
     Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
 
+/-- The hash-to-point extraction data, stated on the folded layouter circuit. -/
+theorem hashCircuit_extract (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : ns ≠ []) (cfg : Sinsemilla.HashPiece.Config)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (hashCircuit G ns Q hQ hns).extract cfg input i env =
+      Sinsemilla.Chain.extract ns (fun _ => Q.y) cfg 0 i env :=
+  rfl
+
 derive_contract_bridges hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp)
   (hQ : Q.OnCurve) (hns : ns ≠ []) := hashCircuit G ns Q hQ hns
 

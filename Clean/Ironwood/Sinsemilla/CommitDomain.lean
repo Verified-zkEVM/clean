@@ -426,9 +426,8 @@ def commit (G : Generators) (ns : List ℕ)
   Assumptions _ := True
 
   Witness := fun F => Sinsemilla.Chain.ChainWit ns F × (Vector F 85 × Fq)
-  extract := fun (bcfg, hcfg, _) input i₀ env =>
-    ((HashToPoint.hashCircuit G ns Q hQ hns).extract hcfg
-      { pieces := input.pieces } (i₀ + 2) env,
+  extract := fun (bcfg, hcfg, _) _ i₀ env =>
+    (Sinsemilla.Chain.extract ns (fun _ => Q.y) hcfg 0 (i₀ + 2) env,
      Ecc.MulFixed.FullWidth.fwExtract bcfg i₀ env)
 
   Spec input output wit :=
@@ -458,51 +457,30 @@ def commit (G : Generators) (ns : List ℕ)
     have hHashS := hashOut_spec
       (by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE) trivial
     rw [HashToPoint.hashCircuit_spec_eq] at hHashS
+    rw [HashToPoint.hashCircuit_extract] at wit_hashOut_eq
+    subst wit_hashOut_eq
     obtain ⟨chunks, hPC, hZs, -, hContract⟩ := hHashS
-    -- input eval landing: bridge to the whole-struct `input_eq`
-    have hPC' : PieceChunks ns input.pieces chunks := by
-      rw [← input_eq]
-      exact hPC
-    refine ⟨chunks, hPC', hZs, ?_⟩
+    refine ⟨chunks, hPC, hZs, ?_⟩
     intro B hB
-    have hcoords := hContract B hB
-    -- the hash output point value IS the eval'd point (projection commute; go through
-    -- the componentwise `ProvableStruct.Halo2.eval` — the flat eval of the whole symbolic-size
-    -- Output struct is a whnf wall)
-    have hpoint : (ProvableStruct.Halo2.eval place env hashOut).point
-        = (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp) := by
-      rw [ProvableType.Halo2.eval_cells]; rfl
     -- the hash point equals B
-    have hPB : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
+    have hPB : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut_point
         : Value Point Fp) = B := by
+      obtain ⟨hx, hy⟩ := hContract B hB
       obtain ⟨bx, byv⟩ := B
-      have hx : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp).x = bx := by
-        rw [← hpoint]; exact hcoords.1
-      have hy : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp).y = byv := by
-        rw [← hpoint]; exact hcoords.2
+      simp only at hx hy
       rw [← hx, ← hy]
     -- B is a valid point (the chunks are generator indices)
     have hBvalid : B.Valid :=
       Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
         (Sinsemilla.Chain.pieceChunks_bound hPC) hB
-    -- the complete addition's contract (input literal already eval'd componentwise)
-    have hAddS := result_spec trivial (by
-      show (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp).Valid ∧
-        (eval (⟨place, env⟩ : Placed Environment Fp) blindOut
-          : Value Point Fp).Valid
-      constructor
-      · rw [hPB]; exact hBvalid
-      · rw [hBl]; exact R.smul_valid _)
-    obtain ⟨hVout, hSum⟩ := hAddS
-    have hresult : (eval (⟨place, env⟩ : Placed Environment Fp) result
-        : Value Point Fp) = { x := output_x, y := output_y } := by
-      rw [← result_eq]
-      rw [Ecc.Add.addFormal_output, Ecc.Add.add_output_cells]
-      rw [ProvableType.Halo2.eval_cells, Sinsemilla.Chain.point_eval_literal]
+    -- the complete addition's contract
+    obtain ⟨hVout, hSum⟩ := out_spec trivial ⟨by rw [hPB]; exact hBvalid,
+      by rw [hBl]; exact R.smul_valid _⟩
+    have hresult : (eval (⟨place, env⟩ : Placed Environment Fp)
+        (Ecc.Add.addFormal.output cfg { p := hashOut_point, q := blindOut } (i₀ + 1 + 2))
+          : Value Point Fp) = { x := output_x, y := output_y } := by
+      rw [Ecc.Add.addFormal_output_cells, ProvableType.Halo2.eval_cells,
+        Sinsemilla.Chain.point_eval_literal]
       congr 1
       · exact output_eq.1
       · exact output_eq.2
@@ -523,12 +501,12 @@ def commit (G : Generators) (ns : List ℕ)
     -- the pieces value bridge: the hint-erased eval of the message-piece cells equals
     -- the prover-view piece value (`input_eq` lands the whole struct; the hint-erased
     -- and prover-view evals of a pure-provable var agree up to defeq)
-    have hpe : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var.pieces
-        : Value (fields ns.length) Fp) = input.pieces := by
-      rw [← input_eq, ProvableType.Halo2.eval_var, ProvableType.Halo2.eval_var_prover]
+    have hpe : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var_pieces
+        : Value (fields ns.length) Fp) = input_pieces := by
+      rw [← input_eq.1, ProvableType.Halo2.eval_var, ProvableType.Halo2.eval_var_prover]
     -- the hash child's honest-prover precondition, transported to the minted witness
     have hPAhash : (HashToPoint.hashCircuit G ns Q hQ hns).ProverAssumptions
-        ({ pieces := eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var.pieces }
+        ({ pieces := eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var_pieces }
           : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
         wit_hashOut env.hint := by
       rw [← wit_hashOut_eq, HashToPoint.hashCircuit_proverAssumptions_eq]
@@ -540,31 +518,23 @@ def commit (G : Generators) (ns : List ℕ)
     rw [HashToPoint.hashCircuit_proverSpec_eq] at hPSHash
     have hres := hPSHash ⟨bx, byv⟩ (by
       simp only [hpe]; exact hB0)
-    -- projection commute through the componentwise `ProvableStruct.Halo2.eval` (the flat
-    -- eval of the whole symbolic-size Output struct is a whnf wall)
-    have hpointP : (ProvableStruct.Halo2.eval place env.toEnvironment hashOut).point
-        = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp) := by
-      rw [ProvableType.Halo2.eval_cells]; rfl
     -- the hash point equals the honest B0
-    have hPB0 : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point : Value Point Fp)
-        = (⟨bx, byv⟩ : Point Fp) := by
-      have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point : Value Point Fp).x = bx := by
-        rw [← hpointP]; exact hres.1
-      have hy : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point : Value Point Fp).y = byv := by
-        rw [← hpointP]; exact hres.2
+    have hPB0 : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut_point
+        : Value Point Fp) = (⟨bx, byv⟩ : Point Fp) := by
+      obtain ⟨hx, hy⟩ := hres
+      simp only at hx hy
       rw [← hx, ← hy]
     have hB0valid : (⟨bx, byv⟩ : Point Fp).Valid :=
       Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
         (Sinsemilla.Chain.pieceChunks_bound
-          (Sinsemilla.Chain.pieceChunks_honestChunks ns input.pieces hPBounds)) hB0
+          (Sinsemilla.Chain.pieceChunks_honestChunks ns input_pieces hPBounds)) hB0
     refine ⟨⟨by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hMulE,
       by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial,
       by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial⟩,
       ⟨by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE, trivial,
         hPAhash⟩,
       trivial, ?_, trivial⟩
-    show (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point
+    show (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut_point
         : Value Point Fp).Valid ∧
       (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) blindOut
         : Value Point Fp).Valid
