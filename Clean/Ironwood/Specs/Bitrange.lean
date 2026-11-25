@@ -104,39 +104,44 @@ theorem val_Fp (x : Fp) :
     FiniteField.val x = ZMod.val x := FiniteField.val_F x
 
 /-- The raw `n / 2^s % 2^l` shape (definitionally `bitrange`) folded into the named form,
-for the rare proof that still needs to bridge a manually-written division/mod chain into
-`bitrange`, rather than going through `Clean.U64Expr.bitrange`. -/
+for proofs that bridge a division/mod chain into `bitrange`. -/
 theorem bitrange_eq (n s l : ℕ) : n / 2 ^ s % 2 ^ l = bitrange n s l := rfl
 
 end Zcash.Circuits.Specs
 
-open Zcash.Circuits.Specs (bitrange)
-
 /-! ## The witness-IR counterpart of `bitrange`
 
-`Witgen.U64ExprOver.bitrange n start len` is the witness-generation-IR expression for the
-same bit slice `Zcash.Circuits.Specs.bitrange` computes on concrete naturals — write
-`n.bitrange start len` inside a witness generator (via dot notation) instead of spelling
-out `n / 2 ^ start % 2 ^ len`. Generic over the variable atom `V`, matching the
-atom-generic authoring sugar (`Clean/Circuit/WitnessIRSugar.lean`). It's kept as an
-opaque named definition (not unfolded by `circuit_norm`) specifically so that
-`circuit_proof_start`'s normalization produces `Zcash.Circuits.Specs.bitrange (n.eval ctx) start
-len` directly, in the exact shape the rest of the canonicity proofs already expect — no
-manual re-folding needed. -/
+`Witgen.FExprOver.bitrange x start len` computes, in the field, the bit slice
+`Zcash.Circuits.Specs.bitrange (val x) start len` from the bits of `x`. Generic over the
+variable atom `V`, like the witness IR. -/
 
 namespace Witgen
 
-/-- The `U64Expr` (witness-IR) counterpart of `Zcash.Circuits.Specs.bitrange`. -/
-def U64ExprOver.bitrange {F V : Type} (n : U64ExprOver F V) (start len : ℕ) : U64ExprOver F V :=
-  n / (2 ^ start : ℕ) % (2 ^ len : ℕ)
+variable {V Env : Type}
+
+/-- Bits `start .. start+len-1` of `val x` as a field element: `Σ bit (start + k) · 2^k`. -/
+def FExprOver.bitrange (x : FExprOver Fp V) (start : ℕ) : ℕ → FExprOver Fp V
+  | 0 => .const 0
+  | k + 1 => .add (x.bitrange start k) (.ite (.bit x (start + k)) (.const (2 ^ k)) (.const 0))
+
+@[simp, circuit_norm]
+theorem FExprOver.eval_bitrange [WitgenEnv Fp Env V] (ctx : CtxOver Fp Env)
+    (x : FExprOver Fp V) (start len : ℕ) :
+    (x.bitrange start len).eval ctx
+      = ((Zcash.Circuits.Specs.bitrange (x.eval ctx).val start len : ℕ) : Fp) := by
+  induction len with
+  | zero => simp [FExprOver.bitrange, FExprOver.eval, Zcash.Circuits.Specs.bitrange, Nat.mod_one]
+  | succ k ih =>
+    set y := (x.eval ctx).val / 2 ^ start
+    have hbit : (FiniteField.val (x.eval ctx)).testBit (start + k)
+        = decide (y / 2 ^ k % 2 = 1) := by
+      rw [Zcash.Circuits.Specs.val_Fp, Nat.testBit_eq_decide_div_mod_eq, Nat.div_div_eq_div_mul,
+        ← pow_add]
+    have hsplit : y % 2 ^ (k + 1) = y % 2 ^ k + 2 ^ k * (y / 2 ^ k % 2) := by
+      rw [pow_succ, Nat.mod_mul]
+    simp only [FExprOver.bitrange, FExprOver.eval, BExprOver.eval, ih, hbit,
+      Zcash.Circuits.Specs.bitrange]
+    rw [hsplit]
+    rcases Nat.mod_two_eq_zero_or_one (y / 2 ^ k) with h | h <;> simp [h] <;> rfl
 
 end Witgen
-
-namespace Clean
-
-variable {F : Type} [FiniteField F]
-
-@[simp, circuit_norm] theorem U64Expr.eval_bitrange (ctx : Ctx F) (n : U64Expr F) (start len : ℕ) :
-    (n.bitrange start len).eval ctx = bitrange (n.eval ctx) start len := rfl
-
-end Clean

@@ -153,10 +153,10 @@ structure Output (n : ℕ) (F : Type) where
   zs : Vector F n
 deriving ProvableStruct
 
-/-- The honest running-sum witness at window `idx`: `z_idx = α ≫ (W·idx)`, as a witgen
-program over the `α` cell (the `LookupRangeCheck.zWitness` spelling). -/
+/-- The honest running-sum witness at window `idx`: `z_idx = α ≫ (W·idx)`, computed in the
+field from the `α` cell as halo2 does (`Witgen.FExprOver.runningSum`). -/
 def zWitness (W idx : ℕ) (alpha : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .ofFExpr (.ofNat (.div (.val (.expr alpha)) (.const (2 ^ (W * idx)))))
+  .ofFExpr ((Witgen.FExprOver.expr alpha).runningSum W idx)
 
 /-- The selector-enable loop (Rust `decompose` lines 161-164): the range-check gate on
 every window row. A named def (not inline `forRange'`) so the constraints/witness chunks

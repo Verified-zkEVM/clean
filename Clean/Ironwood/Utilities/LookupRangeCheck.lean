@@ -1,6 +1,7 @@
 import Clean.Halo2
 import Clean.Ironwood.Ecc.Basic
 import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Utilities.RunningSum
 
 /-!
 Reference:
@@ -1028,10 +1029,10 @@ structure Output (F : Type) where
 deriving ProvableStruct
 
 /-- The honest running-sum witness value at word `idx`: `z_idx = element ≫ (K·idx)`
-(donor `CopyCheck.main`). As a witgen program over the `element` cell: cast to ℕ (`.val`),
-shift right by `K·idx` bits (`.div` by `2^(K·idx)`), cast back to the field (`.ofNat`). -/
+(donor `CopyCheck.main`), computed in the field from the `element` cell as halo2 does
+(`Witgen.FExprOver.runningSum`). -/
 def zWitness (K idx : ℕ) (element : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .ofFExpr (.ofNat (.div (.val (.expr element)) (.const (2 ^ (K * idx)))))
+  .ofFExpr ((Witgen.FExprOver.expr element).runningSum K idx)
 
 /-- One round of the running sum (Rust loop body, `lookup_range_check.rs:211-233`), at
 word `idx` inside the ambient region starting at base row `row` (`= offset + idx`): enable
