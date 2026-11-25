@@ -16,8 +16,6 @@ public import Clean.Specs.PoseidonOptimized
 
 public meta import Clean.Specs.PoseidonOptimized
 
-open Clean
-
 @[expose] public section
 
 namespace Specs.PoseidonOptimized

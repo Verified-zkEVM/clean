@@ -10,8 +10,6 @@ public import Clean.Specs.PoseidonParameterGeneration
 public meta import Lean.Elab.Term
 public meta import Clean.Specs.PoseidonParameterGeneration
 
-open Clean
-
 @[expose] public section
 
 namespace Specs.Poseidon.ParameterGeneration

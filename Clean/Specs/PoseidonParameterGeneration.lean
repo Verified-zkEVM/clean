@@ -10,8 +10,6 @@ module
 
 public import Mathlib.Data.Int.GCD
 
-open Clean
-
 @[expose] public section
 
 namespace Specs.Poseidon.ParameterGeneration

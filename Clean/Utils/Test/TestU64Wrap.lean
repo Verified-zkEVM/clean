@@ -62,7 +62,7 @@ variable {F : Type} [FiniteField F]
 /-- `BExpr.bit` is a condition; casting it into the field gives the `0`/`1` element, in
 the same normal form `VExpr.bitsOf` produces for the loop-indexed case. -/
 example (ctx : Ctx F) (x : FExpr F) (i : ℕ) :
-    FExpr.eval ctx (x.bit i) = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
+    Witgen.FExprOver.eval ctx (x.bit i) = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
   simp only [circuit_norm]
 
 /-- The bit index is a static `ℕ`, so it is exact past 64 on large fields. -/
