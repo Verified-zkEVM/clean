@@ -153,29 +153,9 @@ theorem operations_enable (gate : Gate F) (row : ℕ) (self : RegionIndex) :
 
 @[circuit_norm]
 theorem operations_enableLookup (arg : LookupArgument F) (auxiliarySelectors : List Selector)
-    (row : ℕ)
-    (hauxiliary : auxiliarySelectors.Forall fun selector =>
-      selector.index ∈ arg.selectorIndices)
-    (self : RegionIndex) :
-    (arg.enable auxiliarySelectors row hauxiliary).operations self =
+    (row : ℕ) (self : RegionIndex) :
+    (arg.enable auxiliarySelectors row).operations self =
       [.enableLookup arg (arg.masterSelector :: auxiliarySelectors) row] := rfl
-
-open Lean Meta in
-/--
-`operations_enableLookup` as a simproc. A proof that unfolds the lookup argument leaves the
-side-condition proof's type mentioning the folded argument, and since Lean 4.35 checks the
-type of an assigned proof metavariable at reducible transparency, the lemma then no longer
-matches. The simproc reads the `enable` application syntactically instead.
--/
-dsimproc reduceOperationsEnableLookup
-    (RegionCircuit.operations (LookupArgument.enable _ _ _ _) _) := fun e => do
-  unless e.isAppOfArity ``RegionCircuit.operations 5 do
-    return .continue
-  unless e.appFn!.appArg!.isAppOf ``LookupArgument.enable do
-    return .continue
-  return .done (← withDefault <| whnf e)
-
-attribute [circuit_norm] reduceOperationsEnableLookup
 
 @[keygen_norm]
 theorem lookupActivationsWellFormed_operations_enableLookup
@@ -184,7 +164,7 @@ theorem lookupActivationsWellFormed_operations_enableLookup
     (hauxiliary : auxiliarySelectors.Forall fun selector =>
       selector.index ∈ arg.selectorIndices)
     (self : RegionIndex) :
-    (arg.enable auxiliarySelectors row hauxiliary).operations self
+    (arg.enable auxiliarySelectors row).operations self
       |>.LookupActivationsWellFormed := by
   rw [operations_enableLookup, RegionOperations.LookupActivationsWellFormed]
   rw [List.forall_cons]

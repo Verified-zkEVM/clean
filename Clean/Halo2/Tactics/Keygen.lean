@@ -98,7 +98,7 @@ attribute [keygen_spine]
   RegionCircuit.operations_bind RegionCircuit.operations_pure
   Circuit.operations_bind Circuit.operations_pure
   operations_assignRegion operations_assignAdvice operations_assignFixed
-  operations_copyAdvice operations_enable operations_enableLookup reduceOperationsEnableLookup
+  operations_copyAdvice operations_enable operations_enableLookup
   operations_constrainEqual operations_constrainInstance operations_loadTable
   operations_constrainConstant operations_assignAdviceFromInstance
   operations_cellAt operations_cellVec
@@ -270,18 +270,6 @@ theorem assignAdvice_keygenRegistered
 open Lean Elab Tactic Meta
 
 namespace KeygenRegistration
-
-/--
-Run registration proof search with Lean's pre-4.35 type check for assigned metavariables.
-The registration lemmas match configured handles and lookup enables that carry proof
-arguments, and those proofs' types mention the circuit bundle or lookup argument in the
-folded form the proof was elaborated against. Matching them against the normalized goal
-needs to unfold that bundle, which `backward.isDefEq.respectTransparency.types` (on by
-default since 4.35) forbids at reducible transparency.
--/
-def withBundleProofUnification {m : Type → Type} {α : Type} [MonadWithOptions m]
-    (x : m α) : m α :=
-  withOptions (·.setBool `backward.isDefEq.respectTransparency.types false) x
 
 /-- Find a transparent configure-program head below an output/delta projection. -/
 def configureHead? (target : Expr) : Option Name := do
@@ -676,13 +664,22 @@ partial def localProductWitness? (target : Expr) : SimpM (Option Expr) := do
       return some result
   return none
 
-/-- Extract a proof when simp has reduced a proposition to `True`. -/
-def proofOfSimpTrue? (result : Simp.Result) : MetaM (Option Expr) := do
+/--
+Extract a proof of `proposition` when simp has reduced it to `True`. The proof is stated
+at `proposition` itself: simp's definitional steps leave no trace in its proof term, and
+lemmas about the handles this proof is passed to match the proof's type at implicit
+transparency.
+-/
+def proofOfSimpTrue? (proposition : Expr) (result : Simp.Result) :
+    MetaM (Option Expr) := do
   unless result.expr.isConstOf ``True do
     return none
-  match result.proof? with
-  | some proof => return some (← mkOfEqTrue proof)
-  | none => return some (mkConst ``True.intro)
+  let proof ← match result.proof? with
+    | some proof => mkOfEqTrue proof
+    | none => pure (mkConst ``True.intro)
+  if (← instantiateMVars (← inferType proof)) == (← instantiateMVars proposition) then
+    return some proof
+  return some (← mkExpectedTypeHint proof proposition)
 
 /-- The symbolic allocation states at every node of an append-only configure tree. -/
 partial def betaZetaHead (expression : Expr) : Expr :=
@@ -892,16 +889,25 @@ Recover or construct the configured handle required by a call certificate.
 Composition normally projects it from the parent's direct-child provenance product.
 Pure/output-configured helper calls instead use one of the framework constructors
 tagged `keygen_configured`.
+
+The handle is found against the fully reduced `target`, but it is returned at the declared
+`target`: lemmas about the certificate's arguments match the handle's type at implicit
+transparency, which does not unfold the circuit bundle that the declared type names.
 -/
 partial def configuredWitness? (target : Expr)
     (candidateNodes : Array (Expr × Expr) := #[]) (fuel : Nat := 8) :
     SimpM (Option Expr) := do
+  let declared ← instantiateMVars target
+  let atDeclared (witness : Expr) : SimpM (Option Expr) := do
+    if (← instantiateMVars (← inferType witness)) == declared then
+      return some witness
+    return some (← mkExpectedTypeHint witness declared)
   let configureProjections := keygenConfigureProjectionAttr.getDecls (← getEnv)
   let target ← withTransparency .all <| whnf target
   if ← isDefEq target (mkConst ``Unit) then
-    return some (mkConst ``Unit.unit)
+    return ← atDeclared (mkConst ``Unit.unit)
   if let some proof ← localProductWitness? target then
-    return some proof
+    return ← atDeclared proof
   if target.isAppOfArity ``Prod 2 then
     let arguments := target.getAppArgs
     let some left ← configuredWitness? arguments[arguments.size - 2]!
@@ -910,7 +916,7 @@ partial def configuredWitness? (target : Expr)
     let some right ← configuredWitness? arguments[arguments.size - 1]!
         candidateNodes (fuel - 1)
       | return none
-    return some (← mkAppM ``Prod.mk #[left, right])
+    return ← atDeclared (← mkAppM ``Prod.mk #[left, right])
   if fuel == 0 then
     return none
   let env ← getEnv
@@ -979,7 +985,7 @@ partial def configuredWitness? (target : Expr)
               requirementType candidateNodes (fuel - 1)
             | throwError "configured requirement was not recovered"
           let proof ← instantiateMVars (mkApp partialApplication requirement)
-          return some proof
+          return ← atDeclared proof
         catch _ =>
           set metaState
       continue
@@ -1011,7 +1017,7 @@ partial def configuredWitness? (target : Expr)
                   Simp.withSimpTheorems #[circuitDefinition] do
                     Simp.simp sideTarget
                 for _ in [0:8] do
-                  if (← proofOfSimpTrue? result).isSome then
+                  if result.expr.isConstOf ``True then
                     break
                   let some configureApp := result.expr.find? fun expression =>
                       let head := expression.getAppFn.constName?
@@ -1030,16 +1036,17 @@ partial def configuredWitness? (target : Expr)
                     Simp.withSimpTheorems #[circuitDefinition] do
                       Simp.simp result.expr
                   result ← result.mkEqTrans next
-                let some proof ← proofOfSimpTrue? result
+                let some proof ← proofOfSimpTrue? sideTarget result
                   | throwError "circuit configure is not definitionally pure"
                 sideCondition.assign proof
                 continue
-              try
-                withTransparency .default sideCondition.refl
-                continue
-              catch _ =>
-                pure ()
-              let some proof ← proofOfSimpTrue? (← Simp.simp sideTarget)
+              if let some (_, lhs, _) := sideTarget.eq? then
+                let reflexivity ← mkEqRefl lhs
+                if ← withTransparency .default <|
+                    isDefEq (← inferType reflexivity) sideTarget then
+                  sideCondition.assign (← mkExpectedTypeHint reflexivity sideTarget)
+                  continue
+              let some proof ← proofOfSimpTrue? sideTarget (← Simp.simp sideTarget)
                 | throwError "configured constructor proposition was not simplified"
               sideCondition.assign proof
             else
@@ -1049,7 +1056,7 @@ partial def configuredWitness? (target : Expr)
               sideCondition.assign proof
         let proof ← instantiateMVars goalExpr
         unless proof.isMVar do
-          return some proof
+          return ← atDeclared proof
         throwError "configured constructor left unresolved metavariables"
       catch _ =>
         set metaState
@@ -1130,7 +1137,7 @@ partial def proveConcreteForall (goal : MVarId) (fuel : Nat := 256) : SimpM Bool
   let values := target.getAppArgs[2]!
   if values.isAppOfArity ``List.nil 1 then
     let simplified ← simpCallRouting target
-    let some proof ← proofOfSimpTrue? simplified
+    let some proof ← proofOfSimpTrue? target simplified
       | return false
     goal.assign proof
     return true
@@ -1149,9 +1156,10 @@ partial def proveConcreteForall (goal : MVarId) (fuel : Nat := 256) : SimpM Bool
   let goals ← conjunctionGoal.applyConst ``And.intro
   let [headGoal, tailGoal] := goals
     | return false
+  let headTarget ← instantiateMVars (← headGoal.getType)
   let simplified ← headGoal.withContext do
-    simpCallRouting (← instantiateMVars (← headGoal.getType))
-  let some proof ← proofOfSimpTrue? simplified
+    simpCallRouting headTarget
+  let some proof ← proofOfSimpTrue? headTarget simplified
     | trace[Halo2.keygen] "concrete routing head residual:\n{simplified.expr}"
       return false
   headGoal.assign proof
@@ -1295,10 +1303,10 @@ def proveWithCallCertificate?
           trace[Halo2.keygen] "routed list-membership premise"
           continue
         let mut simplified ← Simp.simp sideTarget
-        let mut proof? ← proofOfSimpTrue? simplified
+        let mut proof? ← proofOfSimpTrue? sideTarget simplified
         if proof?.isNone then
           simplified ← simpCallRouting sideTarget
-          proof? ← proofOfSimpTrue? simplified
+          proof? ← proofOfSimpTrue? sideTarget simplified
         let some proof := proof?
           | trace[Halo2.keygen] "routing residual:\n{simplified.expr}"
             throwError "keygen call routing premise was not simplified"
@@ -1319,8 +1327,7 @@ recognizes the call and chooses the certificate; ordinary `keygen_norm` simp lem
 prove the gate/lookup inclusions, so standard facts such as `true_or` remain fully
 composable with circuit-local simp lemmas.
 -/
-def callRegistrationSimproc (target : Expr) : SimpM Simp.Step :=
-  withBundleProofUnification do
+def callRegistrationSimproc (target : Expr) : SimpM Simp.Step := do
   let bundles ← taggedCallBundles target
   if bundles.isEmpty then
     return .continue
@@ -1555,8 +1562,7 @@ It first applies the shared structural simp sets, then selectively unfolds named
 configure/synthesis heads that still block a registration goal. Formal-circuit calls
 stay opaque for explicit discharge through the compositional registration lemmas.
 -/
-elab "keygen_registration" : tactic =>
-  KeygenRegistration.withBundleProofUnification do
+elab "keygen_registration" : tactic => do
   if (← getGoals).isEmpty then
     return
   trace[Halo2.keygen] "keygen_registration: introductions"
