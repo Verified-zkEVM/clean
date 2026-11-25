@@ -519,7 +519,7 @@ private theorem wpointNonId_output (c : Ecc.WitnessPoint.Config)
         : Var Point Fp) := rfl
 
 private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
+    (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
         psi := c7, rcm := r })
@@ -534,7 +534,7 @@ private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem vcInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
+    (c1 c2 : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var ValueCommit.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { rcv := r, magnitude := c1, sign := c2 })
     = { rcv := (), magnitude := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
@@ -553,14 +553,14 @@ private theorem dnInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem saInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (p : Point (AssignedCell Fp)) (a : Var UnconstrainedU64 Fp) :
+    (p : Point (AssignedCell Fp)) (a : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var SpendAuthority.Input Fp) (⟨place, env⟩ : Placed Environment Fp)
       { alpha := a, akP := p })
     = { alpha := (), akP := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem civkInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
+    (c1 c2 : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var CommitIvk.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { ak := c1, nk := c2, rivk := r })
     = { ak := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
@@ -588,11 +588,11 @@ private theorem layerInput_eval_eq (place : RegionIndex → ℕ) (env : Environm
 
 private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
-    (r : Var UnconstrainedU64 Fp) :
+    (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var ValueCommit.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { rcv := r, magnitude := c1, sign := c2 })
     = { rcv := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedU64 Fp),
+          (r : Var (UnconstrainedLimbs 4) Fp),
         magnitude := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c1 : Var field Fp),
         sign := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
@@ -601,14 +601,14 @@ private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
 
 private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
-    (r : Var UnconstrainedU64 Fp) :
+    (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var CommitIvk.Main.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { ak := c1, nk := c2, rivk := r })
     = { ak := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
         nk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c2 : Var field Fp),
         rivk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedU64 Fp) } := by
+          (r : Var (UnconstrainedLimbs 4) Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
@@ -625,7 +625,7 @@ private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
 
 private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp)
-    (r : Var UnconstrainedU64 Fp) :
+    (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
         psi := c7, rcm := r })
@@ -638,7 +638,7 @@ private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
         psi := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c7 : Var field Fp),
         rcm := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedU64 Fp) } := by
+          (r : Var (UnconstrainedLimbs 4) Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 /-! ## Stage outputs and offsets -/

@@ -352,7 +352,7 @@ private theorem short_extract_eq' (b : ℕ) (cfg : LookupRangeCheck.Config 10)
   simp only [circuit_norm, Nat.add_zero]
 
 private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
-    (c₀ c₁ c₂ c₃ : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
+    (c₀ c₁ c₂ c₃ : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
       ((⟨#v[c₀, c₁, c₂, c₃], r⟩
         : Var (Sinsemilla.CommitDomain.Input ns.length) Fp).pieces)
@@ -365,7 +365,7 @@ private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnviro
 
 /-- Environment-side sibling of `pieces_eval_eq`. -/
 private theorem pieces_eval_eq_env (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c₀ c₁ c₂ c₃ : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
+    (c₀ c₁ c₂ c₃ : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (⟨place, env⟩ : Placed Environment Fp)
       ((⟨#v[c₀, c₁, c₂, c₃], r⟩
         : Var (Sinsemilla.CommitDomain.Input ns.length) Fp).pieces)

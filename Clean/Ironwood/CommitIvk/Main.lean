@@ -44,11 +44,11 @@ def ns : List ℕ := [24, 0, 23, 0]
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
 
 /-- The main circuit's inputs: the `ak`/`nk` field-element cells and the blinding
-scalar's nat-valued reading program `rivk` (a prover hint). -/
+scalar's limb-valued reading program `rivk` (a prover hint). -/
 structure Inputs (F : Type) where
   ak : F
   nk : F
-  rivk : UnconstrainedU64 F
+  rivk : UnconstrainedLimbs 4 F
 deriving CircuitType
 
 /-! ## Witness programs (the canonical bit-slice values; Rust computes the same from

@@ -1,5 +1,6 @@
 import Clean.Circuit.WitnessIR
 import Clean.Circuit.WitnessIRSugar
+import Clean.Circuit.WitnessIRLimbs
 import Clean.Halo2.Provable
 
 /-!
@@ -211,6 +212,71 @@ variable {F : Type} [FiniteField F]
   with_unfolding_all rfl
 
 end UnconstrainedU64
+
+/-- Prover-only wide unsigned input (a number the prover knows that does not fit in 64 bits,
+such as a scalar-field trapdoor): the `Var` view is a builder computation yielding `n`
+little-endian 64-bit limbs, the prover value is the number they represent. -/
+structure UnconstrainedLimbs (n : ℕ) (F : Type) where
+  program : Witgen.MOver F (AssignedCell F) (Witgen.LimbsOver F (AssignedCell F) n)
+
+namespace UnconstrainedLimbs
+variable {n : ℕ}
+
+/-- The number a limb-valued builder computation evaluates to. -/
+@[circuit_norm]
+def evalProgram {F : Type} [FiniteField F] (pe : Placed ProverEnvironment F)
+    (program : Witgen.MOver F (AssignedCell F) (Witgen.LimbsOver F (AssignedCell F) n)) : ℕ :=
+  let (out, steps) := program #[]
+  out.toNat { env := pe, locals := Witgen.evalSteps pe steps.toList }
+
+@[reducible] instance : CircuitType (UnconstrainedLimbs n) where
+  Var F := Witgen.MOver F (AssignedCell F) (Witgen.LimbsOver F (AssignedCell F) n)
+  Value := unit
+  ProverValue _ := ℕ
+  evalVerifier _ _ := ()
+  evalProver pe program := evalProgram pe program
+
+instance : ProvableType (Halo2.Value (UnconstrainedLimbs n)) :=
+  (inferInstance : ProvableType unit)
+
+@[circuit_norm] lemma var_of_unconstrainedLimbs {F : Type} :
+    Halo2.Var (UnconstrainedLimbs n) F
+      = Witgen.MOver F (AssignedCell F) (Witgen.LimbsOver F (AssignedCell F) n) := rfl
+@[circuit_norm] lemma value_of_unconstrainedLimbs {F : Type} :
+    Halo2.Value (UnconstrainedLimbs n) F = Unit := rfl
+@[circuit_norm] lemma proverValue_of_unconstrainedLimbs {F : Type} :
+    Halo2.ProverValue (UnconstrainedLimbs n) F = ℕ := rfl
+
+instance {F : Type} : Inhabited (Var (UnconstrainedLimbs n) F) :=
+  ⟨(pure (Witgen.LimbsOver.const 0 n) :
+    Witgen.MOver F (AssignedCell F) (Witgen.LimbsOver F (AssignedCell F) n))⟩
+
+variable {F : Type} [FiniteField F]
+
+@[reducible] instance : Eval (Placed Environment F)
+    (Witgen.MOver F (AssignedCell F) (Witgen.LimbsOver F (AssignedCell F) n)) Unit :=
+  CircuitType.verifierEval (UnconstrainedLimbs n)
+@[reducible] instance : Eval (Placed ProverEnvironment F)
+    (Witgen.MOver F (AssignedCell F) (Witgen.LimbsOver F (AssignedCell F) n)) ℕ :=
+  CircuitType.proverEval (UnconstrainedLimbs n)
+
+@[circuit_norm] lemma eval_unconstrainedLimbs
+    (pe : Placed Environment F) (v : Var (UnconstrainedLimbs n) F) :
+    eval pe (v : Var (UnconstrainedLimbs n) F) = () := rfl
+
+@[circuit_norm] lemma eval_unconstrainedLimbs_prover
+    (pe : Placed ProverEnvironment F) (v : Var (UnconstrainedLimbs n) F) :
+    eval pe v = evalProgram pe v := by
+  with_unfolding_all rfl
+
+@[circuit_norm] lemma eval_unconstrainedLimbs_prover' :
+    @Eval.eval (Placed ProverEnvironment F)
+        (Witgen.MOver F (AssignedCell F) (Witgen.LimbsOver F (AssignedCell F) n)) ℕ
+        (CircuitType.proverEval (UnconstrainedLimbs n))
+      = evalProgram := by
+  with_unfolding_all rfl
+
+end UnconstrainedLimbs
 
 /-- Prover-only Bool-sorted input: the `Var` view is a builder computation yielding a
 witness condition, the prover value is the boolean. -/

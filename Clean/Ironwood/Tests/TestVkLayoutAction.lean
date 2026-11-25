@@ -42,7 +42,8 @@ def aCfg : Config := (configure aG {}).1
 def unk : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp) := pure (.const 0)
 def unkPoint : Witgen.MOver Fp (AssignedCell Fp) (Point (FExpr Fp)) :=
   pure { x := .const 0, y := .const 0 }
-def unkNat : Witgen.MOver Fp (AssignedCell Fp) (U64Expr Fp) := pure (.const 0)
+def unkNat : Witgen.MOver Fp (AssignedCell Fp) (Witgen.LimbsOver Fp (AssignedCell Fp) 4) :=
+  pure (.const 0 4)
 
 /-! ## The synthesize mirror (identical region stream to `Action.Circuit.synthesize`,
 fixed-base-mul sites data-level) -/

@@ -649,7 +649,7 @@ private theorem bit_cast_isBool (m : ℕ) (h : m < 2) : IsBool ((m : ℕ) : Fp) 
 /-- Prover-eval of the commit input record over opaque cells (doc pattern 1: the
 transport lemma is checked once over abstract variables). -/
 private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
-    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
+    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
       (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇], r := r }).pieces
@@ -665,7 +665,7 @@ private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnviro
 
 /-- Environment-side sibling of `pieces_eval_eq`. -/
 private theorem pieces_eval_eq_env (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
+    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
       (⟨place, env⟩ : Placed Environment Fp)
       { pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇], r := r }).pieces

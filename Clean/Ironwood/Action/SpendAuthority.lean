@@ -31,12 +31,12 @@ namespace Zcash.Circuits.Action.SpendAuthority
 open Halo2
 open Ecc.MulFixed (FixedBase)
 
-/-- The input of the spend-authority block: the randomizer's nat-valued reading program
+/-- The input of the spend-authority block: the randomizer's limb-valued reading program
 `alpha` (a prover hint — Rust `Value<pallas::Scalar>`; the `FullWidth` child derives its
 85 window witnesses from it, and the scalar is the extraction data) and the
 already-assigned authorizing key point `ak_P`. -/
 structure Input (F : Type) where
-  alpha : UnconstrainedU64 F
+  alpha : UnconstrainedLimbs 4 F
   akP : Point F
 deriving CircuitType
 

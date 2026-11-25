@@ -29,10 +29,10 @@ open Halo2
 open Ecc.MulFixed (FixedBase)
 
 /-- The inputs: the short child's magnitude/sign cells and the blinding scalar's
-nat-valued reading program `rcv` (a prover hint — Rust `Value<pallas::Scalar>`; the
+limb-valued reading program `rcv` (a prover hint — Rust `Value<pallas::Scalar>`; the
 full-width child derives its window witnesses from it, the scalar is extraction data). -/
 structure Inputs (F : Type) where
-  rcv : UnconstrainedU64 F
+  rcv : UnconstrainedLimbs 4 F
   magnitude : F
   sign : F
 deriving CircuitType

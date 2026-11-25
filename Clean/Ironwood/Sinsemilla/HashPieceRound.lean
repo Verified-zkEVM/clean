@@ -1,5 +1,6 @@
 import Clean.Halo2
 import Clean.Ironwood.Specs.Pallas
+import Clean.Ironwood.Utilities.RunningSum
 import Clean.Ironwood.Specs.Sinsemilla
 import Clean.Ironwood.Ecc.DoubleAndAdd
 import Clean.Ironwood.Ecc.Basic
@@ -632,10 +633,10 @@ def readsValue (w : State (AssignedCell Fp)) (env : Placed ProverEnvironment Fp)
   row := { xA := readCell env w.row.xA, xP := readCell env w.row.xP,
            lambda1 := readCell env w.row.lambda1, lambda2 := readCell env w.row.lambda2 }
 
-/-- Honest running sum `z_r = ↑(piece.val ≫ (K·r))` at word `r` (`pieceZ` as a witgen program):
-cast to ℕ, shift right by `K·r` bits, cast back. -/
+/-- Honest running sum `z_r = ↑(piece.val ≫ (K·r))` at word `r` (`pieceZ` as a witgen program),
+computed in the field from the piece cell (`Witgen.FExprOver.runningSum`). -/
 def zWit (piece : AssignedCell Fp) (r : ℕ) : WitgenIR Fp 1 :=
-  .ofFExpr (.ofNat (.div (.val (.expr piece)) (.const (2 ^ (K * r)))))
+  .ofFExpr ((Witgen.FExprOver.expr piece).runningSum K r)
 
 /-- The running-sum witness evaluates to the honest `pieceZ` of the piece cell's value —
 spelled over the folded `AssignedCell.eval` cell read, the form `h_input` lands on (the
@@ -647,7 +648,7 @@ theorem zWit_eval (piece : AssignedCell Fp) (r : ℕ) (env : Placed ProverEnviro
       = pieceZ (AssignedCell.eval env.place env.env.toEnvironment piece) r := by
   have hj0 : j = 0 := by omega
   subst hj0
-  simp only [zWit, Witgen.WitgenIROver.getElem_eval_ofFExpr]
+  simp only [zWit, Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval_runningSum]
   rfl
 
 /-- Honest witness for one output cell of round `i`: the corresponding field of

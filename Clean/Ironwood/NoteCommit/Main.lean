@@ -44,7 +44,7 @@ def ns : List ℕ := [24, 0, 24, 5, 0, 24, 24, 0]
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
 
 /-- The circuit inputs: the note's field-element cells (`x/y(g_d)`, `x/y(pk_d)`, the
-64-bit value, `rho`, `psi`) and the blinding scalar's nat-valued reading program `rcm`
+64-bit value, `rho`, `psi`) and the blinding scalar's limb-valued reading program `rcm`
 (a prover hint — Rust `Value<pallas::Scalar>`; the fixed-base mul child derives its 85
 window witnesses from it and the scalar it encodes is extraction data). -/
 structure Inputs (F : Type) where
@@ -55,7 +55,7 @@ structure Inputs (F : Type) where
   value : F
   rho : F
   psi : F
-  rcm : UnconstrainedU64 F
+  rcm : UnconstrainedLimbs 4 F
 deriving CircuitType
 
 /-! ## Witness programs
@@ -415,7 +415,7 @@ def synthGates (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
   synthCanonicity cfg input pcs ccs gcs iHash
 
 /-- Rust `NoteCommitChip::commit` (`note_commit.rs:1596-1798`), in exact region order.
-The `rcm` blinding scalar enters as the input's nat-valued reading program. -/
+The `rcm` blinding scalar enters as the input's limb-valued reading program. -/
 def synth (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
     (input : Var Inputs Fp) : Circuit Fp (Var Point Fp) := do

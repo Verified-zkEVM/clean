@@ -19,7 +19,7 @@ import Clean.Halo2.CircuitTypeDeriving
 `commit(msg, r) = hash_to_point(Q, msg) + [r]·R`, keeping the per-piece running sums `zs`
 (`NoteCommit`/`CommitIvk` read individual `zs[i][j]` cells). The `[r]·R` leg is full-width
 fixed-base scalar mul (`Ecc.MulFixed.FullWidth.circuit R`): the blinding scalar enters as the
-input's nat-valued reading program `r`, the child derives its 85 window witnesses from it, and the
+input's limb-valued reading program `r`, the child derives its 85 window witnesses from it, and the
 scalar it encodes is extraction data, so the commitment `Spec` is stated at the extracted scalar.
 
 The `Chain.circuit` enters at an accumulator seeded from the domain point `Q`: the wrapper assigns
@@ -62,14 +62,14 @@ structure Config (BCfg : Type) where
 
 /-! ## Inputs / Output -/
 
-/-- The message pieces and the blinding scalar's nat-valued reading program `r` (a prover hint —
+/-- The message pieces and the blinding scalar's limb-valued reading program `r` (a prover hint —
 Rust `Value<pallas::Scalar>`; the full-width child derives its 85 window witnesses from it and the
 scalar it encodes is the child's extraction data). -/
 structure Input (k : ℕ) (F : Type) where
   -- The message pieces (the whole `k`-piece message).
   pieces : Vector F k
-  -- The blinding scalar's nat-valued reading program (prover hint).
-  r : UnconstrainedU64 F
+  -- The blinding scalar's limb-valued reading program (prover hint).
+  r : UnconstrainedLimbs 4 F
 deriving CircuitType
 
 structure Output (ns : List ℕ) (F : Type) where
@@ -85,9 +85,9 @@ deriving ProvableStruct
 the `[r]R` leg is the `Ecc.MulFixed.FullWidth` bundle. -/
 
 /-- `CommitDomain::blinding_factor` is the bare `[r]R` — exactly the full-width fixed-base
-mul bundle, whose input is the blinding scalar's nat-valued reading program. -/
+mul bundle, whose input is the blinding scalar's limb-valued reading program. -/
 def blindingFactor (R : FixedBase) :
-    FormalCircuit Fp Ecc.MulFixed.Config Ecc.MulFixed.FullWidth.Config UnconstrainedU64 Point :=
+    FormalCircuit Fp Ecc.MulFixed.Config Ecc.MulFixed.FullWidth.Config (UnconstrainedLimbs 4) Point :=
   Ecc.MulFixed.FullWidth.circuit R
 
 /-! ## The `commit` bundle -/

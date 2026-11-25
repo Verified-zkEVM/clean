@@ -1343,7 +1343,7 @@ instance : ProvableType (Value UnconstrainedSwaps) :=
 /-- The Action circuit's private inputs as a prover-only hint block, derived per-field
 (the `Unconstrained` pattern): the `Var` view is the witness programs, the verifier
 value is erased, and the prover value is the evaluated data. Mirrors the Rust
-`Circuit` struct's `Value<_>` fields; the fixed-base-mul scalars are nat-valued
+`Circuit` struct's `Value<_>` fields; the fixed-base-mul scalars are limb-valued
 reading programs, their 85 window witnesses derived inside the mul bundles. -/
 structure PrivateInputs (F : Type) where
   psiOld : Unconstrained field F
@@ -1360,11 +1360,11 @@ structure PrivateInputs (F : Type) where
   pkDOld : Unconstrained Point F
   gdNew : Unconstrained Point F
   pkdNew : Unconstrained Point F
-  rcv : UnconstrainedU64 F
-  alpha : UnconstrainedU64 F
-  rivk : UnconstrainedU64 F
-  rcmOld : UnconstrainedU64 F
-  rcmNew : UnconstrainedU64 F
+  rcv : UnconstrainedLimbs 4 F
+  alpha : UnconstrainedLimbs 4 F
+  rivk : UnconstrainedLimbs 4 F
+  rcmOld : UnconstrainedLimbs 4 F
+  rcmNew : UnconstrainedLimbs 4 F
   merkleSib : UnconstrainedSibs F
   merkleSwap : UnconstrainedSwaps F
 deriving CircuitType
@@ -1399,10 +1399,10 @@ private def pointHint (key : String) :
     y := .hintGet key 2 (.const 0) 1
   }
 
-/-- One Nat-valued Action hint, read through the field-to-Nat bridge. -/
+/-- One scalar Action hint: the four 64-bit limbs of a field-element hint's value. -/
 private def natHint (key : String) :
-    Witgen.MOver Fp (AssignedCell Fp) (U64Expr Fp) :=
-  pure (.val (.hintGet key 1 (.const 0) 0))
+    Witgen.MOver Fp (AssignedCell Fp) (Witgen.LimbsOver Fp (AssignedCell Fp) 4) :=
+  pure (.ofField (.hintGet key 1 (.const 0) 0) 4)
 
 /-- A Merkle sibling hint at layer `i`. -/
 private def merkleSiblingHint (i : ℕ) : WitgenIR Fp 1 :=
