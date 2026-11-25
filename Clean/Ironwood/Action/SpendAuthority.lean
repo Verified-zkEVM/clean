@@ -258,11 +258,13 @@ def circuit (G : FixedBase) : FormalCircuit Fp
   soundness := by
     circuit_proof_start2 [Ecc.MulFixed.FullWidth.circuit, Ecc.Add.addFormal]
     have hAl := alphaCommitment_spec env_assumptions
-    have hAddS := rk_spec ⟨by rw [hAl]; exact G.smul_valid _, assumptions⟩
-    rw [Ecc.Add.addFormal_output_cells] at rk_eq
+    have hAddS := out_spec ⟨by rw [hAl]; exact G.smul_valid _, assumptions⟩
     have hrk : ({ x := output_x, y := output_y } : Point Fp) =
-        eval (⟨place, env⟩ : Placed Environment Fp) rk := by
-      rw [← rk_eq]
+        eval (⟨place, env⟩ : Placed Environment Fp)
+          (Ecc.Add.addFormal.output cfg
+            { p := alphaCommitment, q := { x := input_var_akP_x, y := input_var_akP_y } }
+            (i₀ + 2)) := by
+      rw [Ecc.Add.addFormal_output_cells]
       simp only [Point.eval_eq, circuit_norm]
       simp_all
     rw [hrk, hAddS.2, hAl]
@@ -301,7 +303,7 @@ theorem circuit_call_output_cells_assigned
     FormalCircuit.call_regionCount', Ecc.MulFixed.FullWidth.circuit_regionCount, Operations.assignedCellsFrom_append, Ecc.Add.addFormal_output_cells,
     List.mem_append, AssignedCell.of_cell, Nat.add_assoc,
     product] at hadd ⊢
-  exact ⟨Or.inr (Or.inl hadd.1), Or.inr (Or.inl hadd.2)⟩
+  exact ⟨Or.inr hadd.1, Or.inr hadd.2⟩
 
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq (G : FixedBase)

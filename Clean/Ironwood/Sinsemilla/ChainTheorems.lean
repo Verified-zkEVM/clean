@@ -616,7 +616,7 @@ namespace Chain
 
 /-- Per-piece running-sum lengths: piece `i` of width `nᵢ` produces `nᵢ + 1`
 running-sum cells (`z₀..z_{nᵢ}`). -/
-def zLengths (ns : List ℕ) : List ℕ := ns.map (· + 1)
+@[implicit_reducible] def zLengths (ns : List ℕ) : List ℕ := ns.map (· + 1)
 
 /-- The entering accumulator `2·y` of a level, as derived by the preceding gate from
 the level's first row: the `Y_A` expression for in-message rows, twice the witnessed

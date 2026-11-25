@@ -467,20 +467,6 @@ theorem roundSynthesize_copyCellsAssigned
         AssignedCell.of_cell, RegionOperations.assignedCellsAfter,
         RegionOperation.assignedCells] using hOutputCellsAssigned.2
 
-/-- A round assigns no fixed cells: its own operations are advice assignments and a selector
-enable, and both complete additions have fixed-free footprints. -/
-theorem roundSynthesize_hasNoFixedAssignments (w iter : ℕ) (cfg : Config) (offset : ℕ)
-    (input : Var RoundInputs Fp) (region : RegionIndex) :
-    ((roundSynthesize w iter cfg offset input).operations region).HasNoFixedAssignments := by
-  simp only [roundSynthesize, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-    RegionOperations.HasNoFixedAssignments, List.forall_append]
-  and_intros
-  all_goals first
-    | exact Add.add.call_hasNoFixedAssignments _ _ _ _
-        (Add.synthesisSummary_hasNoFixedColumns _ _)
-    | exact True.intro
-    | keygen_registration
-
 def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs RoundOutput where
   configure := pure
 
@@ -524,10 +510,6 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
         · simp only [roundSynthesisSummary, roundColumns, roundSynthesize,
             Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
       registered := by keygen_registration [roundSynthesize]
-      fixedAssignmentsAgree := by
-        intro configInput counts _hconfig offset input region
-        exact (roundSynthesize_hasNoFixedAssignments w iter configInput offset input region)
-          |>.fixedAssignmentsAgree
       lookupSelectorsAnchoredBy_of_registered := by
         intro configInput counts configured offset input region anchor _ _
         exact roundSynthesize_lookupSelectorsAnchoredBy
@@ -1022,11 +1004,6 @@ def assign_region (numBits : ℕ) (w : ℕ) :
           inputCells _ _ input :=
             [input.base.x.cell, input.base.y.cell, input.xA.cell,
               input.yA.cell, input.z.cell] }
-      lookupSelectorsAnchoredBy_of_registered := by
-        intro configInput counts hconfig offset input region anchor _ hregistered
-        apply RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
-        simpa only [Add.Configured.lookups_eq_nil, configure_delta_lookups,
-          List.nil_append] using hregistered
       registered := by
         intro configInput counts hconfig offset input region
         dsimp only
@@ -1054,36 +1031,31 @@ def assign_region (numBits : ℕ) (w : ℕ) :
               apply FormalRegionCircuit.Configured.ofPure
               · change Add.add.Configured configInput.2
                 exact hconfig
-              · rfl
+              · exact @id ((round w ↑i).configure _ = pure _) rfl
             case hgates =>
               intro gate hgate
-              have hg : gate ∈ [decomposeGate ((configure configInput.1 configInput.2).output counts)]
-                  ++ FormalRegionCircuit.Configured.gates hconfig := hgate
-              rw [configure_delta_gates]
-              simp only [List.mem_append, List.mem_singleton] at hg ⊢
-              exact hg.symm
+              rw [FormalRegionCircuit.Configured.ofPure_gates] at hgate
+              simp only [FormalRegionCircuit.keygenRequirements,
+                ElaboratedRegionCircuit.keygenRequirements, round,
+                List.mem_append, List.mem_cons, List.not_mem_nil,
+                or_false] at hgate
+              simp only [configure_delta_gates, List.mem_append,
+                List.mem_singleton]
+              rcases hgate with hgate | hgate
+              · exact Or.inr hgate
+              · exact Or.inl hgate
             case hlookups =>
               intro argument hargument
-              have ha : argument ∈ FormalRegionCircuit.Configured.lookups hconfig := hargument
-              exact List.mem_append_left _ ha
-            case hfixedColumns =>
-              intro column hcolumn
-              have h : column ∈ ([] : List (Column .fixed)) ++
-                  (pure ((configure configInput.1 configInput.2).output counts) :
-                    Configure Fp Config).fixedColumns {} := hcolumn
-              simp at h
-            case hpermutationColumns =>
-              intro column hcolumn
-              have h : column ∈ (((configure configInput.1 configInput.2).output counts).zComplete.toAny
-                    :: FormalRegionCircuit.Configured.permutationColumns hconfig) ++
-                  ((pure ((configure configInput.1 configInput.2).output counts) :
-                    Configure Fp Config).delta {}).permutationRequests := hcolumn
-              simp only [Configure.delta_pure, List.mem_append, List.mem_cons] at h
-              rcases h with (rfl | h) | h
-              · exact List.mem_append_left _ (List.mem_append_right _
-                  (configure_output_zComplete_mem_permutationRequests _ _ _))
-              · exact List.mem_append_left _ (List.mem_append_left _ h)
-              · simp at h
+              set_option backward.isDefEq.respectTransparency true in
+              simpa only [FormalRegionCircuit.Configured.ofPure_lookups,
+                FormalRegionCircuit.keygenRequirements,
+                ElaboratedRegionCircuit.keygenRequirements,
+                configure_delta_lookups, List.mem_append, List.not_mem_nil,
+                or_false, round, FormalRegionCircuit.Configured.lookups,
+                FormalRegionCircuit.Configured.ofPure, Configure.delta_pure,
+                List.mem_append, List.not_mem_nil, or_false, id] using hargument
+            case hfixedColumns => keygen_registration
+            case hpermutationColumns => keygen_registration
             case hinputCells =>
               cases hval : i.val <;> keygen_registration
         · simp only [operations_zsCells, List.forall_nil]
@@ -1130,9 +1102,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
           RegionOperations.copyCellsAssignedFrom_append_iff]
         constructor
         · constructor
-          · simp only [startCopy, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-              List.append_nil]
-            keygen_registration
+          · keygen_registration
           · apply RegionCircuit.foldRange_copyCellsAssignedFrom
               (invariant := fun cells acc =>
                 input.base.x.cell ∈ cells ∧ input.base.y.cell ∈ cells ∧

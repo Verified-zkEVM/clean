@@ -592,9 +592,10 @@ theorem innerRegion_copyCellsAssignedFrom
   have hdecompose : decomposeOps.CopyCellsAssignedFrom self [alpha.cell] := by
     apply (copyDecompose 3 85).call_copyCellsAssignedFrom
       cfg.superConfig.runningSumConfig
-      (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 85)
-        (cfg.superConfig.runningSumConfig.qRangeCheck,
-          cfg.superConfig.runningSumConfig.z) {} ())
+      (@id ((copyDecompose 3 85).Configured cfg.superConfig.runningSumConfig)
+        (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 85)
+          (cfg.superConfig.runningSumConfig.qRangeCheck,
+            cfg.superConfig.runningSumConfig.z) {} ()))
       offset ⟨alpha⟩ self
     intro cell hcell
     rw [DecomposeRunningSum.copyDecompose_configured_inputCells_eq] at hcell
