@@ -370,6 +370,25 @@ def Configured.ofPure
     self.Configured config :=
   ⟨config, {}, hconfig, by simp [hconfigure]⟩
 
+open Lean Meta Simp in
+/--
+Reduce a projection of a `Configured.ofPure` handle with the matching `_ofPure` theorem,
+instantiated directly from the handle's arguments. The handle carries proofs elaborated
+against the folded circuit bundle. Matching the theorem's statement against those proofs
+would unfold the bundle, which Lean 4.35 no longer does when it checks the types of
+assigned proof metavariables (`backward.isDefEq.respectTransparency.types`).
+-/
+def _root_.Halo2.reduceConfiguredHandle (handleCtor reduction : Name) (e : Expr) :
+    SimpM Step := do
+  let args := e.getAppArgs
+  let some handleIdx := args.findIdx? (·.isAppOf handleCtor) | return .continue
+  let handle := args[handleIdx]!
+  unless (← getConstInfo reduction).levelParams.isEmpty do return .continue
+  let proof := mkAppN (mkConst reduction)
+    (handle.getAppArgs ++ args.extract (handleIdx + 1) args.size)
+  let some (_, _, rhs) := (← inferType proof).eq? | return .continue
+  return .visit { expr := rhs, proof? := some proof }
+
 /-- Gate arguments available from a configured circuit handle. -/
 def Configured.gates
     {self : FormalCircuit F ConfigInput Config Input Output}
@@ -487,7 +506,7 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
   simpa [Configured.permutationColumns, ConfigurationCertificate.configured] using
     certificate.permutationColumns column hcolumn
 
-@[simp, keygen_norm, grind =] theorem Configured.ofPure_gates
+@[keygen_norm, grind =] theorem Configured.gates_ofPure
     (self : FormalCircuit F Config Config Input Output)
     (config : Config)
     (hconfig : self.keygenRequirements.configLawful config)
@@ -496,7 +515,7 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
       self.keygenRequirements.gates config hconfig := by
   simp [Configured.gates, Configured.ofPure, hconfigure]
 
-@[simp, keygen_norm, grind =] theorem Configured.ofPure_lookups
+@[keygen_norm, grind =] theorem Configured.lookups_ofPure
     (self : FormalCircuit F Config Config Input Output)
     (config : Config)
     (hconfig : self.keygenRequirements.configLawful config)
@@ -505,7 +524,7 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
       self.keygenRequirements.lookups config hconfig := by
   simp [Configured.lookups, Configured.ofPure, hconfigure]
 
-@[simp, keygen_norm] theorem Configured.ofPure_fixedColumns
+@[keygen_norm] theorem Configured.fixedColumns_ofPure
     (self : FormalCircuit F Config Config Input Output)
     (config : Config)
     (hconfig : self.keygenRequirements.configLawful config)
@@ -514,7 +533,7 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
       self.keygenRequirements.fixedColumns config hconfig := by
   simp [Configured.fixedColumns, Configured.ofPure, hconfigure]
 
-@[keygen_norm] theorem Configured.ofPure_permutationColumns
+@[keygen_norm] theorem Configured.permutationColumns_ofPure
     (self : FormalCircuit F Config Config Input Output)
     (config : Config)
     (hconfig : self.keygenRequirements.configLawful config)
@@ -523,7 +542,7 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
       self.keygenRequirements.permutationColumns config hconfig := by
   simp [Configured.permutationColumns, Configured.ofPure, hconfigure]
 
-@[keygen_norm] theorem Configured.ofPure_inputPermutationColumns
+@[keygen_norm] theorem Configured.inputPermutationColumns_ofPure
     (self : FormalCircuit F Config Config Input Output)
     (config : Config)
     (hconfig : self.keygenRequirements.configLawful config)
@@ -534,7 +553,7 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
       self.keygenRequirements.inputPermutationColumns config hconfig input := by
   simp [Configured.inputPermutationColumns, Configured.ofPure]
 
-@[keygen_norm] theorem Configured.ofPure_inputCells
+@[keygen_norm] theorem Configured.inputCells_ofPure
     (self : FormalCircuit F Config Config Input Output)
     (config : Config)
     (hconfig : self.keygenRequirements.configLawful config)
@@ -544,6 +563,30 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
         (Configured.ofPure self config hconfig hconfigure) input =
       self.keygenRequirements.inputCells config hconfig input := by
   simp [Configured.inputCells, Configured.ofPure]
+
+simproc Configured.ofPure_gates
+    (Configured.gates (Configured.ofPure _ _ _ _)) :=
+  reduceConfiguredHandle ``Configured.ofPure ``Configured.gates_ofPure
+
+simproc Configured.ofPure_lookups
+    (Configured.lookups (Configured.ofPure _ _ _ _)) :=
+  reduceConfiguredHandle ``Configured.ofPure ``Configured.lookups_ofPure
+
+simproc Configured.ofPure_fixedColumns
+    (Configured.fixedColumns (Configured.ofPure _ _ _ _)) :=
+  reduceConfiguredHandle ``Configured.ofPure ``Configured.fixedColumns_ofPure
+
+simproc Configured.ofPure_permutationColumns
+    (Configured.permutationColumns (Configured.ofPure _ _ _ _)) :=
+  reduceConfiguredHandle ``Configured.ofPure ``Configured.permutationColumns_ofPure
+
+simproc Configured.ofPure_inputPermutationColumns
+    (Configured.inputPermutationColumns (Configured.ofPure _ _ _ _) _) :=
+  reduceConfiguredHandle ``Configured.ofPure ``Configured.inputPermutationColumns_ofPure
+
+simproc Configured.ofPure_inputCells
+    (Configured.inputCells (Configured.ofPure _ _ _ _) _) :=
+  reduceConfiguredHandle ``Configured.ofPure ``Configured.inputCells_ofPure
 
 @[simp, keygen_norm, grind =] theorem Configured.ofOutput_gates
     (self : FormalCircuit F ConfigInput Config Input Output)
