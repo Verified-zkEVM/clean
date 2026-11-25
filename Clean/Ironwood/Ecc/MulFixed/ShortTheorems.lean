@@ -572,7 +572,7 @@ private theorem env_get_rowTail {env : ProverEnvironment Fp} {n : ℕ} {r : RowT
 /-- The evaluated row program is the honest `rowTailValue`, stated at symbolic `w` and
 an opaque magnitude `m`, where every reduction is cheap. The LHS is the `circuit_norm`
 normal form of the witness-IR completeness hypothesis: `FiniteField.fromNat`/
-`FiniteField.val` from `NExpr.toField`/`Expression.val`, and one range-guarded
+`FiniteField.val` from `U64Expr.toField`/`Expression.val`, and one range-guarded
 window-table read per column from the `.listGet` evaluation (see `rowProgram_value` in
 `FullWidth.lean`). -/
 private theorem rowProgram_value (B : FixedBase) (m : Fp) (w : ℕ) :

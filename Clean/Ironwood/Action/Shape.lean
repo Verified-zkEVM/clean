@@ -122,10 +122,10 @@ theorem actionShape_eq_compiled :
   · simpa only [actionShape, TopLevelCompilation.circuitShape,
       ← actionCircuit_formalCircuit_eq, TopLevelCircuit.constraintSystem] using
         actionCircuit_numInstanceColumns_eq.symm
-  · simpa only [actionShape, TopLevelCompilation.circuitShape] using
-      actionInstanceQueryCount_eq.symm
-  · simpa only [actionShape, TopLevelCompilation.circuitShape] using
-      actionAdviceQueryCount_eq.symm
+  · simp only [actionShape, TopLevelCompilation.circuitShape]
+    exact actionInstanceQueryCount_eq.symm
+  · simp only [actionShape, TopLevelCompilation.circuitShape]
+    exact actionAdviceQueryCount_eq.symm
   · simp only [actionShape, TopLevelCompilation.circuitShape]
     rw [TopLevelCompilation.fixedQueryCount_eq actionFormalCircuit
       PublicInputs.layout (by

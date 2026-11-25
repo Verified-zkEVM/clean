@@ -49,11 +49,12 @@ theorem constantLength_value_two (a b : Fp) :
     Hash.ConstantLength.value #v[a, b]
       = Hash.HashPaddedBlock.value roundConstants (Hash.ConstantLength.capacity 2)
           { x0 := a, x1 := b } := by
-  simp [Hash.ConstantLength.value, Hash.HashPaddedBlock.value,
+  simp only [Hash.ConstantLength.value, Hash.HashPaddedBlock.value,
     Hash.ConstantLength.blockCount, Hash.ConstantLength.stepValueAt,
-    Hash.ConstantLength.absorbPermuteValue, Permute.concreteValue,
+    Hash.ConstantLength.absorbPermuteValue,
     Hash.ConstantLength.blockValue, Hash.ConstantLength.paddedWord,
     Fin.foldl_succ, Fin.foldl_zero]
+  rfl
 
 /-! ## Region counts -/
 
@@ -160,6 +161,65 @@ def synthesize (K : FixedBase)
     { p := input.cm, q := product }
   pure nf.x
 
+private theorem synthesize_registered (K : FixedBase)
+    (cfg : Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config)
+    (hconfig : (keygenRequirements K).configLawful cfg) (input : Var Input Fp) (self : RegionIndex) :
+    ((synthesize K cfg input).operations self).KeygenRegistered
+      ((keygenRequirements K).gates cfg hconfig)
+      ((keygenRequirements K).lookups cfg hconfig)
+      ((keygenRequirements K).fixedColumns cfg hconfig)
+      ((keygenRequirements K).permutationColumns cfg hconfig ++
+        (keygenRequirements K).inputPermutationColumns cfg hconfig input) := by
+  simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+    Operations.KeygenRegistered.append, circuit_norm]
+  exact ⟨by
+    apply (Poseidon.hash (Hash.ConstantLength.capacity 2))
+        |>.call_keygenRegistered cfg.1 hconfig.1 _ self <;>
+      keygen_registration,
+    by
+      apply AddChip.addFormal.call_keygenRegistered cfg.2.1
+          hconfig.2.1 _ (self + 3)
+      · intro gate h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inl (Or.inl (Or.inr h))
+      · intro argument h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inl (Or.inl (Or.inr h))
+      · intro column h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inl (Or.inl (Or.inr h))
+      · keygen_registration
+      · keygen_registration,
+    by
+      apply (Ecc.MulFixed.BaseFieldElem.circuit K)
+          |>.call_keygenRegistered cfg.2.2.1 hconfig.2.2.1 _
+            (self + 4)
+      · intro gate h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inl (Or.inr h)
+      · intro argument h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inl (Or.inr h)
+      · intro column h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inl (Or.inr h)
+      · keygen_registration
+      · keygen_registration,
+    by
+      apply Ecc.Add.addFormal.call_keygenRegistered cfg.2.2.2
+          hconfig.2.2.2 _ (self + 8)
+      · intro gate h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inr h
+      · intro argument h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inr h
+      · intro column h
+        simp only [keygenRequirements, List.mem_append]
+        exact Or.inr h
+      · keygen_registration
+      · keygen_registration⟩
+
 /-- Rust `gadget.rs::derive_nullifier`: the Poseidon hash of `(nk, rho)`, the add-chip
 sum with `psi`, the `scalar • NullifierK` base-field-element fixed-base mul, and the
 complete addition with `cm`. `Spec` is the donor contract: the nullifier is
@@ -180,25 +240,8 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     { keygenRequirements := keygenRequirements K
       registered := by
         intro cfg counts hconfig input self
-        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
-          Operations.KeygenRegistered.append, circuit_norm]
-        exact ⟨by
-          apply (Poseidon.hash (Hash.ConstantLength.capacity 2))
-              |>.call_keygenRegistered cfg.1 hconfig.1 _ self <;>
-            keygen_registration,
-          by
-            apply AddChip.addFormal.call_keygenRegistered cfg.2.1
-                hconfig.2.1 _ (self + 3) <;>
-              keygen_registration,
-          by
-            apply (Ecc.MulFixed.BaseFieldElem.circuit K)
-                |>.call_keygenRegistered cfg.2.2.1 hconfig.2.2.1 _
-                  (self + 4) <;>
-              keygen_registration,
-          by
-            apply Ecc.Add.addFormal.call_keygenRegistered cfg.2.2.2
-                hconfig.2.2.2 _ (self + 8) <;>
-              keygen_registration⟩
+        simpa only [keygen_norm, keygen_spine] using
+          synthesize_registered K cfg hconfig input self
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
         simp only [operations, program, Configure.output_pure, synthesize,
@@ -229,7 +272,8 @@ def circuit (K : FixedBase) : FormalCircuit Fp
         · exact (Ecc.MulFixed.BaseFieldElem.circuit K)
             |>.call_lookupSelectorsAnchoredBy cfg.2.2.1 hconfig.2.2.1 _
               (self + 4) anchor (by
-                simpa only [Ecc.MulFixed.BaseFieldElem.circuit_lookupSelectorAnchorRequirements]
+                simpa only [Ecc.MulFixed.BaseFieldElem.circuit_lookupSelectorAnchorRequirements,
+                  Configure.output_pure]
                   using hanchor)
         · exact Ecc.Add.addFormal.call_lookupSelectorsAnchoredBy
             cfg.2.2.2 hconfig.2.2.2 _ (self + 8) anchor (by trivial)

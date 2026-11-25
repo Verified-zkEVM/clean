@@ -55,7 +55,7 @@ structure Inputs (F : Type) where
   value : F
   rho : F
   psi : F
-  rcm : UnconstrainedNat F
+  rcm : UnconstrainedU64 F
 deriving CircuitType
 
 /-! ## Witness programs
@@ -1429,7 +1429,7 @@ private theorem pureRegionCall_lookupSelectorsAnchoredBy
   exact lifted.call_lookupSelectorsAnchoredBy cfg
     (FormalCircuit.Configured.ofPure lifted cfg hconfigured hliftedConfigure)
     input self anchor (by
-      simpa only [lifted, FormalRegionCircuit.toFormal] using hanchor)
+      exact hanchor)
 
 theorem synthDecompositions_keygenRegistered
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)

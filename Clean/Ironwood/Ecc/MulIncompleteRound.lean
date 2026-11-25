@@ -385,8 +385,8 @@ def readsValue (w : State (AssignedCell Fp)) (env : Placed ProverEnvironment Fp)
 -- TODO make all these witness programs non-native (exportable IR instead of `.native`
 -- closures). Prerequisites: the `Witgen.M` let-step builder monad (the λ-formulas need
 -- shared intermediates; `Clean/Halo2/WitnessIR.lean` defers that port), plus
--- `UnconstrainedNat` and vector-level IR hints for the bit decomposition
--- (`kBitsWindow` is Nat-level: `(tQNat + a.val).testBit …` — NExpr has
+-- `UnconstrainedU64` and vector-level IR hints for the bit decomposition
+-- (`kBitsWindow` is Nat-level: `(tQNat + a.val).testBit …` — U64Expr has
 -- shiftR/land/mod, so it is expressible once the builder lands).
 
 /-- The y-coordinate the step leaves at the new accumulator (bit-free: the second

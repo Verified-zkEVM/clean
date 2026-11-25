@@ -105,7 +105,7 @@ theorem val_Fp (x : Fp) :
 
 /-- The raw `n / 2^s % 2^l` shape (definitionally `bitrange`) folded into the named form,
 for the rare proof that still needs to bridge a manually-written division/mod chain into
-`bitrange`, rather than going through `Clean.NExpr.bitrange`. -/
+`bitrange`, rather than going through `Clean.U64Expr.bitrange`. -/
 theorem bitrange_eq (n s l : ℕ) : n / 2 ^ s % 2 ^ l = bitrange n s l := rfl
 
 end Zcash.Circuits.Specs
@@ -114,7 +114,7 @@ open Zcash.Circuits.Specs (bitrange)
 
 /-! ## The witness-IR counterpart of `bitrange`
 
-`Witgen.NExprOver.bitrange n start len` is the witness-generation-IR expression for the
+`Witgen.U64ExprOver.bitrange n start len` is the witness-generation-IR expression for the
 same bit slice `Zcash.Circuits.Specs.bitrange` computes on concrete naturals — write
 `n.bitrange start len` inside a witness generator (via dot notation) instead of spelling
 out `n / 2 ^ start % 2 ^ len`. Generic over the variable atom `V`, matching the
@@ -126,8 +126,8 @@ manual re-folding needed. -/
 
 namespace Witgen
 
-/-- The `NExpr` (witness-IR) counterpart of `Zcash.Circuits.Specs.bitrange`. -/
-def NExprOver.bitrange {F V : Type} (n : NExprOver F V) (start len : ℕ) : NExprOver F V :=
+/-- The `U64Expr` (witness-IR) counterpart of `Zcash.Circuits.Specs.bitrange`. -/
+def U64ExprOver.bitrange {F V : Type} (n : U64ExprOver F V) (start len : ℕ) : U64ExprOver F V :=
   n / (2 ^ start : ℕ) % (2 ^ len : ℕ)
 
 end Witgen
@@ -136,7 +136,7 @@ namespace Clean
 
 variable {F : Type} [FiniteField F]
 
-@[simp, circuit_norm] theorem NExpr.eval_bitrange (ctx : Ctx F) (n : NExpr F) (start len : ℕ) :
+@[simp, circuit_norm] theorem U64Expr.eval_bitrange (ctx : Ctx F) (n : U64Expr F) (start len : ℕ) :
     (n.bitrange start len).eval ctx = bitrange (n.eval ctx) start len := rfl
 
 end Clean

@@ -708,7 +708,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
           (env.advice cfg.yP ((place self + (offset + 1) : ℕ) : ℤ)))).iter
         (bitsFrom input_alpha w) r)
       (bitsFrom input_alpha w) (fun i => rfl) m
-      (by simpa [bitsFrom] using hH0) hbudget
+      (by simpa [bitsFrom, State.iter] using hH0) hbudget
     have hHn := hHiter n le_rfl
     beta_reduce at hHn
     rw [← hPS1] at hHn

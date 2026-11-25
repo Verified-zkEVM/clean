@@ -519,7 +519,7 @@ private theorem wpointNonId_output (c : Ecc.WitnessPoint.Config)
         : Var Point Fp) := rfl
 
 private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
     (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
         psi := c7, rcm := r })
@@ -534,7 +534,7 @@ private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem vcInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
     (eval (Var := Var ValueCommit.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { rcv := r, magnitude := c1, sign := c2 })
     = { rcv := (), magnitude := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
@@ -553,14 +553,14 @@ private theorem dnInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem saInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (p : Point (AssignedCell Fp)) (a : Var UnconstrainedNat Fp) :
+    (p : Point (AssignedCell Fp)) (a : Var UnconstrainedU64 Fp) :
     (eval (Var := Var SpendAuthority.Input Fp) (⟨place, env⟩ : Placed Environment Fp)
       { alpha := a, akP := p })
     = { alpha := (), akP := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem civkInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedU64 Fp) :
     (eval (Var := Var CommitIvk.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { ak := c1, nk := c2, rivk := r })
     = { ak := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
@@ -588,11 +588,11 @@ private theorem layerInput_eval_eq (place : RegionIndex → ℕ) (env : Environm
 
 private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
-    (r : Var UnconstrainedNat Fp) :
+    (r : Var UnconstrainedU64 Fp) :
     (eval (Var := Var ValueCommit.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { rcv := r, magnitude := c1, sign := c2 })
     = { rcv := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedNat Fp),
+          (r : Var UnconstrainedU64 Fp),
         magnitude := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c1 : Var field Fp),
         sign := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
@@ -601,14 +601,14 @@ private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
 
 private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
-    (r : Var UnconstrainedNat Fp) :
+    (r : Var UnconstrainedU64 Fp) :
     (eval (Var := Var CommitIvk.Main.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { ak := c1, nk := c2, rivk := r })
     = { ak := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
         nk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c2 : Var field Fp),
         rivk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedNat Fp) } := by
+          (r : Var UnconstrainedU64 Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
@@ -625,7 +625,7 @@ private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
 
 private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp)
-    (r : Var UnconstrainedNat Fp) :
+    (r : Var UnconstrainedU64 Fp) :
     (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
         psi := c7, rcm := r })
@@ -638,7 +638,7 @@ private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
         psi := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c7 : Var field Fp),
         rcm := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedNat Fp) } := by
+          (r : Var UnconstrainedU64 Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 /-! ## Stage outputs and offsets -/
@@ -3408,9 +3408,10 @@ private theorem mainPost_keygenRegistered
   · rw [(baseCircuit G B).call_operations]
     simpa only [FormalCircuit.keygenRequirements, baseCircuit,
       ElaboratedCircuit.keygenRequirements, KeygenRequirements.inputPermutationColumns,
-      List.map_nil, List.append_nil] using
+      List.map_nil, List.append_nil, List.nil_append] using
         (elaborated G B).registered () counts () () i
-  · simpa only [FormalCircuit.output_call'] using
+  · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
+    simpa only [FormalCircuit.output_call'] using
       synthCrossAddressChecks_baseOutput_keygenRegistered G B counts i (i + 394)
 
 private theorem mainPost_copyCellsAssigned
@@ -3424,7 +3425,7 @@ private theorem mainPost_copyCellsAssigned
   apply Operations.CopyCellsAssignedFrom.append
   · rw [(baseCircuit G B).call_operations]
     simpa only [FormalCircuit.keygenRequirements, baseCircuit,
-      ElaboratedCircuit.keygenRequirements] using
+      ElaboratedCircuit.keygenRequirements, Operations.CopyCellsAssigned] using
         (elaborated G B).copyCellsAssigned () counts () () i
   · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
     rw [FormalCircuit.output_call']
@@ -3532,7 +3533,7 @@ instance elaboratedPost (G : Generators) (B : Bases) :
     cases configInput
     cases hconfig
     cases input
-    simpa only [KeygenRequirements.inputCells] using
+    simpa only [KeygenRequirements.inputCells, Operations.CopyCellsAssigned] using
       mainPost_copyCellsAssigned G B counts i
   lookupSelectorAssignmentsAgree_of_registered := by
     intro configInput counts hconfig input i program operations _hregistered
@@ -3813,6 +3814,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
+          List.get!Internal, Nat.reduceMod, circuit_norm]
         linear_combination hdx
       · rw [w6, w0]
         ring
@@ -3825,6 +3828,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
+          List.get!Internal, Nat.reduceMod, circuit_norm]
         linear_combination hdy
       · rw [w6, w0]
         ring
@@ -3837,6 +3842,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
+          List.get!Internal, Nat.reduceMod, circuit_norm]
         linear_combination hpx
       · rw [w6, w0]
         ring
@@ -3849,6 +3856,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
+          List.get!Internal, Nat.reduceMod, circuit_norm]
         linear_combination hpy
       · rw [w6, w0]
         ring

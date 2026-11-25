@@ -486,19 +486,19 @@ theorem innerRegion_copyCellsAssignedFrom_and_outputAssigned
     simpa only [RegionOperations.assignedCellsAfter_append,
       witnessOps, fixedOps] using hchain.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.2.2
 
@@ -852,7 +852,6 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
     (by
       intro j hj1 hj83 hAssumptions
       obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-      dsimp only at hOnP hOnQ hne ⊢
       rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
       rcases Nat.lt_or_ge j 2 with hj2 | hj2
       · have hj : j = 1 := by omega
@@ -880,7 +879,6 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
             • B.point).y := by
     intro j hj1 hj83
     have h := hLadder j hj83
-    dsimp only at h
     rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
     exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
@@ -1252,7 +1250,6 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
       (by
         intro j hj1 hj83 hAssumptions
         obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-        dsimp only at hOnP hOnQ hne ⊢
         rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
         rcases Nat.lt_or_ge j 2 with hj2 | hj2
         · -- j = 1: the explicit first chunk (window 1 + window 0)
@@ -1272,7 +1269,6 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
           obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
           exact hOut)
     have hI83 := hLadder 83 (by norm_num)
-    dsimp only at hI83
     rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
       show offset + 83 + 1 = offset + 84 from by omega] at hI83
     rw [← hOax, ← hOay]
@@ -1383,7 +1379,7 @@ the 85 three-bit window programs are derived from it. -/
 window `w` reads `(scalar >>> 3w) &&& 7` as a field-valued witness program. The concrete
 85-entry vector stays irreducible so callers can share it without materializing every
 bind-program. -/
-irreducible_def scalarWindows (scalar : Var UnconstrainedNat Fp) :
+irreducible_def scalarWindows (scalar : Var UnconstrainedU64 Fp) :
     Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85 :=
   Vector.ofFn fun w =>
     (do let n ← scalar
@@ -1391,13 +1387,13 @@ irreducible_def scalarWindows (scalar : Var UnconstrainedNat Fp) :
       Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
 
 /-- The derived window programs are 3-bit by construction. -/
-theorem scalarWindows_eval_lt (scalar : Var UnconstrainedNat Fp)
+theorem scalarWindows_eval_lt (scalar : Var UnconstrainedU64 Fp)
     (env : Placed ProverEnvironment Fp) (w : Fin 85) :
     (Witgen.MOver.eval (value := field) env (scalarWindows scalar)[w.val]!).val < 8 := by
   rw [getElem!_pos _ w.val w.isLt]
   simp only [scalarWindows, Vector.getElem_ofFn]
   simp only [Witgen.MOver.eval, circuit_norm, Witgen.eval_field, Witgen.FExprOver.eval,
-    Witgen.NExprOver.eval, FiniteField.fromNat_F]
+    Witgen.U64ExprOver.eval, FiniteField.fromNat_F]
   rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
   · exact Nat.lt_succ_of_le Nat.and_le_right
   · exact lt_of_lt_of_le (Nat.lt_succ_of_le Nat.and_le_right)
@@ -1456,7 +1452,7 @@ set_option linter.constructorNameAsVariable false in
 /-- `[s]B` for the full-width scalar encoded by the witnessed windows. The input is the scalar's
 nat-valued reading program; the window programs derive from it and are 3-bit by construction. -/
 def circuit (B : FixedBase) :
-    FormalCircuit Fp MulFixed.Config Config UnconstrainedNat Point where
+    FormalCircuit Fp MulFixed.Config Config UnconstrainedU64 Point where
   name := "fixed-base mul (full width)"
 
   configure := configure
@@ -1539,7 +1535,8 @@ def circuit (B : FixedBase) :
         constructor
         · simpa only [synthesize, Circuit.operations_bind, operations_assignRegion,
             List.forall_append, List.forall_cons, List.forall_nil, and_true,
-            windows] using And.intro hinner hadd
+            windows, cfg, Operation.FixedAssignmentsAgree, output_assignRegion,
+            nextRegionIndex_assignRegion] using And.intro hinner hadd
         · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
             Operations.loadedTableColumns]
         · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
@@ -1695,7 +1692,7 @@ def circuit (B : FixedBase) :
 
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq
-    (B : FixedBase) (cfg : Config) (input : Var UnconstrainedNat Fp)
+    (B : FixedBase) (cfg : Config) (input : Var UnconstrainedU64 Fp)
     (self : RegionIndex) :
     (circuit B).elaborated.synthesisSummary cfg input self =
       circuitSynthesisSummary cfg := rfl
@@ -1720,7 +1717,7 @@ theorem circuitSynthesisSummary_tableRowExtent_eq (config : Config) :
 /-- Full-width fixed-base multiplication requests no deferred constant allocations. -/
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_constantSiteCount
-    (B : FixedBase) (config : Config) (input : Var UnconstrainedNat Fp)
+    (B : FixedBase) (config : Config) (input : Var UnconstrainedU64 Fp)
     (region : RegionIndex) :
     ((circuit B).elaborated.synthesisSummary
       config input region).constantSiteCount = 0 := by
@@ -1729,7 +1726,7 @@ theorem circuit_synthesisSummary_constantSiteCount
 
 @[keygen_output_norm]
 theorem circuit_output_cells
-    (B : FixedBase) (config : Config) (input : Var UnconstrainedNat Fp)
+    (B : FixedBase) (config : Config) (input : Var UnconstrainedU64 Fp)
     (self : RegionIndex) :
     (circuit B).output config input self =
       { x := .of (self + 1) 1 config.superConfig.addConfig.xQR,
@@ -1737,7 +1734,7 @@ theorem circuit_output_cells
   rfl
 
 @[circuit_norm]
-theorem circuit_regionCount (B : FixedBase) (input : Var UnconstrainedNat Fp) :
+theorem circuit_regionCount (B : FixedBase) (input : Var UnconstrainedU64 Fp) :
     (circuit B).regionCount input = 2 := by
   rfl
 
@@ -1745,7 +1742,7 @@ theorem circuit_regionCount (B : FixedBase) (input : Var UnconstrainedNat Fp) :
 theorem circuit_inputCells_eq
     (B : FixedBase) {config : Config}
     (configured : (circuit B).Configured config)
-    (input : Var UnconstrainedNat Fp) :
+    (input : Var UnconstrainedU64 Fp) :
     configured.inputCells input = [] := by
   rfl
 
@@ -1763,7 +1760,7 @@ theorem Configured.lookups_eq_nil
     Add.Configured.lookups_eq_nil hconfig.2.1]
 
 theorem circuit_call_output_cells_assigned
-    (B : FixedBase) (config : Config) (input : Var UnconstrainedNat Fp)
+    (B : FixedBase) (config : Config) (input : Var UnconstrainedU64 Fp)
     (self : RegionIndex) :
     let output := (circuit B).output config input self
     output.x.cell ∈ Operations.assignedCellsFrom

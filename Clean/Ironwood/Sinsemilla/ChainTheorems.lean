@@ -157,17 +157,17 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
   -- unfold the spec-level step into its two incomplete additions (as in `step_coordinates_of_constraints`)
   unfold Specs.Sinsemilla.step Point.doubleAndAdd at hstep
   by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₁] at hstep
     simp at hstep
-  rw [Point.incompleteAdd_def, if_neg hc₁] at hstep
+  rw [Point.incompleteAdd_def, ite_eq_right hc₁] at hstep
   push Not at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S m with hR_def
   change Point.incompleteAdd R A = some B at hstep
   by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at hstep
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₂] at hstep
     simp at hstep
-  rw [Point.incompleteAdd_def, if_neg hc₂] at hstep
+  rw [Point.incompleteAdd_def, ite_eq_right hc₂] at hstep
   push Not at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by
@@ -177,7 +177,7 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
       ({ x := P.x, y := P.y } : Point Fp) ≠ Point.zero := by
     intro P hP h
     apply hP
-    simpa [Point.zero_def] using h
+    simpa only [Point.zero, Point.zero_def] using h
   -- the first addition: `R = A ⸭ S(m)`, with the chord through `A` and `S(m)`
   have hRadd := Point.nondegenerateAdd_eq_add
     (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
@@ -305,7 +305,7 @@ private theorem genX_read_value (G : Generators) (p : Fp) (r : ℕ) :
     = (G.S (pieceWord p r)).x := by
   have hlt : FiniteField.val p / 2 ^ (K * r) % 2 ^ K < 2 ^ K :=
     Nat.mod_lt _ (by norm_num [K])
-  simp only [dif_pos hlt]
+  simp only [dite_eq_left hlt]
   rfl
 
 theorem pieceZ_zero (p : Fp) : pieceZ p 0 = p := by
@@ -369,16 +369,15 @@ private theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → �
     (n := d + 1)
     (by
       intro s hs
-      dsimp only
-      rw [if_pos (show s ≤ d by omega)]
+      rw [ite_eq_left (show s ≤ d by omega)]
       rcases Nat.lt_or_ge s d with hsd | hsd
-      · rw [if_pos (show s + 1 ≤ d by omega), show r + (s + 1) = r + s + 1 by omega]
+      · rw [ite_eq_left (show s + 1 ≤ d by omega), show r + (s + 1) = r + s + 1 by omega]
         exact hword (r + s) (by omega)
       · obtain rfl : s = d := by omega
-        rw [if_neg (show ¬ s + 1 ≤ s by omega), mul_zero, _root_.add_zero,
+        rw [ite_eq_right (show ¬ s + 1 ≤ s by omega), mul_zero, _root_.add_zero,
           show r + s = w by omega]
         exact hlast)
-    (by dsimp only; rw [if_neg (show ¬ d + 1 ≤ d by omega)])
+    (by rw [ite_eq_right (show ¬ d + 1 ≤ d by omega)])
   simpa using h
 
 private theorem range_prefix_some (S : ℕ → Point Fp)
@@ -502,7 +501,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
   have hms_at : ∀ r (hr : r < w + 1), ms r = mf ⟨r, hr⟩ := by
     intro r hr
     simp only [hms]
-    rw [dif_pos hr]
+    rw [dite_eq_left hr]
   -- recombination of the piece from its words
   have hpiece : piece
       = ((∑ r ∈ Finset.range (w + 1), ms r * 2 ^ (K * r) : ℕ) : Fp) := by
@@ -515,7 +514,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
       | zero => simp
       | succ v ih =>
         have h := hmf_word ⟨v, by omega⟩
-        rw [if_neg (show ¬ (⟨v, by omega⟩ : Fin (w + 1)).val = w by simp; omega)] at h
+        rw [ite_eq_right (show ¬ (⟨v, by omega⟩ : Fin (w + 1)).val = w by simp; omega)] at h
         rw [ih (by omega), Finset.sum_range_succ]
         rw [← hms_at v (by omega)] at h
         push_cast
@@ -524,7 +523,7 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
         linear_combination ((2 : Fp) ^ (K * v)) * h
     have hlast : zV w = ((ms w : ℕ) : Fp) := by
       have h := hmf_word ⟨w, by omega⟩
-      rw [if_pos rfl] at h
+      rw [ite_eq_left rfl] at h
       rw [hms_at w (by omega)]
       exact h
     rw [key w (by omega), hlast, Finset.sum_range_succ]
@@ -535,12 +534,12 @@ private theorem soundness_aux (G : Generators) (w : ℕ)
     have hword : ∀ s, s < w → zV s = (ms s : Fp) + 2 ^ K * zV (s + 1) := by
       intro s hs
       have h := hmf_word ⟨s, by omega⟩
-      rw [if_neg (show ¬ (⟨s, by omega⟩ : Fin (w + 1)).val = w by simp; omega)] at h
+      rw [ite_eq_right (show ¬ (⟨s, by omega⟩ : Fin (w + 1)).val = w by simp; omega)] at h
       rw [← hms_at s (by omega)] at h
       linear_combination h
     have hlast : zV w = (ms w : Fp) := by
       have h := hmf_word ⟨w, by omega⟩
-      rw [if_pos rfl] at h
+      rw [ite_eq_left rfl] at h
       rw [hms_at w (by omega)]
       exact h
     apply Vector.ext
@@ -750,7 +749,7 @@ theorem z1sOfZs_tail {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (z1sOfZs (n :: rest) zs).tail = z1sOfZs rest (HVec.tail zs) := by
   simp only [z1sOfZs, Vector.listCons]
   ext i hi
-  simp; rfl
+  simp
 
 theorem z1sOfZs_getElem_succ {F : Type} [Zero F] (n : ℕ) (rest : List ℕ)
     (zs : HVec (zLengths (n :: rest)) F) (k : ℕ) (hk : k + 1 < (n :: rest).length) :
@@ -768,7 +767,7 @@ theorem z1Facts_of_zsFacts : (ns : List ℕ) → (chunks : List ℕ) →
     refine ⟨?_, ?_⟩
     · rw [z1sOfZs_getElem_zero]
       by_cases hn : 1 < n + 1
-      · simp only [dif_pos hn]
+      · simp only [dite_eq_left hn]
         rw [hhead]
         simp only [Vector.getElem_ofFn]
         congr 1
@@ -777,7 +776,7 @@ theorem z1Facts_of_zsFacts : (ns : List ℕ) → (chunks : List ℕ) →
         apply Finset.sum_congr rfl
         intro j _
         rw [Nat.add_comm 1 j]
-      · simp only [dif_neg hn]
+      · simp only [dite_eq_right hn]
         have hn0 : n = 0 := by omega
         subst hn0
         simp
@@ -796,10 +795,10 @@ theorem z1sHonest_of_zsHonest : (ns : List ℕ) → (pieces : Vector Fp ns.lengt
     refine ⟨?_, ?_⟩
     · rw [z1sOfZs_getElem_zero]
       by_cases hn : 1 < n + 1
-      · simp only [dif_pos hn]
+      · simp only [dite_eq_left hn]
         rw [hhead]
         simp [Vector.getElem_ofFn]
-      · simp only [dif_neg hn]
+      · simp only [dite_eq_right hn]
         have hn0 : n = 0 := by omega
         subst hn0
         refine (?_ : pieceZ pieces[0] 1 = 0).symm

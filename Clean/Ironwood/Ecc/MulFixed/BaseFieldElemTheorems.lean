@@ -388,7 +388,7 @@ private theorem rowTailValue_u (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
 /-- The evaluated row program is the honest `rowTailValue`, stated at symbolic `w` and
 an opaque base-field element `α`, where every reduction is cheap. The LHS is the
 `circuit_norm` normal form of the witness-IR completeness hypothesis:
-`FiniteField.fromNat`/`FiniteField.val` from `NExpr.toField`/`Expression.val`, and one
+`FiniteField.fromNat`/`FiniteField.val` from `U64Expr.toField`/`Expression.val`, and one
 range-guarded window-table read per column from the `.listGet` evaluation (see
 `rowProgram_value` in `FullWidth.lean`). -/
 private theorem rowProgram_value (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
