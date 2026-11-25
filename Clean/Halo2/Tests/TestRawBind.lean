@@ -11,10 +11,10 @@ this shape (design doc, "Raw binds, loops, and the mint gate"):
 
 - the raw binder mints do-binder-named atoms (`p_x`/`p_y`) whose defining equations
   (`p_eq`) are the concrete boundary facts, reduced separately;
-- the call contract (`s_spec`) and naming equation (`s_eq`) spell those atoms — the
+- the call is the terminal step (`let s ← call; pure s` lowers to the call itself), so its
+  contract (`out_spec`) and the output equation (`output_eq`) spell those atoms — the
   concrete cell record never propagates;
-- the raw step's region count folds (the child contract's index is the literal
-  `i₀ + 1`, converged with `s_eq`'s spelling);
+- the raw step's region count folds (the child's index is the literal `i₀ + 1`);
 - the content-free raw chunk (`region_0 : True`) is auto-cleared.
 
 The proofs end in `sorry` deliberately: the circuit has no gate on the witnessed point,
@@ -55,7 +55,6 @@ def double : FormalCircuit Fp
       intro configInput counts hconfig input i
       simp only [Configure.output_bind,
         Configure.output_pure, Circuit.operations_bind,
-        Circuit.operations_pure, List.append_nil,
         nextRegionIndex_assignRegion, output_assignRegion,
         RegionCircuit.output_bind, output_assignAdvice,
         RegionCircuit.output_pure]
@@ -83,7 +82,6 @@ def double : FormalCircuit Fp
       intro configInput counts hconfig input i
       simp only [Configure.output_bind,
         Configure.output_pure, Circuit.operations_bind,
-        Circuit.operations_pure, List.append_nil,
         nextRegionIndex_assignRegion, output_assignRegion,
         RegionCircuit.output_bind, output_assignAdvice,
         RegionCircuit.output_pure]
@@ -100,8 +98,7 @@ def double : FormalCircuit Fp
       intro configInput counts hconfig input i
       apply Operations.HasNoFixedWrites.fixedWritesLawful
       simp only [Configure.output_bind, Configure.output_pure,
-        Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
-        Operations.HasNoFixedWrites, List.forall_append]
+        Circuit.operations_bind, Operations.HasNoFixedWrites, List.forall_append]
       constructor
       · keygen_registration
       · apply Add.addFormal.call_hasNoFixedWrites
@@ -119,9 +116,7 @@ def double : FormalCircuit Fp
           (i + 1))
     synthesisSummary_eq := by
       intro config input i
-      simp only [Circuit.operations_bind,
-        Circuit.operations_pure, List.append_nil,
-        FloorPlanner.synthesisSummary_append,
+      simp only [Circuit.operations_bind, FloorPlanner.synthesisSummary_append,
         FormalCircuit.call_synthesisSummary]
       congr 1
     regionCount _ := 2 }
@@ -134,11 +129,17 @@ def double : FormalCircuit Fp
     circuit_proof_start2 [Add.addFormal]
     -- the minted boundary facts and the atom-spelled contract, pinned
     guard_hyp p_eq : AssignedCell.of i₀ 0 cfg_1.1 = p_x ∧ AssignedCell.of i₀ 0 cfg_1.2 = p_y
-    guard_hyp s_eq : Add.addFormal.output cfg
-        { p := { x := p_x, y := p_y }, q := { x := p_x, y := p_y } } (i₀ + 1)
-      = { x := s_x, y := s_y }
-    guard_hyp output_eq : AssignedCell.eval place env s_x = output_x
-      ∧ AssignedCell.eval place env s_y = output_y
+    guard_hyp output_eq : eval (⟨place, env⟩ : Placed Environment Fp)
+        (Add.addFormal.output cfg
+          { p := { x := p_x, y := p_y }, q := { x := p_x, y := p_y } } (i₀ + 1))
+      = { x := output_x, y := output_y }
+    guard_hyp out_spec :
+      ({ x := AssignedCell.eval place env p_x, y := AssignedCell.eval place env p_y } :
+          Point Fp).Valid →
+        ({ x := output_x, y := output_y } : Point Fp).Valid ∧
+          ({ x := output_x, y := output_y } : Point Fp) =
+            { x := AssignedCell.eval place env p_x, y := AssignedCell.eval place env p_y } +
+              { x := AssignedCell.eval place env p_x, y := AssignedCell.eval place env p_y }
     sorry
 
   completeness := by
