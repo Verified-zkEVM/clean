@@ -13,9 +13,6 @@ lean_lib Clean where
 lean_lib Zcash where
   roots := #[`Clean.Ironwood]
 
-lean_lib Orchard where
-  roots := #[`Clean.Orchard]
-
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
