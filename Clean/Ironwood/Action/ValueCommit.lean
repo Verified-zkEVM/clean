@@ -367,14 +367,14 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     obtain ⟨hSEnv, hFEnv⟩ := env_assumptions
     obtain ⟨hm_lt, hcases⟩ := commitment_spec hSEnv
     have hBl := blind_spec hFEnv
-    have hAddS := cv_spec ⟨by
+    have hAddS := out_spec ⟨by
         rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _,
       by rw [hBl]; exact R.smul_valid _⟩
     refine ⟨hm_lt, ?_⟩
-    rw [Ecc.Add.addFormal_output_cells] at cv_eq
     have hcv : ({ x := output_x, y := output_y } : Point Fp) =
-        eval (⟨place, env⟩ : Placed Environment Fp) cv := by
-      rw [← cv_eq]
+        eval (⟨place, env⟩ : Placed Environment Fp)
+          (Ecc.Add.addFormal.output cfg { p := commitment, q := blind } (i₀ + 4)) := by
+      rw [Ecc.Add.addFormal_output_cells]
       simp only [Point.eval_eq, circuit_norm]
       simp_all
     rcases hcases with ⟨hsign, hCm⟩ | ⟨hsign, hCm⟩
@@ -447,8 +447,7 @@ theorem circuit_call_output_cells_assigned
     FormalCircuit.call_regionCount',
         Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Operations.assignedCellsFrom_append, List.mem_append,
     AssignedCell.of_cell, Nat.add_assoc, Nat.reduceAdd]
-  exact ⟨Or.inr (Or.inr (Or.inl hadd.1)),
-    Or.inr (Or.inr (Or.inl hadd.2))⟩
+  exact ⟨Or.inr (Or.inr hadd.1), Or.inr (Or.inr hadd.2)⟩
 
 /-- A value commitment requests only the short scalar's strict-decomposition
 constant allocation. -/

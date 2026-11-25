@@ -1031,11 +1031,11 @@ def assign_region (numBits : ℕ) (w : ℕ) :
               apply FormalRegionCircuit.Configured.ofPure
               · change Add.add.Configured configInput.2
                 exact hconfig
-              · exact @id ((round w ↑i).configure _ = pure _) rfl
+              · rfl
             case hgates =>
               intro gate hgate
-              rw [FormalRegionCircuit.Configured.ofPure_gates] at hgate
-              simp only [FormalRegionCircuit.keygenRequirements,
+              simp only [FormalRegionCircuit.Configured.ofPure_gates,
+                FormalRegionCircuit.keygenRequirements,
                 ElaboratedRegionCircuit.keygenRequirements, round,
                 List.mem_append, List.mem_cons, List.not_mem_nil,
                 or_false] at hgate

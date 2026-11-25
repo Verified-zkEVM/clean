@@ -1808,7 +1808,7 @@ private theorem synthesize_keygenRegistered
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hgate
-      rw [mainKeygenRequirements_gates] at hgate
+      dsimp only [mainKeygenRequirements] at hgate
       simp only [FormalRegionCircuit.Configured.gates,
         FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
         keygenRequirements] at hgate ⊢
@@ -1819,7 +1819,7 @@ private theorem synthesize_keygenRegistered
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hargument
-      rw [mainKeygenRequirements_lookups] at hargument
+      dsimp only [mainKeygenRequirements] at hargument
       simp only [FormalRegionCircuit.Configured.lookups,
         FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
         keygenRequirements] at hargument ⊢
@@ -1830,7 +1830,7 @@ private theorem synthesize_keygenRegistered
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hcolumn
-      rw [mainKeygenRequirements_fixedColumns] at hcolumn
+      dsimp only [mainKeygenRequirements] at hcolumn
       simp only [FormalRegionCircuit.Configured.fixedColumns,
         FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
         keygenRequirements] at hcolumn ⊢
@@ -1842,7 +1842,7 @@ private theorem synthesize_keygenRegistered
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hcolumn
-      rw [mainKeygenRequirements_permutationColumns] at hcolumn
+      dsimp only [mainKeygenRequirements] at hcolumn
       simp only [FormalRegionCircuit.Configured.permutationColumns,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements,
