@@ -149,7 +149,6 @@ theorem qRunning_declared_by_rangeCheckLookup (K : ℕ) (cfg : Config K) :
     List.mem_cons] using
     qRunning_mem_rangeCheckLookup_selectorIndices K cfg
 
-@[keygen_norm]
 theorem mem_rangeCheckLookup_auxiliarySelectorIndices (K : ℕ) (cfg : Config K)
     {selector : ℕ}
     (hselector : selector ∈ (rangeCheckLookup K cfg).auxiliarySelectorIndices) :
