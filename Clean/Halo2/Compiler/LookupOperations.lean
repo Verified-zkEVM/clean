@@ -1,5 +1,9 @@
-import Clean.Halo2.Compiler.ConstraintFamilies
-import Clean.Halo2.TopLevel
+module
+
+public import Clean.Halo2.Compiler.ConstraintFamilies
+public import Clean.Halo2.TopLevel
+
+@[expose] public section
 
 /-! # Source lookup activations and configure membership -/
 

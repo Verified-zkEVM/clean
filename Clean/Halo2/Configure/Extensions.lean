@@ -1,5 +1,9 @@
-import Clean.Halo2.ElaboratedConfigure
-import Clean.Halo2.Expression.Checks
+module
+
+public import Clean.Halo2.ElaboratedConfigure
+public import Clean.Halo2.Expression.Checks
+
+@[expose] public section
 
 /-!
 # midnight-zk configure constructs
@@ -129,8 +133,8 @@ end Configure.Unextended
 /-! ## Typed constructs -/
 
 /-- Record how midnight-zk compiles what follows; position 0 is the next gate or lookup.
-Private, so that an entry always describes the shadows its construct emits. -/
-private def extend (entry : ConfigureExtension F) : Configure F Unit :=
+Internal helper so an entry always describes the shadows its construct emits. -/
+def extend (entry : ConfigureExtension F) : Configure F Unit :=
   ⟨fun _ => ((), { extensions := [entry] }, {})⟩
 
 /-- `extend` emits no gate, lookup, query or allocation: the `pure` metadata. -/
@@ -334,7 +338,7 @@ constraint-free gate on it, so that synthesis can enable the selector with `enab
 
 /-- Register a closure's queries in call order, emitting nothing else. Selector queries
 register nothing. -/
-private def registerQueries (cells : List (Expression F Query)) : Configure F Unit :=
+def registerQueries (cells : List (Expression F Query)) : Configure F Unit :=
   ⟨fun _ => ((), ConfigureDelta.queriedCells cells, {})⟩
 
 instance instElaboratedConfigureRegisterQueries (cells : List (Expression F Query)) :
@@ -443,7 +447,7 @@ abbrev VirtualCells := StateM (Array Query)
 
 namespace VirtualCells
 
-private def query (q : Query) : VirtualCells (Expression F Query) := do
+def query (q : Query) : VirtualCells (Expression F Query) := do
   modify (·.push q)
   return .var q
 
@@ -474,16 +478,16 @@ def record {α : Type} (body : VirtualCells α) : α × List Query :=
 
 end VirtualCells
 
-private def reject (message : String) : Configure F Unit :=
+def reject (message : String) : Configure F Unit :=
   extend (.rejected message)
 
-private theorem all_free {constraints : List (String × Expression F Query)}
+theorem all_free {constraints : List (String × Expression F Query)}
     (h : constraints.all (·.2.free) = true) :
     ∀ constraint ∈ constraints, constraint.2.SelectorFree :=
   fun constraint hconstraint =>
     (Expression.free_iff constraint.2).mp (List.all_eq_true.mp h constraint hconstraint)
 
-private theorem all_declared {constraints : List (String × Expression F Query)}
+theorem all_declared {constraints : List (String × Expression F Query)}
     {calls : List Query} (h : constraints.all (·.2.declared calls) = true) :
     constraints.Forall fun constraint =>
       constraint.2.QueriesDeclared (calls.map (.var ·)) :=
@@ -491,7 +495,7 @@ private theorem all_declared {constraints : List (String × Expression F Query)}
     (Expression.declared_iff constraint.2 calls).mp (List.all_eq_true.mp h constraint hconstraint)
 
 /-- The first selector atom, in syntax order. -/
-private def firstSelector : Expression F Query → Option Selector
+def firstSelector : Expression F Query → Option Selector
   | .var (.selector s) => some s
   | .var _ | .const _ => none
   | .add a b | .mul a b =>
@@ -501,10 +505,10 @@ private def firstSelector : Expression F Query → Option Selector
 
 namespace Closure
 
-private def emptyBody (name : String) : String :=
+def emptyBody (name : String) : String :=
   s!"gate {name}: expected a nonempty constraint body"
 
-private def undeclared (name : String) : String :=
+def undeclared (name : String) : String :=
   s!"gate {name}: a polynomial uses a query its closure did not make"
 
 /-- `meta.create_gate(name, |meta| Constraints::with_selector(q, body))`. -/
@@ -576,7 +580,7 @@ def batchedLookup (name : String) (q : Option ComplexSelector)
     else reject s!"lookup {name}: expected a nonempty rectangular batch"
 
 /-- A batch midnight-zk states per tuple: selected, selector-free, over bare fixed columns. -/
-private def anyOwned (q : Option ComplexSelector)
+def anyOwned (q : Option ComplexSelector)
     (columns : List (List (Expression F Query) × Expression F Query)) : Bool :=
   q.isSome && columns.all fun column =>
     column.1.all (·.free) && match column.2 with

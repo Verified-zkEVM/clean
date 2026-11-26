@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.FloorPlanner.V1Correctness
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.V1Correctness
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner.V1
 
@@ -90,7 +94,7 @@ theorem perm_replicate_append_singleton_iff
       · exact hRepeat
       · have hSingletonCount : items.count singleton = 1 := hCounts.2.1
         rw [hItems, List.count_append, List.count_cons] at hSingletonCount
-        simp only [BEq.beq, decide_true, if_true] at hSingletonCount
+        simp only [BEq.beq, decide_true, ite_true] at hSingletonCount
         have hBeforeZero : beforeItems.count singleton = 0 := by omega
         exact (List.count_eq_zero.mp hBeforeZero (hSingle ▸ hItem)).elim
     have hAfterOnly : ∀ item ∈ afterItems, item = repeated := by
@@ -102,7 +106,7 @@ theorem perm_replicate_append_singleton_iff
       · exact hRepeat
       · have hSingletonCount : items.count singleton = 1 := hCounts.2.1
         rw [hItems, List.count_append, List.count_cons] at hSingletonCount
-        simp only [BEq.beq, decide_true, if_true] at hSingletonCount
+        simp only [BEq.beq, decide_true, ite_true] at hSingletonCount
         have hAfterZero : afterItems.count singleton = 0 := by omega
         exact (List.count_eq_zero.mp hAfterZero (hSingle ▸ hItem)).elim
     have hBefore := List.eq_replicate_length.mpr hBeforeOnly

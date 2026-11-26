@@ -1,8 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Tactics
-import Clean.Gadgets.Equality
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Tactics
+public import Clean.Gadgets.Equality
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 open Clean
 
@@ -60,23 +63,21 @@ template MultiMux3(n) {
 }
 -/
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
-  let { c, s } := input
-
-  let s10 <== s[1] * s[0]
+  let s10 <== input.s[1] * input.s[0]
 
   -- Witness and constrain output vector
-  let out <== c.map fun ci =>
+  let out <== input.c.map fun ci =>
     let a210 := (ci[7] - ci[6] - ci[5] + ci[4] - ci[3] + ci[2] + ci[1] - ci[0]) * s10
-    let a21 := (ci[6] - ci[4] - ci[2] + ci[0]) * s[1]
-    let a20 := (ci[5] - ci[4] - ci[1] + ci[0]) * s[0]
+    let a21 := (ci[6] - ci[4] - ci[2] + ci[0]) * input.s[1]
+    let a20 := (ci[5] - ci[4] - ci[1] + ci[0]) * input.s[0]
     let a2 := (ci[4] - ci[0])
 
     let a10 := (ci[3] - ci[2] - ci[1] + ci[0]) * s10;
-    let a1 := (ci[2] - ci[0]) * s[1];
-    let a0 := (ci[1] - ci[0]) * s[0];
+    let a1 := (ci[2] - ci[0]) * input.s[1];
+    let a0 := (ci[1] - ci[0]) * input.s[0];
     let a := (ci[0]);
 
-    (a210 + a21 + a20 + a2) * s[2] + (a10 + a1 + a0 + a);
+    (a210 + a21 + a20 + a2) * input.s[2] + (a10 + a1 + a0 + a);
 
   return out
 
@@ -100,36 +101,14 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       output[i] = (c[i])[idx]
 
   soundness := by
-    simp +instances only [circuit_norm, main]
-    intro offset env input_var input h_input h_assumptions h_output
-    obtain ⟨h_s10, h_out_vec⟩ := h_output
-    -- We need to show the spec holds for all i < n
+    circuit_proof_start
+    obtain ⟨h_s10, h_out⟩ := h_holds
     intro i hi
-    -- The output at position i is computed from the multilinear interpolation formula
-    -- We need to show this equals c[i][idx] where idx is determined by the selector bits
-
-    -- Get the i-th element equality from h_output
-    have h_output_i := congrArg (fun v => v[i]) h_out_vec
-    simp only [Vector.getElem_map] at h_output_i
-    simp only [Vector.getElem_mapRange] at h_output_i
-    simp only [circuit_norm] at h_output_i
-    simp only [h_output_i]
-
-    rw [← h_input] at h_assumptions ⊢
-    -- Extract boolean assumptions
-    obtain ⟨h_s0, h_s1, h_s2⟩ := h_assumptions
-
-    simp only [Vector.getElem_map] at h_s0 h_s1 h_s2
-    simp only [Vector.getElem_map]
-
-    -- Case analysis on s[0], s[1] and s[2]
-    cases h_s0 <;> cases h_s1 <;> cases h_s2 <;>
-      (rename_i h_s0 h_s1 h_s2
-       simp only [h_s0, h_s1, h_s2, h_s10, circuit_norm]
-       norm_num
-       rw [ProvableType.Clean.getElem_eval_fields, getElem_eval_vector])
-
-    all_goals ring_nf
+    have h_holds_i := congrArg (fun v => v[i]) h_out
+    simp only [circuit_norm, h_s10, h_input.1] at h_holds_i
+    rw [h_holds_i]
+    rcases h_assumptions with ⟨h0 | h0, h1 | h1, h2 | h2⟩ <;> simp [h0, h1, h2]
+    all_goals ring
 
   completeness := by
     circuit_proof_start
@@ -141,11 +120,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       -- Left side: eval of varFromOffset
       simp only [Vector.getElem_map, Vector.getElem_mapRange]
       -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
-      simp only [Expression.eval]
+      simp only [circuit_norm]
       -- Right side: eval of the computed expression
       have h_env_i := h_env ⟨i, hi⟩
-      rw [h_env_i]
-      simp only [Expression.eval_sub, Expression.eval]
+      rw [h_env_i]; simp only [h_input.1]
 
 end MultiMux3
 
@@ -176,10 +154,8 @@ template Mux3() {
 }
 -/
 def main (input : Var Inputs (F p)) := do
-  let { c, s } := input
-
   -- Call MultiMux3 with n=1
-  let mux_out ← MultiMux3.circuit 1 { c := #v[c], s }
+  let mux_out ← MultiMux3.circuit 1 { c := #v[input.c], s := input.s }
   return mux_out[0]
 
 def circuit : FormalCircuit (F p) Inputs field where
@@ -201,21 +177,14 @@ def circuit : FormalCircuit (F p) Inputs field where
     output = c[idx]
 
   soundness := by
-    simp only [circuit_norm, main]
-    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
-    rw [← h_input] at *
-    clear input h_input
-    simp only [MultiMux3.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
-    specialize h_subcircuit_sound h_assumptions 0 (by omega)
-    simpa only [eval_vector, Vector.getElem_mk, List.getElem_toArray,
-      List.getElem_cons_zero, circuit_norm, Nat.add_zero] using h_subcircuit_sound
+    circuit_proof_start [MultiMux3.circuit]
+    specialize h_holds h_assumptions 0 (by omega)
+    simp only [circuit_norm] at h_holds
+    exact h_holds
 
   completeness := by
-    simp only [circuit_norm, main]
-    intros offset env input_var h_env input h_input h_s
-    simp only [MultiMux3.circuit, circuit_norm]
-    rw [← h_input] at h_s
-    simp_all
+    circuit_proof_start [MultiMux3.circuit]
+    exact h_assumptions
 
 end Mux3
 

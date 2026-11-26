@@ -1,9 +1,13 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.StructEvalSimprocs
-import Clean.Halo2.Operations
-import Clean.Halo2.WitnessIR
-import Clean.Utils.Tactics.ProvableTacticUtils
-import Clean.Utils.Tactics.ProvableStructNaming
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Clean.Halo2.StructEvalSimprocs
+public meta import Clean.Halo2.Operations
+public meta import Clean.Halo2.WitnessIR
+public meta import Clean.Utils.Tactics.ProvableTacticUtils
+public meta import Clean.Utils.Tactics.ProvableStructNaming
+
+public meta section
 
 /-!
 # `provable_type_simp`

@@ -1,8 +1,10 @@
-import Lean
-import Clean.Circuit.CircuitType
-import Clean.Circuit.Provable
+module
 
-open Clean
+public meta import Lean
+public meta import Clean.Circuit.CircuitType
+public meta import Clean.Circuit.Provable
+
+public meta section
 
 open Lean Meta Elab Tactic
 
@@ -20,39 +22,6 @@ def isMkConstructor (e : Expr) : MetaM Bool := do
     return name.components.getLast? == some `mk
   | _ => return false
 
-/-- Return the generated `mk.injEq` lemma for a constructor application, if it exists. -/
-def mkInjEqNameFromConstructor? (e : Expr) : MetaM (Option Name) := do
-  let env ← getEnv
-  match e.consumeMData.getAppFn with
-  | .const name _ =>
-    if name.components.getLast? == some `mk then
-      let mkInjEqName := name ++ `injEq
-      if env.contains mkInjEqName then
-        return some mkInjEqName
-    return none
-  | _ => return none
-
-/--
-Return the generated `mk.injEq` lemma for a structure type, if it exists.
-
-This uses reducible transparency so type synonyms/class projections such as
-`Value M F` can reduce to the concrete generated view structure.
--/
-def mkInjEqNameFromType? (type : Expr) : MetaM (Option Name) := do
-  let env ← getEnv
-  let type' ← withTransparency .reducible (whnf type)
-  match type'.getAppFn with
-  | .const typeName _ =>
-    let mkInjEqName := typeName ++ `mk ++ `injEq
-    if env.contains mkInjEqName then
-      return some mkInjEqName
-    return none
-  | _ => return none
-
-/-- Check whether a type is a structure-like type with a generated `mk.injEq` lemma. -/
-def hasMkInjEqForType (type : Expr) : MetaM Bool := do
-  return (← mkInjEqNameFromType? type).isSome
-
 /-- Extract all equalities from an expression (including inside conjunctions) -/
 partial def extractEqualities (e : Expr) : MetaM (List (Expr × Expr × Expr)) := do
   -- Returns list of (equality_expr, lhs, rhs) triples
@@ -68,48 +37,3 @@ partial def extractEqualities (e : Expr) : MetaM (List (Expr × Expr × Expr)) :
       if let (some lhs, some rhs) := (e.getArg? 1, e.getArg? 2) then
         return [(e, lhs, rhs)]
     return []
-
-/-- Check if a type has a ProvableStruct instance, handling parameterized types -/
-def hasProvableStructInstance (type : Expr) : MetaM Bool := do
-  let type' ← withTransparency .reducible (whnf type)
-  -- For types like MyStruct n (F p), check ProvableStruct (MyStruct n)
-  match type' with
-  | .app typeCtor _ =>
-    try
-      let instType ← mkAppM ``ProvableStruct #[typeCtor]
-      match ← trySynthInstance instType with
-      | .some _ => return true
-      | _ => return false
-    catch _ => return false
-  | _ => return false
-
-/-- Check if expression contains eval pattern (ProvableType.Clean.eval, Expression.eval, or ProvableStruct.Clean.eval) -/
-def hasEvalPattern (e : Expr) : Bool :=
-  e.isAppOf ``eval || e.isAppOf ``ProvableType.Clean.eval || e.isAppOf ``Expression.eval ||
-    e.isAppOf ``ProvableStruct.Clean.eval
-
-/-- Extract type map candidates from a type for ProvableType/ProvableStruct checking -/
-def extractTypeMapCandidates (type : Expr) : MetaM (List Expr) := do
-  -- If type looks like `SomeType F` where F might be a field,
-  -- return [SomeType] as a candidate TypeMap
-  match type with
-  | .app f _ => return [f]
-  | _ => return []
-
-/-- Check if a type is an Expression type with Field instance -/
-def isExpressionType (type : Expr) : MetaM Bool := do
-  match type with
-  | .app (.const ``Expression _) fieldType =>
-    -- Expression F requires Field F
-    let fieldClass ← mkAppM ``Field #[fieldType]
-    match ← trySynthInstance fieldClass with
-    | .some _ => return true
-    | _ => return false
-  | _ => return false
-
-/-- Check if a type has Field instance -/
-def hasFieldInstance (type : Expr) : MetaM Bool := do
-  let fieldClass ← mkAppM ``Field #[type]
-  match ← trySynthInstance fieldClass with
-  | .some _ => return true
-  | _ => return false

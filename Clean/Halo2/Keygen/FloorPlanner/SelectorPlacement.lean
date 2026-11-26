@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.FloorPlanner.Allocations
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.Allocations
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 
@@ -233,14 +237,14 @@ theorem PlacementEffect.selectorAllocationsDominatedBy
       dsimp only at hinterval ⊢
       by_cases hselector : RegionColumn.selector selector ∈ columns
       · have hanchor := hanchors selector hselector
-        rw [if_pos hselector, Allocations.mem_insert_iff] at hinterval
-        rw [if_pos hanchor, Allocations.mem_insert_iff]
+        rw [ite_eq_left hselector, Allocations.mem_insert_iff] at hinterval
+        rw [ite_eq_left hanchor, Allocations.mem_insert_iff]
         exact hinterval.imp_right (hbefore selector interval)
-      · rw [if_neg hselector] at hinterval
+      · rw [ite_eq_right hselector] at hinterval
         by_cases hanchor : anchor selector ∈ columns
-        · rw [if_pos hanchor, Allocations.mem_insert_iff]
+        · rw [ite_eq_left hanchor, Allocations.mem_insert_iff]
           exact Or.inr (hbefore selector interval hinterval)
-        · rw [if_neg hanchor]
+        · rw [ite_eq_right hanchor]
           exact hbefore selector interval hinterval
 
 end V1
@@ -870,10 +874,10 @@ theorem placeSummary_physicalEquivalent
         physical_mem_sorted_full_iff kind index summary.columns
       by_cases hcolumn : RegionColumn.column kind index ∈
           sortRegionColumns summary.columns
-      · rw [if_pos hcolumn, if_pos (hmember.mp hcolumn),
+      · rw [ite_eq_left hcolumn, ite_eq_left (hmember.mp hcolumn),
           hbefore kind index]
         rfl
-      · rw [if_neg hcolumn, if_neg (mt hmember.mpr hcolumn),
+      · rw [ite_eq_right hcolumn, ite_eq_right (mt hmember.mpr hcolumn),
           hbefore kind index]
 
 theorem placeSummary_withoutSelectors_row_congruent

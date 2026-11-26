@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.PdqsortCertify
+module
+
+public import Clean.Halo2.Keygen.PdqsortCertify
+
+@[expose] public section
 
 namespace Halo2.Tests.TestPdqsortCertify
 
@@ -39,7 +43,7 @@ example : (Pdqsort.quicksort ((List.range 80).map (fun i => (i, i % 4))).toArray
   rw [tied]
   decide +kernel
 
-/-- info: 'Halo2.Tests.TestPdqsortCertify.tied' depends on axioms: [propext, Quot.sound] -/
+/-- info: 'Halo2.Tests.TestPdqsortCertify.tied' depends on axioms: [propext, Classical.choice, Quot.sound] -/
 #guard_msgs in
 #print axioms tied
 

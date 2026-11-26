@@ -1,10 +1,14 @@
-import Clean.Circuit.Basic
-import Clean.Circuit.Provable
-import Clean.Circuit.Theorems
-import Clean.Circuit.Loops
-import Clean.Gadgets.IsZeroField
-import Clean.Utils.Field
-import Clean.Utils.Tactics
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Provable
+public import Clean.Circuit.Theorems
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.IsZeroField
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 open Clean
 
@@ -19,10 +23,9 @@ Returns 1 if all elementts are 0, otherwise returns 0.
 -/
 def main (input : Var M F) : Circuit F (Var field F) := do
   let elemVars := toElements (M:=M) input
-  -- Use foldlRange to multiply all IsZero results together
-  -- Start with 1, and for each element, multiply by its IsZero result
-  let result ← Circuit.foldlRange (size M) (1 : Expression F) fun acc i => do
-    let isZeroElem ← IsZeroField.circuit elemVars[i]
+  -- Multiply all IsZero results together, starting with 1
+  let result ← Circuit.foldlDynamic elemVars (1 : Expression F) fun acc x => do
+    let isZeroElem ← IsZeroField.circuit x
     return acc * isZeroElem
   return result
 
@@ -101,7 +104,6 @@ lemma foldl_isZero_eq_one_iff {n : ℕ} {vars : Vector (Expression F) n} {vals :
 
 theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Spec := by
   circuit_proof_start [IsZeroField.circuit]
-  simp only [explicit_provable_type, ProvableType.fromElements_eq_iff] at h_input
   conv_rhs =>
     arg 1
     rw [Zero.toOfNat0, OfNat.ofNat]
@@ -109,9 +111,10 @@ theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Sp
     rw [ProvableType.fromElements_eq_iff']
     rw [Vector.ext_iff]
     simp only [Vector.getElem_replicate]
-  apply foldl_isZero_eq_one_iff
-  · assumption
+  apply foldl_isZero_eq_one_iff (vars := toElements input_var) (vals := toElements input)
+  · simp only [circuit_norm, h_input]
   · intro i _
+    simp only [circuit_norm, IsZeroField.circuit, h_input]
     exact h_holds i
 
 theorem completeness : Completeness F (main (M:=M)) Assumptions := by

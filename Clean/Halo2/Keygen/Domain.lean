@@ -1,5 +1,9 @@
-import Clean.Halo2.Keygen.PinnedCs
-import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
+module
+
+public import Clean.Halo2.Keygen.PinnedCs
+public import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
+
+@[expose] public section
 
 namespace Halo2
 

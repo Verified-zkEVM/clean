@@ -1,4 +1,8 @@
-import Mathlib.GroupTheory.Perm.Cycle.Factors
+module
+
+public import Mathlib.GroupTheory.Perm.Cycle.Factors
+
+@[expose] public section
 
 /-! # Building permutation cycles from equality pairs
 

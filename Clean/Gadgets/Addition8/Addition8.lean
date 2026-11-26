@@ -1,5 +1,9 @@
-import Clean.Gadgets.Addition8.Addition8FullCarry
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Gadgets.Addition8.Addition8FullCarry
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 open Clean
 
@@ -42,23 +46,14 @@ def circuit : FormalCircuit (F p) Inputs field where
   main := fun { x, y } =>
     Addition8Full.circuit { x, y, carryIn := 0 }
 
-  elaborated := by
-    haveI (input : Var Inputs (F p)) : ExplicitCircuit
-        (match input with | { x, y } => subcircuit Addition8Full.circuit { x, y, carryIn := 0 }) := by
-      rcases input with ⟨x, y⟩
-      infer_instance
-    elaborate_circuit
-
   Assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 
   Spec | { x, y }, z => z.val = (x.val + y.val) % 256
 
   -- the proofs are trivial since this just wraps `Addition8Full`
   soundness := by
-    rintro offset env ⟨vx, vy⟩ ⟨x, y⟩ hinput has hholds
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
   completeness := by
-    rintro offset env ⟨vx, vy⟩ henv ⟨x, y⟩ hinput has
     simp_all [circuit_norm, Addition8Full.circuit, IsBool]
 
 end Addition8

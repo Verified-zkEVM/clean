@@ -1,5 +1,9 @@
-import Clean.Halo2.Keygen.RichExpression
-import Clean.Halo2.Keygen.CompressSelectors
+module
+
+public import Clean.Halo2.Keygen.RichExpression
+public import Clean.Halo2.Keygen.CompressSelectors
+
+@[expose] public section
 
 /-!
 # The query-index walk: `ConstraintSystem` → pinned gate AST

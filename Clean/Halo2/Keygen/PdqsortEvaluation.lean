@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.Pdqsort
+module
+
+public import Clean.Halo2.Keygen.Pdqsort
+
+@[expose] public section
 
 /-!
 # Staged pdqsort evaluation
@@ -517,17 +521,17 @@ theorem recursePartitionPlanned_sound
               simp only
               split
               · rw [hrec leftPlan left pred limit true true leftResult
-                    (by simpa only [if_pos ‹left.size < right.size›] using hleft),
+                    (by simpa only [ite_eq_left ‹left.size < right.size›] using hleft),
                   hrec rightPlan right (some pivotValue) limit balanced
                     wasPartitioned rightResult
-                    (by simpa only [if_pos ‹left.size < right.size›] using hright)]
+                    (by simpa only [ite_eq_left ‹left.size < right.size›] using hright)]
                 simp
               · rw [hrec rightPlan right (some pivotValue) limit true true
                     rightResult
-                    (by simpa only [if_neg ‹¬left.size < right.size›] using hright),
+                    (by simpa only [ite_eq_right ‹¬left.size < right.size›] using hright),
                   hrec leftPlan left pred limit balanced wasPartitioned
                     leftResult
-                    (by simpa only [if_neg ‹¬left.size < right.size›] using hleft)]
+                    (by simpa only [ite_eq_right ‹¬left.size < right.size›] using hleft)]
                 simp
 
 theorem recursePredPlanned_sound
@@ -600,7 +604,7 @@ theorem recurseAfterPivotPlanned_sound
   unfold recurseAfterPivotPlanned at hresult
   unfold recurseAfterPivot
   cases wasBalanced <;> cases wasPartitioned <;> cases likelySorted <;>
-    simp only [Bool.false_and, Bool.true_and, if_true] at hresult ⊢
+    simp only [Bool.false_and, Bool.true_and, ite_true] at hresult ⊢
   all_goals first
   | exact recursePredPlanned_sound plannedRec actualRec hrec plan v isLess
       pred limit len _ _ pivot result hresult
@@ -654,7 +658,7 @@ theorem recurseLongPlanned_sound
   unfold recurseLongPlanned at hresult
   unfold recurseLong
   cases wasBalanced <;> simp only [Bool.not_false, Bool.not_true,
-    if_true] at hresult ⊢
+    ite_true] at hresult ⊢
   · exact recurseChoosePlanned_sound plannedRec actualRec hrec plan
       (breakPatterns v) isLess pred (limit - 1) len false
       wasPartitioned result hresult
@@ -726,5 +730,223 @@ theorem quicksortPlanned_sound (plan : Plan) (v : Array T)
   · simp [hempty] at hresult ⊢
     exact recursePlanned_sound (v.size + 1) plan v isLess none
       (Nat.log2 v.size + 1) true true result hresult
+
+/-! ## Kernel-reducible mirrors for `pdqsort_certify`
+
+`Std.Legacy.Range.forIn'` is not `@[expose]` in Lean 4.35, so `Id.run do` loops written with
+`[a:b]` do not reduce by `rfl` in module mode. Each `*Eval` mirror replaces `[a:b]` with
+`List.range' a (b - a)` (whose `forIn` reduces in the kernel) and proves equality once via
+`Std.Legacy.Range.forIn_eq_forIn_range'`. -/
+
+section KernelEval
+
+set_option backward.do.legacy true
+
+def overwriteEval (a : Array T) (start : ℕ) (sub : Array T) : Array T := Id.run do
+  let mut a := a
+  for i in List.range' 0 sub.size do
+    a := a.set! (start + i) (sub[i]!)
+  return a
+
+theorem overwrite_eq_eval (a : Array T) (start : ℕ) (sub : Array T) :
+    overwrite a start sub = overwriteEval a start sub := by
+  simp only [overwrite, overwriteEval, Std.Legacy.Range.forIn_eq_forIn_range',
+    Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+
+def shiftHeadEval (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
+  let len := v.size
+  if len < 2 then return v
+  if !isLess (v[1]!) (v[0]!) then return v
+  let mut v := v
+  let tmp := v[0]!
+  let mut hole := 1
+  v := v.set! 0 (v[1]!)
+  for i in List.range' 2 (len - 2) do
+    if !isLess (v[i]!) tmp then break
+    v := v.set! (i - 1) (v[i]!)
+    hole := i
+  v := v.set! hole tmp
+  return v
+
+theorem shiftHead_eq_eval (v : Array T) (isLess : T → T → Bool) :
+    shiftHead v isLess = shiftHeadEval v isLess := by
+  simp only [shiftHead, shiftHeadEval, Std.Legacy.Range.forIn_eq_forIn_range',
+    Std.Legacy.Range.size, Nat.add_sub_cancel, Nat.div_one]
+
+def insertionSortEval (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
+  let mut v := v
+  for i in List.range' 1 (v.size - 1) do
+    v := overwriteEval v 0 (shiftTail (v.extract 0 (i + 1)) isLess)
+  return v
+
+theorem insertionSort_eq_eval (v : Array T) (isLess : T → T → Bool) :
+    insertionSort v isLess = insertionSortEval v isLess := by
+  simp only [insertionSort, insertionSortEval, overwrite_eq_eval,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+    Nat.add_sub_cancel, Nat.div_one]
+
+def siftDownEval (v : Array T) (isLess : T → T → Bool) (node0 : ℕ) : Array T := Id.run do
+  let mut v := v
+  let mut node := node0
+  for _ in List.range' 0 (v.size + 1) do
+    let left := 2 * node + 1
+    let right := 2 * node + 2
+    let greater := if right < v.size && isLess (v[left]!) (v[right]!) then right else left
+    if greater ≥ v.size || !isLess (v[node]!) (v[greater]!) then break
+    v := swp v node greater
+    node := greater
+  return v
+
+theorem siftDown_eq_eval (v : Array T) (isLess : T → T → Bool) (node0 : ℕ) :
+    siftDown v isLess node0 = siftDownEval v isLess node0 := by
+  simp only [siftDown, siftDownEval, Std.Legacy.Range.forIn_eq_forIn_range',
+    Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+
+def heapsortEval (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
+  let mut v := v
+  let n := v.size
+  for i in (List.range (n / 2)).reverse do
+    v := siftDownEval v isLess i
+  for i in (List.range n).reverse do
+    if i ≥ 1 then
+      v := swp v 0 i
+      v := overwriteEval v 0 (siftDownEval (v.extract 0 i) isLess 0)
+  return v
+
+theorem heapsort_eq_eval (v : Array T) (isLess : T → T → Bool) :
+    heapsort v isLess = heapsortEval v isLess := by
+  simp only [heapsort, heapsortEval, siftDown_eq_eval, overwrite_eq_eval]
+
+def finishPartitionEval (setup : PartitionSetup T)
+    (partitioned : ℕ × Array T) : (ℕ × Bool) × Array T :=
+  let values := overwriteEval setup.values (1 + setup.left) partitioned.2
+  let middle := setup.left + partitioned.1
+  let wasPartitioned := decide (setup.left ≥ setup.right)
+  ((middle, wasPartitioned), swp values 0 middle)
+
+theorem finishPartition_eq_eval (setup : PartitionSetup T)
+    (partitioned : ℕ × Array T) :
+    finishPartition setup partitioned = finishPartitionEval setup partitioned := by
+  simp only [finishPartition, finishPartitionEval, overwrite_eq_eval]
+
+def partitionEqualEval (v0 : Array T) (pivotIdx : ℕ) (isLess : T → T → Bool) :
+    ℕ × Array T := Id.run do
+  let mut v := swp v0 0 pivotIdx
+  let pivotVal := v[0]!
+  let n := v.size
+  let mut l : ℕ := 0
+  let mut r : ℕ := n - 1
+  let mut done := false
+  for _ in List.range' 0 (n + 1) do
+    if !done then
+      for _ in List.range' 0 n do
+        if l < r && !isLess pivotVal (v[1 + l]!) then l := l + 1 else break
+      for _ in List.range' 0 n do
+        if l < r && isLess pivotVal (v[1 + (r - 1)]!) then r := r - 1 else break
+      if l ≥ r then done := true
+      else
+        r := r - 1
+        v := swp v (1 + l) (1 + r)
+        l := l + 1
+  return (l + 1, v)
+
+theorem partitionEqual_eq_eval (v0 : Array T) (pivotIdx : ℕ) (isLess : T → T → Bool) :
+    partitionEqual v0 pivotIdx isLess = partitionEqualEval v0 pivotIdx isLess := by
+  simp only [partitionEqual, partitionEqualEval,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+
+def nextPow2Eval (n : ℕ) : ℕ := Id.run do
+  let mut p := 1
+  for _ in List.range' 0 64 do
+    if p ≥ n then break
+    p := p * 2
+  return p
+
+theorem nextPow2_eq_eval (n : ℕ) : nextPow2 n = nextPow2Eval n := by
+  simp only [nextPow2, nextPow2Eval, Std.Legacy.Range.forIn_eq_forIn_range',
+    Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+
+def breakPatternsEval (v0 : Array T) : Array T := Id.run do
+  let mut v := v0
+  let len := v.size
+  if len ≥ 8 then
+    let mut random : UInt32 := len.toUInt32
+    let modulus := nextPow2Eval len
+    let pos := len / 4 * 2
+    for i in List.range' 0 3 do
+      random := random ^^^ (random <<< 13)
+      random := random ^^^ (random >>> 17)
+      random := random ^^^ (random <<< 5)
+      let hi := random
+      random := random ^^^ (random <<< 13)
+      random := random ^^^ (random >>> 17)
+      random := random ^^^ (random <<< 5)
+      let lo := random
+      let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
+      let mut other : ℕ := g.toNat % modulus
+      if other ≥ len then other := other - len
+      v := swp v (pos - 1 + i) other
+  return v
+
+theorem breakPatterns_eq_eval (v0 : Array T) :
+    breakPatterns v0 = breakPatternsEval v0 := by
+  simp only [breakPatterns, breakPatternsEval, nextPow2_eq_eval,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+
+def partialInsertionSortEval (v0 : Array T) (isLess : T → T → Bool) :
+    Bool × Array T := Id.run do
+  let MAX_STEPS := 5
+  let SHORTEST_SHIFTING := 50
+  let mut v := v0
+  let len := v.size
+  let mut i : ℕ := 1
+  let mut result : Option Bool := none
+  for _ in List.range' 0 MAX_STEPS do
+    if result.isNone then
+      for _ in List.range' 0 (len + 1) do
+        if i < len && !isLess (v[i]!) (v[i - 1]!) then i := i + 1 else break
+      if i == len then result := some true
+      else if len < SHORTEST_SHIFTING then result := some false
+      else
+        v := swp v (i - 1) i
+        v := overwriteEval v 0 (shiftTail (v.extract 0 i) isLess)
+        v := overwriteEval v i (shiftHeadEval (v.extract i v.size) isLess)
+  return (result.getD false, v)
+
+theorem partialInsertionSort_eq_eval (v0 : Array T) (isLess : T → T → Bool) :
+    partialInsertionSort v0 isLess = partialInsertionSortEval v0 isLess := by
+  simp only [partialInsertionSort, partialInsertionSortEval,
+    overwrite_eq_eval, shiftHead_eq_eval,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+
+end KernelEval
+
+def preparePartitionEval (values : Array T) (pivotIndex : ℕ)
+    (isLess : T → T → Bool) : PartitionSetup T := Id.run do
+  let values := swp values 0 pivotIndex
+  let pivot := values[0]!
+  let size := values.size
+  let mut left := 0
+  let mut right := size - 1
+  for _ in List.range' 0 size do
+    if left < right && isLess values[1 + left]! pivot then
+      left := left + 1
+    else break
+  for _ in List.range' 0 size do
+    if left < right && !isLess values[1 + (right - 1)]! pivot then
+      right := right - 1
+    else break
+  return ⟨values, pivot, left, right⟩
+
+theorem preparePartition_eq_eval (values : Array T) (pivotIndex : ℕ)
+    (isLess : T → T → Bool) :
+    preparePartition values pivotIndex isLess =
+      preparePartitionEval values pivotIndex isLess := by
+  simp only [preparePartition, preparePartitionEval,
+    Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size,
+    Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
 
 end Halo2.FloorPlanner.Pdqsort

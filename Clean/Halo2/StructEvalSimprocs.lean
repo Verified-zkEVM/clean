@@ -1,4 +1,8 @@
-import Clean.Halo2.Provable
+module
+
+public meta import Clean.Halo2.Provable
+
+public meta section
 
 /-!
 # Simprocs for halo2 provable-type evaluation

@@ -1,6 +1,10 @@
-import Clean.Halo2.Keygen.CompressSelectors
-import Clean.Halo2.Keygen.FloorPlanner.RegionShape
-import Mathlib.Data.Nat.Bitwise
+module
+
+public import Clean.Halo2.Keygen.CompressSelectors
+public import Clean.Halo2.Keygen.FloorPlanner.RegionShape
+public import Mathlib.Data.Nat.Bitwise
+
+@[expose] public section
 
 /-!
 # Bitset computation of selector conflicts

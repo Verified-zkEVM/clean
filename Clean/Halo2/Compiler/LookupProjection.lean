@@ -1,4 +1,8 @@
-import Clean.Halo2.Compiler.Queries
+module
+
+public import Clean.Halo2.Compiler.Queries
+
+@[expose] public section
 
 /-!
 # Lookup projection across the Clean boundary

@@ -1,4 +1,8 @@
-import Clean.Halo2.FormalRegion
+module
+
+public import Clean.Halo2.FormalRegion
+
+@[expose] public section
 
 namespace Halo2
 
@@ -14,7 +18,7 @@ output and the operations off that single application (runtime: no metadata
 re-materialization); the `opaque` is the kernel + elaborator reduction barrier, and the
 packaged `property` re-exposes the equation (`call_eq`/`call_operations`). -/
 @[keygen_call_expression]
-private opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
+opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
     (Input Output : TypeMap) [CircuitType Input] [CircuitType Output] :
     { f : FormalRegionCircuit F CI Cfg Input Output → Cfg → ℕ → Var Input F →
         RegionIndex → Var Output F × RegionOperations F //
