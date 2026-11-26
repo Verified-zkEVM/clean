@@ -1,5 +1,9 @@
-import Clean.Halo2.Tactics.Keygen
-import Clean.Halo2.ElaboratedConfigure
+module
+
+public import Clean.Halo2.Tactics.Keygen
+public import Clean.Halo2.ElaboratedConfigure
+
+@[expose] public section
 
 namespace Halo2
 

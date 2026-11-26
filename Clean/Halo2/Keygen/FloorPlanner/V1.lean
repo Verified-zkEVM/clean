@@ -1,5 +1,9 @@
-import Clean.Halo2.Keygen.FloorPlanner.Allocations
-import Clean.Halo2.Keygen.Pdqsort
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.Allocations
+public import Clean.Halo2.Keygen.Pdqsort
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 

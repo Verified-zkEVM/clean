@@ -1,5 +1,9 @@
-import Clean.Halo2.Keygen.Pdqsort
-import Mathlib.Tactic.NormNum
+module
+
+public import Clean.Halo2.Keygen.Pdqsort
+public import Mathlib.Tactic.NormNum
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 namespace Pdqsort
@@ -109,7 +113,7 @@ theorem overwrite_get!
   rw [arrayToList_getElem!] at heq
   rw [heq]
   by_cases hinside : start ≤ index ∧ index < start + sub.size
-  · rw [if_pos hinside]
+  · rw [ite_eq_left hinside]
     simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
     have htake : (array.toList.take start).length = start := by
       simp only [List.length_take, Array.length_toList]
@@ -117,12 +121,12 @@ theorem overwrite_get!
     have hprefix :
         (array.toList.take start ++ sub.toList).length =
           start + sub.size := by simp [htake]
-    rw [if_pos (by rw [hprefix]; omega), htake,
-      if_neg (by omega)]
-    rw [List.getElem?_eq_getElem (by simp only [List.length_append, htake, Array.length_toList]; omega), Option.getD_some]
+    rw [ite_eq_left (by rw [hprefix]; omega), htake,
+      ite_eq_right (by omega)]
+    rw [List.getElem?_eq_getElem (by simp only [Array.length_toList]; omega), Option.getD_some]
     rw [getElem!_pos sub (index - start) (by omega)]
     exact Array.getElem_toList (xs := sub) (by simpa only [Array.length_toList] using (show index - start < sub.size by omega))
-  · rw [if_neg hinside]
+  · rw [ite_eq_right hinside]
     by_cases hbefore : index < start
     · simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
       have htake : (array.toList.take start).length = start := by
@@ -131,10 +135,10 @@ theorem overwrite_get!
       have hprefix :
           (array.toList.take start ++ sub.toList).length =
             start + sub.size := by simp [htake]
-      rw [if_pos (by rw [hprefix]; omega),
-        if_pos (by rw [htake]; omega)]
+      rw [ite_eq_left (by rw [hprefix]; omega),
+        ite_eq_left (by rw [htake]; omega)]
       rw [List.getElem?_eq_getElem (by
-        simp only [List.length_take, Array.length_toList, List.length_append, htake]
+        simp only [htake]
         omega), Option.getD_some, List.getElem_take]
       rw [getElem!_pos array index (by omega)]
       exact Array.getElem_toList (xs := array) (by simp only [Array.length_toList]; omega)
@@ -146,7 +150,7 @@ theorem overwrite_get!
       have hprefix :
           (array.toList.take start ++ sub.toList).length =
             start + sub.size := by simp [htake]
-      rw [if_neg (by rw [hprefix]; omega), hprefix]
+      rw [ite_eq_right (by rw [hprefix]; omega), hprefix]
       by_cases horiginal : index < array.size
       · rw [List.getElem?_eq_getElem (by
             simp only [List.length_drop, Array.length_toList]
@@ -876,6 +880,320 @@ private theorem adjusted_mod_lt (x len : ℕ) (hlen : 0 < len) :
   dsimp only
   split <;> omega
 
+/-
+private theorem breakPatterns_loop_perm :
+    ∀ (indices : List ℕ) (len : ℕ)
+      (random : UInt32) (a original : Array T),
+      8 ≤ len →
+      a.size = len →
+      (∀ i ∈ indices, i < 3) →
+      List.Perm a.toList original.toList →
+      let result : MProd UInt32 (Array T) := Id.run <|
+        forIn indices (⟨random, a⟩ : MProd UInt32 (Array T))
+          fun i (r : MProd UInt32 (Array T)) =>
+            let random₁ := r.fst ^^^ (r.fst <<< 13)
+            let random₂ := random₁ ^^^ (random₁ >>> 17)
+            let random₃ := random₂ ^^^ (random₂ <<< 5)
+            let hi := random₃
+            let random₄ := random₃ ^^^ (random₃ <<< 13)
+            let random₅ := random₄ ^^^ (random₄ >>> 17)
+            let random₆ := random₅ ^^^ (random₅ <<< 5)
+            let lo := random₆
+            let g : UInt64 :=
+              (hi.toUInt64 <<< 32) ||| lo.toUInt64
+            let raw : ℕ := g.toNat % nextPow2 len
+            let other := if raw ≥ len then raw - len else raw
+            pure (.yield ⟨random₆,
+              swp r.snd (len / 4 * 2 - 1 + i) other⟩)
+      List.Perm result.snd.toList original.toList := by
+  intro indices
+  induction indices with
+  | nil =>
+      intro len random a original hlen hsize hindices hperm
+      simpa using hperm
+  | cons i indices ih =>
+      intro len random a original hlen hsize hindices hperm
+      simp only [List.forIn_cons]
+      apply ih
+      · exact hlen
+      ·
+        have hpermStep := swp_perm a (len / 4 * 2 - 1 + i)
+          (if
+              (((((random ^^^ (random <<< 13)) ^^^
+                    ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                  (((random ^^^ (random <<< 13)) ^^^
+                    ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                ((((random ^^^ (random <<< 13)) ^^^
+                      ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                    (((random ^^^ (random <<< 13)) ^^^
+                      ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
+                (((((random ^^^ (random <<< 13)) ^^^
+                        ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                      (((random ^^^ (random <<< 13)) ^^^
+                        ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                    ((((random ^^^ (random <<< 13)) ^^^
+                          ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                        (((random ^^^ (random <<< 13)) ^^^
+                          ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17) ^^^
+              (((((random ^^^ (random <<< 13)) ^^^
+                        ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                      (((random ^^^ (random <<< 13)) ^^^
+                        ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                    ((((random ^^^ (random <<< 13)) ^^^
+                          ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                        (((random ^^^ (random <<< 13)) ^^^
+                          ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
+                    (((((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                          (((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                        ((((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                            (((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) <<< 5)).toUInt64.toNat %
+                nextPow2 len ≥ len then
+            (((((random ^^^ (random <<< 13)) ^^^
+                    ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                  (((random ^^^ (random <<< 13)) ^^^
+                    ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)).toUInt64 <<< 32 |||
+              (((((random ^^^ (random <<< 13)) ^^^
+                        ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                      (((random ^^^ (random <<< 13)) ^^^
+                        ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                    ((((random ^^^ (random <<< 13)) ^^^
+                          ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                        (((random ^^^ (random <<< 13)) ^^^
+                          ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
+                    (((((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                          (((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                        ((((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                            (((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) ^^^
+                  (((((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                          (((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                        ((((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                            (((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
+                        (((((random ^^^ (random <<< 13)) ^^^
+                                ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                              (((random ^^^ (random <<< 13)) ^^^
+                                ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                            ((((random ^^^ (random <<< 13)) ^^^
+                                  ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                                (((random ^^^ (random <<< 13)) ^^^
+                                  ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) <<< 5)).toUInt64).toNat %
+                nextPow2 len - len
+          else
+            (((((random ^^^ (random <<< 13)) ^^^
+                    ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                  (((random ^^^ (random <<< 13)) ^^^
+                    ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)).toUInt64 <<< 32 |||
+              (((((random ^^^ (random <<< 13)) ^^^
+                        ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                      (((random ^^^ (random <<< 13)) ^^^
+                        ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                    ((((random ^^^ (random <<< 13)) ^^^
+                          ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                        (((random ^^^ (random <<< 13)) ^^^
+                          ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
+                    (((((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                          (((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                        ((((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                            (((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) ^^^
+                  (((((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                          (((random ^^^ (random <<< 13)) ^^^
+                            ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                        ((((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                            (((random ^^^ (random <<< 13)) ^^^
+                              ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13) ^^^
+                        (((((random ^^^ (random <<< 13)) ^^^
+                                ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                              (((random ^^^ (random <<< 13)) ^^^
+                                ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) ^^^
+                            ((((random ^^^ (random <<< 13)) ^^^
+                                  ((random ^^^ (random <<< 13)) >>> 17)) ^^^
+                                (((random ^^^ (random <<< 13)) ^^^
+                                  ((random ^^^ (random <<< 13)) >>> 17)) <<< 5)) <<< 13)) >>> 17)) <<< 5)).toUInt64).toNat %
+              nextPow2 len)
+          (by
+            rw [hsize]
+            have hi := hindices i (by simp)
+            omega)
+          (by
+            rw [hsize]
+            apply adjusted_mod_lt
+            omega)
+        exact array_size_eq_of_perm hpermStep
+      · intro j hj
+        exact hindices j (by simp [hj])
+      ·
+        apply (swp_perm a (len / 4 * 2 - 1 + i)
+          _ (by
+            rw [hsize]
+            have hi := hindices i (by simp)
+            omega) (by
+            rw [hsize]
+            apply adjusted_mod_lt
+            omega)).trans hperm
+-/
+
+private def xorshift32 (random : UInt32) : UInt32 :=
+  let random := random ^^^ (random <<< 13)
+  let random := random ^^^ (random >>> 17)
+  random ^^^ (random <<< 5)
+
+private def breakNextRandom (random : UInt32) : UInt32 :=
+  xorshift32 (xorshift32 random)
+
+private def breakOther (random : UInt32) (len : ℕ) : ℕ :=
+  let hi := xorshift32 random
+  let lo := xorshift32 hi
+  let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
+  let raw := g.toNat % nextPow2 len
+  if raw ≥ len then raw - len else raw
+
+private def breakWord (random : UInt32) : ℕ :=
+  let hi := xorshift32 random
+  let lo := xorshift32 hi
+  let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
+  g.toNat
+
+private theorem breakOther_lt (random : UInt32) (len : ℕ)
+    (hlen : 0 < len) :
+    breakOther random len < len := by
+  unfold breakOther
+  apply adjusted_mod_lt
+  exact hlen
+
+private theorem breakPatterns_loop_perm_clean :
+    ∀ (indices : List ℕ) (len : ℕ)
+      (random : UInt32) (a original : Array T),
+      8 ≤ len →
+      a.size = len →
+      (∀ i ∈ indices, i < 3) →
+      List.Perm a.toList original.toList →
+      let result : MProd UInt32 (Array T) := Id.run <|
+        forIn indices (⟨random, a⟩ : MProd UInt32 (Array T))
+          fun i (r : MProd UInt32 (Array T)) =>
+            pure (.yield ⟨breakNextRandom r.fst,
+              swp r.snd (len / 4 * 2 - 1 + i)
+                (breakOther r.fst len)⟩)
+      List.Perm result.snd.toList original.toList := by
+  intro indices
+  induction indices with
+  | nil =>
+      intro len random a original hlen hsize hindices hperm
+      simpa using hperm
+  | cons i indices ih =>
+      intro len random a original hlen hsize hindices hperm
+      simp only [List.forIn_cons]
+      apply ih
+      · exact hlen
+      ·
+        have hstep := swp_perm a (len / 4 * 2 - 1 + i)
+          (breakOther random len)
+          (by
+            rw [hsize]
+            have hi := hindices i (by simp)
+            omega)
+          (by
+            rw [hsize]
+            exact breakOther_lt random len (by omega))
+        exact (array_size_eq_of_perm hstep).trans hsize
+      · intro j hj
+        exact hindices j (by simp [hj])
+      ·
+        exact (swp_perm a (len / 4 * 2 - 1 + i)
+          (breakOther random len)
+          (by
+            rw [hsize]
+            have hi := hindices i (by simp)
+            omega)
+          (by
+            rw [hsize]
+            exact breakOther_lt random len (by omega))).trans hperm
+
+private def breakChoice (random : UInt32) (len : ℕ) :
+    MProd UInt32 ℕ :=
+  let random := random ^^^ (random <<< 13)
+  let random := random ^^^ (random >>> 17)
+  let random := random ^^^ (random <<< 5)
+  let hi := random
+  let random := random ^^^ (random <<< 13)
+  let random := random ^^^ (random >>> 17)
+  let random := random ^^^ (random <<< 5)
+  let lo := random
+  let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
+  let raw := g.toNat % nextPow2 len
+  ⟨random, if raw ≥ len then raw - len else raw⟩
+
+private theorem breakChoice_other_lt (random : UInt32) (len : ℕ)
+    (hlen : 0 < len) :
+    (breakChoice random len).snd < len := by
+  unfold breakChoice
+  apply adjusted_mod_lt
+  exact hlen
+
+private theorem breakPatterns_loop_perm_choice :
+    ∀ (indices : List ℕ) (len : ℕ)
+      (random : UInt32) (a original : Array T),
+      8 ≤ len →
+      a.size = len →
+      (∀ i ∈ indices, i < 3) →
+      List.Perm a.toList original.toList →
+      let result : MProd UInt32 (Array T) := Id.run <|
+        forIn indices (⟨random, a⟩ : MProd UInt32 (Array T))
+          fun i (r : MProd UInt32 (Array T)) =>
+            let choice := breakChoice r.fst len
+            pure (.yield ⟨choice.fst,
+              swp r.snd (len / 4 * 2 - 1 + i) choice.snd⟩)
+      List.Perm result.snd.toList original.toList := by
+  intro indices
+  induction indices with
+  | nil =>
+      intro len random a original hlen hsize hindices hperm
+      simpa using hperm
+  | cons i indices ih =>
+      intro len random a original hlen hsize hindices hperm
+      simp only [List.forIn_cons]
+      apply ih
+      · exact hlen
+      ·
+        have hstep := swp_perm a (len / 4 * 2 - 1 + i)
+          (breakChoice random len).snd
+          (by
+            rw [hsize]
+            have hi := hindices i (by simp)
+            omega)
+          (by
+            rw [hsize]
+            exact breakChoice_other_lt random len (by omega))
+        exact (array_size_eq_of_perm hstep).trans hsize
+      · intro j hj
+        exact hindices j (by simp [hj])
+      ·
+        exact (swp_perm a (len / 4 * 2 - 1 + i)
+          (breakChoice random len).snd
+          (by
+            rw [hsize]
+            have hi := hindices i (by simp)
+            omega)
+          (by
+            rw [hsize]
+            exact breakChoice_other_lt random len (by omega))).trans hperm
+
 omit [Inhabited T] in
 private theorem state_forIn_perm
     (indices : List ℕ)
@@ -989,16 +1307,61 @@ theorem breakPatterns_perm (v : Array T) :
     List.Perm (breakPatterns v).toList v.toList := by
   simp only [breakPatterns]
   split
-  · have hloop := state_forIn_perm (List.range' 0 3)
-      (breakPatternsStep v.size (nextPow2 v.size) (v.size / 4 * 2))
-      ⟨v.size.toUInt32, v⟩ v (by
-        intro i hi state hperm
-        apply breakPatternsStep_perm v i
-        · simp only [List.mem_range'] at hi
-          omega
-        · omega
-        · exact hperm) (List.Perm.refl _)
-    simpa only [breakPatternsStep, Id.run, pure, bind] using hloop
+  ·
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range']
+    let body : ℕ → MProd UInt32 (Array T) →
+        Id (ForInStep (MProd UInt32 (Array T))) :=
+      fun i r => do
+        let mut a := r.snd
+        let mut random := r.fst
+        random := random ^^^ (random <<< 13)
+        random := random ^^^ (random >>> 17)
+        random := random ^^^ (random <<< 5)
+        let hi := random
+        random := random ^^^ (random <<< 13)
+        random := random ^^^ (random >>> 17)
+        random := random ^^^ (random <<< 5)
+        let lo := random
+        let g : UInt64 := (hi.toUInt64 <<< 32) ||| lo.toUInt64
+        let mut other : ℕ := g.toNat % nextPow2 v.size
+        if other ≥ v.size then other := other - v.size
+        a := swp a (v.size / 4 * 2 - 1 + i) other
+        pure PUnit.unit
+        pure (.yield ⟨random, a⟩)
+    have hbody :
+        ∀ i ∈ List.range' 0 3, ∀ r,
+          List.Perm r.snd.toList v.toList →
+          match body i r with
+          | .done s => List.Perm s.snd.toList v.toList
+          | .yield s => List.Perm s.snd.toList v.toList := by
+      intro i hi r hr
+      simp only [List.mem_range'] at hi
+      have hrsize : r.snd.size = v.size :=
+        array_size_eq_of_perm hr
+      simp only [body]
+      split_ifs with hother
+      ·
+        exact (swp_perm r.snd (v.size / 4 * 2 - 1 + i) _
+          (by rw [hrsize]; omega)
+          (by
+            rw [hrsize]
+            have hb := nextPow2_bounds v.size (by omega)
+            have hm := Nat.mod_lt (breakWord r.fst) hb.1
+            simp only [breakWord, xorshift32] at hm
+            omega)).trans hr
+      ·
+        exact (swp_perm r.snd (v.size / 4 * 2 - 1 + i) _
+          (by rw [hrsize]; omega)
+          (by
+            rw [hrsize]
+            have hb := nextPow2_bounds v.size (by omega)
+            have hm := Nat.mod_lt (breakWord r.fst) hb.1
+            simp only [breakWord, xorshift32] at hm
+            omega)).trans hr
+    have hmain := state_forIn_body_result_perm
+      (List.range' 0 3) body ⟨v.size.toUInt32, v⟩ v
+      hbody (List.Perm.refl _)
+    exact hmain
   · simp
 
 private theorem partialInsertionMutation_perm
@@ -1349,7 +1712,7 @@ private theorem swp_toList_take_before
       ← getElem!_pos array index hindex,
       swp_get! array left right index hleft hright,
       getElem!_pos array index hindex,
-      if_neg (by omega), if_neg (by omega)]
+      ite_eq_right (by omega), ite_eq_right (by omega)]
 
 private theorem partialInsertionMutation_prefix_sorted
     (array : Array T) (key : T → ℕ) (index : ℕ)
@@ -1960,13 +2323,13 @@ private theorem scanLeft_stops_on_greater
       by_cases hstep :
           (decide (left < right) &&
             !isLess pivot array[1 + left]!) = true
-      · rw [scanLeft, if_pos hstep] at hresult ⊢
+      · rw [scanLeft, ite_eq_left hstep] at hresult ⊢
         apply inductionHypothesis
         · simp only [List.length_cons] at hcapacity
           simp only [Bool.and_eq_true, decide_eq_true_eq] at hstep
           omega
         · exact hresult
-      · rw [scanLeft, if_neg hstep] at hresult ⊢
+      · rw [scanLeft, ite_eq_right hstep] at hresult ⊢
         have hleftRight : left < right := hresult
         simp only [Bool.and_eq_true, decide_eq_true_eq,
           Bool.not_eq_true'] at hstep
@@ -1991,13 +2354,13 @@ private theorem scanRight_stops_on_not_greater
       by_cases hstep :
           (decide (left < right) &&
             isLess pivot array[1 + (right - 1)]!) = true
-      · rw [scanRight, if_pos hstep] at hresult ⊢
+      · rw [scanRight, ite_eq_left hstep] at hresult ⊢
         apply inductionHypothesis
         · simp only [List.length_cons] at hcapacity
           simp only [Bool.and_eq_true, decide_eq_true_eq] at hstep
           omega
         · exact hresult
-      · rw [scanRight, if_neg hstep] at hresult ⊢
+      · rw [scanRight, ite_eq_right hstep] at hresult ⊢
         have hleftRight : left < right := hresult
         simp only [Bool.and_eq_true, decide_eq_true_eq] at hstep
         cases hless : isLess pivot array[1 + (right - 1)]! with
@@ -2214,9 +2577,9 @@ theorem partitionP_order
     simp only [middle] at hindexStop
     rw [overwrite_get! swapped block.2 (1 + left) index hfit]
     by_cases hbefore : index < 1 + left
-    · rw [if_neg (by omega)]
+    · rw [ite_eq_right (by omega)]
       exact hleftOrder index hindexStart hbefore
-    · rw [if_pos (by
+    · rw [ite_eq_left (by
           constructor
           · omega
           · rw [hblockSize, hsourceSize]
@@ -2229,7 +2592,7 @@ theorem partitionP_order
     intro index hindexStart hindexStop
     rw [overwrite_get! swapped block.2 (1 + left) index hfit]
     by_cases hbeforeRight : index < 1 + right
-    · rw [if_pos (by
+    · rw [ite_eq_left (by
           constructor
           · simp only [middle] at hindexStart
             omega
@@ -2240,7 +2603,7 @@ theorem partitionP_order
         omega
       · rw [hblockSize, hsourceSize]
         omega
-    · rw [if_neg (by
+    · rw [ite_eq_right (by
           rw [hblockSize, hsourceSize]
           omega)]
       apply hrightOrder index
@@ -2255,7 +2618,7 @@ theorem partitionP_order
     have hzero : rewritten[0]! = swapped[0]! := by
       simp only [rewritten]
       rw [overwrite_get! swapped block.2 (1 + left) 0 hfit,
-        if_neg (by omega)]
+        ite_eq_right (by omega)]
     by_cases hmiddleZero : middle = 0
     · simp [hmiddleZero, hzero]
     · simp [hmiddleZero, hzero]
@@ -2271,15 +2634,15 @@ theorem partitionP_order
       swp_get! rewritten 0 middle index (by
         simpa only [rewritten, overwrite_size] using hpositive) hmiddle]
     by_cases hindexZero : index = 0
-    · rw [if_pos hindexZero]
+    · rw [ite_eq_left hindexZero]
       exact hprefix middle (by omega) (by omega)
-    · rw [if_neg hindexZero, if_neg (by omega)]
+    · rw [ite_eq_right hindexZero, ite_eq_right (by omega)]
       exact hprefix index (by omega) (by omega)
   · intro index hindexStart hindexStop
     rw [hpivotValue,
       swp_get! rewritten 0 middle index (by
         simpa only [rewritten, overwrite_size] using hpositive) hmiddle,
-      if_neg (by omega), if_neg (by omega)]
+      ite_eq_right (by omega), ite_eq_right (by omega)]
     apply hsuffix index
     · omega
     · simpa only [swp_size] using hindexStop
@@ -2375,7 +2738,7 @@ private theorem partitionEqualLoop_cons
     ⟨next, hnext⟩
   rw [partitionEqualLoop]
   simp only [List.forIn_cons]
-  simp only [Id.run_bind, Id.run_pure, LawfulMonad.pure_bind]
+  simp only [Id.run_bind, Id.run_pure]
   have hbody := hnext
   simp [partitionEqualStep] at hbody
   simp only [Bool.not_eq_true', Bool.and_eq_true,
@@ -2383,7 +2746,7 @@ private theorem partitionEqualLoop_cons
   rw [hbody, hnext]
   simp only [ForInStep.run]
   rw [partitionEqualLoop]
-  simp only [Id.run_bind, Id.run_pure, LawfulMonad.pure_bind,
+  simp only [Id.run_bind, Id.run_pure, 
     Bool.not_eq_true', Bool.and_eq_true, decide_eq_true_eq,
     ge_iff_le]
 
@@ -2460,7 +2823,7 @@ private theorem partitionEqualLoop_perm
                   (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
                     swp array (1 + scannedLeft)
                       (1 + (scannedRight - 1))⟩)) = _
-            rw [if_pos hfinished]
+            rw [ite_eq_left hfinished]
             rfl
           rw [partitionEqualLoop_cons, hstate]
           exact ih true scannedLeft scannedRight array original
@@ -2499,7 +2862,7 @@ private theorem partitionEqualLoop_perm
                   (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
                     swp array (1 + scannedLeft)
                       (1 + (scannedRight - 1))⟩)) = _
-            rw [if_neg hfinished]
+            rw [ite_eq_right hfinished]
             rfl
           rw [partitionEqualLoop_cons, hstate]
           exact hnext
@@ -2648,7 +3011,7 @@ private theorem equalPartitionScanStep
       have hposition : position = 1 + scannedLeft := by omega
       subst position
       rw [swp_get! array (1 + scannedLeft) scannedRight
-        (1 + scannedLeft) hleftIndex hrightIndex, if_pos rfl]
+        (1 + scannedLeft) hleftIndex hrightIndex, ite_eq_left rfl]
       exact hrightEqual
     have hnextPrefix := hnextPrefixBase.append hnextPrefixPoint
     have hnextSuffixBase : RangeAll next (1 + scannedRight) next.size
@@ -2665,7 +3028,7 @@ private theorem equalPartitionScanStep
       have hposition : position = scannedRight := by omega
       subst position
       rw [swp_get! array (1 + scannedLeft) scannedRight scannedRight
-        hleftIndex hrightIndex, if_neg (by omega), if_pos rfl]
+        hleftIndex hrightIndex, ite_eq_right (by omega), ite_eq_left rfl]
       simpa only [Nat.add_comm] using hleftGreater
     have hnextSuffix : RangeAll next (1 + (scannedRight - 1)) next.size
         (fun item => key pivot < key item) := by
@@ -2695,7 +3058,7 @@ private theorem partitionEqualStep_stateInvariant
   rcases hinvariant with ⟨hinvariant, hdoneEqual⟩
   cases done with
   | true =>
-      simpa [partitionEqualStep, EqualPartitionStateInvariant] using
+      simpa [partitionEqualStep, EqualPartitionStateInvariant, ForInStep.run] using
         And.intro hinvariant hdoneEqual
   | false =>
       have harrayCapacity : array.size ≤ scanIndices.length := by
@@ -2743,13 +3106,13 @@ private theorem partitionEqualStep_stateInvariant
                 (MProd Bool (MProd ℕ (MProd ℕ (Array T)))))
           else pure (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
             swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩)) = _
-          rw [if_pos hfinished]
+          rw [ite_eq_left hfinished]
           rfl
         rw [hstep]
         simp only [ForInStep.run]
         have hnextInvariant : EqualPartitionInvariant key pivot original
             scannedLeft scannedRight array := by
-          simpa only [hfinished, if_true, Prod.fst, Prod.snd] using hsemantic
+          simpa only [hfinished, ite_true, Prod.fst, Prod.snd] using hsemantic
         refine ⟨hnextInvariant, ?_⟩
         · intro _
           show scannedLeft = scannedRight
@@ -2768,14 +3131,14 @@ private theorem partitionEqualStep_stateInvariant
                 (MProd Bool (MProd ℕ (MProd ℕ (Array T)))))
           else pure (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
             swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩)) = _
-          rw [if_neg hfinished]
+          rw [ite_eq_right hfinished]
           simp only [Id.run_pure]
           rw [show 1 + (scannedRight - 1) = scannedRight by omega]
         rw [hstep]
         simp only [ForInStep.run]
         refine ⟨?_, by simp⟩
         simpa only [scannedLeft, scannedRight, hfinished,
-          if_false, Prod.fst, Prod.snd] using hsemantic
+          ite_false, Prod.fst, Prod.snd] using hsemantic
 
 private theorem partitionEqualLoop_stateInvariant
     (indices scanIndices : List ℕ) (key : T → ℕ) (pivot : T)
@@ -2805,7 +3168,7 @@ private theorem partitionEqualStep_progress
       next.2.2.1 - next.2.1 < state.2.2.1 - state.2.1 := by
   rcases state with ⟨done, left, right, array⟩
   cases done with
-  | true => simp [partitionEqualStep]
+  | true => simp [partitionEqualStep, ForInStep.run]
   | false =>
       let scannedLeft := Id.run <| forIn scanIndices left fun _ current =>
         if current < right && !isLess pivot array[1 + current]! then do
@@ -2843,7 +3206,7 @@ private theorem partitionEqualStep_progress
               (MProd Bool (MProd ℕ (MProd ℕ (Array T)))))
         else pure (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
           swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩))).run.1 = true
-        rw [if_pos hfinished]
+        rw [ite_eq_left hfinished]
         rfl
       · right
         have hstrict : scannedLeft < scannedRight := by omega
@@ -2862,7 +3225,7 @@ private theorem partitionEqualStep_progress
         else pure (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
           swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩)) |>.run).2.1 <
             right - left
-        rw [if_neg hfinished]
+        rw [ite_eq_right hfinished]
         simp only [ForInStep.run, Id.run, pure]
         omega
 
@@ -2878,7 +3241,7 @@ private theorem partitionEqualLoop_done_of_done
       rw [partitionEqualLoop_cons]
       apply inductionHypothesis
       rcases state with ⟨done, left, right, array⟩
-      cases done <;> simp_all [partitionEqualStep]
+      cases done <;> simp_all [partitionEqualStep, ForInStep.run]
 
 private theorem partitionEqualLoop_eventually_done
     (indices scanIndices : List ℕ) (pivot : T)
@@ -2976,7 +3339,7 @@ theorem partitionEqual_ordered
     simp [swapped, swp_size]
   have hpivotValue : swapped[0]! = array[pivotIndex]! := by
     simp only [swapped]
-    rw [swp_get! array 0 pivotIndex 0 hnonempty hpivot, if_pos rfl]
+    rw [swp_get! array 0 pivotIndex 0 hnonempty hpivot, ite_eq_left rfl]
   let initial : MProd Bool (MProd ℕ (MProd ℕ (Array T))) :=
     ⟨false, 0, swapped.size - 1, swapped⟩
   have hinitial : EqualPartitionStateInvariant key swapped[0]! array initial := by
@@ -3511,12 +3874,9 @@ private theorem recurseAfterPivot_perm
   cases wasBalanced <;> cases wasPartitioned <;> cases likelySorted
   all_goals
     simp only [recurseAfterPivot, Bool.false_and, Bool.true_and,
-      if_true]
+      ite_true]
   all_goals
-    first
-    | exact recursePred_perm contracts rec hrec
-        v isLess pred limit len _ _ pivot hpivot
-    | skip
+    try (exact recursePred_perm contracts rec hrec v isLess pred limit len _ _ pivot hpivot)
   generalize hpartial :
     partialInsertionSort v isLess = partialResult
   rcases partialResult with ⟨sorted, v2⟩
@@ -3657,7 +4017,7 @@ private theorem blocks_count_contract
   intro array pivot isLess
   exact (hblocks array pivot isLess).1
 
-def driverContractsOfBlocksContract
+theorem driverContractsOfBlocksContract
     (hblocks : PartitionInBlocksPermContract (T := T)) :
     DriverContracts T where
   insertionSort_perm := insertionSort_perm
@@ -3722,7 +4082,7 @@ structure OrderingContracts (T : Type) [Inhabited T] (key : T → ℕ) where
 
 variable {key : T → ℕ}
 
-private def legacyDriverContracts : DriverContracts T :=
+private theorem legacyDriverContracts : DriverContracts T :=
   driverContractsOfBlocksContract partitionInBlocks_perm_contract
 
 theorem recurse_perm
@@ -3930,12 +4290,9 @@ private theorem recurseAfterPivot_sorted
   cases wasBalanced <;> cases wasPartitioned <;> cases likelySorted
   all_goals
     simp only [recurseAfterPivot, Bool.false_and, Bool.true_and,
-      if_true]
+      ite_true]
   all_goals
-    first
-    | exact recursePred_sorted rec hrecSorted hrecPerm
-        array pred limit len _ _ pivot hpivot hlower
-    | skip
+    try (exact recursePred_sorted rec hrecSorted hrecPerm array pred limit len _ _ pivot hpivot hlower)
   generalize hpartial :
     partialInsertionSort array (lessBy key) = partialResult
   rcases partialResult with ⟨sorted, partiallySorted⟩

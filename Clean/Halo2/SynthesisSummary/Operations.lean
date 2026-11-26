@@ -1,4 +1,8 @@
-import Clean.Halo2.SynthesisSummary.Region
+module
+
+public import Clean.Halo2.SynthesisSummary.Region
+
+@[expose] public section
 
 namespace Halo2
 

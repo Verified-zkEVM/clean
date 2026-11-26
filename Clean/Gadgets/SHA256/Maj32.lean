@@ -1,6 +1,9 @@
-import Clean.Gadgets.WitnessEvaluation
-import Clean.Gadgets.SHA256.BitwiseOps
-import Clean.Specs.SHA256
+module
+
+public import Clean.Gadgets.SHA256.BitwiseOps
+public import Clean.Specs.SHA256
+
+@[expose] public section
 
 open Clean
 
@@ -206,36 +209,22 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [maj32]
   obtain ⟨ha, hb, hc⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b, h_input_c⟩ := h_input
-  have h_ai : ∀ i : Fin 32, Expression.eval env input_var_a[i.val] = input_a[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_a i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  have h_bi : ∀ i : Fin 32, Expression.eval env input_var_b[i.val] = input_b[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_b i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  have h_ci : ∀ i : Fin 32, Expression.eval env input_var_c[i.val] = input_c[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_c i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  -- Extract the two sets of constraints from h_holds
+  -- the lift + input premises already substitute values into `h_holds` elementwise
   obtain ⟨h_holds_t, h_holds_z⟩ := h_holds
   -- t[i] = a[i] * b[i]
   have h_t : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] * input_b[i] := by
     intro i
-    have := h_holds_t i; rw [h_ai i, h_bi i] at this
-    exact sub_eq_zero.mp this
+    exact sub_eq_zero.mp (h_holds_t i)
   -- z[i] = t[i] + c[i] * (a[i] + b[i] - 2 * t[i])
   have h_z : ∀ i : Fin 32, env.get (i₀ + 32 + i.val) =
       input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) := by
     intro i
-    have := h_holds_z i; rw [h_t i, h_ai i, h_bi i, h_ci i] at this
-    exact eq_of_sub_eq_zero (by ring_nf; ring_nf at this; exact this)
-  set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + 32 + i} : Expression (F p))) with hz_def
+    have := h_holds_z i; rw [h_t i] at this
+    exact eq_of_sub_eq_zero (by
+      simp only [Fin.getElem_fin] at this ⊢; ring_nf; ring_nf at this; exact this)
+  set z : fields 32 (F p) := Vector.mapRange 32 fun i => env.get (i₀ + 32 + i) with hz_def
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + 32 + i.val) := by
-    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    intro i; simp [z, Vector.getElem_mapRange]
   have h_eq' : ∀ i : Fin 32, z[i] =
       input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) := by
     intro i; rw [h_z_get i]; exact h_z i
@@ -243,19 +232,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [maj32]
+  simp only [circuit_norm, Fin.isLt, reduceDIte] at h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
-  · have := (h_env.1) i
-    have h_read (v : Vector (Expression (F p)) 32) :
-        (v[(Witgen.NExprOver.idx : NExpr (F p))]).eval {env, idx := i.val} = Expression.eval env.toEnvironment v[i.val] :=
-      Witgen.eval_vector_read {env, idx := i.val} v (Witgen.NExprOver.idx : NExpr (F p)) i.isLt
-    simp only [h_read, circuit_norm] at this
-    rw [this]; ring
-  · have := (h_env.2.1) i
-    have h_read (v : Vector (Expression (F p)) 32) :
-        (v[(Witgen.NExprOver.idx : NExpr (F p))]).eval {env, idx := i.val} = Expression.eval env.toEnvironment v[i.val] :=
-      Witgen.eval_vector_read {env, idx := i.val} v (Witgen.NExprOver.idx : NExpr (F p)) i.isLt
-    simp only [h_read, circuit_norm] at this
-    rw [this]; ring
+  · rw [h_env.1 i]; ring
+  · rw [h_env.2 i]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness

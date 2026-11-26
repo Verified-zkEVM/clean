@@ -1,7 +1,11 @@
-import Clean.Utils.Vector
-import Clean.Circuit.Extensions
-import Clean.Table.Theorems
-import Clean.Gadgets.Addition8.Addition8
+module
+
+public import Clean.Utils.Vector
+public import Clean.Circuit.Extensions
+public import Clean.Table.Theorems
+public import Clean.Gadgets.Addition8.Addition8
+
+@[expose] public section
 
 open Clean
 
@@ -85,61 +89,45 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
   -- simplify constraints
   simp only [boundaryFib]
   simp_assign_row
-  simp +instances only [circuit_norm, table_norm, pure, Operations.forAllNoOffset, table_assignment_norm,
-    true_and, and_true, Nat.reduceAdd, Nat.reduceMod, zero_add]
+  simp only [circuit_norm, table_norm, pure, MonadLift.monadLift, Nat.reduceAdd, Nat.reduceMod]
   intro ⟨ boundary1, boundary2 ⟩
 
   have hx : first_row.x = env.get 0 := by rfl
   have hy : first_row.y = env.get 1 := by rfl
   replace boundary1 : env.get 0 = 0 := (sub_eq_zero.mp boundary1).symm
   replace boundary2 : env.get 1 = 1 := (sub_eq_zero.mp boundary2).symm
-  rw [hx, boundary1, hy, boundary2, ZMod.val_zero, ZMod.val_one]
+  simp only [hx, hy, boundary1, boundary2, ZMod.val_zero, ZMod.val_one, fib8]
   trivial
 
-/-- Evaluate only the finite update pattern, keeping cells abstract. -/
-private theorem update_assignment {α : Type} (a b c d e x y : α) :
-    ((([] ++ [a,b] ++ [c] ++ [d,e]).set 2 x).set 3 y) = [a,b,x,y,e] := rfl
+lemma fibRelation_assignment_vars :
+    (fibRelation (p:=p)).finalAssignment.vars =
+      #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .aux 2] := by
+  dsimp +instances only [fibRelation, TableConstraint.finalAssignment, table_assignment_norm, circuit_norm,
+    copyToVar, Gadgets.Addition8.circuit, pure, MonadLift.monadLift, explicit_provable_type]
+  simp only [Vector.mapFinRange_succ, Vector.mapFinRange_zero]
+  rfl
 
-/-- The assignment shape is independent of field-value computation. -/
-private theorem fib_offset : (fibRelation (p := p)).finalAssignment.offset = 5 := by
-  dsimp only [fibRelation, table_assignment_norm, circuit_norm, copyToVar,
-    Gadgets.Addition8.circuit, Gadgets.Addition8Full.circuit,
-    Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.main,
-    MonadLift.monadLift, pure, explicit_provable_type]
+lemma fibRelation_assignment : (fibRelation (p:=p)).finalAssignment =
+    { offset := 5, aux_length := 3,
+      vars := #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .aux 2] } := by
+  rw [← fibRelation_assignment_vars (p:=p)]
+  rfl
 
-private theorem fib_assignment : (fibRelation (p := p)).finalAssignment.vars.toArray =
-    #[.input ⟨0,0⟩, .input ⟨0,1⟩, .input ⟨1,0⟩, .input ⟨1,1⟩, .aux 2] := by
-  dsimp only [fibRelation, table_assignment_norm, circuit_norm, copyToVar,
-    Gadgets.Addition8.circuit, Gadgets.Addition8Full.circuit,
-    Gadgets.Addition8FullCarry.circuit, Gadgets.Addition8FullCarry.main,
-    MonadLift.monadLift, pure, explicit_provable_type]
-  simp only [Vector.mapFinRange_zero, Vector.mapFinRange_succ]
-  apply Array.toList_inj.mp
-  dsimp only [Vector.toList, Vector.toArray, Vector.append,
-    HAppend.hAppend, Append.append, Vector.mapRange]
-  exact update_assignment _ _ _ _ _ _ _
-
-private theorem fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
+lemma fibRelation_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
     let env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ aux_env
-    env.get 0 = curr.x ∧ env.get 1 = curr.y ∧ env.get 2 = next.x ∧ env.get 3 = next.y := by
-  dsimp only [windowEnv]
-  simp +instances only [fib_offset, Nat.reduceLT, ↓reduceDIte,
-    Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, fib_assignment]
-  and_intros <;> rfl
+    env.get 0 = curr.x ∧ env.get 1 = curr.y ∧
+      env.get 2 = next.x ∧ env.get 3 = next.y := by
+  intro env
+  simp only [env, windowEnv, fibRelation_assignment, fibRelation_assignment_vars]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  all_goals rfl
 
--- TODO(4.30 bump): scoped legacy defeq (still needed after the elaborate_circuit fix:
--- heavyweight offset_consistent autoParam / windowEnv defeq on the concrete table)
+-- TODO(4.30 bump): the new isDefEq transparency rules make the heavyweight table
+-- elaboration (offset_consistent autoParam, windowEnv defeq) time out; scoped legacy mode.
 set_option backward.isDefEq.respectTransparency false in
 def formalFibTable : FormalTable (F p) RowType := {
   constraints := fibTable
   Spec
-
-  offset_consistent := by
-    simp only [fibTable, List.Forall]
-    constructor
-    · rfl
-    · rw [TableConstraint.OffsetConsistent, fib_offset]
-      rfl
 
   soundness := by
     intro N trace envs _
@@ -175,17 +163,11 @@ def formalFibTable : FormalTable (F p) RowType := {
       set env := fibRelation.windowEnv ⟨<+> +> curr +> next, rfl⟩ (envs.toEnvironment 1 (rest.len + 1))
 
       simp only [fibRelation, circuit_norm, table_norm, table_assignment_norm, copyToVar,
-          Gadgets.Addition8.circuit, Gadgets.Addition8Full.circuit,
-      Gadgets.Addition8FullCarry.circuit, pure, MonadLift.monadLift, explicit_provable_type,
-          Operations.forAllNoOffset,
-          true_and, and_true] at ConstraintsHold
+          pure, MonadLift.monadLift, Gadgets.Addition8.circuit] at ConstraintsHold
+      simp only [circuit_norm, varFromOffset, Vector.mapRange] at ConstraintsHold
+      simp only [explicit_provable_type, circuit_norm] at ConstraintsHold
 
-      -- NOTE: In Lean 4.25.0-rc2, Vector/List indexing doesn't reduce definitionally
-      -- as it did in v4.24.0. We use explicit simp lemmas to reduce the expressions.
-      -- See: https://github.com/leanprover/lean4/issues/10736 for related issues.
-      have env_simp : env.get 0 = curr.x ∧ env.get 1 = curr.y ∧
-                      env.get 2 = next.x ∧ env.get (2 + 1) = next.y := by
-        exact fib_vars curr next (envs.toEnvironment 1 (rest.len + 1))
+      have env_simp := fibRelation_vars curr next (envs.toEnvironment 1 (rest.len + 1))
       rw [env_simp.1, env_simp.2.1, env_simp.2.2.1, env_simp.2.2.2] at ConstraintsHold
       clear env_simp
 
@@ -213,8 +195,7 @@ def formalFibTable : FormalTable (F p) RowType := {
 
       have spec2 : (next.y).val = fib8 (rest.len + 2) := by
         simp only [fib8]
-        rw [←curr_fib0, ←curr_fib1]
-        assumption
+        rwa [←curr_fib0, ←curr_fib1]
 
       exact ⟨spec1, spec2⟩
 }

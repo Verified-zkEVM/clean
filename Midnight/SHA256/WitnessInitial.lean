@@ -48,9 +48,9 @@ theorem columnLoaded (hint : ProverHint F) (column : Nat) :
     ColumnLoaded (initial hint).toEnvironment ⟨column⟩ (tableValues column) := by
   constructor
   · intro row bound
-    rw [fixed_at_nat, if_pos bound]
+    rw [fixed_at_nat, ite_eq_left bound]
   · intro _ row bound _
-    rw [fixed_at_nat, if_neg (Nat.not_lt.mpr bound)]
+    rw [fixed_at_nat, ite_eq_right (Nat.not_lt.mpr bound)]
 
 theorem range_length : byteRangeRows.length = 257 := by decide +kernel
 

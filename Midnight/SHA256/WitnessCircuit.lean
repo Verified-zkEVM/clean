@@ -31,7 +31,7 @@ def region {α : Type} (name : String) (body : Region α) : Build α :=
 def enable (selector row : Nat) : Region Unit :=
   fun _ => ((), SHA256.activation selector row)
 
-def sa (index row : Nat) (value : NExpr F) : Region Cell :=
+def sa (index row : Nat) (value : U64Expr F) : Region Cell :=
   assignAdvice ⟨Synthesis.shaAdvice[index]!⟩ row (WitnessIR.program value)
 def scopy (source : Cell) (index row : Nat) : Region Cell :=
   copyAdvice source ⟨Synthesis.shaAdvice[index]!⟩ row
@@ -161,7 +161,7 @@ def blockFromBytes (bytes : Array Cell) : Build (Array Cell) := do
 /-- Source plain/spread assignment, with the lookup tag fixed by the circuit.
 The spread program reads the plain cell just assigned, sharing the computed value
 through the real witness environment instead of repeating its integer expression. -/
-def plainAndSpread (width offset index : Nat) (value : NExpr F) : Region PlainSpread := do
+def plainAndSpread (width offset index : Nat) (value : U64Expr F) : Region PlainSpread := do
   enable 4 offset
   let _ ← assignFixed ⟨index⟩ offset (width : F)
   let plain ← sa (2*index) offset value
@@ -223,7 +223,7 @@ def prepareMessage (summands : Array Cell) : Build Word := do
   region "prepare message word" (prepareMessageRegion summands zero)
 
 /-- Even limbs are assigned first, even when the returned parity is odd. -/
-def spread111110 (odd : Bool) (offset : Nat) (value : NExpr F) : Region Cell := do
+def spread111110 (odd : Bool) (offset : Nat) (value : U64Expr F) : Region Cell := do
   enable 11 (offset+1)
   let index := if odd then 1 else 0
   let evens := WitnessIR.limbs Witness.parityLayout (WitnessIR.evenBits value)
@@ -309,7 +309,7 @@ def addStates (initial final : Compression) : Build (Array Cell) := do
 
 def wordToBytesRegion (word : Cell) : Region (Cell × Array Cell) := do
   let terms := (Array.range 4).map fun i =>
-    (((256^i : Nat) : F), (.ofNat (WitnessIR.limb (WitnessIR.readNat word) (8*i,8)) : FExpr F))
+    (((256^i : Nat) : F), (.ofU64 (WitnessIR.limb (WitnessIR.readNat word) (8*i,8)) : FExpr F))
   let pair ← linearAux terms (.expr word) 1
   for row in #[3,2,1,0] do
     enable 3 row

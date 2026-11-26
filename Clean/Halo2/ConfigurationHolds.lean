@@ -1,6 +1,10 @@
-import Clean.Halo2.Configure.Extensions
-import Clean.Halo2.Operations
-import Clean.Halo2.SynthesisSummary.Region
+module
+
+public import Clean.Halo2.Configure.Extensions
+public import Clean.Halo2.Operations
+public import Clean.Halo2.SynthesisSummary.Region
+
+@[expose] public section
 
 /-!
 # The meaning of the entries no shadow states

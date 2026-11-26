@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.FloorPlanner.V1Correctness
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.V1Correctness
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner.V1.CompactPlanner
 

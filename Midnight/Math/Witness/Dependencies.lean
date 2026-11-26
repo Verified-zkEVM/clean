@@ -27,10 +27,10 @@ mutual
   | .const _ => some []
   | .add a b | .mul a b => join (field a) (field b)
   | .inv a => field a
-  | .ofNat a => nat a
+  | .ofU64 a => nat a
   | .hintGet _ _ row _ => nat row
   | _ => none
- def nat : Witgen.NExprOver F V → Option (List V)
+ def nat : Witgen.U64ExprOver F V → Option (List V)
   | .const _ => some []
   | .val a => field a
   | .add a b | .mul a b | .div a b | .mod a b | .land a b | .lor a b | .lxor a b
@@ -47,10 +47,10 @@ mutual
   | add a b | mul a b =>
     simp only [Reads.field, field, accepts_join, field_eq allowed a, field_eq allowed b]
   | inv a => exact field_eq allowed a
-  | ofNat a => exact nat_eq allowed a
+  | ofU64 a => exact nat_eq allowed a
   | hintGet _ _ row _ => exact nat_eq allowed row
   | _ => rfl
- theorem nat_eq (allowed : V → Bool) (expression : Witgen.NExprOver F V) :
+ theorem nat_eq (allowed : V → Bool) (expression : Witgen.U64ExprOver F V) :
     Reads.nat allowed expression = accepts allowed (nat expression) := by
   cases expression with
   | const _ => rfl
@@ -91,7 +91,6 @@ theorem program_eq {n : Nat} (allowed : V → Bool) (compute : Witgen.WitgenIROv
       | lit expressions =>
         simpa only [Reads.program, program, Array.all_toList] using
           fields_eq allowed expressions.toArray.toList
-      | mapRange _ _ => rfl
-      | append _ _ => rfl
+      | mapRange _ _ | envRange _ | bitsOf _ | append _ _ => rfl
 
 end Midnight.Math.Witness.Dependencies

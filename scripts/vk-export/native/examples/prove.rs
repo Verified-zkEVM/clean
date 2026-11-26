@@ -56,29 +56,31 @@ impl Env {
             "add" => f("lhs") + f("rhs"),
             "mul" => f("lhs") * f("rhs"),
             "inv" => f("arg").invert().unwrap_or(Fq::ZERO),
-            "ofNat" => self.of_nat(&self.nat(&e["arg"])),
+            "ofU64" => Fq::from(self.u64_expr(&e["arg"])),
             // `hintFor`: one row of the message bytes under its key and width, else no rows (zeros).
             "hintGet" => if e["table"].as_str() == Some(&self.hint_key) && num(&e["width"]) == self.hint_width
-                && self.nat(&e["row"]) == BigUint::ZERO { self.message[num(&e["col"])] } else { Fq::ZERO },
+                && self.u64_expr(&e["row"]) == 0 { self.message[num(&e["col"])] } else { Fq::ZERO },
             other => panic!("field node {other}"),
         }
     }
-    fn nat(&self, e: &Json) -> BigUint {
-        let ab = || (self.nat(&e["lhs"]), self.nat(&e["rhs"]));
+    fn u64_expr(&self, e: &Json) -> u64 {
+        let ab = || (self.u64_expr(&e["lhs"]), self.u64_expr(&e["rhs"]));
         match e["type"].as_str().unwrap() {
-            "const" => big(&e["value"]),
-            "val" => BigUint::from_bytes_le(self.field(&e["arg"]).to_repr().as_ref()),
-            "add" => { let (a, b) = ab(); a + b }
-            "mul" => { let (a, b) = ab(); a * b }
-            // Lean's `Nat`: x / 0 = 0, x % 0 = x.
-            "div" => { let (a, b) = ab(); if b == BigUint::ZERO { b } else { a / b } }
-            "mod" => { let (a, b) = ab(); if b == BigUint::ZERO { a } else { a % b } }
+            "const" => e["value"].as_u64()
+                .or_else(|| e["value"].as_str().and_then(|s| s.parse().ok()))
+                .unwrap_or_else(|| panic!("u64 constant {e}")),
+            "val" => u64::from_le_bytes(self.field(&e["arg"]).to_repr().as_ref()[..8].try_into().unwrap()),
+            "add" => { let (a, b) = ab(); a.wrapping_add(b) }
+            "mul" => { let (a, b) = ab(); a.wrapping_mul(b) }
+            // Lean's `UInt64`: x / 0 = 0, x % 0 = x; shifts mask the count mod 64.
+            "div" => { let (a, b) = ab(); if b == 0 { 0 } else { a / b } }
+            "mod" => { let (a, b) = ab(); if b == 0 { a } else { a % b } }
             "and" => { let (a, b) = ab(); a & b }
             "or" => { let (a, b) = ab(); a | b }
             "xor" => { let (a, b) = ab(); a ^ b }
-            "shiftLeft" => { let (a, b) = ab(); a << usize::try_from(b).expect("left shift beyond usize") }
-            "shiftRight" => { let (a, b) = ab(); usize::try_from(b).map_or(BigUint::ZERO, |b| a >> b) }
-            other => panic!("nat node {other}"),
+            "shiftLeft" => { let (a, b) = ab(); a.wrapping_shl(b as u32) }
+            "shiftRight" => { let (a, b) = ab(); a.wrapping_shr(b as u32) }
+            other => panic!("u64 node {other}"),
         }
     }
 }

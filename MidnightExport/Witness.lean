@@ -34,6 +34,61 @@ def run (place : RegionIndex → Nat) (usableRows : Nat) (hint : ProverHint F)
   assignments.foldl (init := ∅) fun cells a =>
     cells.insert (Fast.key a.destination) (a.program.eval ⟨place, environment cells usableRows hint⟩)[0]
 
+mutual
+
+private def fExprToJson [ToJson F] (enc : AssignedCell F → Json) : FExpr F → Json
+  | .expr e => Json.mkObj [("type", "expr"), ("expr", enc e)]
+  | .const c => Json.mkObj [("type", "const"), ("value", Lean.toJson c)]
+  | .localVar i => Json.mkObj [("type", "localVar"), ("index", Lean.toJson i)]
+  | .add x y => Json.mkObj [("type", "add"), ("lhs", fExprToJson enc x), ("rhs", fExprToJson enc y)]
+  | .mul x y => Json.mkObj [("type", "mul"), ("lhs", fExprToJson enc x), ("rhs", fExprToJson enc y)]
+  | .inv x => Json.mkObj [("type", "inv"), ("arg", fExprToJson enc x)]
+  | .ofU64 n => Json.mkObj [("type", "ofU64"), ("arg", u64ExprToJson enc n)]
+  | .ite c t e => Json.mkObj [("type", "ite"),
+      ("cond", bExprToJson enc c), ("then", fExprToJson enc t), ("else", fExprToJson enc e)]
+  | .listGet xs i => Json.mkObj [("type", "listGet"),
+      ("items", Json.arr (fExprListToJson enc xs).toArray), ("index", u64ExprToJson enc i)]
+  | .dataGet key n row col => Json.mkObj [("type", "dataGet"),
+      ("table", Lean.toJson key), ("width", Lean.toJson n),
+      ("row", u64ExprToJson enc row), ("col", Lean.toJson col.val)]
+  | .hintGet key n row col => Json.mkObj [("type", "hintGet"),
+      ("table", Lean.toJson key), ("width", Lean.toJson n),
+      ("row", u64ExprToJson enc row), ("col", Lean.toJson col.val)]
+
+private def fExprListToJson [ToJson F] (enc : AssignedCell F → Json) : List (FExpr F) → List Json
+  | [] => []
+  | x :: xs => fExprToJson enc x :: fExprListToJson enc xs
+
+private def u64ExprToJson [ToJson F] (enc : AssignedCell F → Json) : U64Expr F → Json
+  | .const n => Json.mkObj [("type", "const"), ("value", Lean.toJson n.toNat)]
+  | .val x => Json.mkObj [("type", "val"), ("arg", fExprToJson enc x)]
+  | .idx => Json.mkObj [("type", "idx")]
+  | .localVar i => Json.mkObj [("type", "localVar"), ("index", Lean.toJson i)]
+  | .add x y => Json.mkObj [("type", "add"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .mul x y => Json.mkObj [("type", "mul"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .div x y => Json.mkObj [("type", "div"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .mod x y => Json.mkObj [("type", "mod"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .land x y => Json.mkObj [("type", "and"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .lor x y => Json.mkObj [("type", "or"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .lxor x y => Json.mkObj [("type", "xor"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .shiftL x y => Json.mkObj [("type", "shiftLeft"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .shiftR x y => Json.mkObj [("type", "shiftRight"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .ite c t e => Json.mkObj [("type", "ite"),
+      ("cond", bExprToJson enc c), ("then", u64ExprToJson enc t), ("else", u64ExprToJson enc e)]
+
+private def bExprToJson [ToJson F] (enc : AssignedCell F → Json) : BExpr F → Json
+  | .true => Json.mkObj [("type", "true")]
+  | .false => Json.mkObj [("type", "false")]
+  | .feq x y => Json.mkObj [("type", "eq"), ("lhs", fExprToJson enc x), ("rhs", fExprToJson enc y)]
+  | .neq x y => Json.mkObj [("type", "u64Eq"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .lt x y => Json.mkObj [("type", "u64Lt"), ("lhs", u64ExprToJson enc x), ("rhs", u64ExprToJson enc y)]
+  | .flt x y => Json.mkObj [("type", "lt"), ("lhs", fExprToJson enc x), ("rhs", fExprToJson enc y)]
+  | .bit x i => Json.mkObj [("type", "bit"), ("arg", fExprToJson enc x), ("bit", Lean.toJson i)]
+  | .not b => Json.mkObj [("type", "not"), ("arg", bExprToJson enc b)]
+  | .and x y => Json.mkObj [("type", "and"), ("lhs", bExprToJson enc x), ("rhs", bExprToJson enc y)]
+
+end
+
 /-- An assignment as `[kind, column, row, program]`, in upstream Clean's expression schema with
 cells at absolute rows and constants as decimal strings. -/
 def assignmentJson (place : RegionIndex → Nat) (a : Execute.Assignment F) : Except String Json := do
@@ -44,7 +99,7 @@ def assignmentJson (place : RegionIndex → Nat) (a : Execute.Assignment F) : Ex
     let (kind, column, row) := Fast.key (Execute.address place c)
     Json.mkObj [("kind", kind), ("column", column), ("row", row)]
   let (kind, column, row) := Fast.key a.destination
-  return Json.arr #[kind, column, row, Witgen.FExprOver.toJsonWith cell e]
+  return Json.arr #[kind, column, row, fExprToJson cell e]
 
 def parseMessage (hex : String) : Except String SHA256.Spec.Message := do
   let digit (c : Char) : Except String Nat :=

@@ -1,7 +1,11 @@
-import Clean.Halo2.Compiler.FieldSupport
-import Clean.Halo2.Compiler.Fixed
-import Clean.Halo2.Compiler.Queries
-import Clean.Halo2.Compiler.SelectorCompression
+module
+
+public import Clean.Halo2.Compiler.FieldSupport
+public import Clean.Halo2.Compiler.Fixed
+public import Clean.Halo2.Compiler.Queries
+public import Clean.Halo2.Compiler.SelectorCompression
+
+@[expose] public section
 
 /-! # Soundness of compiled gate row semantics -/
 

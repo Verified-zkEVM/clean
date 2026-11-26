@@ -1,7 +1,11 @@
-import Mathlib.Algebra.Field.Basic
-import Clean.Circuit.SimpGadget
-import Clean.Circuit.Expression
-import Clean.Halo2.SelectorFreeAttr
+module
+
+public import Mathlib.Algebra.Field.Basic
+public import Clean.Circuit.SimpGadget
+public import Clean.Circuit.Expression
+public import Clean.Halo2.SelectorFreeAttr
+
+@[expose] public section
 
 /-!
 # Halo2 variables, expressions and environments

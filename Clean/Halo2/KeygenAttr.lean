@@ -1,5 +1,9 @@
-import Lean.Meta.Tactic.Simp.RegisterCommand
-import Batteries.Lean.TagAttribute
+module
+
+public meta import Lean.Meta.Tactic.Simp.RegisterCommand
+public meta import Batteries.Lean.TagAttribute
+
+public meta section
 
 /-- Structural reductions used by the `keygen_registration` tactic. -/
 register_simp_attr keygen_norm

@@ -1,5 +1,9 @@
-import Clean.Halo2.Operations.Copy
-import Clean.Halo2.SynthesisSummary.Operations
+module
+
+public import Clean.Halo2.Operations.Copy
+public import Clean.Halo2.SynthesisSummary.Operations
+
+@[expose] public section
 
 namespace Halo2
 

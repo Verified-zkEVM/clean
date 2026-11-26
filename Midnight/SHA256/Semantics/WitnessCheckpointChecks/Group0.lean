@@ -23,28 +23,28 @@ attribute [local cbv_eval] LinearNormalization.blockFromBytes_eq LinearNormaliza
 
 theorem inputReturns (offset : Nat) :
     Returns (inputAction offset) (beginCursor offset) (inputOutput offset) (inputAfter offset) := by
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem inputChecked (offset : Nat) :
     Checked id (inputAction offset) (beginCursor offset) (inputOutput offset) (inputAfter offset)
       (inputOperations offset) := checked _ _ _ _ (inputReturns offset)
 
 theorem initialReturns (offset : Nat) :
     Returns (initialAction offset) (inputAfter offset) (initialOutput offset) (initialAfter offset) := by
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem initialChecked (offset : Nat) :
     Checked id (initialAction offset) (inputAfter offset) (initialOutput offset) (initialAfter offset)
       (initialOperations offset) := checked _ _ _ _ (initialReturns offset)
 
 theorem paddingReturns (offset : Nat) :
     Returns (paddingAction offset) (initialAfter offset) (paddingOutput offset) (paddingAfter offset) := by
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem paddingChecked (offset : Nat) :
     Checked id (paddingAction offset) (initialAfter offset) (paddingOutput offset) (paddingAfter offset)
       (paddingOperations offset) := checked _ _ _ _ (paddingReturns offset)
 
 theorem packingReturns (offset : Nat) :
     Returns (packingAction offset) (paddingAfter offset) (packingOutput offset) (packingAfter offset) := by
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem packingChecked (offset : Nat) :
     Checked id (packingAction offset) (paddingAfter offset) (packingOutput offset) (packingAfter offset)
       (packingOperations offset) := checked _ _ _ _ (packingReturns offset)

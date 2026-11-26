@@ -1,5 +1,9 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.QueryCorrect
+module
+
+public import Lean.Elab.Tactic
+public import Clean.Halo2.QueryCorrect
+
+@[expose] public section
 
 /-!
 # Query-declaration tactic

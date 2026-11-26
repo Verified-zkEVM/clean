@@ -62,22 +62,30 @@ theorem majorityRegion_complete {place : RegionIndex → Nat} {self : RegionInde
       ((majorityRegion a b c).operations self) := by
   simp only [majorityRegion, scopy, circuit_norm, activation_maj, true_and] at witnesses
   obtain ⟨ac, bc, cc, parity⟩ := witnesses
-  have bound : (Witgen.NExprOver.add (.add (WitnessIR.readNat a) (WitnessIR.readNat b))
-      (WitnessIR.readNat c)).eval {env := (⟨place,env⟩:Placed ProverEnvironment F)} < 2^64 := by
-    simpa [Witgen.NExprOver.eval, Witgen.FExprOver.eval, WitnessIR.readNat, Halo2.WitgenEnv.readVar_halo2,
-      ax, by_, cz, spread_cast_val hx, spread_cast_val hy, spread_cast_val hz] using
-      three_spreads_lt_u64 hx hy hz
+  have hsum : spread x + spread y + spread z < 2^64 := three_spreads_lt_u64 hx hy hz
+  have evalSum : ((Witgen.U64ExprOver.add (.add (WitnessIR.readNat a) (WitnessIR.readNat b))
+      (WitnessIR.readNat c)).eval {env := (⟨place,env⟩:Placed ProverEnvironment F)}).toNat =
+      spread x + spread y + spread z := by
+    simp only [Witgen.U64ExprOver.eval, UInt64.toNat_add, WitnessIR.eval_readNat,
+      Halo2.WitgenEnv.readVar_halo2, ax, by_, cz, spread_cast_val hx, spread_cast_val hy,
+      spread_cast_val hz]
+    rw [Nat.mod_eq_of_lt (by omega : spread x < 2 ^ 64),
+      Nat.mod_eq_of_lt (by omega : spread y < 2 ^ 64),
+      Nat.mod_eq_of_lt (by omega : spread z < 2 ^ 64),
+      Nat.mod_eq_of_lt (by omega : spread x + spread y < 2 ^ 64),
+      Nat.mod_eq_of_lt hsum]
   have sumEquation := spread111110_sum (place := place) (self := self) (env := env)
-    true 0 _ bound parity
+    true 0 _ parity
   have complete := spread111110_complete (place := place) (self := self) (env := env)
     table true 0 _ parity
   have gate : RegionOperations.Constraints place self env.toEnvironment (activation 5 1) := by
     apply maj_equation_complete
     norm_num [Gates.read, Synthesis.shaAdvice, Nat.cast_add, Int.add_assoc]
     norm_num [Synthesis.shaAdvice, circuit_norm] at ac bc cc
-    rw [ac, bc, cc]
-    simpa [Witgen.NExprOver.eval, Witgen.FExprOver.eval, WitnessIR.readNat, Halo2.WitgenEnv.readVar_halo2,
-      Nat.cast_add, Nat.cast_zero, ZMod.natCast_zmod_val] using sumEquation.symm
+    rw [ac, bc, cc, ax, by_, cz]
+    rw [evalSum] at sumEquation
+    simpa only [Nat.cast_add, Nat.cast_zero, Nat.cast_one, Nat.zero_add, ↓reduceIte] using
+      sumEquation.symm
   simp only [majorityRegion, scopy, circuit_norm, true_and]
   exact ⟨gate, ac, bc, cc, complete⟩
 
@@ -104,21 +112,30 @@ theorem majority_complete {place : RegionIndex → Nat} {self : RegionIndex}
 
 /-- Evaluation of the actual serializable Sigma recipe on its source cells. -/
 theorem weighted_eval {n : Nat} (recipe : Witness.Recipe n) (word : Word)
-    (env : Placed ProverEnvironment F) :
-    (WitnessIR.weighted recipe (Vector.ofFn fun i:Fin n => WitnessIR.readNat word.limbs[i.val]!)).eval {env} =
+    (env : Placed ProverEnvironment F)
+    (hlimbs : ∀ i : Fin n, (word.limbs[i.val]!.eval env.place env.env.toEnvironment).val < 2 ^ 64)
+    (hsum : Witness.weighted recipe ((limbValues env.place env.env.toEnvironment word).map ZMod.val) < 2 ^ 64) :
+    ((WitnessIR.weighted recipe (Vector.ofFn fun i:Fin n => WitnessIR.readNat word.limbs[i.val]!)).eval {env}).toNat =
       Witness.weighted recipe ((limbValues env.place env.env.toEnvironment word).map ZMod.val) := by
   rw [WitnessIR.eval_weighted]
-  congr 1
-  apply Vector.ext
-  intro i hi
-  simp [limbValues, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2]
+  have hvec : (Vector.ofFn fun i:Fin n => WitnessIR.readNat word.limbs[i.val]!).map
+      (fun expression => (expression.eval {env}).toNat) =
+      (limbValues env.place env.env.toEnvironment word).map ZMod.val := by
+    apply Vector.ext
+    intro i hi
+    simp only [limbValues, Vector.getElem_map, Vector.getElem_ofFn, WitnessIR.eval_readNat,
+      Halo2.WitgenEnv.readVar_halo2]
+    exact Nat.mod_eq_of_lt (hlimbs ⟨i, hi⟩)
+  rw [hvec, Nat.mod_eq_of_lt hsum]
 
 /-- The integer recipe's field image is the same polynomial on actual cells. -/
 theorem weighted_eval_cast {n : Nat} (recipe : Witness.Recipe n) (word : Word)
-    (env : Placed ProverEnvironment F) :
-    ((WitnessIR.weighted recipe (Vector.ofFn fun i:Fin n => WitnessIR.readNat word.limbs[i.val]!)).eval {env}:F) =
+    (env : Placed ProverEnvironment F)
+    (hlimbs : ∀ i : Fin n, (word.limbs[i.val]!.eval env.place env.env.toEnvironment).val < 2 ^ 64)
+    (hsum : Witness.weighted recipe ((limbValues env.place env.env.toEnvironment word).map ZMod.val) < 2 ^ 64) :
+    (((WitnessIR.weighted recipe (Vector.ofFn fun i:Fin n => WitnessIR.readNat word.limbs[i.val]!)).eval {env}).toNat:F) =
       weightedField recipe (limbValues env.place env.env.toEnvironment word) := by
-  rw [weighted_eval, ← weightedField_cast]
+  rw [weighted_eval recipe word env hlimbs hsum, ← weightedField_cast]
   simp only [Vector.map_map, Function.comp_def, ZMod.natCast_zmod_val, Vector.map_id']
 
 theorem bigSigma0_equation_complete {place : RegionIndex → Nat} {self : RegionIndex}
@@ -134,12 +151,13 @@ theorem bigSigma0_equation_complete {place : RegionIndex → Nat} {self : Region
     Gates.read, parityPlane, Synthesis.shaAdvice] at equation
   linear_combination (norm := ring_nf) equation
 
-theorem bigSigma0_witness_bound (word : Word) (env : Placed ProverEnvironment F)
+theorem bigSigma0_witness_eval (word : Word) (env : Placed ProverEnvironment F)
     (a b c d : Nat) (bounded : Decomposition.Bounded (Decomposition.aLimbs a b c d))
     (inputs : limbValues env.place env.env.toEnvironment word =
       #v[(spread a:F), (spread b:F), (spread c:F), (spread d:F)]) :
-    (WitnessIR.weighted Witness.bigSigma0Recipe
-      (Vector.ofFn fun i:Fin 4 => WitnessIR.readNat word.limbs[i.val]!)).eval {env} < 2^64 := by
+    (((WitnessIR.weighted Witness.bigSigma0Recipe
+      (Vector.ofFn fun i:Fin 4 => WitnessIR.readNat word.limbs[i.val]!)).eval {env}).toNat : F) =
+      weightedField Witness.bigSigma0Recipe (limbValues env.place env.env.toEnvironment word) := by
   have small (bits value : Nat) (member : (bits,value) ∈ Decomposition.aLimbs a b c d)
       (width : bits ≤ 32) : value < 2^32 :=
     (bounded _ member).trans_le (Nat.pow_le_pow_right (by decide) width)
@@ -147,7 +165,18 @@ theorem bigSigma0_witness_bound (word : Word) (env : Placed ProverEnvironment F)
   have hb := small 9 b (by simp [Decomposition.aLimbs]) (by decide)
   have hc := small 11 c (by simp [Decomposition.aLimbs]) (by decide)
   have hd := small 2 d (by simp [Decomposition.aLimbs]) (by decide)
-  rw [weighted_eval, inputs]
+  have hlimbs : ∀ i : Fin 4, (word.limbs[i.val]!.eval env.place env.env.toEnvironment).val < 2 ^ 64 := by
+    intro i
+    have hi := congrArg (fun v => v[i.val]) inputs
+    simp only [limbValues, Vector.getElem_ofFn] at hi
+    rw [hi]
+    fin_cases i
+    · simpa [spread_cast_val ha] using spread_lt ha
+    · simpa [spread_cast_val hb] using spread_lt hb
+    · simpa [spread_cast_val hc] using spread_lt hc
+    · simpa [spread_cast_val hd] using spread_lt hd
+  apply weighted_eval_cast _ _ _ hlimbs
+  rw [inputs]
   have vals : (#v[(spread a:F), (spread b:F), (spread c:F), (spread d:F)]).map ZMod.val =
       #v[spread a, spread b, spread c, spread d] := by
     ext i hi
@@ -170,8 +199,7 @@ theorem bigSigma0Region_complete {place : RegionIndex → Nat} {self : RegionInd
     RegionOperations.Constraints place self env.toEnvironment ((bigSigma0Region word).operations self) := by
   simp only [bigSigma0Region, scopy, circuit_norm, activation_bigSigma0, true_and] at witnesses
   obtain ⟨h₀, h₁, h₂, h₃, parity⟩ := witnesses
-  have sumEquation := spread111110_sum (place := place) (self := self) (env := env) false 0 _
-    (bigSigma0_witness_bound word ⟨place,env⟩ a b c d bounded inputs) parity
+  have sumEquation := spread111110_sum (place := place) (self := self) (env := env) false 0 _ parity
   have complete := spread111110_complete (place := place) (self := self) (env := env)
     table false 0 _ parity
   have copied : bigSigma0Inputs env.toEnvironment (place self+1:Nat) = limbValues place env.toEnvironment word := by
@@ -185,7 +213,8 @@ theorem bigSigma0Region_complete {place : RegionIndex → Nat} {self : RegionInd
   have gate : RegionOperations.Constraints place self env.toEnvironment (activation 7 1) := by
     apply bigSigma0_equation_complete
     rw [copied]
-    simpa only [Bool.false_eq_true, ↓reduceIte, Nat.zero_add, weighted_eval_cast] using sumEquation.symm
+    simpa only [Bool.false_eq_true, ↓reduceIte, Nat.zero_add,
+      bigSigma0_witness_eval word ⟨place,env⟩ a b c d bounded inputs] using sumEquation.symm
   simp only [bigSigma0Region, scopy, circuit_norm, true_and]
   exact ⟨gate, h₀, h₁, h₂, h₃, complete⟩
 
@@ -219,11 +248,12 @@ theorem bigSigma1_equation_complete {place : RegionIndex → Nat} {self : Region
     Gates.read, parityPlane, Synthesis.shaAdvice] at equation
   linear_combination (norm := ring_nf) equation
 
-theorem bigSigma1_witness_bound (word : Word) (env : Placed ProverEnvironment F)
+theorem bigSigma1_witness_eval (word : Word) (env : Placed ProverEnvironment F)
     (a b c d e : Nat) (bounded : Decomposition.Bounded (Decomposition.eLimbs a b c d e))
     (inputs : limbValues env.place env.env.toEnvironment word = #v[(spread a:F), (spread b:F), (spread c:F), (spread d:F), (spread e:F)]) :
-    (WitnessIR.weighted Witness.bigSigma1Recipe
-      (Vector.ofFn fun i:Fin 5 => WitnessIR.readNat word.limbs[i.val]!)).eval {env} < 2^64 := by
+    (((WitnessIR.weighted Witness.bigSigma1Recipe
+      (Vector.ofFn fun i:Fin 5 => WitnessIR.readNat word.limbs[i.val]!)).eval {env}).toNat : F) =
+      weightedField Witness.bigSigma1Recipe (limbValues env.place env.env.toEnvironment word) := by
   have small (bits value : Nat) (member : (bits,value) ∈ Decomposition.eLimbs a b c d e)
       (width : bits ≤ 32) : value < 2^32 :=
     (bounded _ member).trans_le (Nat.pow_le_pow_right (by decide) width)
@@ -232,7 +262,19 @@ theorem bigSigma1_witness_bound (word : Word) (env : Placed ProverEnvironment F)
   have hc := small 2 c (by simp [Decomposition.eLimbs]) (by decide)
   have hd := small 5 d (by simp [Decomposition.eLimbs]) (by decide)
   have he := small 6 e (by simp [Decomposition.eLimbs]) (by decide)
-  rw [weighted_eval, inputs]
+  have hlimbs : ∀ i : Fin 5, (word.limbs[i.val]!.eval env.place env.env.toEnvironment).val < 2 ^ 64 := by
+    intro i
+    have hi := congrArg (fun v => v[i.val]) inputs
+    simp only [limbValues, Vector.getElem_ofFn] at hi
+    rw [hi]
+    fin_cases i
+    · simpa [spread_cast_val ha] using spread_lt ha
+    · simpa [spread_cast_val hb] using spread_lt hb
+    · simpa [spread_cast_val hc] using spread_lt hc
+    · simpa [spread_cast_val hd] using spread_lt hd
+    · simpa [spread_cast_val he] using spread_lt he
+  apply weighted_eval_cast _ _ _ hlimbs
+  rw [inputs]
   have vals : (#v[(spread a:F), (spread b:F), (spread c:F), (spread d:F), (spread e:F)]).map ZMod.val = #v[spread a, spread b, spread c, spread d, spread e] := by
     ext i hi
     interval_cases i <;> simp [spread_cast_val ha, spread_cast_val hb, spread_cast_val hc, spread_cast_val hd, spread_cast_val he]
@@ -254,8 +296,7 @@ theorem bigSigma1Region_complete {place : RegionIndex → Nat} {self : RegionInd
     RegionOperations.Constraints place self env.toEnvironment ((bigSigma1Region word).operations self) := by
   simp only [bigSigma1Region, scopy, circuit_norm, activation_bigSigma1, true_and] at witnesses
   obtain ⟨h0, h1, h2, h3, h4, parity⟩ := witnesses
-  have sumEquation := spread111110_sum (place := place) (self := self) (env := env) false 0 _
-    (bigSigma1_witness_bound word ⟨place,env⟩ a b c d e bounded inputs) parity
+  have sumEquation := spread111110_sum (place := place) (self := self) (env := env) false 0 _ parity
   have complete := spread111110_complete (place := place) (self := self) (env := env)
     table false 0 _ parity
   have copied : bigSigma1Inputs env.toEnvironment (place self+1:Nat) = limbValues place env.toEnvironment word := by
@@ -270,7 +311,8 @@ theorem bigSigma1Region_complete {place : RegionIndex → Nat} {self : RegionInd
   have gate : RegionOperations.Constraints place self env.toEnvironment (activation 8 1) := by
     apply bigSigma1_equation_complete
     rw [copied]
-    simpa only [Bool.false_eq_true, ↓reduceIte, Nat.zero_add, weighted_eval_cast] using sumEquation.symm
+    simpa only [Bool.false_eq_true, ↓reduceIte, Nat.zero_add,
+      bigSigma1_witness_eval word ⟨place,env⟩ a b c d e bounded inputs] using sumEquation.symm
   simp only [bigSigma1Region, scopy, circuit_norm, true_and]
   exact ⟨gate, h0, h1, h2, h3, h4, complete⟩
 
@@ -303,11 +345,12 @@ theorem sigma0_equation_complete {place : RegionIndex → Nat} {self : RegionInd
     Gates.read, parityPlane, Synthesis.shaAdvice] at equation
   linear_combination (norm := ring_nf) equation
 
-theorem sigma0_witness_bound (word : Word) (env : Placed ProverEnvironment F)
+theorem sigma0_witness_eval (word : Word) (env : Placed ProverEnvironment F)
     (a b c d e f g h : Nat) (bounded : Decomposition.Bounded (Decomposition.messageLimbs a b c d e f g h))
     (inputs : limbValues env.place env.env.toEnvironment word = #v[(spread a:F), (spread b:F), (spread c:F), (spread d:F), (spread e:F), (spread f:F), (spread g:F), (spread h:F)]) :
-    (WitnessIR.weighted Witness.sigma0Recipe
-      (Vector.ofFn fun i:Fin 8 => WitnessIR.readNat word.limbs[i.val]!)).eval {env} < 2^64 := by
+    (((WitnessIR.weighted Witness.sigma0Recipe
+      (Vector.ofFn fun i:Fin 8 => WitnessIR.readNat word.limbs[i.val]!)).eval {env}).toNat : F) =
+      weightedField Witness.sigma0Recipe (limbValues env.place env.env.toEnvironment word) := by
   have small (bits value : Nat) (member : (bits,value) ∈ Decomposition.messageLimbs a b c d e f g h)
       (width : bits ≤ 32) : value < 2^32 :=
     (bounded _ member).trans_le (Nat.pow_le_pow_right (by decide) width)
@@ -319,7 +362,22 @@ theorem sigma0_witness_bound (word : Word) (env : Placed ProverEnvironment F)
   have hf := small 3 f (by simp [Decomposition.messageLimbs]) (by decide)
   have hg := small 4 g (by simp [Decomposition.messageLimbs]) (by decide)
   have hh := small 3 h (by simp [Decomposition.messageLimbs]) (by decide)
-  rw [weighted_eval, inputs]
+  have hlimbs : ∀ i : Fin 8, (word.limbs[i.val]!.eval env.place env.env.toEnvironment).val < 2 ^ 64 := by
+    intro i
+    have hi := congrArg (fun v => v[i.val]) inputs
+    simp only [limbValues, Vector.getElem_ofFn] at hi
+    rw [hi]
+    fin_cases i
+    · simpa [spread_cast_val ha] using spread_lt ha
+    · simpa [spread_cast_val hb] using spread_lt hb
+    · simpa [spread_cast_val hc] using spread_lt hc
+    · simpa [spread_cast_val hd] using spread_lt hd
+    · simpa [spread_cast_val he] using spread_lt he
+    · simpa [spread_cast_val hf] using spread_lt hf
+    · simpa [spread_cast_val hg] using spread_lt hg
+    · simpa [spread_cast_val hh] using spread_lt hh
+  apply weighted_eval_cast _ _ _ hlimbs
+  rw [inputs]
   have vals : (#v[(spread a:F), (spread b:F), (spread c:F), (spread d:F), (spread e:F), (spread f:F), (spread g:F), (spread h:F)]).map ZMod.val = #v[spread a, spread b, spread c, spread d, spread e, spread f, spread g, spread h] := by
     ext i hi
     interval_cases i <;> simp [spread_cast_val ha, spread_cast_val hb, spread_cast_val hc, spread_cast_val hd, spread_cast_val he, spread_cast_val hf, spread_cast_val hg, spread_cast_val hh]
@@ -341,8 +399,7 @@ theorem sigma0Region_complete {place : RegionIndex → Nat} {self : RegionIndex}
     RegionOperations.Constraints place self env.toEnvironment ((sigma0Region word).operations self) := by
   simp only [sigma0Region, scopy, circuit_norm, activation_sigma0, true_and] at witnesses
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, parity⟩ := witnesses
-  have sumEquation := spread111110_sum (place := place) (self := self) (env := env) false 0 _
-    (sigma0_witness_bound word ⟨place,env⟩ a b c d e f g h bounded inputs) parity
+  have sumEquation := spread111110_sum (place := place) (self := self) (env := env) false 0 _ parity
   have complete := spread111110_complete (place := place) (self := self) (env := env)
     table false 0 _ parity
   have copied : sigma0Inputs env.toEnvironment (place self+1:Nat) = limbValues place env.toEnvironment word := by
@@ -360,7 +417,8 @@ theorem sigma0Region_complete {place : RegionIndex → Nat} {self : RegionIndex}
   have gate : RegionOperations.Constraints place self env.toEnvironment (activation 9 1) := by
     apply sigma0_equation_complete
     rw [copied]
-    simpa only [Bool.false_eq_true, ↓reduceIte, Nat.zero_add, weighted_eval_cast] using sumEquation.symm
+    simpa only [Bool.false_eq_true, ↓reduceIte, Nat.zero_add,
+      sigma0_witness_eval word ⟨place,env⟩ a b c d e f g h bounded inputs] using sumEquation.symm
   simp only [sigma0Region, scopy, circuit_norm, true_and]
   exact ⟨gate, h0, h1, h2, h3, h4, h5, h6, h7, complete⟩
 
@@ -393,11 +451,12 @@ theorem sigma1_equation_complete {place : RegionIndex → Nat} {self : RegionInd
     Gates.read, parityPlane, Synthesis.shaAdvice] at equation
   linear_combination (norm := ring_nf) equation
 
-theorem sigma1_witness_bound (word : Word) (env : Placed ProverEnvironment F)
+theorem sigma1_witness_eval (word : Word) (env : Placed ProverEnvironment F)
     (a b c d e f g h : Nat) (bounded : Decomposition.Bounded (Decomposition.messageLimbs a b c d e f g h))
     (inputs : limbValues env.place env.env.toEnvironment word = #v[(spread a:F), (spread b:F), (spread c:F), (spread d:F), (spread e:F), (spread f:F), (spread g:F), (spread h:F)]) :
-    (WitnessIR.weighted Witness.sigma1Recipe
-      (Vector.ofFn fun i:Fin 8 => WitnessIR.readNat word.limbs[i.val]!)).eval {env} < 2^64 := by
+    (((WitnessIR.weighted Witness.sigma1Recipe
+      (Vector.ofFn fun i:Fin 8 => WitnessIR.readNat word.limbs[i.val]!)).eval {env}).toNat : F) =
+      weightedField Witness.sigma1Recipe (limbValues env.place env.env.toEnvironment word) := by
   have small (bits value : Nat) (member : (bits,value) ∈ Decomposition.messageLimbs a b c d e f g h)
       (width : bits ≤ 32) : value < 2^32 :=
     (bounded _ member).trans_le (Nat.pow_le_pow_right (by decide) width)
@@ -409,7 +468,22 @@ theorem sigma1_witness_bound (word : Word) (env : Placed ProverEnvironment F)
   have hf := small 3 f (by simp [Decomposition.messageLimbs]) (by decide)
   have hg := small 4 g (by simp [Decomposition.messageLimbs]) (by decide)
   have hh := small 3 h (by simp [Decomposition.messageLimbs]) (by decide)
-  rw [weighted_eval, inputs]
+  have hlimbs : ∀ i : Fin 8, (word.limbs[i.val]!.eval env.place env.env.toEnvironment).val < 2 ^ 64 := by
+    intro i
+    have hi := congrArg (fun v => v[i.val]) inputs
+    simp only [limbValues, Vector.getElem_ofFn] at hi
+    rw [hi]
+    fin_cases i
+    · simpa [spread_cast_val ha] using spread_lt ha
+    · simpa [spread_cast_val hb] using spread_lt hb
+    · simpa [spread_cast_val hc] using spread_lt hc
+    · simpa [spread_cast_val hd] using spread_lt hd
+    · simpa [spread_cast_val he] using spread_lt he
+    · simpa [spread_cast_val hf] using spread_lt hf
+    · simpa [spread_cast_val hg] using spread_lt hg
+    · simpa [spread_cast_val hh] using spread_lt hh
+  apply weighted_eval_cast _ _ _ hlimbs
+  rw [inputs]
   have vals : (#v[(spread a:F), (spread b:F), (spread c:F), (spread d:F), (spread e:F), (spread f:F), (spread g:F), (spread h:F)]).map ZMod.val = #v[spread a, spread b, spread c, spread d, spread e, spread f, spread g, spread h] := by
     ext i hi
     interval_cases i <;> simp [spread_cast_val ha, spread_cast_val hb, spread_cast_val hc, spread_cast_val hd, spread_cast_val he, spread_cast_val hf, spread_cast_val hg, spread_cast_val hh]
@@ -431,8 +505,7 @@ theorem sigma1Region_complete {place : RegionIndex → Nat} {self : RegionIndex}
     RegionOperations.Constraints place self env.toEnvironment ((sigma1Region word).operations self) := by
   simp only [sigma1Region, scopy, circuit_norm, activation_sigma1, true_and] at witnesses
   obtain ⟨h0, h1, h2, h3, h4, h5, h6, h7, parity⟩ := witnesses
-  have sumEquation := spread111110_sum (place := place) (self := self) (env := env) false 0 _
-    (sigma1_witness_bound word ⟨place,env⟩ a b c d e f g h bounded inputs) parity
+  have sumEquation := spread111110_sum (place := place) (self := self) (env := env) false 0 _ parity
   have complete := spread111110_complete (place := place) (self := self) (env := env)
     table false 0 _ parity
   have copied : sigma1Inputs env.toEnvironment (place self+1:Nat) = limbValues place env.toEnvironment word := by
@@ -450,7 +523,8 @@ theorem sigma1Region_complete {place : RegionIndex → Nat} {self : RegionIndex}
   have gate : RegionOperations.Constraints place self env.toEnvironment (activation 10 1) := by
     apply sigma1_equation_complete
     rw [copied]
-    simpa only [Bool.false_eq_true, ↓reduceIte, Nat.zero_add, weighted_eval_cast] using sumEquation.symm
+    simpa only [Bool.false_eq_true, ↓reduceIte, Nat.zero_add,
+      sigma1_witness_eval word ⟨place,env⟩ a b c d e f g h bounded inputs] using sumEquation.symm
   simp only [sigma1Region, scopy, circuit_norm, true_and]
   exact ⟨gate, h0, h1, h2, h3, h4, h5, h6, h7, complete⟩
 

@@ -1,6 +1,10 @@
-import Clean.Halo2.Compiler.LookupOperations
-import Clean.Halo2.Compiler.SelectorCompression
-import Clean.Halo2.Compiler.Fixed
+module
+
+public import Clean.Halo2.Compiler.LookupOperations
+public import Clean.Halo2.Compiler.SelectorCompression
+public import Clean.Halo2.Compiler.Fixed
+
+@[expose] public section
 
 /-! # Exact lookup selector substitution in the circuit-owned environment -/
 

@@ -1,4 +1,8 @@
-import Clean.Halo2.Configure.Queries
+module
+
+public import Clean.Halo2.Configure.Queries
+
+@[expose] public section
 
 namespace Halo2
 

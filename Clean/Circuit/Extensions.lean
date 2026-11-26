@@ -1,12 +1,16 @@
 /- This file contains miscellaneous additions and helpers on top of the Circuit DSL -/
-import Clean.Circuit.Subcircuit
+module
+
+public import Clean.Circuit.Subcircuit
+
+@[expose] public section
 
 namespace Clean
 
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 instance {M : TypeMap} [ProvableType M] : Inhabited (Circuit F (Var M F)) where
-  default := witnessIR M (.ofFExprs default)
+  default := witnessIR M (.ofCompositeFExpr default)
 
 def copyToVar (x : Expression F) : Circuit F (Variable F) := do
   let x' ← witnessVar (.ofFExpr (.expr x))
@@ -32,7 +36,7 @@ theorem eval_varFromOffset_valueFromOffset (M : TypeMap) [ProvableType M] (offse
 
 def witnessAny (M: TypeMap) [ProvableType M] : Circuit F (Var M F) := do
   let offset ← getOffset
-  witnessIR M (.ir [] (VExpr.range (size M) fun i => .envGet (offset + i)))
+  witnessIR M (.ir [] (.envRange offset))
 
 theorem witnessAny_localWitnesses (n : ℕ) (env : ProverEnvironment F) :
     env.UsesLocalWitnessesCompleteness n (witnessAny M |>.operations n) ↔ True := by

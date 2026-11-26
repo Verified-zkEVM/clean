@@ -52,7 +52,7 @@ theorem prepare15Checked (offset : Nat) :
 theorem expand16Returns (offset : Nat) :
     Returns (expand16Action offset) (prepare15After offset) (expand16Output offset) (expand16After offset) := by
   sha256_witness_unfold expand16
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem expand16Checked (offset : Nat) :
     Checked id (expand16Action offset) (prepare15After offset) (expand16Output offset) (expand16After offset)
       (expand16Operations offset) := checked _ _ _ _ (expand16Returns offset)
@@ -60,7 +60,7 @@ theorem expand16Checked (offset : Nat) :
 theorem expand17Returns (offset : Nat) :
     Returns (expand17Action offset) (expand16After offset) (expand17Output offset) (expand17After offset) := by
   sha256_witness_unfold expand17
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem expand17Checked (offset : Nat) :
     Checked id (expand17Action offset) (expand16After offset) (expand17Output offset) (expand17After offset)
       (expand17Operations offset) := checked _ _ _ _ (expand17Returns offset)
@@ -68,7 +68,7 @@ theorem expand17Checked (offset : Nat) :
 theorem expand18Returns (offset : Nat) :
     Returns (expand18Action offset) (expand17After offset) (expand18Output offset) (expand18After offset) := by
   sha256_witness_unfold expand18
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem expand18Checked (offset : Nat) :
     Checked id (expand18Action offset) (expand17After offset) (expand18Output offset) (expand18After offset)
       (expand18Operations offset) := checked _ _ _ _ (expand18Returns offset)
@@ -76,7 +76,7 @@ theorem expand18Checked (offset : Nat) :
 theorem expand19Returns (offset : Nat) :
     Returns (expand19Action offset) (expand18After offset) (expand19Output offset) (expand19After offset) := by
   sha256_witness_unfold expand19
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem expand19Checked (offset : Nat) :
     Checked id (expand19Action offset) (expand18After offset) (expand19Output offset) (expand19After offset)
       (expand19Operations offset) := checked _ _ _ _ (expand19Returns offset)

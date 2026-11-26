@@ -1,6 +1,10 @@
-import Clean.Types.U32
-import Clean.Gadgets.Rotation32.Theorems
-import Clean.Utils.Primes
+module
+
+public import Clean.Types.U32
+public import Clean.Gadgets.Rotation32.Theorems
+public import Clean.Utils.Primes
+
+@[expose] public section
 
 open Clean
 
@@ -39,11 +43,11 @@ def Spec (offset : Fin 4) (x : U32 (F p)) (y : U32 (F p)) :=
     | 3 => ⟨ x3, x0, x1, x2 ⟩
 
   subcircuitsConsistent x i0 := by
-    cases x
+    obtain ⟨x0, x1, x2, x3⟩ := x
     simp only [main]
-    fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, Fin.reduceFinMk, Fin.reduceEq]
   channelsLawful := by
-    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, main, Fin.reduceFinMk, Fin.reduceEq]
 
   output_eq := by
     intros
@@ -80,9 +84,11 @@ def circuit (off : Fin 4) : FormalCircuit (F p) U32 U32 where
   main := main off
   elaborated := elaborated off
   requirementsChannelsLawful := by
-    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, main, Fin.reduceFinMk, Fin.reduceEq]
   Assumptions
   Spec := Spec off
+  computableWitnesses := by
+    fin_cases off <;> computable_witnesses [reduceIte, Fin.reduceFinMk, Fin.reduceEq]
   soundness := soundness off
   completeness := completeness off
 

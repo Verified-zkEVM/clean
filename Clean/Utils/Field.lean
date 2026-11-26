@@ -1,7 +1,11 @@
-import Mathlib.Algebra.Field.ZMod
-import Mathlib.Algebra.Order.Star.Basic
-import Mathlib.Analysis.Normed.Ring.Lemmas
-import Clean.Circuit.SimpGadget
+module
+
+public import Mathlib.Algebra.Field.ZMod
+public import Mathlib.Algebra.Order.Star.Basic
+public import Mathlib.Analysis.Normed.Ring.Lemmas
+public import Clean.Circuit.SimpGadget
+
+@[expose] public section
 
 -- main field definition
 abbrev F p := ZMod p
@@ -11,6 +15,10 @@ instance (p : ℕ) [Fact p.Prime] : Inhabited (F p) := ⟨0⟩
 instance (p : ℕ) : CommRing (F p) := ZMod.commRing p
 
 instance {p : ℕ} : DecidableEq (F p) := ZMod.decidableEq p
+
+instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <| by
+  simp [F, ZMod.ringChar_zmod_n]
+  linarith [pGt.out]
 
 @[circuit_norm]
 lemma zero_ne_neg_one {F : Type} [Field F] : (0 : F) ≠ -1 := by
@@ -104,7 +112,7 @@ theorem natToField_val {n : ℕ} (lt : n < p) : (natToField n lt).val = n := by
   · exact False.elim (Nat.not_lt_zero n lt)
   · rfl
 
-def less_than_p (x : F p) : x.val < p := by
+theorem less_than_p (x : F p) : x.val < p := by
   rcases p with _ | n; cases p_ne_zero rfl
   exact x.is_lt
 
@@ -127,7 +135,8 @@ def floorDiv (x : F p) (c : ℕ+) : F p := (x.val / c : ℕ)
 
 lemma mod_val {x : F p} {c : ℕ+} {lt : c < p} : (mod x c lt).val = x.val % c := by
   rw [mod, ZMod.val_natCast_of_lt]
-  exact (Nat.mod_lt x.val c.pos).trans lt
+  grw [Nat.mod_lt x.val c.pos]
+  exact lt.le
 
 lemma floorDiv_val {x : F p} {c : ℕ+} : (floorDiv x c).val = x.val / c := by
   rw [floorDiv, ZMod.val_natCast_of_lt]

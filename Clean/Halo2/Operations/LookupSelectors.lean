@@ -1,4 +1,8 @@
-import Clean.Halo2.Operations.Keygen
+module
+
+public import Clean.Halo2.Operations.Keygen
+
+@[expose] public section
 
 namespace Halo2
 
@@ -76,8 +80,12 @@ def RegionOperation.EnablesLookupAuxiliarySelectors : RegionOperation F → Prop
         (SelectorEnabledAtIndex enabled)
   | _ => True
 
-/-- Whether an operation is not a lookup activation. -/
-@[circuit_norm]
+/-- Whether an operation is not a lookup activation.
+
+Implicit-reducible: simp discharges `operation.IsNotLookup` side conditions by reducing it
+on a constructor to `True`, and the resulting proof of `True` is checked against the side
+condition at implicit transparency. -/
+@[circuit_norm, implicit_reducible]
 def RegionOperation.IsNotLookup : RegionOperation F → Prop
   | .enableLookup _ _ _ => False
   | _ => True

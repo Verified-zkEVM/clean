@@ -1,33 +1,25 @@
+module
+
 -- This file imports all test modules
-import Clean.Utils.Test.TestDecomposeProvableStruct
-import Clean.Utils.Test.TestSplitProvableStructEq
-import Clean.Utils.Test.TestCircuitProofStart
-import Clean.Utils.Test.TestSimplifyProvableStructEval
-import Clean.Utils.Test.TestWitgenEvalProjection
-import Clean.Utils.Test.TestElaborateCircuit
-import Clean.Utils.Test.TestCircuitStructDeriving
-import Clean.Utils.Test.TestMixedCircuitType
-import Clean.Utils.Test.TestLookup
-import Clean.Utils.Test.SimpMatchRegression
-import Clean.Halo2.Tests.TestProvableTypeSimp
-import Clean.Halo2.Tests.TestCircuitTypeDeriving
-import Clean.Halo2.Tests.TestSubcircuit
-import Clean.Halo2.Tests.TestRawBind
-import Clean.Halo2.Tests.TestLayouterSubcircuit
-import Clean.Halo2.Tests.TestSubcircuitRw
-import Clean.Halo2.Tests.TestAbstractOutputs
-import Clean.Halo2.Tests.TestLoops
-import Clean.Halo2.Tests.TestContractBridges
-import Clean.Halo2.Tests.TestLookupMembership
-import Clean.Halo2.Tests.TestProofStart
-import Clean.Halo2.Tests.TestTupleLookup
-import Clean.Halo2.Tests.TestSelectorFree
-import Clean.Halo2.Tests.TestPdqsortCertify
-import Clean.Halo2.Tests.TestSelectorBitsets
-import Clean.Ironwood.Tests.TestVkMatchAdd
-import Clean.Ironwood.Tests.TestVkLayoutAdd
-import Clean.Ironwood.Tests.TestVkMatchMul
-import Clean.Ironwood.Tests.TestVkLayoutMul
-import Clean.Ironwood.Tests.TestVkMatchAction
-import Clean.Ironwood.Tests.TestVkLayoutAction
-import Clean.Ironwood.Tests.TestVkLayoutActionBase
+public import Clean.Utils.Test.TestProvableStructSimp
+public import Clean.Utils.Test.TestCircuitProofStart
+public import Clean.Utils.Test.TestWitgenEvalProjection
+public import Clean.Utils.Test.TestU64Wrap
+public import Clean.Utils.Test.TestElaborateCircuit
+public import Clean.Utils.Test.TestCircuitStructDeriving
+public import Clean.Utils.Test.TestMixedCircuitType
+public import Clean.Utils.Test.TestComputableWitnesses
+public import Clean.Backends.Circom.TestWasmCompile
+public import Clean.Backends.Circom.TestWasmSemantics
+public import Clean.Utils.Test.TestExpressionPolynomial
+public import Clean.Examples.FibonacciVm.WitnessGenerationTest
+public import Clean.Examples.FemtoCairo.FlatAirTest
+public import Clean.Examples.OpcodeVm.WitnessGenerationTest
+public import Clean.Examples.BinaryFibonacci.WitnessGenerationTest
+public import Clean.Utils.Test.SimpMatchRegression
+public import Clean.Halo2.Tests.TestCircuitTypeDeriving
+public import Clean.Halo2.Tests.TestSelectorFree
+public import Clean.Halo2.Tests.TestPdqsortCertify
+public import Clean.Halo2.Tests.TestSelectorBitsets
+
+@[expose] public section
