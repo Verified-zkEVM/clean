@@ -59,7 +59,7 @@ lean_exe export_differential_rust where
 -- The shared elliptic-curve/finite-field theory used by Clean/Ironwood: the Lean 4.35 port of
 -- daira/CompElliptic, on the bot fork. Brings CompPoly transitively.
 require CompElliptic from git
-  "https://github.com/mitschabaude-bot/CompElliptic.git" @ "ac857d29b60b8201671e6d7435eacda5e03b55ee"
+  "https://github.com/mitschabaude-bot/CompElliptic.git" @ "68211e1113172c77ae7c61c70f1048fd82684b0c"
 
 require "leanprover-community" / "mathlib" @ git "v4.35.0"
 require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git" @ "v4.35.0"
