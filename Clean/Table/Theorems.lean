@@ -4,6 +4,8 @@ public import Clean.Table.Basic
 
 @[expose] public section
 
+open Clean
+
 namespace Trace
 variable {F : Type} {S : Type → Type} [ProvableType S]
 
@@ -138,20 +140,20 @@ theorem pushVarInput_offset (assignment : CellAssignment W S) (off : CellOffset 
 lemma pushRow_offset (assignment : CellAssignment W S) (row : Fin W) :
   (assignment.pushRow row).offset = assignment.offset + size S := rfl
 
-theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Clean.Operations F) :
+theorem assignmentFromCircuit_offset (as : CellAssignment W S) (ops : Operations F) :
     (assignmentFromCircuit as ops).offset = as.offset + ops.localLength := by
-  induction ops using Clean.Operations.induct generalizing as with
+  induction ops using Operations.induct generalizing as with
   | empty => rfl
   | witness | assert | lookup | subcircuit | interact =>
-    simp_all +arith [assignmentFromCircuit, CellAssignment.pushVarsAux, Clean.Operations.localLength]
+    simp_all +arith [assignmentFromCircuit, CellAssignment.pushVarsAux, Operations.localLength]
 
-theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Clean.Operations F) :
+theorem assignmentFromCircuit_vars (as : CellAssignment W S) (ops : Operations F) :
     (assignmentFromCircuit as ops).vars = (as.vars ++ (.mapRange ops.localLength fun i => .aux (as.aux_length + i) : Vector (Cell W S) _)
       ).cast (assignmentFromCircuit_offset ..).symm := by
-  induction ops using Clean.Operations.induct generalizing as with
+  induction ops using Operations.induct generalizing as with
   | empty => rfl
   | witness | assert | lookup | subcircuit | interact =>
-    simp_all +arith [assignmentFromCircuit, pushVarsAux, Clean.Operations.localLength,
+    simp_all +arith [assignmentFromCircuit, pushVarsAux, Operations.localLength,
       Vector.mapRange_add_eq_append, Vector.cast, Vector.toArray_append, Array.append_assoc]
 
 end CellAssignment

@@ -11,6 +11,8 @@ public import Clean.Utils.Fin
 
 @[expose] public section
 
+open Clean
+
 namespace Utils.Bits
 /--
   Convert a natural number to a vector of bits.
@@ -154,20 +156,20 @@ Convert a vector of bits to a field element.
 def fieldFromBits {n : ℕ} (bits : Vector (F p) n) : F p :=
   fromBits <| bits.map ZMod.val
 
-def fieldFromBitsExpr {n : ℕ} (bits : Vector (Clean.Expression (F p)) n) : Clean.Expression (F p) :=
+def fieldFromBitsExpr {n : ℕ} (bits : Vector (Expression (F p)) n) : Expression (F p) :=
   Fin.foldl n (fun acc ⟨i, _⟩ => acc + bits[i] * (2^i : F p)) 0
 
 /-- Evaluation commutes with bits accumulation -/
-theorem fieldFromBits_eval {n : ℕ} {eval : Clean.Environment (F p)} (bits : Vector (Clean.Expression (F p)) n) :
+theorem fieldFromBits_eval {n : ℕ} {eval : Environment (F p)} (bits : Vector (Expression (F p)) n) :
     eval (fieldFromBitsExpr bits) = fieldFromBits (bits.map eval) := by
   simp only [fieldFromBitsExpr, fieldFromBits, fromBits]
   induction n with
-  | zero => simp only [Fin.foldl_zero, Clean.Expression.eval, Vector.map_map, Vector.getElem_map,
+  | zero => simp only [Fin.foldl_zero, Expression.eval, Vector.map_map, Vector.getElem_map,
     Function.comp_apply, Nat.cast_zero]
   | succ n ih =>
     obtain ih := ih bits.pop
     simp [Vector.getElem_pop'] at ih
-    simp [Fin.foldl_succ_last, ih, Clean.Expression.eval]
+    simp [Fin.foldl_succ_last, ih, Expression.eval]
 
 theorem fieldToBits_bits {n : ℕ} {x : F p} :
     ∀ i (_ : i < n), (fieldToBits n x)[i] = 0 ∨ (fieldToBits n x)[i] = 1 := by

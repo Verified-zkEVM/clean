@@ -11,6 +11,8 @@ Reference: `halo2_gadgets/src/ecc/chip/mul/overflow.rs`.
 
 namespace Zcash.Circuits.Ecc.Mul.Overflow
 
+open Clean
+
 structure Input (F : Type) where
   z0 : F
   z130 : F
@@ -78,8 +80,8 @@ def Spec (input : Input Fp) : Prop :=
 /-- Name the evaluation of a vector's cell 13 opaquely; stating this over an abstract
 `v` lets the caller instantiate it with a concrete append term whose `getElem` bound
 would not elaborate inline. -/
-private theorem eval_get13 (env : Clean.Environment Fp) (v : Vector (Clean.Expression Fp) 14) :
-    ∃ z, Clean.Expression.eval env v[13] = z := ⟨_, rfl⟩
+private theorem eval_get13 (env : Environment Fp) (v : Vector (Expression Fp) 14) :
+    ∃ z, Expression.eval env v[13] = z := ⟨_, rfl⟩
 
 end OverflowCheck
 

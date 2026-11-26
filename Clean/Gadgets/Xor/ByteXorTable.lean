@@ -6,11 +6,13 @@ public import Init.Data.Fin.Bitwise
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Xor
 open ByteUtils
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-def ByteXorTable : Clean.Table (F p) fieldTriple := .fromStatic {
+def ByteXorTable : Table (F p) fieldTriple := .fromStatic {
   name := "ByteXor"
   length := 256*256
 

@@ -13,6 +13,8 @@ Reference: `halo2_gadgets/src/ecc/chip/mul_fixed.rs`.
 
 namespace Zcash.Circuits.Ecc.MulFixed
 
+open Clean
+
 structure CoordsParams (F : Type) where
   z : F
   lagrange0 : F
@@ -25,7 +27,7 @@ structure CoordsParams (F : Type) where
   lagrange7 : F
 
 def CoordsParams.toExpr (params : CoordsParams Fp) :
-    CoordsParams (Clean.Expression Fp) where
+    CoordsParams (Expression Fp) where
   z := params.z
   lagrange0 := params.lagrange0
   lagrange1 := params.lagrange1

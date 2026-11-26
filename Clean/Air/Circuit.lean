@@ -38,6 +38,7 @@ lemma valueFromOffset_zero_fromInput_eq (input : Input F) (data : ProverData F) 
 end ProvableType.Clean
 
 section
+open Clean
 
 /-- The public input of the prover data, as a value of the public input type: its first elements,
 padded with zeros. -/
@@ -49,7 +50,7 @@ def ProverData.getPublicInput (data : ProverData F) (PublicIO : TypeMap) [Provab
 lemma ProverData.getPublicInput_eq_eval (data : ProverData F) (PublicIO : TypeMap)
     [ProvableType PublicIO] :
     data.getPublicInput PublicIO =
-      eval data.publicEnvironment (Clean.varFromOffset (F := F) PublicIO 0) := by
+      eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0) := by
   rw [ProvableType.Clean.eval_varFromOffset, getPublicInput]
   congr 1
   ext i hi
