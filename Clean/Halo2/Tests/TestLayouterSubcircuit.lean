@@ -1,6 +1,10 @@
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Ironwood.Ecc.WitnessPoint
+module
+
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Ironwood.Ecc.WitnessPoint
+
+@[expose] public section
 
 /-!
 # Test: layouter-level subcircuit composition via the `subcircuit_rw` engine

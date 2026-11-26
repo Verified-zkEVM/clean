@@ -1,8 +1,12 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Halo2.Tactics.CircuitProofStart
-import Clean.Halo2.Tactics.AbstractOutputs
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Clean.Halo2.Subcircuit
+public meta import Clean.Halo2.Tactics.SubcircuitRw
+public meta import Clean.Halo2.Tactics.CircuitProofStart
+public meta import Clean.Halo2.Tactics.AbstractOutputs
+
+public meta section
 
 /-!
 # `circuit_proof_start2` — the atomic-binds proof prefix (CPS v2)

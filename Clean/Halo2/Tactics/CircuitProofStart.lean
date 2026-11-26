@@ -1,11 +1,15 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.Formal.Tactics
-import Clean.Halo2.Loops
-import Clean.Halo2.Tactics.ProvableTypeSimp
-import Clean.Halo2.Tactics.AbstractOutputs
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Halo2.Tactics.ContractBridges
-import Clean.Utils.Tactics.CircuitProofStart
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Clean.Halo2.Formal.Tactics
+public meta import Clean.Halo2.Loops
+public meta import Clean.Halo2.Tactics.ProvableTypeSimp
+public meta import Clean.Halo2.Tactics.AbstractOutputs
+public meta import Clean.Halo2.Tactics.SubcircuitRw
+public meta import Clean.Halo2.Tactics.ContractBridges
+public meta import Clean.Utils.Tactics.CircuitProofStart
+
+public meta section
 
 /-!
 # `circuit_proof_start` — the composite prefix for halo2 bundle proofs

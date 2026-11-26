@@ -1,4 +1,8 @@
-import Clean.Halo2.Expression
+module
+
+public import Clean.Halo2.Expression
+
+@[expose] public section
 
 /-!
 # The pinned/verifier gate-polynomial AST

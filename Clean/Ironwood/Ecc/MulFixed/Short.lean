@@ -1,7 +1,11 @@
-import Clean.Ironwood.Ecc.MulFixed
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
-import Batteries.Data.Vector.Lemmas
+module
+
+public import Clean.Ironwood.Ecc.MulFixed
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+public import Batteries.Data.Vector.Lemmas
+
+@[expose] public section
 
 /-!
 Fixed-base scalar multiplication by a short *signed* exponent: `output = [sign · magnitude] B`
@@ -698,7 +702,7 @@ theorem mswRegionSynthesisSummary_constantSiteCount (cfg : Config) :
 
 set_option linter.all false in
 /-- The inner region's soundness, standalone (own declaration budget). -/
-private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : ℕ) :
+theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Soundness
       (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
       pure
@@ -1360,7 +1364,7 @@ private theorem short_completeness_dec (cfg : Config) (offset : ℕ)
 
 set_option linter.all false in
 /-- The inner region's completeness, standalone (own declaration budget). -/
-private theorem short_inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
+theorem short_inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Completeness
       (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
       pure
@@ -1470,7 +1474,7 @@ def Spec (B : FixedBase) (input : Inputs Fp) (output : Point Fp) : Prop :=
       (input.sign = -1 ∧ output = -(input.magnitude.val : Fq) • B))
 
 /-- The region count of `synthesize`: inner mul + most significant word. -/
-private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
+theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
     Operations.regionCount ((synthesize B cfg input).operations i) = 2 := by
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount]

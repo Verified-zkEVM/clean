@@ -1,7 +1,11 @@
-import Clean.Halo2
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Ecc.Basic
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Ecc.Basic
+
+@[expose] public section
 
 namespace Zcash.Circuits.Ecc
 

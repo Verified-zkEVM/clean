@@ -1,7 +1,11 @@
-import Clean.Halo2
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 Reference:

@@ -1,15 +1,19 @@
-import Clean.Circuit
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Ecc.MulAssignTheorems
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Utils.Tactics
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Circuit
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulAssignTheorems
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Utils.Tactics
+public import Clean.Utils.Tactics.ProvableStructDeriving
+
+@[expose] public section
 
 /-!
 # Sinsemilla chip custom gates

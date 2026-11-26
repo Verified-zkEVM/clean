@@ -1,8 +1,12 @@
-import Clean.Halo2.Keygen.PinnedCs
-import Clean.Halo2.Keygen.Domain
-import Clean.Halo2.Keygen.Semantics
-import Clean.Halo2.Keygen.Layout
-import Clean.Halo2.CircuitShape
+module
+
+public import Clean.Halo2.Keygen.PinnedCs
+public import Clean.Halo2.Keygen.Domain
+public import Clean.Halo2.Keygen.Semantics
+public import Clean.Halo2.Keygen.Layout
+public import Clean.Halo2.CircuitShape
+
+@[expose] public section
 
 /-!
 # Closed top-level formal circuits

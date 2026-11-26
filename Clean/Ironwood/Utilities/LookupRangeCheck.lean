@@ -1,7 +1,11 @@
-import Clean.Halo2
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 Reference:
@@ -332,13 +336,13 @@ theorem configure_constraintDegree (K : ℕ)
     bitshiftGate, LookupArgument.requiredDegree, Expression.degree,
     querySelector, queryAdvice, queryFixed, Gate.withSelector]
 
-@[reducible] private def configureInferred
+@[reducible] def configureInferred
     (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
     ElaboratedConfigure (configure K runningSum tableIdx) := by
   unfold configure
   infer_instance
 
-private theorem configure_selectorRequirements
+theorem configure_selectorRequirements
     (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) (counts) :
     (configureInferred K runningSum tableIdx).selectorRequirements counts := by
   dsimp only [configureInferred, configure]
@@ -351,7 +355,7 @@ private theorem configure_selectorRequirements
   simp [Expression.selectorBound]
   omega
 
-private theorem configure_externalSelectorSummary
+theorem configure_externalSelectorSummary
     (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) (counts) :
     ((configureInferred K runningSum tableIdx).selectorSummary counts).externalAt
       counts.numSelectors = {} := by

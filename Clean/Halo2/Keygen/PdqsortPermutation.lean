@@ -1,5 +1,9 @@
-import Clean.Halo2.Keygen.Pdqsort
-import Mathlib.Tactic.NormNum
+module
+
+public import Clean.Halo2.Keygen.Pdqsort
+public import Mathlib.Tactic.NormNum
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 namespace Pdqsort
@@ -3054,7 +3058,7 @@ private theorem partitionEqualStep_stateInvariant
   rcases hinvariant with ⟨hinvariant, hdoneEqual⟩
   cases done with
   | true =>
-      simpa [partitionEqualStep, EqualPartitionStateInvariant] using
+      simpa [partitionEqualStep, EqualPartitionStateInvariant, ForInStep.run] using
         And.intro hinvariant hdoneEqual
   | false =>
       have harrayCapacity : array.size ≤ scanIndices.length := by
@@ -3164,7 +3168,7 @@ private theorem partitionEqualStep_progress
       next.2.2.1 - next.2.1 < state.2.2.1 - state.2.1 := by
   rcases state with ⟨done, left, right, array⟩
   cases done with
-  | true => simp [partitionEqualStep]
+  | true => simp [partitionEqualStep, ForInStep.run]
   | false =>
       let scannedLeft := Id.run <| forIn scanIndices left fun _ current =>
         if current < right && !isLess pivot array[1 + current]! then do
@@ -3237,7 +3241,7 @@ private theorem partitionEqualLoop_done_of_done
       rw [partitionEqualLoop_cons]
       apply inductionHypothesis
       rcases state with ⟨done, left, right, array⟩
-      cases done <;> simp_all [partitionEqualStep]
+      cases done <;> simp_all [partitionEqualStep, ForInStep.run]
 
 private theorem partitionEqualLoop_eventually_done
     (indices scanIndices : List ℕ) (pivot : T)

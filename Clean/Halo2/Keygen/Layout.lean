@@ -1,9 +1,13 @@
-import Clean.Halo2.Keygen.CompressSelectors
-import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
-import Clean.Halo2.Operations.FixedWrites
-import Batteries.Data.Array.Lemmas
-import Mathlib.Data.List.GetD
-import Std.Data.HashSet.Lemmas
+module
+
+public import Clean.Halo2.Keygen.CompressSelectors
+public import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
+public import Clean.Halo2.Operations.FixedWrites
+public import Batteries.Data.Array.Lemmas
+public import Mathlib.Data.List.GetD
+public import Std.Data.HashSet.Lemmas
+
+@[expose] public section
 
 /-!
 # Phase-2 layout reconstruction (reusable, NOT mul-specific)

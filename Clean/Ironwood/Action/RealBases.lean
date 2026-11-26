@@ -1,11 +1,15 @@
-import Clean.Ironwood.Ecc.MulFixed.Certs.NullifierK
-import Clean.Ironwood.Ecc.MulFixed.Certs.ValueCommitR
-import Clean.Ironwood.Ecc.MulFixed.Certs.SpendAuthG
-import Clean.Ironwood.Ecc.MulFixed.Certs.CommitIvkR
-import Clean.Ironwood.Ecc.MulFixed.Certs.NoteCommitR
-import Clean.Ironwood.Ecc.MulFixed.Certs.ValueCommitV
-import Clean.Ironwood.Specs.SinsemillaGenerators
-import Clean.Ironwood.Action.Bundle
+module
+
+public import Clean.Ironwood.Ecc.MulFixed.Certs.NullifierK
+public import Clean.Ironwood.Ecc.MulFixed.Certs.ValueCommitR
+public import Clean.Ironwood.Ecc.MulFixed.Certs.SpendAuthG
+public import Clean.Ironwood.Ecc.MulFixed.Certs.CommitIvkR
+public import Clean.Ironwood.Ecc.MulFixed.Certs.NoteCommitR
+public import Clean.Ironwood.Ecc.MulFixed.Certs.ValueCommitV
+public import Clean.Ironwood.Specs.SinsemillaGenerators
+public import Clean.Ironwood.Action.Bundle
+
+@[expose] public section
 
 /-!
 # The real Orchard `Bases`

@@ -1,4 +1,8 @@
-import Clean.Ironwood.Action.Shape.PlannerTraceBridge
+module
+
+public import Clean.Ironwood.Action.Shape.PlannerTraceBridge
+
+@[expose] public section
 
 namespace Zcash.Circuits.Action
 
@@ -147,6 +151,31 @@ def actionReducedRegionStarts : List ℕ :=
    1624, 1630, 299, 454, 1649, 588, 1695, 137, 1705, 482, 411, 396, 440,
    258, 262, 270, 264, 271, 592, 590, 597, 588, 584, 1745, 1681]
 
+private def insertPairByIndex (item : ℕ × ℕ) : List (ℕ × ℕ) → List (ℕ × ℕ)
+  | [] => [item]
+  | head :: tail =>
+      if item.1 ≤ head.1 then item :: head :: tail else head :: insertPairByIndex item tail
+
+private def sortPairsByIndexEval : List (ℕ × ℕ) → List (ℕ × ℕ)
+  | [] => []
+  | head :: tail => insertPairByIndex head (sortPairsByIndexEval tail)
+
+private theorem insertPairByIndex_eq (item : ℕ × ℕ) (pairs : List (ℕ × ℕ)) :
+    List.orderedInsert (fun left right => left.1 ≤ right.1) item pairs =
+      insertPairByIndex item pairs := by
+  induction pairs with
+  | nil => simp [insertPairByIndex]
+  | cons head tail ih =>
+      simp only [List.orderedInsert_cons, insertPairByIndex, ih]
+
+private theorem sortPairsByIndex_eq_eval (pairs : List (ℕ × ℕ)) :
+    V1.sortPairsByIndex pairs = sortPairsByIndexEval pairs := by
+  induction pairs with
+  | nil => simp [V1.sortPairsByIndex, sortPairsByIndexEval]
+  | cons head tail ih =>
+      simp only [V1.sortPairsByIndex, List.insertionSort_cons, sortPairsByIndexEval]
+      rw [← V1.sortPairsByIndex, ih, insertPairByIndex_eq]
+
 /-- The operation-level planner starts agree with the reduced-summary computation. -/
 theorem actionRegionStarts_eq_reduced :
     TopLevelCompilation.regionStarts actionFormalCircuit =
@@ -187,10 +216,10 @@ theorem actionRegionStarts_eq_reduced :
     exact List.zip_of_prod hpairsIndices hpairsStarts
   unfold V1.planCandidate
   change (V1.sortPairsByIndex pairs).map (·.2) = actionReducedRegionStarts
-  rw [hpairs]
+  rw [hpairs, sortPairsByIndex_eq_eval]
   unfold actionSortedRegionIndices actionExactSortedStarts
     actionExactPlannerTrace actionPlannerBlocks actionReducedRegionStarts
-    V1.PlannedSummaryBlock.starts V1.repeatedStarts V1.sortPairsByIndex
+    V1.PlannedSummaryBlock.starts V1.repeatedStarts
   decide +kernel
 
 /-- Action's absolute selector activations reconstructed from reduced local summaries. -/

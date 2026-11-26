@@ -1,8 +1,12 @@
+module
+
 -- Auto-generated Sinsemilla generator table: the 2^10 `S` points of the real orchard
 -- keygen generator table (read off the ironwood-branch dump, `ActionLayout` fixed
 -- columns 1/2; python-validated on-curve). Do not edit by hand.
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Ecc.MulFixed.CertCheck
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Ecc.MulFixed.CertCheck
+
+@[expose] public section
 
 namespace Zcash.Circuits.Specs.Sinsemilla
 
@@ -10,7 +14,7 @@ open Ecc.MulFixed.Cert (pointOf)
 open Ecc.MulFixed.Cert.Chain (checkOnCurve checkOnCurve_sound)
 
 set_option maxRecDepth 100000 in
-private def sData : List (ℕ × ℕ) := [
+def sData : List (ℕ × ℕ) := [
   (6200097879647205583499851243213148560621730003917924543823561700220554504799,
    21285653556795296467031706491948305595095309413618206259690549906869937136771),
   (14956489506517365096554278448741960632304080728451860555774734322298081816465,
@@ -2060,11 +2064,11 @@ private def sData : List (ℕ × ℕ) := [
   (1093230847645536979936743753857511812060502273070439896600445972204993224110,
    26002465274768363823869533298650935518655726540752975986040009872244448848790)]
 
-private def checkSList : List (ℕ × ℕ) → Bool
+def checkSList : List (ℕ × ℕ) → Bool
   | [] => true
   | c :: rest => checkOnCurve c.1 c.2 && checkSList rest
 
-private theorem checkSList_sound {l : List (ℕ × ℕ)} (h : checkSList l = true) :
+theorem checkSList_sound {l : List (ℕ × ℕ)} (h : checkSList l = true) :
     ∀ k, k < l.length → (pointOf (l.getD k (0, 0))).OnCurve := by
   induction l with
   | nil => intro k hk; simp at hk
@@ -2081,9 +2085,9 @@ private theorem checkSList_sound {l : List (ℕ × ℕ)} (h : checkSList l = tru
 
 -- `decide +kernel`: the whole evaluation runs in the kernel's GMP Nat arithmetic
 -- (plain `rfl`/`decide` hit the heartbeat-counted elaborator evaluator instead)
-private theorem sTable_check : checkSList sData = true := by decide +kernel
+theorem sTable_check : checkSList sData = true := by decide +kernel
 
-private theorem sData_length : sData.length = 1024 := by decide +kernel
+theorem sData_length : sData.length = 1024 := by decide +kernel
 
 /-- The deployed Sinsemilla generator family, proof-carrying: `S k` is the `k`-th point
 of the real keygen generator table. -/

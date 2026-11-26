@@ -23,23 +23,20 @@ lean_lib Clean where
   -- validate on every platform
   platformIndependent := true
 
--- Halo2-Clean, the Ironwood circuit, the test aggregator and the core files only they use are
--- not module-system files, so their libraries permit non-module files importing the
--- module-system `Clean` library. A module belongs to the last library declaring it.
 @[default_target]
 lean_lib Halo2 where
-  roots := #[`Clean.Halo2, `Clean.Utils.ListZip, `Clean.Utils.PermutationConstruction,
-    `Clean.Utils.FieldDomainParams]
-  allowNonModules := true
+  roots := #[`Clean.Halo2]
+  requiresModuleSystem := true
+  platformIndependent := true
 
 lean_lib Zcash where
   roots := #[`Clean.Ironwood]
-  allowNonModules := true
+  requiresModuleSystem := true
+  platformIndependent := true
 
 lean_lib CleanTests where
-  roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests, `Clean.Utils.Test.TestLookup,
-    `Clean.Utils.Test.SimpMatchRegression]
-  allowNonModules := true
+  roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
+  requiresModuleSystem := true
 
 lean_exe export_fibonacci_ensemble_rust where
   root := `Clean.Examples.FibonacciVm.Rust

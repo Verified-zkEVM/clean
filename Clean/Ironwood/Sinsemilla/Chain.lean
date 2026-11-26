@@ -1,14 +1,18 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.ContractBridges
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Sinsemilla.HVec
-import Clean.Ironwood.Sinsemilla.ChainTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Sinsemilla.Basic
-import Clean.Ironwood.Sinsemilla.HashPiece
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.ContractBridges
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Sinsemilla.HVec
+public import Clean.Ironwood.Sinsemilla.ChainTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Sinsemilla.Basic
+public import Clean.Ironwood.Sinsemilla.HashPiece
+
+@[expose] public section
 
 /-!
 `hash_all_pieces` as a native variable-stride loop over the piece list: one `HashPiece.circuit`
@@ -1124,7 +1128,7 @@ private def dRowP (cfg : Config) (pl : RegionIndex → ℕ) (e : ProverEnvironme
 
 /-! ## The bundle -/
 
-private def circuitOutputCells (cfg : Config) (ns : List ℕ) (offset : ℕ)
+def circuitOutputCells (cfg : Config) (ns : List ℕ) (offset : ℕ)
     (self : RegionIndex) : Var Output Fp :=
   { point :=
       { x := .of self (offset + prefixRows ns ns.length) cfg.xA,

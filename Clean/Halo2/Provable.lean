@@ -1,5 +1,9 @@
-import Clean.Circuit.Provable
-import Clean.Halo2.Expression
+module
+
+public import Clean.Circuit.Provable
+public import Clean.Halo2.Expression
+
+@[expose] public section
 
 /-!
 # Provable types over halo2 cells

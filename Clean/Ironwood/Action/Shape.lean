@@ -1,5 +1,9 @@
-import Clean.Ironwood.Action.Shape.SelectorPacking
-import Clean.Ironwood.Action.TopLevel
+module
+
+public import Clean.Ironwood.Action.Shape.SelectorPacking
+public import Clean.Ironwood.Action.TopLevel
+
+@[expose] public section
 
 /-!
 # The fully reduced Orchard Action circuit shape

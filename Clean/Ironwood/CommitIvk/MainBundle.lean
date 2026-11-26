@@ -1,4 +1,8 @@
-import Clean.Ironwood.CommitIvk.Main
+module
+
+public import Clean.Ironwood.CommitIvk.Main
+
+@[expose] public section
 
 /-!
 # CommitIvk bundle proofs (soundness / completeness / the `circuit` def)

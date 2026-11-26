@@ -1,9 +1,13 @@
-import Clean.Ironwood.CommitIvk.Composite
-import Clean.Ironwood.NoteCommit.Main
-import Clean.Ironwood.Sinsemilla.CommitDomain
-import Clean.Ironwood.CommitIvk.MainTheorems
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Halo2.CircuitTypeDeriving
+module
+
+public import Clean.Ironwood.CommitIvk.Composite
+public import Clean.Ironwood.NoteCommit.Main
+public import Clean.Ironwood.Sinsemilla.CommitDomain
+public import Clean.Ironwood.CommitIvk.MainTheorems
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Halo2.CircuitTypeDeriving
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -565,7 +569,7 @@ private theorem synthPieces_lookupSelectorsAnchoredBy
   · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
       cfg.hashConfig _ _ anchor
 
-private theorem synth_copyCellsAssigned
+theorem synth_copyCellsAssigned
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
     (configured : (keygenRequirements G R Q hQ).configLawful cfg) :

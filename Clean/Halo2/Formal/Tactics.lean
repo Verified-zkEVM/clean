@@ -1,4 +1,8 @@
-import Clean.Halo2.FormalRegion.ToFormal
+module
+
+public meta import Clean.Halo2.FormalRegion.ToFormal
+
+public meta section
 
 namespace Halo2
 

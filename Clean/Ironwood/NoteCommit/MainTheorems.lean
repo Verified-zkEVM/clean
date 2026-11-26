@@ -1,9 +1,13 @@
-import Clean.Ironwood.NoteCommit.CanonicityTheorems
-import Clean.Ironwood.NoteCommit.DecomposeTheorems
-import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
-import Clean.Ironwood.Specs.Bitrange
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Ironwood.NoteCommit.CanonicityTheorems
+public import Clean.Ironwood.NoteCommit.DecomposeTheorems
+public import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
+public import Clean.Ironwood.Specs.Bitrange
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 # `gadgets::note_commit` synthesis-level entry

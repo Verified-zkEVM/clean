@@ -1,5 +1,9 @@
-import Clean.Ironwood.Ecc.MulFixed
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+module
+
+public import Clean.Ironwood.Ecc.MulFixed
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+
+@[expose] public section
 
 /-!
 Fixed-base scalar multiplication by a full-width scalar: the windows are witnessed
@@ -1415,7 +1419,7 @@ def EnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
   cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP
 
 /-- The region count of `synthesize`: inner mul + complete addition. -/
-private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
+theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
     (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (i : RegionIndex) :
     Operations.regionCount ((synthesize B cfg windows).operations i) = 2 := by
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount]

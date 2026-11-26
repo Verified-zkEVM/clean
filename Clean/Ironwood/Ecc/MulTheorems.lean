@@ -1,5 +1,9 @@
-import Clean.Ironwood.Ecc.Defs
-import CompElliptic.CurveForms.ShortWeierstrass
+module
+
+public import Clean.Ironwood.Ecc.Defs
+public import CompElliptic.CurveForms.ShortWeierstrass
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.

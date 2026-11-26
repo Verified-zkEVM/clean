@@ -1,10 +1,14 @@
-import Clean.Halo2
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.MulIncompleteTheorems
-import Clean.Ironwood.Ecc.MulAssignTheorems
-import Clean.Halo2.CircuitTypeDeriving
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.MulIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulAssignTheorems
+public import Clean.Halo2.CircuitTypeDeriving
+
+@[expose] public section
 
 /-!
 Variable-base scalar multiplication, *incomplete* phase. For each scalar bit, one merged

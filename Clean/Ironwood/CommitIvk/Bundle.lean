@@ -1,5 +1,9 @@
-import Clean.Ironwood.CommitIvk.Gate
-import Clean.Ironwood.CommitIvk.GateTheorems
+module
+
+public import Clean.Ironwood.CommitIvk.Gate
+public import Clean.Ironwood.CommitIvk.GateTheorems
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -17,9 +21,9 @@ namespace Zcash.Circuits.CommitIvk
 
 open Halo2
 
-private abbrev DRow := Gate.Input
-private abbrev DSpec := Gate.Spec
-private abbrev DAssumptions := Gate.Assumptions
+abbrev DRow := Gate.Input
+abbrev DSpec := Gate.Spec
+abbrev DAssumptions := Gate.Assumptions
 
 /-- `v·(1−v) = 0` pins a boolean. -/
 private theorem isBool_of_boolCheck {v : Fp} (h : v * (1 - v) = 0) : IsBool v := by

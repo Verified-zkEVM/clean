@@ -1,10 +1,14 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Utils.Tactics.ProvableStructDeriving
-import Clean.Halo2.CircuitTypeDeriving
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Mul
-import Clean.Ironwood.Ecc.WitnessPoint
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Utils.Tactics.ProvableStructDeriving
+public import Clean.Halo2.CircuitTypeDeriving
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Mul
+public import Clean.Ironwood.Ecc.WitnessPoint
+
+@[expose] public section
 
 /-!
 # Orchard diversified address integrity (Ironwood)

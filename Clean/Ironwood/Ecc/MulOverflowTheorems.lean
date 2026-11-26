@@ -1,5 +1,9 @@
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/overflow.rs`.

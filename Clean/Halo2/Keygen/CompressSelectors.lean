@@ -1,4 +1,8 @@
-import Clean.Halo2.Configure
+module
+
+public import Clean.Halo2.Configure
+
+@[expose] public section
 
 /-!
 # `compress_selectors`, ported: the selector-compression map and its algebra

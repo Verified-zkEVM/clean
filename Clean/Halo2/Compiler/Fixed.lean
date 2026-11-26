@@ -1,6 +1,10 @@
-import Clean.Halo2.Compiler.ConstraintFamilies
-import Clean.Halo2.Keygen.Layout
-import Clean.Halo2.TopLevel
+module
+
+public import Clean.Halo2.Compiler.ConstraintFamilies
+public import Clean.Halo2.Keygen.Layout
+public import Clean.Halo2.TopLevel
+
+@[expose] public section
 
 /-!
 # Fixed-data compilation and its semantics

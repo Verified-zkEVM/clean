@@ -1,10 +1,14 @@
-import CompElliptic.CurveForms.ShortWeierstrass
-import CompElliptic.Curves.Pasta
-import CompElliptic.Fields.Pasta
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import CompElliptic.CurveForms.ShortWeierstrass
+public import CompElliptic.Curves.Pasta
+public import CompElliptic.Fields.Pasta
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`.

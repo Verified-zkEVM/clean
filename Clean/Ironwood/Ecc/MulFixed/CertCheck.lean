@@ -1,6 +1,10 @@
-import Clean.Ironwood.Specs.PallasCert
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+module
+
+public import Clean.Ironwood.Specs.PallasCert
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+
+@[expose] public section
 
 /-!
 # Nat-level certification checker for concrete fixed-base window tables

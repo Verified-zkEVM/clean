@@ -1,5 +1,9 @@
-import Clean.Ironwood.Action.CircuitPreNU63
-import Clean.Ironwood.Action.Spec
+module
+
+public import Clean.Ironwood.Action.CircuitPreNU63
+public import Clean.Ironwood.Action.Spec
+
+@[expose] public section
 
 /-!
 # The pre- and post-NU6.3 circuits differ exactly by same-address enforcement

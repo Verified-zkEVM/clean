@@ -1,5 +1,9 @@
-import Clean.Circuit
-import Clean.Ironwood.Poseidon.Constants
+module
+
+public import Clean.Circuit
+public import Clean.Ironwood.Poseidon.Constants
+
+@[expose] public section
 
 /-!
 # Orchard Poseidon Pow5 gates and chip entry points

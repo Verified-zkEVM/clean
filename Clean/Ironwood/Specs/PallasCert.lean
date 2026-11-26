@@ -1,4 +1,8 @@
-import Clean.Ironwood.Specs.Pallas
+module
+
+public import Clean.Ironwood.Specs.Pallas
+
+@[expose] public section
 
 /-!
 # Witnessed-operation lemmas for concrete point chains

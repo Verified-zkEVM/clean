@@ -1,14 +1,18 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.MulTheorems
-import Clean.Ironwood.Ecc.MulAssignTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulIncomplete
-import Clean.Ironwood.Ecc.MulComplete
-import Clean.Ironwood.Ecc.MulOverflow
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.MulTheorems
+public import Clean.Ironwood.Ecc.MulAssignTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulIncomplete
+public import Clean.Ironwood.Ecc.MulComplete
+public import Clean.Ironwood.Ecc.MulOverflow
+
+@[expose] public section
 
 /-!
 Variable-base scalar multiplication: computes `alpha • base` where `alpha : Fp` is a Pallas
@@ -1634,7 +1638,7 @@ theorem synthesize_synthesisSummary_eq (cfg : Config)
 
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
-private theorem synthesize_regionCount (cfg : Config)
+theorem synthesize_regionCount (cfg : Config)
     (input : Var Inputs Fp) (i : RegionIndex) :
     Operations.regionCount ((synthesize cfg input).operations i) = 4 := by
   simp only [synthesize, circuit_norm]
@@ -1755,7 +1759,7 @@ private def overflowConfigured
     (completeProgram.finalCounts
       (loProgram.finalCounts (hiProgram.finalCounts counts))) ()
 
-private theorem synthesize_keygenRegistered
+theorem synthesize_keygenRegistered
     (configInput :
       Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
     (counts : ConfigureCounts)
@@ -1914,7 +1918,7 @@ private theorem synthesize_keygenRegistered
         apply Configure.mem_permutationRequests_delta_bind_left
         exact hcolumn
 
-private theorem synthesize_copyCellsAssigned
+theorem synthesize_copyCellsAssigned
     (configInput :
       Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
     (counts : ConfigureCounts)
@@ -1960,7 +1964,7 @@ private theorem synthesize_copyCellsAssigned
     · exact List.mem_append_right _
         (mainCircuit_call_overflowInput_cells_assigned _ input self).2.2
 
-@[reducible] private def mulElaborated :
+@[reducible] def mulElaborated :
     ElaboratedCircuit Fp
       (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
       Config Inputs Point

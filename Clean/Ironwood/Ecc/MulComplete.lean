@@ -1,14 +1,18 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Halo2.Tactics.AbstractOutputs
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.MulCompleteTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulIncomplete
-import Clean.Halo2.CircuitTypeDeriving
-import Clean.Circuit.WitnessIRLimbs
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Halo2.Tactics.AbstractOutputs
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.MulCompleteTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulIncomplete
+public import Clean.Halo2.CircuitTypeDeriving
+public import Clean.Circuit.WitnessIRLimbs
+
+@[expose] public section
 
 /-!
 Variable-base scalar multiplication, *complete* phase: the final three bits (`COMPLETE_RANGE`),

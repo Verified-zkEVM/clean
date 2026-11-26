@@ -1,5 +1,9 @@
-import Clean.Halo2.CircuitTypeDeriving
-import Clean.Halo2.WitnessIR
+module
+
+public import Clean.Halo2.CircuitTypeDeriving
+public import Clean.Halo2.WitnessIR
+
+@[expose] public section
 
 /-!
 Regression test for Halo2's `deriving CircuitType`: a mixed record of ordinary

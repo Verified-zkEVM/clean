@@ -1,5 +1,9 @@
-import Clean.Halo2
-import Clean.Ironwood.Ecc.Basic
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Ecc.Basic
+
+@[expose] public section
 
 /-!
 Regression test for the **3-tuple lookup membership reduction** — the new shape introduced

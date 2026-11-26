@@ -1,4 +1,8 @@
-import Clean.Ironwood.Poseidon.Permute
+module
+
+public import Clean.Ironwood.Poseidon.Permute
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -304,7 +308,7 @@ theorem addInputRegion_output_cells_assigned (cfg : Config) (offset : ℕ)
     List.mem_cons, true_or]
 
 /-- The region count of `hash`: three regions. -/
-private theorem hash_regionCount (capacity : Fp) (cfg : Config)
+theorem hash_regionCount (capacity : Fp) (cfg : Config)
     (input : Var Sponge.Rate2 Fp) (i : RegionIndex) :
     Operations.regionCount
       (((do

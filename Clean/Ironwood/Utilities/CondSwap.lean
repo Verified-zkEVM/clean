@@ -1,6 +1,10 @@
-import Clean.Halo2
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Specs.Pallas
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Specs.Pallas
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):

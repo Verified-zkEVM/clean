@@ -1,6 +1,10 @@
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.DoubleAndAdd
+module
+
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.

@@ -1,10 +1,14 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Sinsemilla.Basic
-import Clean.Ironwood.Sinsemilla.HashPiece
-import Clean.Ironwood.Sinsemilla.Chain
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Sinsemilla.Basic
+public import Clean.Ironwood.Sinsemilla.HashPiece
+public import Clean.Ironwood.Sinsemilla.Chain
+
+@[expose] public section
 
 /-!
 # Sinsemilla `hash_message` — the layouter-level hash region
@@ -739,7 +743,7 @@ theorem hashCircuitSynthesisSummary_instanceRowExtent_eq (ns : List ℕ)
   simp only [hashCircuitSynthesisSummary, hashRegionSynthesisSummary,
     synthesis_summary_norm]
 
-private opaque hashPhysicalShapePacked :
+opaque hashPhysicalShapePacked :
     { shape : List ℕ → Sinsemilla.HashPiece.Config →
         FloorPlanner.RegionShapeSummary //
       ∀ ns config,

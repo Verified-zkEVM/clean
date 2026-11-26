@@ -1,6 +1,10 @@
-import Clean.Ironwood.Sinsemilla.ChainTheorems
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.AddTheorems
+module
+
+public import Clean.Ironwood.Sinsemilla.ChainTheorems
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.AddTheorems
+
+@[expose] public section
 
 /-!
 # Sinsemilla commit domain

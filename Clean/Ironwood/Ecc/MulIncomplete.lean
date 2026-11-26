@@ -1,5 +1,9 @@
-import Clean.Halo2.Tactics.ContractBridges
-import Clean.Ironwood.Ecc.MulIncompleteRound
+module
+
+public import Clean.Halo2.Tactics.ContractBridges
+public import Clean.Ironwood.Ecc.MulIncompleteRound
+
+@[expose] public section
 
 /-! The double-and-add loop and bundle over the round gadget (`MulIncompleteRound.lean`). -/
 

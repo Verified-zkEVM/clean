@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.Bitrange
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Circuit
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.Bitrange
+public import Clean.Utils.Tactics.ProvableStructDeriving
+
+@[expose] public section
 
 /-!
 # Running-sum range-check theory
@@ -132,4 +136,3 @@ theorem FExprOver.eval_runningSum [WitgenEnv Fp Env V] (ctx : CtxOver Fp Env) (K
       hcast, mul_comm, ← mul_assoc, inv_mul_cancel₀ h2K, one_mul]
 
 end Witgen
-

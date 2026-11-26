@@ -1,7 +1,11 @@
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.MulIncompleteTheorems
-import Clean.Ironwood.Ecc.AddTheorems
-import CompElliptic.CurveForms.ShortWeierstrass
+module
+
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.MulIncompleteTheorems
+public import Clean.Ironwood.Ecc.AddTheorems
+public import CompElliptic.CurveForms.ShortWeierstrass
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.

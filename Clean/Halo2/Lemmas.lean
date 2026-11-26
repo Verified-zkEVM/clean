@@ -1,7 +1,11 @@
-import Clean.Halo2.Attributes
-import Clean.Halo2.Basic
-import Clean.Halo2.Operations.LookupSelectors
-import Clean.Halo2.SynthesisSummary.Operations
+module
+
+public import Clean.Halo2.Attributes
+public import Clean.Halo2.Basic
+public import Clean.Halo2.Operations.LookupSelectors
+public import Clean.Halo2.SynthesisSummary.Operations
+
+@[expose] public section
 
 /-!
 # Composition lemmas: the deliberate simp set — DESIGN SKETCH

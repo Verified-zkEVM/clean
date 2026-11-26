@@ -1,10 +1,14 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Utils.Tactics.ProvableStructDeriving
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulFixed.FullWidth
-import Clean.Halo2.CircuitTypeDeriving
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Utils.Tactics.ProvableStructDeriving
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulFixed.FullWidth
+public import Clean.Halo2.CircuitTypeDeriving
+
+@[expose] public section
 
 /-!
 # Orchard-protocol spend authority

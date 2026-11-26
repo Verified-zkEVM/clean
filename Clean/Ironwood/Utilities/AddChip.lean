@@ -1,5 +1,9 @@
-import Clean.Halo2
-import Clean.Ironwood.Ecc.Basic
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Ecc.Basic
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):

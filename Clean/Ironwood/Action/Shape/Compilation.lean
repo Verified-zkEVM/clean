@@ -1,4 +1,8 @@
-import Clean.Ironwood.Action.TopLevel
+module
+
+public import Clean.Ironwood.Action.TopLevel
+
+@[expose] public section
 
 /-!
 # Reduced compilation input for the Orchard Action circuit

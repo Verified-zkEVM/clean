@@ -1,14 +1,18 @@
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Specs.Bitrange
-import Clean.Ironwood.Sinsemilla.ChainTheorems
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Ecc.MulAssignTheorems
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+module
+
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Specs.Bitrange
+public import Clean.Ironwood.Sinsemilla.ChainTheorems
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulAssignTheorems
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+
+@[expose] public section
 
 /-!
 # `commit_ivk` message-piece chunk bridge

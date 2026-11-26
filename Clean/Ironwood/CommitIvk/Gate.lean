@@ -1,6 +1,10 @@
-import Clean.Halo2
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Specs.Pallas
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Specs.Pallas
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -89,12 +93,12 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
     ((configure advices).delta counts).constants = [] := by
   simp [configure]
 
-@[reducible] private def configureInferred (advices : Fin 10 → Column .advice) :
+@[reducible] def configureInferred (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) := by
   unfold configure
   infer_instance
 
-private theorem configure_selectorRequirements
+theorem configure_selectorRequirements
     (advices : Fin 10 → Column .advice) (counts) :
     (configureInferred advices).selectorRequirements counts := by
   dsimp only [configureInferred, configure]

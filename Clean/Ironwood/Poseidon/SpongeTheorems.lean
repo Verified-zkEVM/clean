@@ -1,4 +1,8 @@
-import Clean.Ironwood.Poseidon.Pow5Theorems
+module
+
+public import Clean.Ironwood.Poseidon.Pow5Theorems
+
+@[expose] public section
 
 /-!
 # Orchard Poseidon sponge APIs

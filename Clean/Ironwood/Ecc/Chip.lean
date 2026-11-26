@@ -1,11 +1,15 @@
-import Clean.Ironwood.Ecc.WitnessPoint
-import Clean.Ironwood.Ecc.AddIncomplete
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.Mul
-import Clean.Ironwood.Ecc.MulFixed
-import Clean.Ironwood.Ecc.MulFixed.FullWidth
-import Clean.Ironwood.Ecc.MulFixed.Short
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
+module
+
+public import Clean.Ironwood.Ecc.WitnessPoint
+public import Clean.Ironwood.Ecc.AddIncomplete
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.Mul
+public import Clean.Ironwood.Ecc.MulFixed
+public import Clean.Ironwood.Ecc.MulFixed.FullWidth
+public import Clean.Ironwood.Ecc.MulFixed.Short
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
+
+@[expose] public section
 
 /-!
 # Orchard-protocol ECC chip configure
@@ -122,7 +126,7 @@ theorem configure_output_mulFixedBaseField_lookupConfig
     MulFixed.FullWidth.configure,
     MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
-@[reducible] private def configureInferred
+@[reducible] def configureInferred
     (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) :
@@ -130,7 +134,7 @@ theorem configure_output_mulFixedBaseField_lookupConfig
   unfold configure
   infer_instance
 
-private theorem configure_selectorRequirements
+theorem configure_selectorRequirements
     (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) (counts) :
@@ -279,7 +283,7 @@ theorem advice_mem_permutationRequests (advices : Fin 10 → Column .advice)
     exact Configure.mem_permutationRequests_delta_enableEquality _ _
 
 /-- The keygen context produced locally by one aggregate ECC configure run. -/
-private def configureDeltaContext (advices : Fin 10 → Column .advice)
+def configureDeltaContext (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
     KeygenContext Fp :=

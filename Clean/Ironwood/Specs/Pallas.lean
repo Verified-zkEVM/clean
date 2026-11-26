@@ -1,7 +1,11 @@
-import CompElliptic.CurveForms.ShortWeierstrass
-import CompElliptic.Curves.Pasta
-import CompElliptic.Curves.PastaOrder
-import CompElliptic.Fields.Pasta
+module
+
+public import CompElliptic.CurveForms.ShortWeierstrass
+public import CompElliptic.Curves.Pasta
+public import CompElliptic.Curves.PastaOrder
+public import CompElliptic.Fields.Pasta
+
+@[expose] public section
 
 /-!
 # Orchard-facing Pallas vocabulary

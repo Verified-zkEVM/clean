@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.Layout
+module
+
+public import Clean.Halo2.Keygen.Layout
+
+@[expose] public section
 
 /-! # Bounded copy-table coordinates -/
 

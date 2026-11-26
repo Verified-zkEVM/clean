@@ -1,8 +1,12 @@
-import Clean.Ironwood.Ecc.MulTheorems
-import Clean.Ironwood.Ecc.MulIncompleteTheorems
-import Clean.Ironwood.Ecc.MulCompleteTheorems
-import Clean.Ironwood.Ecc.MulOverflowTheorems
-import Clean.Ironwood.Ecc.AddTheorems
+module
+
+public import Clean.Ironwood.Ecc.MulTheorems
+public import Clean.Ironwood.Ecc.MulIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulCompleteTheorems
+public import Clean.Ironwood.Ecc.MulOverflowTheorems
+public import Clean.Ironwood.Ecc.AddTheorems
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs::Config::assign`

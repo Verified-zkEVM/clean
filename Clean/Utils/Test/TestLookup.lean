@@ -1,6 +1,10 @@
-import Clean.Halo2
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Utilities.LookupRangeCheck
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+
+@[expose] public section
 
 open Clean
 

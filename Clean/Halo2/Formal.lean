@@ -1,4 +1,8 @@
-import Clean.Halo2.Elaborated
+module
+
+public import Clean.Halo2.Elaborated
+
+@[expose] public section
 
 /-!
 # Halo2 formal circuits — DESIGN SKETCH
@@ -302,7 +306,7 @@ checks assignments at implicit transparency, so the reduction theorems cannot be
 against the handle. Their instances at the handle's own arguments are well-typed, as in
 `Clean.Circuit.Formal`'s `metadataSimproc` for record constructors.
 -/
-def configuredProjectionSimproc (reductions : List (Name × Name)) (e : Expr) :
+meta def configuredProjectionSimproc (reductions : List (Name × Name)) (e : Expr) :
     SimpM Step := do
   let some projection := e.getAppFn.constName? | return .continue
   let some handleIndex := (← getFunInfo e.getAppFn).paramInfo.findIdx? (·.isExplicit)

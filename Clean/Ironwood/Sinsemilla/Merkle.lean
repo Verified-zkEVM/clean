@@ -1,16 +1,20 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Ironwood.Specs.Bitrange
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Sinsemilla.Basic
-import Clean.Ironwood.Sinsemilla.HashPiece
-import Clean.Ironwood.Sinsemilla.Chain
-import Clean.Ironwood.Utilities.LookupRangeCheck
-import Clean.Ironwood.Utilities.CondSwap
-import Clean.Ironwood.Sinsemilla.HashToPoint
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Ironwood.Specs.Bitrange
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Sinsemilla.Basic
+public import Clean.Ironwood.Sinsemilla.HashPiece
+public import Clean.Ironwood.Sinsemilla.Chain
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+public import Clean.Ironwood.Utilities.CondSwap
+public import Clean.Ironwood.Sinsemilla.HashToPoint
+
+@[expose] public section
 
 /-!
 # Sinsemilla MerkleCRH
@@ -449,12 +453,12 @@ def configure (scfg : HashPiece.Config) : Configure Fp Config := do
     (configure scfg).fixedColumns counts = [] := by
   simp [configure, CondSwap.configure, Gate.configure]
 
-@[reducible] private def configureInferred (scfg : HashPiece.Config) :
+@[reducible] def configureInferred (scfg : HashPiece.Config) :
     ElaboratedConfigure (configure scfg) := by
   unfold configure
   infer_instance
 
-private theorem configure_selectorRequirements
+theorem configure_selectorRequirements
     (scfg : HashPiece.Config) (counts) :
     (configureInferred scfg).selectorRequirements counts := by
   dsimp only [configureInferred, configure]
@@ -1261,7 +1265,7 @@ private theorem sum_z1_eq_pieceZ {n : ℕ} (hn : K * (n + 1) ≤ 250) {ms : ℕ 
 
 /-- The region count of `HashLayer.synthesize`: three witness-piece regions, two short
 range checks, the hash region, the decomposition region = 7. -/
-private theorem hashLayer_regionCount (G : Generators) (cfg : Config)
+theorem hashLayer_regionCount (G : Generators) (cfg : Config)
     (lcfg : LookupRangeCheck.Config 10) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (input : Var HashLayer.Input Fp) (i : RegionIndex) :
     Operations.regionCount
@@ -2879,7 +2883,7 @@ def HashLayer.configurationCertificate (G : Generators) (Q : Point Fp)
       exact hwitnessPieces
 
 /-- The region count of the layer: the swap region + the hash layer's 7. -/
-private theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
     (wswap : Placed ProverEnvironment Fp → Bool)
     (ccfg : CondSwap.Config) (cfg : Config)
@@ -2900,7 +2904,7 @@ private theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurv
       rw [FormalCircuit.call_regionCount]
       rfl]
 
-private theorem layer_output (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+theorem layer_output (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
     (wswap : Placed ProverEnvironment Fp → Bool)
     (ccfg : CondSwap.Config) (cfg : Config)
@@ -3561,7 +3565,7 @@ private theorem foldState_snd
     rw [foldState_snd cfg input i₀ m, Nat.mul_succ, Nat.add_assoc]
 
 /-- The fold's region count: `8 * d`. -/
-private theorem fold_regionCount
+theorem fold_regionCount
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (i : RegionIndex) :
     Operations.regionCount
@@ -3818,7 +3822,7 @@ private theorem foldState_node_cell_mem
 /-- A nonempty Merkle fold carries the last layer's `xA` output column; the empty
 fold returns its input cell unchanged. -/
 @[keygen_norm]
-private theorem foldState_node_column
+theorem foldState_node_column
     (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ : ℕ)
     (wsib : ℕ → WitgenIR Fp 1)
     (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
@@ -3834,14 +3838,14 @@ private theorem foldState_node_column
       rw [layerAt_output_column]
       simp
 
-private def synthesize
+def synthesize
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) : Circuit Fp (Var field Fp) := do
   let acc ← FormalCircuit.foldCall
     (layerAt G Q hQ l₀ wsib wswap) toInput cfg input d
   pure acc.node
 
-private theorem synthesize_keygenRegistered :
+theorem synthesize_keygenRegistered :
     ∀ (configInput : CondSwap.Config × Config × LookupRangeCheck.Config 10)
       (counts : ConfigureCounts)
       (hconfig : (keygenRequirements G Q hQ l₀ wsib wswap).configLawful configInput)

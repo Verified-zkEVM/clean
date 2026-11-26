@@ -1,12 +1,16 @@
-import Clean.Ironwood.NoteCommit.Gates
-import Clean.Ironwood.NoteCommit.Decompose
-import Clean.Ironwood.NoteCommit.Canonicity
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Ironwood.NoteCommit.Composites
-import Clean.Ironwood.NoteCommit.YComposite
-import Clean.Ironwood.Sinsemilla.CommitDomain
-import Clean.Ironwood.NoteCommit.MainTheorems
-import Clean.Halo2.CircuitTypeDeriving
+module
+
+public import Clean.Ironwood.NoteCommit.Gates
+public import Clean.Ironwood.NoteCommit.Decompose
+public import Clean.Ironwood.NoteCommit.Canonicity
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Ironwood.NoteCommit.Composites
+public import Clean.Ironwood.NoteCommit.YComposite
+public import Clean.Ironwood.Sinsemilla.CommitDomain
+public import Clean.Ironwood.NoteCommit.MainTheorems
+public import Clean.Halo2.CircuitTypeDeriving
+
+@[expose] public section
 
 /-!
 # Orchard-protocol NoteCommit main circuit
@@ -2378,7 +2382,7 @@ private theorem synthCanonicity_copyCellsAssignedFrom
     intro cell hcell
     exact List.mem_append_left _ hcell
 
-private theorem synth_copyCellsAssigned
+theorem synth_copyCellsAssigned
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
     (configured : (keygenRequirements G R Q hQ).configLawful cfg) :

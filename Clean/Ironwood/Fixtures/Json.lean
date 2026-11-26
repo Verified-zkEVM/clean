@@ -1,6 +1,10 @@
-import Lean.Data.Json
-import Lean.Util.Path
-import Clean.Ironwood.Fixtures.FixtureTypes
+module
+
+public import Lean.Data.Json
+public import Lean.Util.Path
+public import Clean.Ironwood.Fixtures.FixtureTypes
+
+@[expose] public section
 
 /-!
 # JSON codecs and the checked loader for VK fixtures
@@ -37,7 +41,7 @@ drift after regeneration, parse error) is an `IO` error → a build failure at t
 consuming `#eval`. -/
 def hex (u : UInt64) : String := String.ofList (Nat.toDigits 16 u.toNat)
 
-private def packageSourceRoot : IO System.FilePath := do
+def packageSourceRoot : IO System.FilePath := do
   let searchPath ← Lean.searchPathRef.get
   let relativeOLean := System.FilePath.mk "Clean/Ironwood/Fixtures/Json.olean"
   let some oleanRoot ← searchPath.findM? fun root =>
@@ -53,7 +57,7 @@ private def packageSourceRoot : IO System.FilePath := do
     | throw <| IO.userError s!"unexpected Clean build path: {oleanRoot}"
   pure packageRoot
 
-private def resolveSourcePath (path : System.FilePath) : IO System.FilePath := do
+def resolveSourcePath (path : System.FilePath) : IO System.FilePath := do
   if ← path.pathExists then
     return path
   let candidate := (← packageSourceRoot) / path

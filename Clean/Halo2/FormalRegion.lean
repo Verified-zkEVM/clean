@@ -1,4 +1,8 @@
-import Clean.Halo2.Formal.Call
+module
+
+public import Clean.Halo2.Formal.Call
+
+@[expose] public section
 
 namespace Halo2
 

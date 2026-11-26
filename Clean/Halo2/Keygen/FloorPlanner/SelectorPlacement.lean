@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.FloorPlanner.Allocations
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.Allocations
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 

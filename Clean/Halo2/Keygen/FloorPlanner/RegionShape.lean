@@ -1,10 +1,14 @@
-import Clean.Halo2.SynthesisSummary.Operations
-import Clean.Halo2.Operations.LookupSelectors
-import Mathlib.Data.List.GetD
-import Mathlib.Data.List.Nodup
-import Mathlib.Data.List.Perm.Basic
-import Mathlib.Data.List.Sort
-import Mathlib.Data.List.TakeDrop
+module
+
+public import Clean.Halo2.SynthesisSummary.Operations
+public import Clean.Halo2.Operations.LookupSelectors
+public import Mathlib.Data.List.GetD
+public import Mathlib.Data.List.Nodup
+public import Mathlib.Data.List.Perm.Basic
+public import Mathlib.Data.List.Sort
+public import Mathlib.Data.List.TakeDrop
+
+@[expose] public section
 
 /-!
 # Floor-planner region shapes
@@ -255,7 +259,7 @@ private theorem orderedInsert_append_of_rel_right
   induction left with
   | nil =>
       cases right with
-      | nil => rfl
+      | nil => simp
       | cons head tail =>
           simp only [List.nil_append, List.orderedInsert_cons]
           rw [ite_eq_left (hrel head (by simp))]
@@ -299,7 +303,7 @@ private theorem sortRegionColumns_cons
       List.orderedInsert (fun left right =>
         RegionColumn.lt left right = true) head
         (sortRegionColumns tail) := by
-  rfl
+  simp [sortRegionColumns]
 
 private theorem physicalColumns_column_cons
     (kind : ColumnKind) (index : ℕ) (tail : List RegionColumn) :
@@ -331,7 +335,7 @@ theorem sortRegionColumns_eq_physical_append_selectors
       sortRegionColumns (physicalColumns columns) ++
         sortRegionColumns (selectorColumns columns) := by
   induction columns with
-  | nil => rfl
+  | nil => simp [sortRegionColumns, physicalColumns, selectorColumns]
   | cons head tail inductionHypothesis =>
       cases head with
       | column kind index =>

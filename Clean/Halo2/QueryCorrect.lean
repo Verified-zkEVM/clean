@@ -1,5 +1,9 @@
-import Clean.Halo2.Expression
-import Clean.Halo2.QueryCorrectAttr
+module
+
+public import Clean.Halo2.Expression
+public import Clean.Halo2.QueryCorrectAttr
+
+@[expose] public section
 
 namespace Halo2
 

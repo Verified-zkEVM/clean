@@ -1,12 +1,16 @@
-import Clean.Circuit
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Ecc.MulAssignTheorems
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+module
+
+public import Clean.Circuit
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulAssignTheorems
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+
+@[expose] public section
 
 /-!
 # P128Pow5T3 constants for Orchard Poseidon

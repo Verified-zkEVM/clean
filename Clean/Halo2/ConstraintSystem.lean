@@ -1,10 +1,14 @@
-import Clean.Halo2.Expression
-import Clean.Halo2.Tactics.SelectorFree
-import Clean.Halo2.Tactics.QueryCorrect
-import Clean.Halo2.ConfigureAttr
-import Clean.Halo2.KeygenAttr
-import Mathlib.Data.List.Dedup
-import Mathlib.Data.List.MinMax
+module
+
+public import Clean.Halo2.Expression
+public import Clean.Halo2.Tactics.SelectorFree
+public import Clean.Halo2.Tactics.QueryCorrect
+public import Clean.Halo2.ConfigureAttr
+public import Clean.Halo2.KeygenAttr
+public import Mathlib.Data.List.Dedup
+public import Mathlib.Data.List.MinMax
+
+@[expose] public section
 
 /-!
 # Halo2 configure layer — DESIGN SKETCH
@@ -304,7 +308,7 @@ def Gate.withSelector
 
 open Lean Meta Simp in
 /-- Reduce only a named gate's selector projection, without unfolding its constraints. -/
-def foldGateSelectorProc : Simproc := fun expression => do
+meta def foldGateSelectorProc : Simproc := fun expression => do
   unless expression.isAppOf ``Gate.selector do
     return .continue
   try

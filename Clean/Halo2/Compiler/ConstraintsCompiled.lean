@@ -1,7 +1,11 @@
-import Clean.Halo2.TopLevel
-import Clean.Halo2.Compiler.CompiledGates
-import Clean.Halo2.Compiler.CompiledCopies
-import Clean.Halo2.Compiler.CompiledLookups
+module
+
+public import Clean.Halo2.TopLevel
+public import Clean.Halo2.Compiler.CompiledGates
+public import Clean.Halo2.Compiler.CompiledCopies
+public import Clean.Halo2.Compiler.CompiledLookups
+
+@[expose] public section
 
 /-! # Semantic soundness of the Halo2 compiler
 

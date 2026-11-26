@@ -1,5 +1,9 @@
-import Clean.Ironwood.Action.CircuitPreNU63
-import Clean.Ironwood.Action.ConfigureCertificates
+module
+
+public import Clean.Ironwood.Action.CircuitPreNU63
+public import Clean.Ironwood.Action.ConfigureCertificates
+
+@[expose] public section
 
 /-!
 # The Orchard Action circuit: bundle contract (spec / extract / elaborated)
@@ -234,7 +238,7 @@ structure ActionData where
 deriving Inhabited
 
 /-- One advice cell read. -/
-private def cellRead (env : Placed Environment Fp) (i : RegionIndex) (row : ℕ)
+def cellRead (env : Placed Environment Fp) (i : RegionIndex) (row : ℕ)
     (col : Column .advice) : Fp :=
   eval env (AssignedCell.of i row col : Var field Fp)
 

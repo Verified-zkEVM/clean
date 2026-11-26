@@ -1,5 +1,9 @@
-import Clean.Ironwood.NoteCommit.Main
-import Clean.Ironwood.Sinsemilla.ChainTheorems
+module
+
+public import Clean.Ironwood.NoteCommit.Main
+public import Clean.Ironwood.Sinsemilla.ChainTheorems
+
+@[expose] public section
 
 /-!
 # NoteCommit bundle proofs (soundness / completeness / the `circuit` def)

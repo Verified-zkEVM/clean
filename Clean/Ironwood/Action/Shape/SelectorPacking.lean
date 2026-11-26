@@ -1,5 +1,9 @@
-import Clean.Halo2.Keygen.SelectorBitsets
-import Clean.Ironwood.Action.Shape.PlannerTrace
+module
+
+public import Clean.Halo2.Keygen.SelectorBitsets
+public import Clean.Ironwood.Action.Shape.PlannerTrace
+
+@[expose] public section
 
 namespace Zcash.Circuits.Action
 

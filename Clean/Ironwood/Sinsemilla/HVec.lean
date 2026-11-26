@@ -1,5 +1,9 @@
-import Clean.Circuit
-import Clean.Utils.Vector
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Vector
+
+@[expose] public section
 
 /-!
 # Heterogeneous vectors of vectors as a `ProvableType`

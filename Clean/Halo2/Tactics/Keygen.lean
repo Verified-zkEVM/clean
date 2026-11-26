@@ -1,10 +1,14 @@
-import Clean.Halo2.Loops
-import Clean.Halo2.Configure.Lemmas
-import Clean.Halo2.Operations.FixedWrites
-import Clean.Halo2.Operations.LookupSelectors
-import Clean.Halo2.KeygenAttr
-import Batteries.Lean.TagAttribute
-import Lean.Elab.Tactic
+module
+
+public import Clean.Halo2.Loops
+public import Clean.Halo2.Configure.Lemmas
+public import Clean.Halo2.Operations.FixedWrites
+public import Clean.Halo2.Operations.LookupSelectors
+public import Clean.Halo2.KeygenAttr
+public meta import Batteries.Lean.TagAttribute
+public meta import Lean.Elab.Tactic
+
+@[expose] public section
 
 /-!
 # Configure/synthesis registration automation
@@ -28,7 +32,7 @@ attribute [keygen_norm]
 
 open Lean
 
-initialize registerTraceClass `Halo2.keygen
+meta initialize registerTraceClass `Halo2.keygen
 
 attribute [keygen_norm]
   ComplexSelector.toSelector_index ComplexSelector.toSelector_simple
@@ -266,6 +270,8 @@ theorem assignAdvice_keygenRegistered
         permutationColumns) := by
   simp only [operations_assignAdvice, List.forall_cons,
     RegionOperation.KeygenRegistered, List.forall_nil, and_self]
+
+meta section
 
 open Lean Elab Tactic Meta
 
@@ -1594,5 +1600,7 @@ elab "configure_route" : tactic => do
   let goal ← getMainGoal
   unless ← KeygenRegistration.proveConfigureRoutingPremise goal do
     throwError "configure_route could not find the configured child in the parent program"
+
+end
 
 end Halo2

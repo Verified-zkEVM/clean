@@ -1,5 +1,9 @@
-import Clean.Ironwood.Ecc.Basic
-import Clean.Halo2.Keygen
+module
+
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Halo2.Keygen
+
+@[expose] public section
 
 /-!
 # VK-matching fixture types

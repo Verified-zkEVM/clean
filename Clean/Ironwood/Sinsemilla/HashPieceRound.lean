@@ -1,10 +1,14 @@
-import Clean.Halo2
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Utilities.RunningSum
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Sinsemilla.Basic
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Utilities.RunningSum
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Sinsemilla.Basic
+
+@[expose] public section
 
 /-!
 Sinsemilla hash: one word round of `hash_piece`, as a formal circuit. The per-word row assigns
@@ -475,7 +479,7 @@ set_option synthInstance.maxSize 2048 in
   unfold configure
   infer_instance
 
-private theorem configure_constraintDegree
+theorem configure_constraintDegree
     (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
     (genTable : GeneratorTableConfig) (counts) :

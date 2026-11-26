@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.PdqsortPermutation
+module
+
+public import Clean.Halo2.Keygen.PdqsortPermutation
+
+@[expose] public section
 
 /-! Ordering correctness of the legacy pdqsort implementation. -/
 

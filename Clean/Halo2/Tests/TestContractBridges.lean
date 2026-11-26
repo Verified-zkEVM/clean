@@ -1,6 +1,10 @@
-import Clean.Halo2
-import Clean.Halo2.Tactics.ContractBridges
-import Clean.Ironwood.Ecc.Add
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Tactics.ContractBridges
+public import Clean.Ironwood.Ecc.Add
+
+@[expose] public section
 
 /-!
 Regression pins for `derive_contract_bridges` (C2a #2). Assert that the command generates the

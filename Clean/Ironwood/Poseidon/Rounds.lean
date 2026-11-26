@@ -1,4 +1,8 @@
-import Clean.Ironwood.Poseidon.Pow5
+module
+
+public import Clean.Ironwood.Poseidon.Pow5
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):

@@ -1,8 +1,12 @@
-import Clean.Utils.PermutationConstruction
-import Clean.Halo2.Compiler.CopyLayout
-import Clean.Halo2.Compiler.PermutationRows
-import Clean.Halo2.Keygen.Layout
-import Mathlib.Tactic.IntervalCases
+module
+
+public import Clean.Utils.PermutationConstruction
+public import Clean.Halo2.Compiler.CopyLayout
+public import Clean.Halo2.Compiler.PermutationRows
+public import Clean.Halo2.Keygen.Layout
+public import Mathlib.Tactic.IntervalCases
+
+@[expose] public section
 
 /-! # Correctness of executable permutation assembly
 

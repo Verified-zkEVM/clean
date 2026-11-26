@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Tactics
-import Clean.Utils.Tactics.ProvableStructDeriving
-import Clean.Ironwood.Specs.Pallas
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Tactics
+public import Clean.Utils.Tactics.ProvableStructDeriving
+public import Clean.Ironwood.Specs.Pallas
+
+@[expose] public section
 
 /-!
 # Double-and-add row (incomplete addition)

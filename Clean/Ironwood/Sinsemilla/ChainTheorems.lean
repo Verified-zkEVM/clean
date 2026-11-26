@@ -1,9 +1,14 @@
-import Batteries.Data.Vector.Lemmas
-import Clean.Ironwood.Sinsemilla.ChipTheorems
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Sinsemilla.HVec
+module
+
+public import Batteries.Data.Vector.Lemmas
+public import Mathlib.Data.List.GetD
+public import Clean.Ironwood.Sinsemilla.ChipTheorems
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Sinsemilla.HVec
+
+@[expose] public section
 
 /-!
 Reference:

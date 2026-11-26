@@ -1,11 +1,15 @@
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.Set
-import Clean.Circuit.WitnessIRSugar
-import CompElliptic.Fields.Pasta
+module
+
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.Set
+public import Clean.Circuit.WitnessIRSugar
+public import CompElliptic.Fields.Pasta
+
+@[expose] public section
 
 open CompElliptic.Fields.Pasta (Fp)
 

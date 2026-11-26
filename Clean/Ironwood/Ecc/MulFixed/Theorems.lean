@@ -1,7 +1,11 @@
-import CompElliptic.CurveForms.ShortWeierstrass
-import CompElliptic.Curves.Pasta
-import CompElliptic.Fields.Pasta
-import Clean.Ironwood.Ecc.Defs
+module
+
+public import CompElliptic.CurveForms.ShortWeierstrass
+public import CompElliptic.Curves.Pasta
+public import CompElliptic.Fields.Pasta
+public import Clean.Ironwood.Ecc.Defs
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed.rs`.

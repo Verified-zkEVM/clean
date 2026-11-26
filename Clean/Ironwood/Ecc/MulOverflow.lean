@@ -1,11 +1,15 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.MulOverflowTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Utilities.LookupRangeCheck
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.MulOverflowTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+
+@[expose] public section
 
 /-!
 The overflow check of variable-base scalar multiplication: given the scalar `alpha` and the

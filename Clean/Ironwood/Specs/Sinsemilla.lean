@@ -1,6 +1,10 @@
-import Clean.Ironwood.Specs.Pallas
-import CompElliptic.Curves.Pasta
-import Clean.Ironwood.Specs.Bitrange
+module
+
+public import Clean.Ironwood.Specs.Pallas
+public import CompElliptic.Curves.Pasta
+public import Clean.Ironwood.Specs.Bitrange
+
+@[expose] public section
 
 /-!
 # Sinsemilla value-level specification

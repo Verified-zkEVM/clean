@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.PinnedCs
+module
+
+public import Clean.Halo2.Keygen.PinnedCs
+
+@[expose] public section
 
 /-!
 # The VK-match projection preserves evaluation

@@ -1,11 +1,15 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.AddIncomplete
-import Clean.Ironwood.Utilities.DecomposeRunningSum
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.AddIncomplete
+public import Clean.Ironwood.Utilities.DecomposeRunningSum
+
+@[expose] public section
 
 /-!
 The shared core of fixed-base scalar multiplication (`H = 8`, 3-bit windows): `[scalar]B` for a

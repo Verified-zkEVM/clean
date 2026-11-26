@@ -1,16 +1,20 @@
-import Clean.Halo2.Keygen.RichExpression
-import Clean.Halo2.Keygen.CompressSelectors
-import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
-import Clean.Halo2.Keygen.FloorPlanner.Simple
-import Clean.Halo2.Keygen.FloorPlanner.V1SortCorrectness
-import Clean.Halo2.Keygen.PdqsortCorrectness
-import Clean.Halo2.Keygen.PlannerTrace
-import Clean.Halo2.Keygen.Projection
-import Clean.Halo2.Keygen.PinnedCs
-import Clean.Halo2.Keygen.Domain
-import Clean.Halo2.Keygen.Semantics
-import Clean.Halo2.Keygen.Layout
-import Clean.Halo2.Keygen.GateProjection
+module
+
+public import Clean.Halo2.Keygen.RichExpression
+public import Clean.Halo2.Keygen.CompressSelectors
+public import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
+public import Clean.Halo2.Keygen.FloorPlanner.Simple
+public import Clean.Halo2.Keygen.FloorPlanner.V1SortCorrectness
+public import Clean.Halo2.Keygen.PdqsortCorrectness
+public import Clean.Halo2.Keygen.PlannerTrace
+public import Clean.Halo2.Keygen.Projection
+public import Clean.Halo2.Keygen.PinnedCs
+public import Clean.Halo2.Keygen.Domain
+public import Clean.Halo2.Keygen.Semantics
+public import Clean.Halo2.Keygen.Layout
+public import Clean.Halo2.Keygen.GateProjection
+
+@[expose] public section
 
 /-!
 # Halo2 keygen — the circuit-side half of `keygen_vk`

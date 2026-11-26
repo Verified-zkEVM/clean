@@ -1,9 +1,13 @@
-import Mathlib.Data.List.Infix
-import Mathlib.Data.List.Nodup
-import Mathlib.Data.List.Pairwise
-import Mathlib.Data.List.Perm.Basic
-import Mathlib.Data.List.Sort
-import Mathlib.Data.List.TakeDrop
+module
+
+public import Mathlib.Data.List.Infix
+public import Mathlib.Data.List.Nodup
+public import Mathlib.Data.List.Pairwise
+public import Mathlib.Data.List.Perm.Basic
+public import Mathlib.Data.List.Sort
+public import Mathlib.Data.List.TakeDrop
+
+@[expose] public section
 
 set_option backward.do.legacy true
 
@@ -2113,7 +2117,7 @@ private theorem scanned_block_cycle_perm
     simp only [right]
     omega
 
-private def refreshOffsets
+def refreshOffsets
     (block startIdx endIdx : ℕ) (offsets : Array ℕ)
     (keep : ℕ → Bool) : ℕ × ℕ × Array ℕ :=
   if startIdx = endIdx then
@@ -2633,7 +2637,7 @@ private theorem exhausted_right_block_rangeAll
     offset hoffset
   simpa only [haddress] using hgood
 
-private def blockCycleOutput
+def blockCycleOutput
     (array : Array T) (l r : ℕ)
     (offsetsL offsetsR : Array ℕ)
     (startL startR count : ℕ) : Array T :=
@@ -2866,7 +2870,7 @@ private theorem refreshOffsets_bounds
   · simp only [refreshOffsets, ite_eq_right heq]
     exact ⟨hstart, hend heq, trivial, hactive heq⟩
 
-private def blockMutateArray
+def blockMutateArray
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
     (l r blockL blockR : ℕ)
     (offsetsL offsetsR : Array ℕ)
@@ -3669,7 +3673,7 @@ private theorem forIn_step_decreasing_post
             simp only [List.length_cons] at hfuel
             omega)
 
-private structure BlockCoreResult (T : Type) where
+structure BlockCoreResult (T : Type) where
   v : Array T
   l : ℕ
   r : ℕ
@@ -3680,7 +3684,7 @@ private structure BlockCoreResult (T : Type) where
   endR : ℕ
   offsetsR : Array ℕ
 
-private def blockCore
+def blockCore
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
     (l r blockL blockR : ℕ)
     (offsetsL offsetsR : Array ℕ)

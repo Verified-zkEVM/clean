@@ -1,5 +1,9 @@
-import Clean.Halo2.Tactics.ContractBridges
-import Clean.Ironwood.Sinsemilla.HashPieceRound
+module
+
+public import Clean.Halo2.Tactics.ContractBridges
+public import Clean.Ironwood.Sinsemilla.HashPieceRound
+
+@[expose] public section
 
 /-!
 The Sinsemilla hash-word loop and the `hash_piece` bundle over the round gadget

@@ -1,5 +1,9 @@
-import Clean.Halo2.TopLevel
-import Clean.Utils.FieldDomainParams
+module
+
+public import Clean.Halo2.TopLevel
+public import Clean.Utils.FieldDomainParams
+
+@[expose] public section
 
 /-!
 # Field support for a compiled circuit

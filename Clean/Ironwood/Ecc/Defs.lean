@@ -1,11 +1,15 @@
-import Clean.Circuit
-import CompElliptic.CurveForms.ShortWeierstrass
-import Clean.Ironwood.Specs.Pallas
-import Clean.Utils.Tactics
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
+module
+
+public import Clean.Circuit
+public import CompElliptic.CurveForms.ShortWeierstrass
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Utils.Tactics
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+
+@[expose] public section
 
 /-
 Some definitions useful for circuits involving points

@@ -1,5 +1,9 @@
-import Clean.Ironwood.CommitIvk.Bundle
-import Clean.Ironwood.Utilities.LookupRangeCheck
+module
+
+public import Clean.Ironwood.CommitIvk.Bundle
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):

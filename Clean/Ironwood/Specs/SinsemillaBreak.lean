@@ -1,4 +1,8 @@
-import Clean.Ironwood.Specs.Sinsemilla
+module
+
+public import Clean.Ironwood.Specs.Sinsemilla
+
+@[expose] public section
 
 /-!
 # Sinsemilla exceptional cases as computed break data

@@ -1,4 +1,9 @@
-import Clean.Halo2.ConstraintSystem
+module
+
+public import Clean.Halo2.ConstraintSystem
+public import Mathlib.Data.List.Nodup
+
+@[expose] public section
 
 namespace Halo2
 

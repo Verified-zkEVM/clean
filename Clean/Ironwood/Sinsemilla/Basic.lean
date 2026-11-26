@@ -1,9 +1,13 @@
-import Clean.Ironwood.Sinsemilla.ChainTheorems
-import Clean.Halo2
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.Basic
+module
+
+public import Clean.Ironwood.Sinsemilla.ChainTheorems
+public import Clean.Halo2
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.Basic
+
+@[expose] public section
 
 /-!
 The Sinsemilla generator table — the `2^K` independent generators `S(r)` in three fixed columns

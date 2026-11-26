@@ -1,6 +1,10 @@
-import Clean.Ironwood.Ecc.MulFixed
-import Clean.Ironwood.Utilities.LookupRangeCheck
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+module
+
+public import Clean.Ironwood.Ecc.MulFixed
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+
+@[expose] public section
 
 /-!
 Fixed-base scalar multiplication by a base-field element α (`FixedPointBaseField::mul`),
@@ -1265,7 +1269,7 @@ private theorem inner_completeness_dec (cfg : Config) (offset : ℕ)
 
 /-- The inner bundle's completeness, standalone (its own declaration/heartbeat budget —
 the shared-budget split). -/
-private theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
+theorem inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
     FormalRegionCircuit.Completeness
       (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
       pure
@@ -1583,7 +1587,7 @@ def Spec (B : FixedBase) (alpha : Fp) (output : Point Fp) : Prop :=
 
 /-- The region count of `synthesize`: inner mul, complete addition, witness check,
 canonicity checks. -/
-private theorem synthesize_regionCount (B : FixedBase) (cfg : Config)
+theorem synthesize_regionCount (B : FixedBase) (cfg : Config)
     (alpha : AssignedCell Fp) (i : RegionIndex) :
     Operations.regionCount ((synthesize B cfg alpha).operations i) = 4 := by
   simp only [synthesize, witnessCheck13, circuit_norm, operations_assignRegion,

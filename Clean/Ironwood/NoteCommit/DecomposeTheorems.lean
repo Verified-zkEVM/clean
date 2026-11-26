@@ -1,8 +1,12 @@
-import Clean.Circuit
-import Clean.Gadgets.Boolean
-import Clean.Ironwood.NoteCommit.CanonicityTheorems
-import Clean.Utils.Tactics
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Boolean
+public import Clean.Ironwood.NoteCommit.CanonicityTheorems
+public import Clean.Utils.Tactics
+public import Clean.Utils.Tactics.ProvableStructDeriving
+
+@[expose] public section
 
 /-!
 # NoteCommit message-piece decomposition gates

@@ -1,6 +1,10 @@
-import Clean.Halo2.TopLevel
-import Clean.Ironwood.Action.ConfigureCertificates
-import Clean.Ironwood.Action.Spec
+module
+
+public import Clean.Halo2.TopLevel
+public import Clean.Ironwood.Action.ConfigureCertificates
+public import Clean.Ironwood.Action.Spec
+
+@[expose] public section
 
 /-!
 # The deployed Orchard Action as a closed top-level circuit
@@ -79,7 +83,7 @@ The circuit compiler supplies the residual Action environment contract. Table
 contents are deliberately absent: the circuit proofs derive those from their
 respective operational hypotheses.
 -/
-private theorem configured_closesEnvironment
+theorem configured_closesEnvironment
     (assignment : ProofAssignment Fp) :
     let formal := circuit Specs.Sinsemilla.orchardGenerators orchardBases
     formal.EnvAssumptions
@@ -128,7 +132,7 @@ private theorem configured_closesEnvironment
 The deployed proof-carrying Orchard Action circuit: unit synthesis input/output,
 explicit public inputs, and no unfulfilled environment contract at its boundary.
 -/
-private theorem actionSelectorRequirements :
+theorem actionSelectorRequirements :
     (circuit Specs.Sinsemilla.orchardGenerators orchardBases).selectorRequirements
       () {} := by
   dsimp only [FormalCircuit.selectorRequirements, Circuit.circuit,
@@ -215,7 +219,7 @@ def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
 /-- The concrete Action implementation and its opening equation, kept behind an
 opaque reduction barrier. Runtime evaluation still computes the implementation;
 proofs cross the boundary only through the API below. -/
-private opaque actionCircuitPacked :
+opaque actionCircuitPacked :
     { top : TopLevelCircuit Fp Config PublicInputs //
       top = Internal.actionCircuitImpl } :=
   ⟨Internal.actionCircuitImpl, rfl⟩

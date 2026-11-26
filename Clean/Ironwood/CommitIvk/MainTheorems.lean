@@ -1,9 +1,13 @@
-import Clean.Ironwood.CommitIvk.GateTheorems
-import Clean.Ironwood.CommitIvk.ChunkTheorems
-import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Ironwood.CommitIvk.GateTheorems
+public import Clean.Ironwood.CommitIvk.ChunkTheorems
+public import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 # Orchard incoming viewing key commitment

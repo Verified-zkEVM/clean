@@ -1,4 +1,8 @@
-import Clean.Ironwood.Poseidon.Rounds
+module
+
+public import Clean.Ironwood.Poseidon.Rounds
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):

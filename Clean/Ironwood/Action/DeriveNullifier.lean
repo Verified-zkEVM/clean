@@ -1,11 +1,15 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Utils.Tactics.ProvableStructDeriving
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
-import Clean.Ironwood.Poseidon.Hash
-import Clean.Ironwood.Utilities.AddChip
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Utils.Tactics.ProvableStructDeriving
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
+public import Clean.Ironwood.Poseidon.Hash
+public import Clean.Ironwood.Utilities.AddChip
+
+@[expose] public section
 
 /-!
 # Orchard-protocol nullifier derivation
@@ -60,7 +64,7 @@ theorem constantLength_value_two (a b : Fp) :
 
 /-- The region count of `derive_nullifier`: the Poseidon child's three regions, the
 add-chip region, the fixed-base mul's four regions, the final complete addition. -/
-private theorem deriveNullifier_regionCount (K : FixedBase)
+theorem deriveNullifier_regionCount (K : FixedBase)
     (pcfg : Poseidon.Config) (acfg : AddChip.Config)
     (bcfg : Ecc.MulFixed.BaseFieldElem.Config) (ecfg : Ecc.Add.Config)
     (input : Var Input Fp) (i : RegionIndex) :

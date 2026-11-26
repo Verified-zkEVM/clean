@@ -1,7 +1,11 @@
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.CircuitProofStart2
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
+module
+
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.CircuitProofStart2
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+
+@[expose] public section
 
 /-! # Raw-used-bind shape pin for CPS v2
 
@@ -47,10 +51,11 @@ def double : FormalCircuit Fp
   elaborated := {
     keygenRequirements :=
       { configLawful input := Add.add.Configured input.2
-        gates _ configured := configured.toFormal.gates
-        lookups _ configured := configured.toFormal.lookups
-        fixedColumns _ configured := configured.toFormal.fixedColumns
-        permutationColumns _ configured := configured.toFormal.permutationColumns }
+        gates _ configured := (configured.toFormal (name := "complete point addition")).gates
+        lookups _ configured := (configured.toFormal (name := "complete point addition")).lookups
+        fixedColumns _ configured := (configured.toFormal (name := "complete point addition")).fixedColumns
+        permutationColumns _ configured :=
+          (configured.toFormal (name := "complete point addition")).permutationColumns }
     registered := by
       intro configInput counts hconfig input i
       simp only [Configure.output_bind,

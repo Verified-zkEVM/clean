@@ -1,7 +1,11 @@
-import Clean.Circuit.WitnessIR
-import Clean.Circuit.WitnessIRSugar
-import Clean.Circuit.WitnessIRLimbs
-import Clean.Halo2.Provable
+module
+
+public import Clean.Circuit.WitnessIR
+public import Clean.Circuit.WitnessIRSugar
+public import Clean.Circuit.WitnessIRLimbs
+public import Clean.Halo2.Provable
+
+@[expose] public section
 
 /-!
 # Halo2 witness-generation IR

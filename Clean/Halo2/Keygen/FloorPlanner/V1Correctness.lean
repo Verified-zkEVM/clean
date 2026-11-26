@@ -1,6 +1,10 @@
-import Clean.Halo2.Keygen.FloorPlanner.SelectorPlacement
-import Clean.Halo2.Keygen.FloorPlanner.V1
-import Clean.Halo2.Keygen.PdqsortCorrectness
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.SelectorPlacement
+public import Clean.Halo2.Keygen.FloorPlanner.V1
+public import Clean.Halo2.Keygen.PdqsortCorrectness
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 

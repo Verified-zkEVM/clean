@@ -1,5 +1,9 @@
-import Clean.Ironwood.Action.PublicInput
-import Clean.Ironwood.Action.RealBases
+module
+
+public import Clean.Ironwood.Action.PublicInput
+public import Clean.Ironwood.Action.RealBases
+
+@[expose] public section
 
 /-!
 # The Orchard Action specification

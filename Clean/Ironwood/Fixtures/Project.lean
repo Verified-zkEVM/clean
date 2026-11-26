@@ -1,5 +1,9 @@
-import Clean.Ironwood.Fixtures.FixtureTypes
-import Clean.Halo2.Keygen
+module
+
+public import Clean.Ironwood.Fixtures.FixtureTypes
+public import Clean.Halo2.Keygen
+
+@[expose] public section
 
 /-!
 # `projectCS` — Halo2-Clean `ConstraintSystem` → `CsFixture`
