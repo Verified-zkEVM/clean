@@ -16,7 +16,7 @@ public import Clean.Examples.FibonacciVm.WitnessGenerationTest
 public import Clean.Examples.FemtoCairo.FlatAirTest
 public import Clean.Examples.OpcodeVm.WitnessGenerationTest
 public import Clean.Examples.BinaryFibonacci.WitnessGenerationTest
-public import Clean.Utils.Test.TestLookup
+public import Clean.Halo2.Tests.TestLookup
 public import Clean.Utils.Test.SimpMatchRegression
 public import Clean.Halo2.Tests.TestProvableTypeSimp
 public import Clean.Halo2.Tests.TestCircuitTypeDeriving

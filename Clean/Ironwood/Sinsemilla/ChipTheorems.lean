@@ -32,7 +32,6 @@ row-layout machinery. The synthesis-level circuits that enable them live in
 
 namespace Zcash.Circuits.Sinsemilla.Chip
 
-open Clean
 open Ecc
 
 /-! ### Initial `y_Q` gate -/
@@ -46,7 +45,7 @@ structure Row (F : Type) where
 deriving ProvableStruct
 
 def Params.toExpr (params : Params Fp) :
-    Params (Expression Fp) where
+    Params (Clean.Expression Fp) where
   yQ := params.yQ
 
 def Spec (params : Params Fp) (row : Row Fp) : Prop :=
@@ -66,7 +65,7 @@ structure Row (F : Type) where
 deriving ProvableStruct
 
 def Params.toExpr (params : Params Fp) :
-    Params (Expression Fp) where
+    Params (Clean.Expression Fp) where
   qS2 := params.qS2
 
 def qS3 {K : Type} [One K] [Sub K] [Mul K] (params : Params K) : K :=

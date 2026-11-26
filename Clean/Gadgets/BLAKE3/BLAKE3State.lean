@@ -6,8 +6,6 @@ public import Clean.Specs.BLAKE3
 
 @[expose] public section
 
-open Clean
-
 namespace Gadgets.BLAKE3
 open Specs.BLAKE3
 

@@ -5,13 +5,11 @@ public import Clean.Examples.BinaryFibonacci.Ensemble
 -- `native_decide` runs compiled code from this module.
 public meta import Clean.Examples.BinaryFibonacci.Ensemble
 
-open Clean
-
 @[expose] public section
 
 namespace BinaryFibonacci.WitnessGenerationTest
 
-open Air.Flat.WitnessGeneration
+open Clean.Air.Flat.WitnessGeneration
 
 def steps : ℕ := 100
 

@@ -4,8 +4,6 @@ public import Clean.Backends.Circom.TestWasmCompile
 
 public meta import Clean.Backends.Circom.TestWasmCompile
 
-open Clean
-
 @[expose] public section
 
 /-!
@@ -31,7 +29,7 @@ BN254 layout. Include empty tables as an ordinary default case. -/
   let p := Specs.Poseidon.BN254_PRIME
   let nw := 4
   let input := 42
-  let ops : List (Operation Specs.Poseidon.F) :=
+  let ops : List (Clean.Operation Specs.Poseidon.F) :=
     [.witness 8 (.ir [] (.bitsOf (.expr (.var ⟨0⟩)))),
      .witness 1 (.ir [] (.lit #v[.listGet [] (.const 0)]))]
   let wit ← compileAndWitness p 1 ["in"] [] ops nw
@@ -47,9 +45,9 @@ zero-divisor convention and compositions of arithmetic operations. -/
 #eval! withTools ["snarkjs"] do
   for nw in [1, 2] do
     for (x, y) in [(17, 3), (17, 0)] do
-      let a : U64Expr (F p1009) := .const (UInt64.ofNat x)
-      let b : U64Expr (F p1009) := .const (UInt64.ofNat y)
-      let ops : List (Operation (F p1009)) :=
+      let a : Clean.U64Expr (F p1009) := .const (UInt64.ofNat x)
+      let b : Clean.U64Expr (F p1009) := .const (UInt64.ofNat y)
+      let ops : List (Clean.Operation (F p1009)) :=
         [.witness 3 (.ir [] (.lit #v[
           .ofU64 (.div a b), .ofU64 (.mod a b),
           .ofU64 (.add (.div a b) (.mod a b))]))]

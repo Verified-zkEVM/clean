@@ -4,7 +4,6 @@ public import Clean.Circuit
 
 @[expose] public section
 
-open Clean
 namespace Examples.FemtoCairo.Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

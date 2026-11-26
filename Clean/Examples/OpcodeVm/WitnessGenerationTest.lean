@@ -7,13 +7,11 @@ public import Clean.Utils.Primes
 public meta import Clean.Examples.OpcodeVm.Ensemble
 public meta import Clean.Utils.Primes
 
-open Clean
-
 @[expose] public section
 
 namespace OpcodeVm.WitnessGenerationTest
 
-open Air.Flat.WitnessGeneration
+open Clean.Air.Flat.WitnessGeneration
 
 def result (final : F pBabybear) : Except String (List ℕ × Bool × Bool) :=
   match generate (formalEnsemble exampleProgram exampleProgram_length).ensemble 1000

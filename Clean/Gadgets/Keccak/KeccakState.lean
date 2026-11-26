@@ -7,8 +7,6 @@ public import Clean.Specs.Keccak256
 
 @[expose] public section
 
-open Clean
-
 namespace Gadgets.Keccak256
 open Specs.Keccak256
 
@@ -77,7 +75,7 @@ lemma KeccakRow.normalized_value_ext (row : KeccakRow (F p)) (rhs : Vector ℕ 5
 
 -- circuits
 
-def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
+def KeccakBlock.normalized : Clean.FormalAssertion (F p) KeccakBlock where
   main block := .forEach block U64.AssertNormalized.circuit
   Assumptions _ := True
   Spec block := block.Normalized

@@ -2,8 +2,6 @@ module
 
 public import Clean.Circuit.Provable
 
-open Clean
-
 /-! # Statically optional circuit columns
 
 `ProvableOptional` selects a layout using a static Boolean parameter and reuses

@@ -19,8 +19,6 @@ Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 
 namespace Zcash.Circuits.Ecc
 
-open Clean
-
 -- A helper struct for single-row double-and-add using incomplete addition.
 structure DoubleAndAddRow (F : Type) where
   -- x-coordinate of the accumulator in each double-and-add iteration.

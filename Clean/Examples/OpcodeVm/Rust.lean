@@ -4,8 +4,6 @@ public import Clean.Backends.Plonky3.Print
 public import Clean.Examples.OpcodeVm.Ensemble
 public import Clean.Utils.Primes
 
-open Clean
-
 @[expose] public section
 
 def main : IO Unit := do

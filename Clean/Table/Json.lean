@@ -6,8 +6,6 @@ public import Clean.Circuit.Json
 
 @[expose] public section
 
-open Clean
-
 open Lean
 
 instance : ToJson RowIndex where

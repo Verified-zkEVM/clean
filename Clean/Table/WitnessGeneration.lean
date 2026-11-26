@@ -4,8 +4,6 @@ public import Clean.Table.Basic
 
 @[expose] public section
 
-open Clean
-
 variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [FiniteField F]
 
 /--
@@ -61,7 +59,7 @@ def generateNextRow (tc : TableConstraint W S F Unit) (cur_row : Array F)
         else panic! s!"Invalid variable index {i} in environment"
 
     -- evaluate the witness generators
-      let provEnv : ProverEnvironment F := { get := env, data, hint _ _ := #[] }
+      let provEnv : Clean.ProverEnvironment F := { get := env, data, hint _ _ := #[] }
       let wit := compute provEnv
 
       let next_row := if h : idx < assignment.offset then

@@ -6,8 +6,6 @@ public import Clean.Circomlib.CompConstant
 
 @[expose] public section
 
-open Clean
-
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/aliascheck.circom
@@ -35,12 +33,12 @@ template AliasCheck() {
     compConstant.out === 0;
 }
 -/
-def main (input : Vector (Expression (F p)) 254) := do
+def main (input : Vector (Clean.Expression (F p)) 254) := do
   -- CompConstant(-1) means we're comparing against p-1 (since -1 ≡ p-1 mod p)
   let comp_out ← CompConstant.circuit (p - 1) hppre254.elim input
   comp_out === 0
 
-def circuit : FormalAssertion (F p) (fields 254) where
+def circuit : Clean.FormalAssertion (F p) (fields 254) where
   main
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1

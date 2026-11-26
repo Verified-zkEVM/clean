@@ -16,7 +16,7 @@ definition itself) and documents the usage rule.
 
 ## When to use `UnconstrainedNative` vs deriving from a cell (the hard rule)
 
-Per `Clean/Halo2/halo2-clean-requirements.md` ("No prover information at synthesis time"):
+Per `Clean/Halo2/README.md` ("No prover information at synthesis time"):
 
 - **Derive from a cell** whenever the Rust circuit computes the prover-side value from a
   *witnessed cell* — e.g. variable-base scalar mul's bits come from

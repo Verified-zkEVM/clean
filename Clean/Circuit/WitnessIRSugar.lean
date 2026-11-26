@@ -28,8 +28,6 @@ witnessVectorProgram 32 do
 
 @[expose] public section
 
-open Clean
-
 variable {F : Type} {α β : Type}
 
 namespace Clean
@@ -422,7 +420,7 @@ def MOver (F V : Type) (α : Type) : Type :=
   Array (StepOver F V) → α × Array (StepOver F V)
 
 /-- Main Clean's witness-program builder (variables are circuit `Expression`s). -/
-abbrev M (F : Type) : Type → Type := MOver F (Expression F)
+abbrev M (F : Type) : Type → Type := MOver F (Clean.Expression F)
 
 instance {V : Type} : Monad (MOver F V) where
   pure a := fun s => (a, s)

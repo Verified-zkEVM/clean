@@ -3,8 +3,6 @@ module
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Utils.Primes
 
-open Clean
-
 @[expose] public section
 
 /-!

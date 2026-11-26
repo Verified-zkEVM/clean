@@ -2,8 +2,6 @@ module
 
 public import Clean.Air.OrderedChannel
 
-open Clean
-
 @[expose] public section
 
 /-!

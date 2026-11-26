@@ -21,8 +21,6 @@ This module mirrors `halo2_poseidon/src/fp.rs` for the Pallas-base constants use
 
 namespace Zcash.Circuits.Poseidon.Permute
 
-open Clean
-
 /-- Width-3 Poseidon state used by Orchard's `P128Pow5T3`. -/
 structure State (F : Type) where
   x0 : F

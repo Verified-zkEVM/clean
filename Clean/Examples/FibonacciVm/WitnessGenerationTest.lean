@@ -7,8 +7,6 @@ public import Clean.Utils.Primes
 public meta import Clean.Examples.FibonacciVm.Ensemble
 public meta import Clean.Utils.Primes
 
-open Clean
-
 @[expose] public section
 
 namespace Clean.Air.Flat.WitnessGenerationTest

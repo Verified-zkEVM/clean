@@ -17,8 +17,6 @@ weighted sum of its sub-pieces (`orchard note_commit.rs` `Decompose*`).
 
 namespace Zcash.Circuits.NoteCommit
 
-open Clean
-
 namespace DecomposeB.Gate
 
 structure Row (F : Type) where

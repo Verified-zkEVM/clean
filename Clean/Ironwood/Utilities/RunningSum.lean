@@ -19,8 +19,6 @@ fixed-base scalar-multiplication canonicity proofs.
 
 namespace Zcash.Circuits
 
-open Clean
-
 namespace Utilities
 
 variable {F : Type} [FiniteField F]

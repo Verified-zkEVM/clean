@@ -5,8 +5,6 @@ public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Examples.FemtoCairo.FlatAirTestData
 public import Clean.Utils.Primes
 
-open Clean
-
 @[expose] public section
 
 open Examples.FemtoCairo

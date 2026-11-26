@@ -4,8 +4,6 @@ public meta import Lean
 public meta import Lean.Elab.Deriving.Util
 public meta import Clean.Circuit.Provable
 
-open Clean
-
 /-!
   # Deriving handlers for ProvableStruct and CircuitType
 
@@ -511,11 +509,11 @@ structure CircuitTypeProfile where
 
 /-- Main Clean's profile (`Environment`/`ProverEnvironment`). -/
 def mainCircuitTypeProfile : CircuitTypeProfile where
-  classConst := ``CircuitType
-  varConst := ``CircuitType.Var
-  valueConst := ``CircuitType.Value
-  proverValueConst := ``CircuitType.ProverValue
-  derivedConst := ``DerivedCircuitType
+  classConst := ``Clean.CircuitType
+  varConst := ``Clean.CircuitType.Var
+  valueConst := ``Clean.CircuitType.Value
+  proverValueConst := ``Clean.CircuitType.ProverValue
+  derivedConst := ``Clean.DerivedCircuitType
 
 /--
   Generate a companion structure for one of the `CircuitType` views of a
@@ -845,6 +843,6 @@ def circuitTypeDerivingHandlerWith (profile : CircuitTypeProfile)
 def circuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool :=
   circuitTypeDerivingHandlerWith mainCircuitTypeProfile declNames
 
-initialize registerDerivingHandler ``CircuitType circuitTypeDerivingHandler
+initialize registerDerivingHandler ``Clean.CircuitType circuitTypeDerivingHandler
 
 end ProvableStructDeriving

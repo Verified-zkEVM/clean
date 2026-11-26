@@ -5,8 +5,6 @@ public import Clean.Utils.Field
 
 @[expose] public section
 
-open Clean
-
 namespace Gadgets
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
@@ -14,7 +12,7 @@ variable [p_large_enough: Fact (p > 512)]
 def fromByte (x : Fin 256) : F p :=
   FieldUtils.natToField x.val (by linarith [x.is_lt, p_large_enough.elim])
 
-def ByteTable : Table (F p) field := .fromStatic {
+def ByteTable : Clean.Table (F p) field := .fromStatic {
   name := "Bytes"
   length := 256
 

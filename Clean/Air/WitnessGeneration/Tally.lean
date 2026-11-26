@@ -4,8 +4,6 @@ public import Clean.Air.WitnessGeneration.Generation
 public import Std.Data.HashMap
 public import Std.Data.TreeMap
 
-open Clean
-
 @[expose] public section
 
 /-!

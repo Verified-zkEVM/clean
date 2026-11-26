@@ -6,8 +6,6 @@ public import Clean.Circomlib.CompConstant
 
 @[expose] public section
 
-open Clean
-
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/sign.circom
@@ -44,11 +42,11 @@ template Sign() {
 }
 -/
 
-def main (input : Vector (Expression (F p)) 254) :=
+def main (input : Vector (Clean.Expression (F p)) 254) :=
   -- Use (p-1)/2 as the constant for comparison
   CompConstant.circuit ((p - 1) / 2) hppre_half_254 input
 
-def circuit : FormalCircuit (F p) (fields 254) field where
+def circuit : Clean.FormalCircuit (F p) (fields 254) field where
   main
 
   Assumptions input :=

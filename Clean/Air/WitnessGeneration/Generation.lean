@@ -3,8 +3,6 @@ module
 public import Clean.Air.RowProgram
 public import Clean.Circuit.Channel
 
-open Clean
-
 @[expose] public section
 
 /-!

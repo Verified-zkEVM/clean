@@ -38,7 +38,6 @@ the shared canonicity facts in `NoteCommit` (`CanonicityTheorems`).
 
 namespace Zcash.Circuits.CommitIvk.Gate
 
-open Clean
 open Specs (bitrange bitrange_lt bitrange_add bitrange_mod)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 open NoteCommit (pallasBaseCard_eq tPNat tP_eq val_limb2 val_shift

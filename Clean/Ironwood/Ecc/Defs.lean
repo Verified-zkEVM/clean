@@ -16,8 +16,6 @@ Some definitions useful for circuits involving points
 -/
 namespace Zcash.Circuits
 
-open Clean
-
 variable {F : Type} [FiniteField F]
 
 structure CurrentNext (F : Type) where

@@ -25,6 +25,14 @@ example {F : Type} [FiniteField F] (ctx : Ctx F) (a b : FExpr F) :
       FlatRow.mk (Witgen.FExprOver.eval ctx a) (Witgen.FExprOver.eval ctx b) := by
   simp only [circuit_norm]
 
+example {F : Type} [FiniteField F] (ctx : Ctx F) (row : FlatRow (FExpr F)) :
+    Witgen.FExprOver.eval ctx row.first = (Witgen.eval ctx row).first := by
+  simp only [circuit_norm]
+
+example {F : Type} [FiniteField F] (ctx : Ctx F) (row : FlatRow (FExpr F)) :
+    Witgen.FExprOver.eval ctx row.second = (Witgen.eval ctx row).second := by
+  simp only [circuit_norm]
+
 structure TestRow (F : Type) where
   first : F
   second : F

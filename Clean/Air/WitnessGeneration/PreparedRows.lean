@@ -2,8 +2,6 @@ module
 
 public import Clean.Air.FlatEnsemble
 
-open Clean
-
 @[expose] public section
 
 /-!

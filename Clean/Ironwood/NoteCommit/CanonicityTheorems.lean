@@ -26,8 +26,6 @@ reference to any particular circuit cell.
 
 namespace Zcash.Circuits.NoteCommit
 
-open Clean
-
 variable {F : Type} [FiniteField F]
 
 theorem mul_eq_zero_of_or {a b : F} (h : a = 0 ∨ b = 0) : a * b = 0 := by

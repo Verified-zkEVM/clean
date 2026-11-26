@@ -5,8 +5,6 @@ public import Clean.Air.WitnessGeneration.Tally
 public import Clean.Air.WitnessGeneration.Validation
 public import Clean.Circuit.WitnessGeneration
 
-open Clean
-
 @[expose] public section
 
 /-!

@@ -10,8 +10,6 @@ public import Mathlib.Data.List.Sort
 
 @[expose] public section
 
-open Clean
-
 /-
 The purpose of this file is to define a memory model that can be checked using the Memory in the Head paradigm,
 often also called "offline memory checking". [Blu+91]

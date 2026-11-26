@@ -24,14 +24,12 @@ width 3 and rate 2.
 
 namespace Zcash.Circuits.Poseidon
 
-open Clean
-
 def pow5 {K : Type} [Mul K] (x : K) : K :=
   let x2 := x * x
   x2 * x2 * x
 
 /-- `pow5` commutes with witness-IR evaluation, since it is built purely from `*`. -/
-theorem pow5_FExpr_eval (ctx : Ctx Fp) (x : FExpr Fp) :
+theorem pow5_FExpr_eval (ctx : Clean.Ctx Fp) (x : Clean.FExpr Fp) :
     Witgen.FExprOver.eval ctx (pow5 x) = pow5 (Witgen.FExprOver.eval ctx x) := by
   simp [pow5, circuit_norm]
 
@@ -62,7 +60,7 @@ structure Input (F : Type) where
 deriving ProvableStruct
 
 def Params.toExpr (params : Params Fp) :
-    Params (Expression Fp) where
+    Params (Clean.Expression Fp) where
   rcA0 := params.rcA0
   rcA1 := params.rcA1
   rcA2 := params.rcA2
@@ -158,7 +156,7 @@ structure Input (F : Type) where
 deriving ProvableStruct
 
 def Params.toExpr (params : Params Fp) :
-    Params (Expression Fp) where
+    Params (Clean.Expression Fp) where
   rcA0 := params.rcA0
   rcA1 := params.rcA1
   rcA2 := params.rcA2
@@ -185,7 +183,7 @@ def Params.toExpr (params : Params Fp) :
   mInv22 := params.mInv22
 
 def Params.toFExpr (params : Params Fp) :
-    Params (FExpr Fp) where
+    Params (Clean.FExpr Fp) where
   rcA0 := params.rcA0
   rcA1 := params.rcA1
   rcA2 := params.rcA2

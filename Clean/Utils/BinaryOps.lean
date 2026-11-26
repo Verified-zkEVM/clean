@@ -5,8 +5,6 @@ public import Clean.Utils.Bitwise
 public import Clean.Utils.Field
 public import Clean.Gadgets.Boolean
 
-open Clean
-
 /-!
 # Binary Operations Utilities
 

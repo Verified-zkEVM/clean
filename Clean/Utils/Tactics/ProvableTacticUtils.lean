@@ -6,8 +6,6 @@ public meta import Clean.Circuit.Provable
 
 public meta section
 
-open Clean
-
 open Lean Meta Elab Tactic
 
 /-- Check if an expression is a constructor application (ends with .mk).

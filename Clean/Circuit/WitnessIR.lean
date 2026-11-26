@@ -50,8 +50,6 @@ range, a field-element bit decomposition, or an append.
 
 @[expose] public section
 
-open Clean
-
 variable {F V Env : Type}
 
 namespace Witgen
@@ -822,18 +820,26 @@ private meta def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   thms ← thms.addDeclToUnfold ``ProvableStruct.fromComponents
   let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
   let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
-  unless ← withDefault <| isDefEq rhsSimp.expr e do
-    -- custom-`ProvableType` route (e.g. `Point`): the internal `ProvableStruct` set cannot
-    -- reduce the candidate, but the rewrite is still definitionally sound — accept by
-    -- unrestricted defeq, the kernel re-checks (cf. `evalStructLiteral`'s custom route).
-    if ← withTransparency .all (isDefEq rhs e) then
-      return .done { expr := rhs, proof? := none }
+  if ← withDefault <| isDefEq rhsSimp.expr e then
+    -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.
+    -- Return `.done` rather than `.visit` so the outer simplifier keeps the row-level shape and can
+    -- continue from there, instead of immediately descending back into scalar projections.
+    let result ← rhsSimp.mkEqSymm rhs
+    return .done result
+
+  -- custom-`ProvableType` route (e.g. `Point`): reduce `rhs` using the public vector/array map
+  -- lemmas (cf. `evalStructLiteral`'s custom route) rather than unfolding with `.all` transparency.
+  let mut customThms : SimpTheorems := {}
+  for name in [``Witgen.eval, ``ProvableType.toElements, ``ProvableType.fromElements] do
+    customThms ← customThms.addDeclToUnfold name
+  for name in [``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil] do
+    customThms ← customThms.addConst name
+  let customSimpCtx ← Simp.mkContext (simpTheorems := #[customThms])
+  let (customSimp, _) ← Meta.simp rhs customSimpCtx #[]
+  unless ← withDefault <| isDefEq customSimp.expr e do
     return Simp.Step.continue
 
-  -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.
-  -- Return `.done` rather than `.visit` so the outer simplifier keeps the row-level shape and can
-  -- continue from there, instead of immediately descending back into scalar projections.
-  let result ← rhsSimp.mkEqSymm rhs
+  let result ← customSimp.mkEqSymm rhs
   return .done result
 
 simproc evalProjection (Witgen.FExprOver.eval _ _) := evalProjectionSimproc

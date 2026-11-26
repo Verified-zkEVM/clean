@@ -6,17 +6,15 @@ public import Clean.Ironwood.Utilities.LookupRangeCheck
 
 @[expose] public section
 
-open Clean
-
 /-!
-Shape / composition regression tests for the lookup axis (`lookup-design.md` §2.2/§2.4).
+Shape / composition regression tests for the lookup axis.
 
-Each `example` pins a claim the design's normal-form conventions depend on:
+Each `example` pins a claim the normal-form conventions depend on:
 
 - (a) an `enableLookup` op's `Constraints` reduces under `circuit_norm` to the membership
   existential over the typed-accessor atoms (`env.advice`/`env.fixed`), with **no record
   literals** — the syntactic-pin guard. Pinned for BOTH per-row activation variants of the
-  range-check argument (`lookup-design.md` §1.4): a two-selector enable
+  range-check argument: a two-selector enable
   (`[qLookup, qRunning]`, running-sum row) where the gated input reduces to the running
   word `z_cur − 2^K·z_next`, and a one-selector enable (`[qLookup]`, short row —
   `q_running` OFF) where the *same* argument's input reduces to `z_cur`. This pair is the
@@ -38,8 +36,8 @@ reduces to literals in the shape pins below. -/
 def qLookup : ComplexSelector := ⟨0⟩
 def qRunning : ComplexSelector := ⟨1⟩
 
-/-- The range-check lookup argument, verbatim input shape from `lookup-design.md` §1.4
-(K = 4): `q_lookup · (q_running · (z_cur − 2^K·z_next) + (1 − q_running) · z_cur)`,
+/-- The range-check lookup argument (K = 4):
+`q_lookup · (q_running · (z_cur − 2^K·z_next) + (1 − q_running) · z_cur)`,
 table = the table column's rotation-0 fixed query. ONE argument whose input reduces to
 *different* words depending on which selectors are enabled at the row. -/
 def rcArg (z : Column .advice) (tbl : TableColumn) : LookupArgument Fp where

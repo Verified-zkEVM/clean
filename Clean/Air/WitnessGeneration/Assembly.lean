@@ -2,8 +2,6 @@ module
 
 public import Clean.Air.WitnessGeneration.State
 
-open Clean
-
 @[expose] public section
 
 /-!
