@@ -304,7 +304,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
                 ((LookupRangeCheck.witnessShortCheck 10 9 configInput.2
                   (k0Wit input.y)).nextRegionIndex i))
           have hjp := LookupRangeCheck.witnessCheck_output_cells_assigned
-            10 13 false synth._proof_2 configInput.2
+            10 13 false (by simp) configInput.2
               (jPrimeWit
                 ((LookupRangeCheck.witnessCheckDecomposed configInput.2
                   (jWit wlsb input.y)).output (i + 2)).z0) (i + 3)
@@ -376,7 +376,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
         refine ⟨LookupRangeCheck.witnessCheckDecomposed_lookupActivationsWellFormed
           cfg.2 (jWit wlsb input.y) (i + 2), ?_⟩
         refine ⟨LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
-          10 13 false synth._proof_2 cfg.2 _ (i + 3), ?_⟩
+          10 13 false (by simp) cfg.2 _ (i + 3), ?_⟩
         exact (gateChild wlsb input).call_lookupActivationsWellFormed _ _ _
       lookupSelectorAnchorRequirements cfg _ _ :=
         LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
@@ -394,7 +394,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
             cfg.2 (jWit wlsb input.y) (i + 2) anchor hanchor
         apply Operations.LookupSelectorsAnchoredBy.append
         · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
-            10 13 false synth._proof_2 cfg.2 _ (i + 3) anchor hanchor
+            10 13 false (by simp) cfg.2 _ (i + 3) anchor hanchor
         · exact (gateChild wlsb input).call_lookupSelectorsAnchoredBy
             cfg.1
             (FormalCircuit.Configured.ofOutput
@@ -536,8 +536,8 @@ def circuit (wlsb : WitgenIR Fp 1) :
         < 2 ^ 250 := by
       rw [hjval]; exact bitrange_lt _ _ _
     have hjE : (show Fp from (LookupRangeCheck.rangeCheckAtDecomposed 25
-          LookupRangeCheck.witnessCheckDecomposed._proof_1
-          LookupRangeCheck.witnessCheckDecomposed._proof_2).extract cfg.2 0 () (i₀ + 2)
+          (by norm_num)
+          (by norm_num)).extract cfg.2 0 () (i₀ + 2)
         ({ place := place, env := env } : Placed ProverEnvironment Fp).toEnvironment).val
         < 2 ^ (10 * 25) := by
       rw [decomposed_extract_cells]

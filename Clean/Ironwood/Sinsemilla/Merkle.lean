@@ -1165,6 +1165,8 @@ so Lean must unfold it while checking implicit arguments. -/
 @[implicit_reducible]
 def merkleNs : List ℕ := [24, 1, 24]
 
+theorem merkleNs_ne_nil : merkleNs ≠ [] := by decide
+
 /-- `MerkleInstructions::hash_layer`, layouter-level, in the Rust region sequence: witness `a`,
 short-range-check `b_1`/`b_2` (5 bits), witness `b`/`c`, `hash_to_point` (the `hashMessage`
 region), the `"Check piece decomposition"` gate region. Output: the hash point's `x` cell. -/
@@ -1181,7 +1183,7 @@ def synthesize (G : Generators) (cfg : Config)
   let pb ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wbWit input.left input.right)
   let pc ← HashToPoint.witnessMessagePiece cfg.sinsemilla (wcWit input.right)
   -- the hash (the formal hash_to_point bundle)
-  let out ← HashToPoint.hashMessage G merkleNs cfg.sinsemilla Q hQ (by decide)
+  let out ← HashToPoint.hashMessage G merkleNs cfg.sinsemilla Q hQ merkleNs_ne_nil
     ⟨#v[pa, pb, pc]⟩
   -- the decomposition-gate region
   let _ ← assignRegion "Check piece decomposition"
@@ -1664,7 +1666,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           Circuit.operations_pure, operations_assignRegion,
           keygen_norm, keygen_spine]
         exact (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
-            HashLayer.synthesize._proof_1)
+            HashLayer.merkleNs_ne_nil)
           |>.call_lookupSelectorAssignmentsAgree
             configInput.1.sinsemilla hconfig.2.1 _ _
       fixedWritesLawful := by
@@ -1804,7 +1806,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                       simpa only [Fin.getElem_fin] using
                         (HashToPoint.hashMessage_output_z1_cell_assigned
                           G merkleNs configInput.1.sinsemilla Q hQ
-                            HashLayer.synthesize._proof_1
+                            HashLayer.merkleNs_ne_nil
                             { pieces := #v[
                                 (HashToPoint.witnessMessagePiece configInput.1.sinsemilla
                                   (waWit l input.left)).output i,
@@ -1817,7 +1819,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                       simpa only [Fin.getElem_fin] using
                         (HashToPoint.hashMessage_output_z1_cell_assigned
                           G merkleNs configInput.1.sinsemilla Q hQ
-                            HashLayer.synthesize._proof_1
+                            HashLayer.merkleNs_ne_nil
                             { pieces := #v[
                                 (HashToPoint.witnessMessagePiece configInput.1.sinsemilla
                                   (waWit l input.left)).output i,
@@ -1857,7 +1859,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         · keygen_registration [HashToPoint.witnessMessagePiece]
         constructor
         · simpa only [HashToPoint.hashMessage, Operations.LookupActivationsWellFormed] using
-            (HashToPoint.hashCircuit G merkleNs Q hQ HashLayer.synthesize._proof_1)
+            (HashToPoint.hashCircuit G merkleNs Q hQ HashLayer.merkleNs_ne_nil)
               |>.call_lookupActivationsWellFormed config.1.sinsemilla _ _
         · constructor
           · exact (Gate.circuit (l : Fp)).call_lookupActivationsWellFormed
@@ -1941,7 +1943,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
       Vector.getElem_ofFn] at hGateS hPC hb1 hb2
     -- land the running-sum extraction on the zsFam family and unpack the per-piece facts
     rw [show ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
-          HashLayer.synthesize._proof_1).extract
+          HashLayer.merkleNs_ne_nil).extract
           cfg.1.sinsemilla
           { pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
                          AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
@@ -2080,13 +2082,13 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     obtain ⟨⟨hbA, hbB, hbC⟩, hhchunks⟩ := hhp
     -- the hash child's honest-prover precondition (used by the leaf AND the derived run)
     have hPAhash : (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
-        HashLayer.synthesize._proof_1).ProverAssumptions
+        HashLayer.merkleNs_ne_nil).ProverAssumptions
         (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) ({ pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
             AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
             AssignedCell.of (i₀ + 2 + 2) 0 cfg.1.sinsemilla.witnessPieces] }
           : Var (Sinsemilla.Chain.Inputs HashLayer.merkleNs.length) Fp))
         ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
-          HashLayer.synthesize._proof_1).extract
+          HashLayer.merkleNs_ne_nil).extract
           cfg.1.sinsemilla
           { pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
               AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
@@ -2139,7 +2141,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     -- the hash child's honest run: the verifier Spec (for the z_1 values) + the honest PS
     have hder := Halo2.SubcircuitRw.layouter_completeness_derived_placed
       (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
-        HashLayer.synthesize._proof_1)
+        HashLayer.merkleNs_ne_nil)
       cfg.1.sinsemilla (i₀ + 3 + 2) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
           AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
@@ -2154,7 +2156,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     try simp only [Placed.toEnvironment_mk] at hPCH hZsH
     -- the running-sum families and the z_1 sums (the soundness-side extraction)
     rw [show ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
-          HashLayer.synthesize._proof_1).extract
+          HashLayer.merkleNs_ne_nil).extract
           cfg.1.sinsemilla
           { pieces := #v[AssignedCell.of i₀ 0 cfg.1.sinsemilla.witnessPieces,
               AssignedCell.of (i₀ + 1 + 2) 0 cfg.1.sinsemilla.witnessPieces,
@@ -2270,7 +2272,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         exact bitrange_lt _ _ _
     · -- the hash
       refine Halo2.SubcircuitRw.layouter_completeness_leaf_placed
-        (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ HashLayer.synthesize._proof_1)
+        (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ HashLayer.merkleNs_ne_nil)
           cfg.1.sinsemilla (i₀ + 3 + 2) (⟨place, env⟩ : Placed ProverEnvironment Fp) _ hWhash
         ⟨?_, trivial, ?_⟩
       · exact _hE.1

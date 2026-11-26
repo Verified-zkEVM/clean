@@ -186,14 +186,14 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
                 (gateChild wb1 wd1) configInput.1 {} (by keygen_registration))
             intro cell hcell
             have ha := LookupRangeCheck.witnessCheck_output_cells_assigned
-              10 13 false synth._proof_2 configInput.2 (aPrimeWit input.a) i
+              10 13 false (by simp) configInput.2 (aPrimeWit input.a) i
             have hb := LookupRangeCheck.witnessCheck_output_cells_assigned
-              10 14 false synth._proof_4 configInput.2
+              10 14 false (by simp) configInput.2
                 (b2CPrimeWit input.b2 input.c)
                 ((LookupRangeCheck.witnessCheck 10 13 false configInput.2
                   (aPrimeWit input.a)).nextRegionIndex i)
             have hregion := LookupRangeCheck.witnessCheck_regionCount
-              10 13 false synth._proof_2 configInput.2 (aPrimeWit input.a) i
+              10 13 false (by simp) configInput.2 (aPrimeWit input.a) i
             dsimp only at ha hb
             rw [FormalCircuit.Configured.inputCells,
               gateChild_inputCells_eq] at hcell
@@ -217,20 +217,20 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
             · rw [hregion]
               exact Or.inr (by
                 simpa only [LookupRangeCheck.witnessCheck_nextRegionIndex
-                  10 13 false synth._proof_2 configInput.2 (aPrimeWit input.a) i]
+                  10 13 false (by simp) configInput.2 (aPrimeWit input.a) i]
                   using hb.1)
             · rw [hregion]
               exact Or.inr (by
                 simpa only [LookupRangeCheck.witnessCheck_nextRegionIndex
-                  10 13 false synth._proof_2 configInput.2 (aPrimeWit input.a) i]
+                  10 13 false (by simp) configInput.2 (aPrimeWit input.a) i]
                   using hb.2)
       lookupActivationsWellFormed := by
         intro cfg input i
         simp only [synth, circuit_norm, List.forall_append]
         refine ⟨LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
-          10 13 false synth._proof_2 cfg.2 (aPrimeWit input.a) i, ?_⟩
+          10 13 false (by simp) cfg.2 (aPrimeWit input.a) i, ?_⟩
         refine ⟨LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
-          10 14 false synth._proof_4 cfg.2 (b2CPrimeWit input.b2 input.c)
+          10 14 false (by simp) cfg.2 (b2CPrimeWit input.b2 input.c)
             ((LookupRangeCheck.witnessCheck 10 13 false cfg.2
               (aPrimeWit input.a)).nextRegionIndex i), ?_⟩
         exact (gateChild wb1 wd1).call_lookupActivationsWellFormed _ _ _
@@ -242,11 +242,11 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
           List.append_nil]
         apply Operations.LookupSelectorsAnchoredBy.append
         · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
-            10 13 false synth._proof_2 cfg.2 (aPrimeWit input.a) i
+            10 13 false (by simp) cfg.2 (aPrimeWit input.a) i
             anchor hanchor
         apply Operations.LookupSelectorsAnchoredBy.append
         · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
-            10 14 false synth._proof_4 cfg.2 (b2CPrimeWit input.b2 input.c)
+            10 14 false (by simp) cfg.2 (b2CPrimeWit input.b2 input.c)
             ((LookupRangeCheck.witnessCheck 10 13 false cfg.2
               (aPrimeWit input.a)).nextRegionIndex i) anchor hanchor
         · exact (gateChild wb1 wd1).call_lookupSelectorsAnchoredBy
