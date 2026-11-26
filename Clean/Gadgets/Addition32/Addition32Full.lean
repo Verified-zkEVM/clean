@@ -9,6 +9,8 @@ public import Clean.Utils.Tactics
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

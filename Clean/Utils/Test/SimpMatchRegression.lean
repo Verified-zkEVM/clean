@@ -1,3 +1,7 @@
+module
+
+@[expose] public section
+
 /-!
 Minimal reproducer for a Lean 4.29 simplification regression.
 

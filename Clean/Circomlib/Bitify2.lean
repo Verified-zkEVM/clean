@@ -9,6 +9,8 @@ public import Clean.Circomlib.Comparators
 
 @[expose] public section
 
+open Clean
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/bitify.circom

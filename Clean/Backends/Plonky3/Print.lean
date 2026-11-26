@@ -2,6 +2,8 @@ module
 
 public import Clean.Backends.Program
 
+open Clean
+
 @[expose] public section
 
 /-!
@@ -96,7 +98,7 @@ loop index or the row index. -/
 
 mutual
 
-def fexprToRust (inLoop : Bool) : Witgen.FExpr F → String
+def fexprToRust (inLoop : Bool) : FExpr F → String
   | .expr e => witnessExprToRust e
   | .const value => fieldIn "F" value
   | .localVar index => s!"local_{index}"
@@ -115,11 +117,11 @@ def fexprToRust (inLoop : Bool) : Witgen.FExpr F → String
   | .hintGet key width row column =>
       s!"hint.get({quoted key}, {width}, {indexToRust (u64exprToRust inLoop row)}, {column})"
 
-def fexprListToRust (inLoop : Bool) : List (Witgen.FExpr F) → List String
+def fexprListToRust (inLoop : Bool) : List (FExpr F) → List String
   | [] => []
   | value :: values => fexprToRust inLoop value :: fexprListToRust inLoop values
 
-def u64exprToRust (inLoop : Bool) : Witgen.U64Expr F → String
+def u64exprToRust (inLoop : Bool) : U64Expr F → String
   | .const value => s!"{value.toNat}u64"
   | .val value => s!"({fexprToRust inLoop value}).canonical_u64()"
   | .idx => if inLoop then "idx" else "row_index"
@@ -137,7 +139,7 @@ def u64exprToRust (inLoop : Bool) : Witgen.U64Expr F → String
       s!"if {bexprToRust inLoop condition} \{ {u64exprToRust inLoop thenValue} } \
           else \{ {u64exprToRust inLoop elseValue} }"
 
-def bexprToRust (inLoop : Bool) : Witgen.BExpr F → String
+def bexprToRust (inLoop : Bool) : BExpr F → String
   | .true => "true"
   | .false => "false"
   | .feq left right => s!"({fexprToRust inLoop left} == {fexprToRust inLoop right})"
@@ -160,7 +162,7 @@ def witnessExprToRust : Expression F → String
 end
 
 /-- `let` statements for witness IR steps, numbering locals in order. -/
-def stepsToRust (lets : ℕ) : List (Witgen.Step F) → List String
+def stepsToRust (lets : ℕ) : List (Step F) → List String
   | [] => []
   | .letF value :: steps =>
       s!"let local_{lets}: F = {fexprToRust false value};" :: stepsToRust (lets + 1) steps
@@ -168,7 +170,7 @@ def stepsToRust (lets : ℕ) : List (Witgen.Step F) → List String
       s!"let local_{lets}: u64 = {u64exprToRust false value};" :: stepsToRust (lets + 1) steps
 
 /-- Statements pushing a witness IR output vector to `output`. -/
-def outputToRust : {n : ℕ} → Witgen.VExpr F n → List String
+def outputToRust : {n : ℕ} → VExpr F n → List String
   | _, .lit values => values.toList.map fun value => s!"output.push({fexprToRust false value});"
   | _, .mapRange count body =>
       [s!"for idx in 0u64..{count}u64 \{ output.push({fexprToRust true body}); }"]
@@ -182,7 +184,7 @@ def outputToRust : {n : ℕ} → Witgen.VExpr F n → List String
   | _, .append left right => outputToRust left ++ outputToRust right
 
 /-- A block computing a witness IR program into a fresh vector `output`. -/
-def programToRust {n : ℕ} (steps : List (Witgen.Step F)) (output : Witgen.VExpr F n) : String :=
+def programToRust {n : ℕ} (steps : List (Step F)) (output : VExpr F n) : String :=
   lines (["let mut output: Vec<F> = Vec::with_capacity(" ++ toString n ++ ");"] ++
     stepsToRust 0 steps ++ outputToRust output)
 
@@ -234,7 +236,7 @@ def paddingToRust (padding : Array F) : String :=
   s!"vec![{commaSep (padding.toList.map (fieldIn "F"))}]"
 
 /-- `fn guard(row, data, hint)`, where `row` is the demanded message. -/
-def guardToRust (guard : Witgen.BExpr F) : String :=
+def guardToRust (guard : BExpr F) : String :=
   s!"pub fn guard<F: WitnessField>(row: &[F], data: &WitnessData<F>, hint: &WitnessData<F>) \
       -> bool \{
     let row_index = 0u64;
@@ -242,7 +244,7 @@ def guardToRust (guard : Witgen.BExpr F) : String :=
 }"
 
 /-- `fn row_of(row, hint)`, the index of the row that answers the demanded message `row`. -/
-def rowOfToRust (rowOf : Witgen.U64Expr F) : String :=
+def rowOfToRust (rowOf : U64Expr F) : String :=
   s!"pub fn row_of<F: WitnessField>(row: &[F], hint: &WitnessData<F>) -> u64 \{
     let row_index = 0u64;
     {u64exprToRust false rowOf}

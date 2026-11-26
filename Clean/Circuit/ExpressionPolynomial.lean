@@ -19,7 +19,7 @@ This is the expression-algebra input to leanerVM's M3 constraint relation. It do
 lookups, directed messages, or global table balance.
 -/
 
-namespace Expression
+namespace Clean.Expression
 
 @[expose] public section
 
@@ -119,4 +119,4 @@ theorem eval_toBoundedPolynomial (width : ℕ) (e : Expression F)
   | mul a b ha hb => simp [toBoundedPolynomial, eval, ha h.1, hb h.2]
 
 end
-end Expression
+end Clean.Expression

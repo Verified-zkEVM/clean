@@ -11,6 +11,8 @@ public import Clean.Utils.Fin
 
 @[expose] public section
 
+open Clean
+
 namespace Utils.Bits
 /--
   Convert a natural number to a vector of bits.

@@ -5,6 +5,8 @@ public import Clean.Circuit.Theorems
 
 @[expose] public section
 
+namespace Clean
+
 variable {F : Type} [FiniteField F]
 
 namespace FlatOperation
@@ -358,7 +360,7 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
 /--
 Theorem and implementation that allows us to take a pure general formal circuit
 and use it as a subcircuit. The implementation delegates to the hint-aware
-variant through the default `ProvableType.toCircuitType` instance.
+variant through the default `ProvableType.Clean.toCircuitType` instance.
 -/
 def GeneralFormalCircuit.toSubcircuit (circuit : GeneralFormalCircuit F β α)
     (n : ℕ) (input_var : Var β F) : Subcircuit F n :=
@@ -730,7 +732,7 @@ theorem FormalCircuitBase.eval_output_congr_field {Input : TypeMap} [CircuitType
     Expression.eval env.toEnvironment (circuit.output input_var n) =
       Expression.eval env'.toEnvironment (circuit.output input_var n) := by
   have h := circuit.eval_output_congr h_agrees input_eq
-  rwa [ProvableType.eval_field, ProvableType.eval_field] at h
+  rwa [ProvableType.Clean.eval_field, ProvableType.Clean.eval_field] at h
 
 /-- `eval_output_congr` at a structure output, which evaluates as a `ProvableStruct`. -/
 @[computable_witnesses_law]
@@ -739,9 +741,9 @@ theorem FormalCircuitBase.eval_output_congr_struct {Input Output : TypeMap} [Cir
     {env env' : ProverEnvironment F} (circuit : FormalCircuitBase F Input Output)
     (h_agrees : env.AgreesBelow (n + circuit.localLength input_var) env')
     (input_eq : eval env input_var = eval env' input_var) :
-    ProvableStruct.eval env.toEnvironment (circuit.output input_var n) =
-      ProvableStruct.eval env'.toEnvironment (circuit.output input_var n) := by
-  rw [← ProvableStruct.eval_eq_eval, ← ProvableStruct.eval_eq_eval]
+    ProvableStruct.Clean.eval env.toEnvironment (circuit.output input_var n) =
+      ProvableStruct.Clean.eval env'.toEnvironment (circuit.output input_var n) := by
+  rw [← ProvableStruct.Clean.eval_eq_eval, ← ProvableStruct.Clean.eval_eq_eval]
   exact circuit.eval_output_congr h_agrees input_eq
 
 /-- The obligation of a circuit that is called inline (not as a subcircuit) on `x`: its
@@ -1010,3 +1012,5 @@ theorem FormalAssertion.toSubcircuit_interactions (circuit : FormalAssertion F I
   rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 
 end
+
+end Clean

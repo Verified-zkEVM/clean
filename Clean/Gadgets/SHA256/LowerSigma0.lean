@@ -8,6 +8,8 @@ public import Clean.Utils.Fin
 
 @[expose] public section
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

@@ -2,6 +2,8 @@ module
 
 public meta import Clean.Circuit.Provable
 
+open Clean
+
 /-!
 # Simprocs for `ProvableStruct` evaluation
 
@@ -10,13 +12,13 @@ Companion to the witgen simprocs in `Clean.Circuit.WitnessIR` (`evalProjection`,
 
 The `circuit_norm` normal form for struct evaluation is component-preserving:
 
-* `ProvableStruct.eval env ⟨a, b, …⟩` on a *literal* decomposes into `⟨eval env a, …⟩`,
+* `ProvableStruct.Clean.eval env ⟨a, b, …⟩` on a *literal* decomposes into `⟨eval env a, …⟩`,
 * evaluation of a *projection* lifts to a projection of the row-level evaluation,
-  `Expression.eval env s.pc ~~> (ProvableStruct.eval env s).pc`,
+  `Expression.eval env s.pc ~~> (ProvableStruct.Clean.eval env s).pc`,
 * evaluation of an *opaque* struct stays a folded row-level atom, to be consumed by
   row-level facts such as `h_input : eval env input_var = input`.
 
-Previously the first two came from unfolding the `ProvableStruct.eval`/`toComponents`
+Previously the first two came from unfolding the `ProvableStruct.Clean.eval`/`toComponents`
 definitions and relying on the matcher eta-expanding opaque structure variables during
 `simp`'s definitional reduction. Matchers do not eta-expand variables anymore, which left
 un-keyable stuck terms `fromComponents (eval.go … (match x with …))`. These simprocs
@@ -37,9 +39,9 @@ lemmas. Keep this simp set independent of `circuit_norm`: row-level user lemmas 
 only run after the simproc has returned its result. -/
 private def proveEvalEq (lhs rhs : Expr) : MetaM (Option Expr) := do
   let mut thms : SimpTheorems := {}
-  thms ← thms.addConst ``ProvableStruct.eval_eq_eval
-  thms ← thms.addConst ``ProvableType.eval_field
-  for name in [``ProvableStruct.eval, ``ProvableStruct.eval.go,
+  thms ← thms.addConst ``ProvableStruct.Clean.eval_eq_eval
+  thms ← thms.addConst ``ProvableType.Clean.eval_field
+  for name in [``ProvableStruct.Clean.eval, ``ProvableStruct.Clean.eval.go,
       ``ProvableStruct.components, ``ProvableStruct.toComponents,
       ``ProvableStruct.fromComponents] do
     thms ← thms.addDeclToUnfold name
@@ -87,8 +89,8 @@ private def projectionView? (e : Expr) : MetaM (Option (Expr × (Expr → MetaM 
 Lift evaluation of a structure projection to a projection of the struct evaluation:
 
 ```
-Expression.eval env s.pc        ~~>  (ProvableStruct.eval env s).pc
-ProvableStruct.eval env d.mode1 ~~>  (ProvableStruct.eval env d).mode1
+Expression.eval env s.pc        ~~>  (ProvableStruct.Clean.eval env s).pc
+ProvableStruct.Clean.eval env d.mode1 ~~>  (ProvableStruct.Clean.eval env d).mode1
 ```
 
 This restores the row-level shape so that row-level hypotheses (`h_input` equations) and
@@ -103,8 +105,8 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
   let env := args[args.size - 2]!
   let projected := args[args.size - 1]!
   -- indexing into a *projected* vector field lifts to the row level in one step:
-  -- `Expression.eval env (s.c[i]) ~~> (ProvableStruct.eval env s).c[i]` (and likewise
-  -- `Eval.eval env (s.c[i]) ~~> (ProvableStruct.eval env s).c[i]` for element types that
+  -- `Expression.eval env (s.c[i]) ~~> (ProvableStruct.Clean.eval env s).c[i]` (and likewise
+  -- `Eval.eval env (s.c[i]) ~~> (ProvableStruct.Clean.eval env s).c[i]` for element types that
   -- are themselves provable). The proof is `getElem_eval_fields` / `getElem_eval_vector`,
   -- whose right-hand side `(eval env s.c)[i]` is definitionally the row-level form.
   -- Restricted to projections: literal vectors reduce element-wise instead, and this
@@ -121,7 +123,7 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
       let xsType ← withDefault <| whnf (← inferType xs)
       unless xsType.isAppOf ``Vector do return .continue
       let lemmaName := if evalHead == ``Expression.eval then
-        ``ProvableType.getElem_eval_fields else ``getElem_eval_vector
+        ``ProvableType.Clean.getElem_eval_fields else ``ProvableType.Clean.getElem_eval_vector
       let proof ← withDefault <| mkAppM lemmaName #[env, xs, i, hval]
       let some (_, lhs0, rhs0) := (← inferType proof).eq? | return .continue
       -- validate that the proof's left-hand side really is the term being rewritten
@@ -130,7 +132,7 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
       -- the lemma's right-hand side is `(eval env xs)[i]`; swap in the row-level
       -- spelling of the same (definitionally equal) vector
       unless rhs0.isAppOfArity ``GetElem.getElem 8 do return .continue
-      let evalBase ← withDefault <| mkAppM ``ProvableStruct.eval #[env, base]
+      let evalBase ← withDefault <| mkAppM ``ProvableStruct.Clean.eval #[env, base]
       let projEval ← mkRhs evalBase
       -- Compose the indexing lemma with a proof that evaluating the field is the
       -- corresponding projection of the evaluated row.
@@ -143,7 +145,7 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
   -- instance). Notably *not* out of pairs: their `circuit_norm` normal form is
   -- element-wise (`eval_var_pair` and friends), so lifting `.1`/`.2` would loop.
   let evalBase ← try
-      withDefault <| mkAppM ``ProvableStruct.eval #[env, base]
+      withDefault <| mkAppM ``ProvableStruct.Clean.eval #[env, base]
     catch _ =>
       return .continue
   let rhs ← mkRhs evalBase
@@ -156,12 +158,12 @@ def structEvalProjectionExprProc : Simproc :=
 
 /-- `evalProjectionLiftCore` registered on struct evaluation. -/
 def structEvalProjectionProc : Simproc :=
-  evalProjectionLiftCore ``ProvableStruct.eval
+  evalProjectionLiftCore ``ProvableStruct.Clean.eval
 
 /-- `evalProjectionLiftCore` registered on the `Eval` class projection. This covers
 projected fields whose own type is not a `ProvableStruct` (e.g. vector fields), where the
-`eval_eq_eval` bridge to `ProvableStruct.eval` cannot fire:
-`Eval.eval env s.c ~~> (ProvableStruct.eval env s).c`. -/
+`eval_eq_eval` bridge to `ProvableStruct.Clean.eval` cannot fire:
+`Eval.eval env s.c ~~> (ProvableStruct.Clean.eval env s).c`. -/
 def structEvalProjectionEvalProc : Simproc :=
   evalProjectionLiftCore ``Eval.eval
 
@@ -215,7 +217,7 @@ private def vectorMapPushLemmas : List (Name × Name) :=
    (``Vector.push, ``Vector.map_push), (``Vector.take, ``Vector.map_take_comm),
    (``Vector.extract, ``Vector.map_extract), (``Vector.takeShort, ``Vector.map_takeShort),
    -- the elements of a provable value: evaluated as the elements of its evaluation
-   (``ProvableType.toElements, ``ProvableType.map_eval_toElements)]
+   (``ProvableType.toElements, ``ProvableType.Clean.map_eval_toElements)]
 
 /-- The push lemma of a constructed vector, `none` for an opaque one. -/
 private def pushLemma? (v : Expr) : Option Name :=
@@ -226,7 +228,7 @@ private def pushLemma? (v : Expr) : Option Name :=
 /-- `eval env v = v.map (eval env)`, at `Expression` elements (`fields`), provable elements, and
 `fieldPair` elements. -/
 private def evalVectorLemmas : List Name :=
-  [``ProvableType.eval_fields, ``eval_vector, ``eval_pairVector]
+  [``ProvableType.Clean.eval_fields, ``ProvableType.Clean.eval_vector, ``ProvableType.Clean.eval_pairVector]
 
 /-- Inward side of the vector normal form: evaluating a constructed vector pushes the
 evaluation into the constructor, `eval env (Vector.ofFn f) ~~> Vector.ofFn fun i => eval env
@@ -265,15 +267,15 @@ Pair components fold to the whole-vector atom in one step: the intermediate `(ev
 would loop against the component-wise `eval_fieldPair` lemmas. -/
 private def liftLemmas (evalHead : Name) : List Name :=
   if evalHead == ``Expression.eval then
-    [``ProvableType.getElem_eval_fields, ``eval_fst_getElem_pairVector,
-      ``eval_snd_getElem_pairVector]
-  else if evalHead == ``Eval.eval then [``getElem_eval_vector, ``getElem_eval_pairVector]
+    [``ProvableType.Clean.getElem_eval_fields, ``ProvableType.Clean.eval_fst_getElem_pairVector,
+      ``ProvableType.Clean.eval_snd_getElem_pairVector]
+  else if evalHead == ``Eval.eval then [``ProvableType.Clean.getElem_eval_vector, ``ProvableType.Clean.getElem_eval_pairVector]
   else [``ProvableStruct.eval_getElem_vector]
 
 /-- The values a circuit proof treats as black boxes: free variables (inputs), child outputs and
 loop accumulators (folds). -/
 private def isAtomRoot (e : Expr) : Bool :=
-  e.isFVar || e.isAppOfArity `FormalCircuitBase.output 9 || e.isAppOfArity ``Fin.foldl 4
+  e.isFVar || e.isAppOfArity `Clean.FormalCircuitBase.output 9 || e.isAppOfArity ``Fin.foldl 4
 
 /-- Outward side of the vector normal form: evaluations of an element access whose chain is
 rooted in a black-box value (`isAtomRoot`) fold toward the whole-atom eval, the spelling facts
@@ -293,13 +295,13 @@ attribute [circuit_norm] vectorAtomLiftEval
 
 /-- `vectorAtomLiftCore` on struct elements, registered below. -/
 def vectorAtomLiftStructEvalProc : Simproc :=
-  vectorAtomLiftCore ``ProvableStruct.eval
+  vectorAtomLiftCore ``ProvableStruct.Clean.eval
 
 /--
 Evaluate struct *literals* component-wise:
 
 ```
-ProvableStruct.eval env ⟨a, b, …⟩  ~~>  ⟨Eval.eval env a, Eval.eval env b, …⟩
+ProvableStruct.Clean.eval env ⟨a, b, …⟩  ~~>  ⟨Eval.eval env a, Eval.eval env b, …⟩
 ```
 
 Only fires on literal constructor applications; opaque values deliberately stay folded
@@ -308,7 +310,7 @@ immediately rewrites back, looping — restricting to literals makes the pair co
 -/
 def structEvalLiteralProc : Simproc := fun e => do
   let args := e.getAppArgs
-  unless e.getAppFn.isConstOf ``ProvableStruct.eval && args.size ≥ 2 do
+  unless e.getAppFn.isConstOf ``ProvableStruct.Clean.eval && args.size ≥ 2 do
     return .continue
   let env := args[args.size - 2]!
   let x := args[args.size - 1]!
@@ -409,7 +411,7 @@ simproc structEqSplit (_ = _) := structEqSplitProc
 attribute [circuit_norm] structEqSplit
 
 /-!
-The surface `simproc … (ProvableStruct.eval _ _)` syntax cannot express these patterns:
+The surface `simproc … (ProvableStruct.Clean.eval _ _)` syntax cannot express these patterns:
 pattern elaboration insists on synthesizing the `ProvableStruct ?α` instance. Compute the
 discrimination keys with plain metavariables and register directly.
 -/
@@ -419,7 +421,7 @@ run_cmd Command.liftTermElabM do
     let f ← mkConstWithFreshMVarLevels head
     let (mvars, _, _) ← forallMetaTelescope (← inferType f)
     withSimpGlobalConfig <| DiscrTree.mkPath (mkAppN f mvars)
-  let structEvalKeys ← mkKeys ``ProvableStruct.eval
+  let structEvalKeys ← mkKeys ``ProvableStruct.Clean.eval
   registerSimproc ``ProvableStruct.structEvalProjectionProc structEvalKeys
   registerSimproc ``ProvableStruct.structEvalLiteralProc structEvalKeys
   registerSimproc ``ProvableStruct.structEvalProjectionEvalProc (← mkKeys ``Eval.eval)

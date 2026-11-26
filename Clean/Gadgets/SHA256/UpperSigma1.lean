@@ -4,6 +4,8 @@ public import Clean.Gadgets.SHA256.LowerSigma0
 
 @[expose] public section
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

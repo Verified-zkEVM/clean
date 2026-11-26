@@ -7,6 +7,8 @@ public import Clean.Specs.Keccak256
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Keccak256.ThetaD
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 

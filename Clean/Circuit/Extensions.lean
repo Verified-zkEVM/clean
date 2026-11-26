@@ -5,6 +5,8 @@ public import Clean.Circuit.Subcircuit
 
 @[expose] public section
 
+namespace Clean
+
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 instance {M : TypeMap} [ProvableType M] : Inhabited (Circuit F (Var M F)) where
@@ -30,7 +32,7 @@ def valueFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) (env : Environ
 
 theorem eval_varFromOffset_valueFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) (env : Environment F) :
     Eval.eval env (varFromOffset (F:=F) M offset) = valueFromOffset M offset env := by
-  rw [ProvableType.eval_varFromOffset, valueFromOffset]
+  rw [ProvableType.Clean.eval_varFromOffset, valueFromOffset]
 
 def witnessAny (M: TypeMap) [ProvableType M] : Circuit F (Var M F) := do
   let offset ← getOffset
@@ -49,3 +51,5 @@ theorem witnessAny_output {n : ℕ} :
 theorem witnessAny_interactionsWith {n : ℕ} {channel : RawChannel F} :
     (witnessAny M |>.operations n).interactionsWith channel = [] := by
   simp [circuit_norm, witnessAny, Operations.interactionsWith]
+
+end Clean

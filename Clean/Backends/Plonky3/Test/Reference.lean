@@ -3,6 +3,8 @@ module
 public import Clean.Backends.Plonky3.Print
 public import Clean.Utils.Primes
 
+open Clean
+
 @[expose] public section
 
 /-!

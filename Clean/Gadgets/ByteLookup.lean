@@ -5,6 +5,8 @@ public import Clean.Utils.Field
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]

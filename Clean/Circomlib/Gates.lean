@@ -10,6 +10,8 @@ public import Mathlib.Data.Nat.Bitwise
 
 @[expose] public section
 
+open Clean
+
 open IsBool
 
 /-
@@ -899,13 +901,13 @@ theorem computableWitnesses : ∀ n, FormalCircuitBase.ComputableWitnesses (Inpu
     set x2 : Var (fields (m + 3 - (m + 3) / 2)) (F p) := (input.drop ((m + 3) / 2)).cast (by omega)
     have hx1 : eval env input = eval env' input → eval env x1 = eval env' x1 := by
       simp only [Vector.ext_iff, circuit_norm]
-      simp only [← ProvableType.getElem_eval_fields]
+      simp only [← ProvableType.Clean.getElem_eval_fields]
       intro h i hi
       simp only [x1, Vector.getElem_cast, Vector.getElem_take]
       exact h i (by omega)
     have hx2 : eval env input = eval env' input → eval env x2 = eval env' x2 := by
       simp only [Vector.ext_iff, circuit_norm]
-      simp only [← ProvableType.getElem_eval_fields]
+      simp only [← ProvableType.Clean.getElem_eval_fields]
       intro h i hi
       simp only [x2, Vector.getElem_cast, Vector.getElem_drop]
       exact h ((m + 3) / 2 + i) (by omega)

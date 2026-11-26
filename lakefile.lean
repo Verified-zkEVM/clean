@@ -23,8 +23,15 @@ lean_lib Clean where
   -- validate on every platform
   platformIndependent := true
 
+@[default_target]
+lean_lib Halo2 where
+  roots := #[`Clean.Halo2]
+  requiresModuleSystem := true
+  platformIndependent := true
+
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
+  requiresModuleSystem := true
 
 lean_exe export_fibonacci_ensemble_rust where
   root := `Clean.Examples.FibonacciVm.Rust
@@ -40,6 +47,11 @@ lean_exe export_witness_ir_reference_rust where
 
 lean_exe export_differential_rust where
   root := `Clean.Backends.Plonky3.Test.Differential
+
+-- The shared elliptic-curve/finite-field theory used by Clean/Ironwood: the Lean 4.35 port of
+-- daira/CompElliptic, on the bot fork. Brings CompPoly transitively.
+require CompElliptic from git
+  "https://github.com/mitschabaude-bot/CompElliptic.git" @ "68211e1113172c77ae7c61c70f1048fd82684b0c"
 
 require "leanprover-community" / "mathlib" @ git "v4.35.0"
 require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git" @ "v4.35.0"

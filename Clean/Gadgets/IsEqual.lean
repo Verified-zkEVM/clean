@@ -18,6 +18,8 @@ public import Clean.Utils.Tactics
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.IsEqual
 
 variable {F : Type} [FiniteField F] [DecidableEq F]
@@ -71,14 +73,14 @@ theorem soundness : Soundness (Input:=ProvablePair α α) (Output:=field) F (mai
     intro h_zero
     rw [ProvableType.ext_iff]; intro i hi
     have h_elem := congrArg (fun (x : α F) => (toElements x)[i]) h_zero
-    simp only [ProvableType.eval_fromElements, ProvableType.toElements_fromElements,
+    simp only [ProvableType.Clean.eval_fromElements, ProvableType.toElements_fromElements,
       Vector.getElem_map] at h_elem
     rw [h_diff i hi, h_zero_elem i hi] at h_elem
     exact sub_eq_zero.mp h_elem
   · -- backward: inputs equal → diffs evaluated to zero
     intro h_eq
     rw [ProvableType.ext_iff]; intro i hi
-    simp only [ProvableType.eval_fromElements, ProvableType.toElements_fromElements,
+    simp only [ProvableType.Clean.eval_fromElements, ProvableType.toElements_fromElements,
       Vector.getElem_map]
     rw [h_diff i hi, h_zero_elem i hi]
     rw [ProvableType.ext_iff] at h_eq; rw [h_eq i hi]; ring

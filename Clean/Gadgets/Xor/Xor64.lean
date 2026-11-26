@@ -6,6 +6,8 @@ public import Clean.Gadgets.Xor.ByteXorTable
 
 @[expose] public section
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

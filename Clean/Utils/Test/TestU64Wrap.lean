@@ -2,6 +2,8 @@ module
 
 public import Clean.Circuit.WitnessIRSugar
 
+open Clean
+
 /-!
 Regression tests for the `u64Wrap` simproc: the `% 2^64` / `% 64` truncations left behind
 by the u64 witness sort are erased exactly when the local hypotheses bound the operand.
@@ -60,7 +62,7 @@ variable {F : Type} [FiniteField F]
 /-- `BExpr.bit` is a condition; casting it into the field gives the `0`/`1` element, in
 the same normal form `VExpr.bitsOf` produces for the loop-indexed case. -/
 example (ctx : Ctx F) (x : FExpr F) (i : ℕ) :
-    FExpr.eval ctx (x.bit i) = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
+    Witgen.FExprOver.eval ctx (x.bit i) = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
   simp only [circuit_norm]
 
 /-- The bit index is a static `ℕ`, so it is exact past 64 on large fields. -/

@@ -9,6 +9,8 @@ public import Clean.Specs.SHA256
 
 @[expose] public section
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

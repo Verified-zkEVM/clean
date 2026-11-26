@@ -5,6 +5,8 @@ public import Clean.Circuit
 
 @[expose] public section
 
+open Clean
+
 namespace TestCircuitProofStart
 
 open Circuit

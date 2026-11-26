@@ -6,6 +6,8 @@ public import Clean.Gadgets.Bits
 
 @[expose] public section
 
+open Clean
+
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

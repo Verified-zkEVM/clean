@@ -3,6 +3,8 @@ module
 public import Clean.Circuit
 public import Clean.Specs.Poseidon
 
+open Clean
+
 @[expose] public section
 
 namespace Circomlib.Poseidon.Sigma

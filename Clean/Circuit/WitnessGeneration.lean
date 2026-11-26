@@ -4,6 +4,8 @@ public import Clean.Circuit.Theorems
 
 @[expose] public section
 
+namespace Clean
+
 /-!
 # Array-backed witness generation
 
@@ -111,3 +113,5 @@ theorem witgen_usesLocalWitnesses (circuit : Circuit F α) (data : ProverData F)
   exact h h_computable
 
 end Circuit
+
+end Clean

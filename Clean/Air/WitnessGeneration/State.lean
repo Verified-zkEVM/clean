@@ -14,7 +14,7 @@ The state that `Clean.Air.WitnessGeneration` evolves: the tally of channel deman
 see `Clean.Air.WitnessGeneration.Tally`, and the rows of every component generated so far.
 -/
 
-namespace Air.Flat.WitnessGeneration
+namespace Clean.Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 
@@ -105,4 +105,4 @@ instance : ToString GenerationError where
     | .fuelExhausted => "ensemble witness generation exhausted its fuel"
     | .assembly message => message
 
-end Air.Flat.WitnessGeneration
+end Clean.Air.Flat.WitnessGeneration

@@ -18,6 +18,8 @@ public meta import Clean.Specs.Poseidon
 public meta import Clean.Circomlib.Poseidon
 public meta import Clean.Circomlib.Bitify
 
+open Clean
+
 @[expose] public section
 
 /-!

@@ -5,6 +5,8 @@ public import Clean.Circuit.Foundations
 
 @[expose] public section
 
+namespace Clean
+
 /--
 A `LookupCircuit` is a circuit that can be used to instantiate a lookup table.
 
@@ -36,7 +38,7 @@ theorem proverEnvironment_usesLocalWitnesses (circuit : LookupCircuit F α β)
   intro env env'
   -- the input is a constant, so it agrees between any two environments
   have h_const : eval env (const input) = eval env' (const input) := by
-    simp only [ProvableType.eval_const_prover]
+    simp only [ProvableType.Clean.eval_const_prover]
   exact (circuit.computableWitnesses' h_const).1
 
 def constantOutput (circuit : LookupCircuit F α β) (input : α F) (hint : ProverHint F) : β F :=
@@ -61,7 +63,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (P
   imply_soundness := by
     intro _ (input, output) ⟨n, env, h_holds, h_guarantees, h_output⟩ h_assumptions
     simp only [h_output]
-    exact (circuit.spec_of_constraintsHold n env (const input) input ProvableType.eval_const
+    exact (circuit.spec_of_constraintsHold n env (const input) input ProvableType.Clean.eval_const
       h_assumptions h_holds h_guarantees).1
 
   implied_by_completeness := by
@@ -70,7 +72,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (P
     simp only [h_output, LookupCircuit.constantOutput, circuit_norm,and_true]
     set env := circuit.proverEnvironment input hint
     exact circuit.constraintsHold_of_usesLocalWitnesses 0 env (const input) input
-      ProvableType.eval_const_prover
+      ProvableType.Clean.eval_const_prover
       h_assumptions (circuit.proverEnvironment_usesLocalWitnesses input hint)
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
@@ -103,3 +105,5 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
 def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) : Circuit F (Var β F) :=
   lookupCircuit circuit hint input
 end LookupCircuit
+
+end Clean

@@ -7,6 +7,8 @@ public import Clean.Utils.Primes
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Addition32
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

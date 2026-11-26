@@ -7,6 +7,8 @@ public import Clean.Circuit.StructEvalSimprocs
 public meta import Clean.Utils.Tactics.ProvableTacticUtils
 public meta import Clean.Utils.Tactics.ProvableStructNaming
 
+open Clean
+
 /-!
 # `provable_struct_simp`
 
@@ -44,10 +46,10 @@ also tagged `circuit_norm`; keep the two in sync when adding lemmas, so
 `provable_struct_simp` and `circuit_norm` passes produce the same struct normal form.
 -/
 def structEvalSimpLemmas : Array Name := #[
-  -- bridges from the `Eval`/`Var` class spellings to `ProvableStruct.eval`
-  ``ProvableStruct.eval_eq_eval, ``ProvableStruct.eval_eq_eval_prover,
-  ``ProvableStruct.eval_var_eq_eval, ``ProvableStruct.eval_var_eq_eval_prover,
-  ``ProvableStruct.eval_field_var_eq_eval, ``ProvableStruct.eval_field_var_eq_eval_prover,
+  -- bridges from the `Eval`/`Var` class spellings to `ProvableStruct.Clean.eval`
+  ``ProvableStruct.Clean.eval_eq_eval, ``ProvableStruct.Clean.eval_eq_eval_prover,
+  ``ProvableStruct.Clean.eval_var_eq_eval, ``ProvableStruct.Clean.eval_var_eq_eval_prover,
+  ``ProvableStruct.Clean.eval_field_var_eq_eval, ``ProvableStruct.Clean.eval_field_var_eq_eval_prover,
   -- struct-eval simprocs: literal decomposition, projection lift, constructor-eq split
   ``ProvableStruct.structEvalLiteralProc, ``ProvableStruct.structEvalProjectionProc,
   ``ProvableStruct.structEvalProjectionEvalProc,
@@ -57,8 +59,8 @@ def structEvalSimpLemmas : Array Name := #[
   -- in `circuit_norm`: there they loop against the element-map spelling
   -- (`eval_var_fields` + `Vector.map_mk`); here the map spelling is absent, so vector
   -- indexing converges to the row level, `Expression.eval env (v[i]) ~~> (eval env v)[i]`
-  ``ProvableType.eval_field, ``ProvableType.getElem_eval_fields,
-  ``ProvableType.getElem_eval_fields_prover, ``getElem_eval_vector,
+  ``ProvableType.Clean.eval_field, ``ProvableType.Clean.getElem_eval_fields,
+  ``ProvableType.Clean.getElem_eval_fields_prover, ``ProvableType.Clean.getElem_eval_vector,
   -- `CircuitType` wrappers and coercions
   ``CircuitType.eval_var_prover_to_verifier,
   ``CircuitType.eval_var_field, ``CircuitType.eval_var_field_prover,
@@ -96,7 +98,7 @@ private def isDestructurableStructVar (fvarId : FVarId) : MetaM Bool := do
 
 /-- Evaluation heads whose equations drive destructuring. -/
 private def evalHeads : Array Name :=
-  #[``ProvableStruct.eval, ``Eval.eval, ``ProvableType.eval]
+  #[``ProvableStruct.Clean.eval, ``Eval.eval, ``ProvableType.Clean.eval]
 
 private def isEvalApp (e : Expr) : Bool :=
   if let .const name _ := e.getAppFn then evalHeads.contains name else false

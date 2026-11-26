@@ -7,6 +7,8 @@ public import Clean.Utils.Tactics
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]

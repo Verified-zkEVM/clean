@@ -7,6 +7,8 @@ module
 public import Clean.Circuit.ExpressionPolynomial
 public import Mathlib.Algebra.MvPolynomial.NoZeroDivisors
 
+open Clean
+
 /-!
 # Expression polynomial controls
 

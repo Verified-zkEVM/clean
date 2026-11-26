@@ -9,6 +9,8 @@ public import Clean.Circuit.Provable
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Rotation32Bits
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]

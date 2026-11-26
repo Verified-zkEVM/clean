@@ -4,6 +4,8 @@ public import Clean.Table.Basic
 
 @[expose] public section
 
+open Clean
+
 variable {F : Type} {S : Type → Type} {W : ℕ+} [ProvableType S] [FiniteField F]
 
 /--

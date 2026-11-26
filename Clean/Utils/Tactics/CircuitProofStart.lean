@@ -6,6 +6,8 @@ public meta import Clean.Utils.Tactics.ProvableStructSimp
 
 public meta section
 
+open Clean
+
 open Lean Elab Tactic Meta
 open Circuit
 

@@ -4,6 +4,8 @@ public import Clean.Gadgets.SHA256.BitwiseOps
 
 @[expose] public section
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

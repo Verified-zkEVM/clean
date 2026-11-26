@@ -11,6 +11,7 @@ public import Clean.Examples.FemtoCairo.TypesLemmas
 @[expose] public section
 
 namespace Examples.FemtoCairo
+open Clean
 open Gadgets
 open Utils.Bits
 open Types

@@ -2,6 +2,8 @@ module
 
 public import Clean.Circuit.WitnessIRSugar
 
+open Clean
+
 @[expose] public section
 
 /-!
@@ -30,7 +32,7 @@ mutual
 
 /-- Whether an expression is valid in a row program: it reads no row or prover data, and only
 prover row programs read hints. -/
-def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
+def FExprOver.validForRow (source : RowProgram.Source) : FExpr F → Bool
   | .expr _ => false
   | .const _ | .localVar _ => true
   | .add left right | .mul left right =>
@@ -45,7 +47,7 @@ def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
   | .dataGet .. => false
   | .hintGet _ _ row _ => source.allowsHints && row.validForRow source
 
-def U64Expr.validForRow (source : RowProgram.Source) : U64Expr F → Bool
+def U64ExprOver.validForRow (source : RowProgram.Source) : U64Expr F → Bool
   | .const _ | .idx | .localVar _ => true
   | .val value => value.validForRow source
   | .add left right | .mul left right | .div left right | .mod left right |
@@ -56,7 +58,7 @@ def U64Expr.validForRow (source : RowProgram.Source) : U64Expr F → Bool
       condition.validForRow source &&
         thenValue.validForRow source && elseValue.validForRow source
 
-def BExpr.validForRow (source : RowProgram.Source) : BExpr F → Bool
+def BExprOver.validForRow (source : RowProgram.Source) : BExpr F → Bool
   | .true | .false => true
   | .feq left right | .flt left right =>
       left.validForRow source && right.validForRow source
@@ -74,7 +76,7 @@ def FExprList.validForRow (source : RowProgram.Source) : List (FExpr F) → Bool
 
 end
 
-def Step.validForRow (source : RowProgram.Source) : Step F → Bool
+def StepOver.validForRow (source : RowProgram.Source) : Step F → Bool
   | .letF value => value.validForRow source
   | .letU value => value.validForRow source
 

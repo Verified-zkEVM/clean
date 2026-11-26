@@ -50,7 +50,7 @@ be exhausted, and because we don't yet prove that channels balance, so generatio
 that no component handles.
 -/
 
-namespace Air.Flat.WitnessGeneration
+namespace Clean.Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -84,7 +84,7 @@ the guard holds. -/
 def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Bool :=
   mode.channel.name == demand.channel && mode.trigger == demand.direction &&
-    mode.guardCondition.eval { env := .fromArray demand.message data hint }
+    mode.guardCondition.eval { env := ProverEnvironment.fromArray demand.message data hint }
 
 /-- Whether a preallocated component answers the demand: it is on the mode's channel and triggers
 it. Answering also needs a row for the message, see `PreallocatedMode.findRow`. -/
@@ -105,7 +105,7 @@ at `rowOf` of the message, if it carries the message. -/
 def PreallocatedMode.findRow (state : ComponentState F)
     (mode : PreallocatedMode F state.component.Input) (demand : Demand F) (data : ProverData F)
     (hint : ProverHint F) : Option (ℕ × GeneratedRow F) :=
-  let index := mode.rowIndex.eval { env := .fromArray demand.message (.empty F) hint }
+  let index := mode.rowIndex.eval { env := ProverEnvironment.fromArray demand.message (.empty F) hint }
   state.rows[index.toNat]?.bind fun row =>
     if state.carries row data mode.channel.name mode.trigger demand.message then
       some (index.toNat, row)
@@ -288,4 +288,4 @@ def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness 
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
   (Tally.empty.addInteractions witness.interactions).isEmpty
 
-end Air.Flat.WitnessGeneration
+end Clean.Air.Flat.WitnessGeneration

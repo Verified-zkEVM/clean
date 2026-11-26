@@ -7,6 +7,8 @@ public import Clean.Circuit.SimpGadget
 
 variable {F : Type}
 
+namespace Clean
+
 structure Variable (F : Type) where
   index : ℕ
 
@@ -20,6 +22,8 @@ inductive Expression (F : Type) where
   | mul : Expression F -> Expression F -> Expression F
 
 export Expression (var)
+
+end Clean
 
 /-- Data fixed for a whole proof, which circuit specs may refer to: the rows of the proof's tables,
 keyed by name, and the public input. -/
@@ -43,6 +47,8 @@ def ProverHint.empty (F : Type) : ProverHint F := fun _ _ => #[]
 
 instance : Inhabited (ProverHint F) where
   default := ProverHint.empty F
+
+namespace Clean
 
 /--
   `Environment` represents the data that is provided at runtime to concretely
@@ -84,7 +90,7 @@ instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := �
   data
 
 /-- The verifier's environment: its variables are the public input of the prover data. -/
-abbrev ProverData.publicEnvironment [Field F] (data : ProverData F) : Environment F :=
+abbrev _root_.ProverData.publicEnvironment [Field F] (data : ProverData F) : Environment F :=
   .fromArray data.publicInput data
 
 namespace Expression
@@ -271,3 +277,5 @@ lemma eval_foldl_mul (env : Environment F) (n : ℕ) (g : Fin n → Expression F
     rw [ih fun i => g i.castSucc]
 
 end EvalLemmas
+
+end Clean

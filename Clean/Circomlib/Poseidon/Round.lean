@@ -4,6 +4,8 @@ public import Clean.Circuit.Loops
 public import Clean.Circomlib.Poseidon.Linear
 public import Clean.Circomlib.Poseidon.Sigma
 
+open Clean
+
 @[expose] public section
 
 namespace Circomlib.Poseidon

@@ -13,6 +13,8 @@ public import Clean.Table.SimpTable
 
 @[expose] public section
 
+open Clean
+
 /--
   A row is StructuredElement that contains field elements.
 -/

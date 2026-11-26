@@ -7,6 +7,7 @@ public import Clean.Gadgets.Keccak.AbsorbBlock
 public import Clean.Specs.Keccak256
 
 @[expose] public section
+
 open Specs.Keccak256
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2 ^ 16 + 2 ^ 8)]
 

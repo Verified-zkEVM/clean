@@ -4,6 +4,8 @@ public import Clean.Air.Vm
 public import Clean.Air.WitnessGeneration
 public import Clean.Utils.BinaryField
 
+open Clean
+
 @[expose] public section
 
 /-!

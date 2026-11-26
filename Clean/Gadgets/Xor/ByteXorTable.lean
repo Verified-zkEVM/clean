@@ -6,6 +6,8 @@ public import Init.Data.Fin.Bitwise
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Xor
 open ByteUtils
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]

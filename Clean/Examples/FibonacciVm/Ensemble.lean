@@ -15,6 +15,8 @@ public import Clean.Air.Lookup
 public import Clean.Air.WitnessGeneration
 public import Clean.Gadgets.Addition8.Theorems
 
+open Clean
+
 @[expose] public section
 open ByteUtils (mod256)
 open FieldUtils (mod floorDiv)

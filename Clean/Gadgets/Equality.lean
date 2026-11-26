@@ -9,6 +9,8 @@ public import Clean.Circuit.Explicit
 
 @[expose] public section
 
+open Clean
+
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 namespace Gadgets
@@ -19,7 +21,7 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
-  rw [ProvableType.getElem_eval_fields env xs i hi]
+  rw [ProvableType.Clean.getElem_eval_fields env xs i hi]
   exact h_holds ⟨i, hi⟩
 
 theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
@@ -27,7 +29,7 @@ theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs 
     ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
-  rw [← ProvableType.getElem_eval_fields env.toEnvironment xs i.val i.isLt]
+  rw [← ProvableType.Clean.getElem_eval_fields env.toEnvironment xs i.val i.isLt]
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality
@@ -60,7 +62,7 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     simp only [circuit_norm, Prod.mk.injEq] at h_input
     obtain ⟨ hx, hy ⟩ := h_input
     rw [←hx, ←hy]
-    simp only [CircuitType.eval_expression, ProvableType.eval]
+    simp only [CircuitType.eval_expression, ProvableType.Clean.eval]
     congr 1
     ext i hi
     simp only [Vector.getElem_map]
@@ -83,7 +85,7 @@ def circuit (M : TypeMap) [ProvableType M] : FormalAssertion F (ProvablePair M M
     rw [←hx, ←hy] at h_spec
     clear hx hy
     apply_fun toElements at h_spec
-    simp only [CircuitType.eval_expression, ProvableType.eval,
+    simp only [CircuitType.eval_expression, ProvableType.Clean.eval,
       ProvableType.toElements_fromElements] at h_spec
     rw [Vector.ext_iff] at h_spec
 

@@ -4,6 +4,8 @@ public import Clean.Table.Basic
 
 @[expose] public section
 
+open Clean
+
 namespace Trace
 variable {F : Type} {S : Type → Type} [ProvableType S]
 

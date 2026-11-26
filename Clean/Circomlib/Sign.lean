@@ -6,6 +6,8 @@ public import Clean.Circomlib.CompConstant
 
 @[expose] public section
 
+open Clean
+
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/master/circuits/sign.circom

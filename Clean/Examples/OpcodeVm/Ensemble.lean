@@ -8,6 +8,8 @@ public import Clean.Air.Vm
 public import Clean.Air.Lookup
 public import Clean.Air.WitnessGeneration
 
+open Clean
+
 @[expose] public section
 
 open Air.Flat
@@ -87,7 +89,7 @@ def programHeight (program : Program) : UInt64 :=
   (WitnessGeneration.nextPowerOfTwo program.length).toUInt64
 
 /-- The instruction at row `i` of the program table. -/
-def programRow (program : Program) (i : Witgen.U64Expr (F p)) : Instruction (Witgen.FExpr (F p)) :=
+def programRow (program : Program) (i : U64Expr (F p)) : Instruction (FExpr (F p)) :=
   let opcodes := (program.map fun (opcode, _) => (opcode.code : F p)).toArray
   let operands := (program.map fun (_, operand) => (operand : F p)).toArray
   { pc := i.toField, opcode := opcodes[i], operand := operands[i] }
@@ -113,7 +115,7 @@ def programLookup (program : Program) : Lookup (F p) Instruction where
 
 /-- A cell of the program table's row `pc`, as the prover reads it: column 1 holds the opcode,
 column 2 the operand. -/
-def programCell (pc : Expression (F p)) (column : Fin 4) : Witgen.FExpr (F p) :=
+def programCell (pc : Expression (F p)) (column : Fin 4) : FExpr (F p) :=
   .dataGet "program" 4 pc.val column
 
 /-- The cell of prover data that `programCell` reads. -/
@@ -224,7 +226,7 @@ abbrev stepComponent (program : Program) (h_program : program.length < p) (opcod
     channel := stateChannel program
     trigger := .push
     -- we handle this message if the current program opcode matches the static opcode parameter
-    guard state := programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
+    guard state := programCell state.pc 1 =? (FExpr.const (opcode.code : F p) : FExpr (F p))
     input | { pc, acc } => pure { enabled := 1, pc, acc }
   }
 

@@ -14,7 +14,7 @@ the rows on every read. Instead, the generator prepares the rows once, and reads
 `readNamedRows`.
 -/
 
-namespace Air.Flat.WitnessGeneration
+namespace Clean.Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 
@@ -58,4 +58,4 @@ def prepareHint (tables : List HintTable) (elements : Array F) :
       elements.extract (table.offset + row.val * table.width)
         (table.offset + (row.val + 1) * table.width)) table.width)
 
-end Air.Flat.WitnessGeneration
+end Clean.Air.Flat.WitnessGeneration

@@ -20,6 +20,8 @@ public import Clean.Circuit.Subcircuit
 
 @[expose] public section
 
+namespace Clean
+
 variable {F : Type} [FiniteField F]
 variable {α β : TypeMap}
 
@@ -207,7 +209,7 @@ def proverEnvironment (circuit : FormalCircuitBase F β α) (input : β F) (data
 theorem eval_proverEnvironment (circuit : FormalCircuitBase F β α) (input : β F)
     (data : ProverData F) (hint : ProverHint F) :
     eval (circuit.proverEnvironment input data hint) (varFromOffset β 0 : Var β F) = input := by
-  rw [ProvableType.eval_varFromOffset_prover]
+  rw [ProvableType.Clean.eval_varFromOffset_prover]
   conv_rhs => rw [← ProvableType.fromElements_toElements input]
   congr 1
   ext i hi
@@ -223,7 +225,7 @@ theorem proverEnvironment_usesLocalWitnesses (circuit : FormalCircuitBase F β �
     (toElements input).toList
   rw [Vector.length_toList] at h
   refine h fun env env' => circuit.computableWitnesses'_onlyAccessedBelow fun h_agrees => ?_
-  simp only [ProvableType.eval_varFromOffset_prover]
+  simp only [ProvableType.Clean.eval_varFromOffset_prover]
   congr 1
   ext i hi
   simp only [Vector.getElem_mapRange]
@@ -276,3 +278,5 @@ theorem GeneralFormalCircuit.exists_constraintsHold (circuit : GeneralFormalCirc
     (circuit.proverEnvironment_usesLocalWitnesses ..) ?_⟩
   rw [h_input]
   exact h_assumptions
+
+end Clean

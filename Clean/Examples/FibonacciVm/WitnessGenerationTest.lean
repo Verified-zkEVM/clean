@@ -9,7 +9,7 @@ public meta import Clean.Utils.Primes
 
 @[expose] public section
 
-namespace Air.Flat.WitnessGenerationTest
+namespace Clean.Air.Flat.WitnessGenerationTest
 
 open Air.Flat.WitnessGeneration
 
@@ -53,4 +53,4 @@ example :
     ens.interactionsFit .logUp [32, 32, 256] := by
   native_decide
 
-end Air.Flat.WitnessGenerationTest
+end Clean.Air.Flat.WitnessGenerationTest

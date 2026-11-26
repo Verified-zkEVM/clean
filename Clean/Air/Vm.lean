@@ -41,7 +41,7 @@ Here, we introduce the `VmTables` structure (capturing basic assumptions we put 
 `addVm_soundVmChannel_of_soundChannels`, which shows soundness for a VM added on top of a `SoundChannels` ensemble.
 -/
 
-namespace Air.Flat
+namespace Clean.Air.Flat
 
 structure VmStep (Message : TypeMap) [ProvableType Message] (F : Type) where
   enabled : Expression F
@@ -134,7 +134,7 @@ def toFormal (ens : SoundVmEnsemble F PublicIO balance)
       (Ensemble.assumptions_of_assumptionsConsistency assumptionsConsistency witness assumptions)
       constraints (EnsembleWitness.interactionsFit_of_heights fit) balanced
 end SoundVmEnsemble
-end Air.Flat
+end Clean.Air.Flat
 
 def List.flattenPairs {α : Type} (pairs : List (α × α)) : List α :=
   pairs.map (fun (a, b) => [a, b]) |>.flatten
@@ -204,7 +204,7 @@ lemma List.zip_map_fst_snd {α β : Type} (pairs : List (α × β)) :
   | cons pair pairs ih =>
     simp [ih]
 
-namespace Air.Flat
+namespace Clean.Air.Flat
 namespace VmTables
 variable {vm : VmTables F PublicIO}
 
@@ -876,7 +876,7 @@ theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO) {balan
       (witness.oldContext_constraints_of_constraints constraints) old_partial_balance
       table table_mem
       |>.right channel channel_mem |>.right
-    have old_sound_channels : _root_.SoundChannels ens.tables finished := ⟨
+    have old_sound_channels : Clean.SoundChannels ens.tables finished := ⟨
       ens.channelsWithGuarantees_subset_iff.mp soundChannels.left |>.right,
       fun channel h_channel => (soundChannels.right.left channel h_channel).right.left,
       soundChannels.right.right⟩
@@ -999,4 +999,4 @@ variable {soundEns : SoundEnsemble F PublicIO balance} {vm : VmTables F PublicIO
     (soundEns.vmFitsInto vm fresh gsf reqs names) := rfl
 
 end SoundEnsemble
-end Air.Flat
+end Clean.Air.Flat

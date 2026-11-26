@@ -7,6 +7,8 @@ public import Clean.Gadgets.Addition8.Theorems
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

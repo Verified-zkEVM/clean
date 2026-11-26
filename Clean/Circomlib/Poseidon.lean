@@ -4,6 +4,8 @@ public import Clean.Circomlib.Poseidon.Generic
 
 @[expose] public section
 
+open Clean
+
 /-
 Poseidon Hash Circuit Implementation
 

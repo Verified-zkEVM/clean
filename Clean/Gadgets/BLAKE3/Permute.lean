@@ -5,6 +5,8 @@ public import Clean.Circuit
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.BLAKE3.Permute
 variable {p : ℕ} [Fact p.Prime]
 

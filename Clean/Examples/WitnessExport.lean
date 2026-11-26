@@ -21,6 +21,8 @@ public meta import Clean.Gadgets.Xor.Xor64
 -- `native_decide` runs compiled code from this module.
 public meta import Clean.Utils.Primes
 
+open Clean
+
 /-!
 Exercises `#assert_exportable` and `#witgen_json` on ported gadgets, including a guarded
 failure for a native-closure witness.

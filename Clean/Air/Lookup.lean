@@ -14,7 +14,7 @@ channel, that component, and its witness generation from the table's rows and wh
 the table.
 -/
 
-namespace Air.Flat
+namespace Clean.Air.Flat
 variable {F : Type} [FiniteField F] {Row : TypeMap} [ProvableType Row]
 
 /-- A verifier-known table of `height` rows of type `Row`, read through a channel. -/
@@ -22,9 +22,9 @@ structure Lookup (F : Type) [FiniteField F] (Row : TypeMap) [ProvableType Row] w
   name : String
   height : UInt64
   /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
-  row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
+  row (i : U64Expr F) : Witgen.M F (Row (FExpr F))
   /-- The index of the row that equals `value`, at or above `height` if there is none. -/
-  rowOf (value : Var Row F) : Witgen.U64Expr F
+  rowOf (value : Var Row F) : U64Expr F
   /-- What it means to be in the table. Pulling a row from the lookup's channel guarantees it. -/
   Contains : Row F → Prop
   /-- `Contains` holds exactly for the rows of the table. -/
@@ -125,4 +125,4 @@ variable {soundEns : SoundEnsemble F PublicIO balance} {lookup : Lookup F Row}
     (soundEns.addLookup lookup fresh fresh_channel).verifier = soundEns.verifier := rfl
 
 end SoundEnsemble
-end Air.Flat
+end Clean.Air.Flat

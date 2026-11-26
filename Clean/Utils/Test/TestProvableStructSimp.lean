@@ -3,6 +3,8 @@ module
 public import Clean.Circuit
 public import Clean.Utils.Tactics
 
+open Clean
+
 /-!
 Tests for `provable_struct_simp`, covering its three jobs:
 
@@ -275,13 +277,13 @@ theorem test_eval_projection_uses_decomposed_struct_eq {F : Type} [FiniteField F
 -- The indexed-field branch composes a vector evaluation lemma with a row projection.
 theorem test_eval_indexed_projection {F : Type} [FiniteField F] (env : Environment F)
     (input : VectorStruct (Expression F)) (i : Fin 2) :
-    Expression.eval env input.xs[i] = (ProvableStruct.eval env input).xs[i] := by
+    Expression.eval env input.xs[i] = (ProvableStruct.Clean.eval env input).xs[i] := by
   simp only [circuit_norm]
 
 theorem test_eval_nested_literal {F : Type} [FiniteField F] (env : Environment F)
     (a b : TestInputs (Expression F)) :
-    ProvableStruct.eval env (NestedInputs.mk a b) =
-      NestedInputs.mk (ProvableStruct.eval env a) (ProvableStruct.eval env b) := by
+    ProvableStruct.Clean.eval env (NestedInputs.mk a b) =
+      NestedInputs.mk (ProvableStruct.Clean.eval env a) (ProvableStruct.Clean.eval env b) := by
   simp only [circuit_norm]
 
 theorem test_eval_in_conjunction {F : Type} [FiniteField F] (env : ProverEnvironment F) (x : F)
@@ -323,8 +325,8 @@ theorem test_conjunction_with_base_and_non_base {F : Type} [FiniteField F] (env 
          eval env s1 = eval env s2) :
     Expression.eval env x_var = 1 := by
   provable_struct_simp
-  -- normalized to the `ProvableStruct.eval` spelling, but not split
-  have : ProvableStruct.eval env.toEnvironment s1 = ProvableStruct.eval env.toEnvironment s2 := h.2
+  -- normalized to the `ProvableStruct.Clean.eval` spelling, but not split
+  have : ProvableStruct.Clean.eval env.toEnvironment s1 = ProvableStruct.Clean.eval env.toEnvironment s2 := h.2
   exact h.1.1.1
 
 end TestProvableStructSimp

@@ -34,6 +34,7 @@ lemma Vector.toList_mapM (xs : Vector α n) {m : Type → Type} [monad: Monad m]
   rw [←Vector.toArray_mapM, Functor.map_map]
   congr
 
+namespace Clean
 namespace Circuit
 variable {prop : Condition F}
 
@@ -1780,3 +1781,5 @@ theorem interactions_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit 
   funext i
   simp [Vector.getElem_finRange]
 end Circuit
+
+end Clean

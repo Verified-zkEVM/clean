@@ -6,6 +6,8 @@ public import Clean.Utils.Bits
 
 @[expose] public section
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 

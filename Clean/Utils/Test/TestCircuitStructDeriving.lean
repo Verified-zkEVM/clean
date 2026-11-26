@@ -5,6 +5,8 @@ public import Clean.Types.U32
 
 @[expose] public section
 
+open Clean
+
 namespace TestCircuitStructDeriving
 
 structure Inputs (F : Type) where

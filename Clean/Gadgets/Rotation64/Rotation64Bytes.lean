@@ -6,6 +6,8 @@ public import Clean.Utils.Primes
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
 

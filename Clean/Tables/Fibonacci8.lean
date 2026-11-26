@@ -7,6 +7,8 @@ public import Clean.Gadgets.Addition8.Addition8
 
 @[expose] public section
 
+open Clean
+
 /-
   8-bit Fibonacci inductive table definition. The i-th row of the table
   contains the values of the Fibonacci sequence at i and i+1, modulo 256.

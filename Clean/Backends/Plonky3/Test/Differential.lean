@@ -7,6 +7,8 @@ public import Clean.Examples.FemtoCairo.FlatAirTestData
 public import Clean.Examples.OpcodeVm.Ensemble
 public import Clean.Utils.Primes
 
+open Clean
+
 @[expose] public section
 
 /-!

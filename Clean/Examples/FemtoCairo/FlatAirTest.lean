@@ -13,11 +13,11 @@ public meta import Clean.Utils.Primes
 
 namespace Examples.FemtoCairo.FlatAirTest
 
-open Air.Flat
+open Clean.Air.Flat
 open Types
 open FlatAir
 open FlatAirTestData
-open Air.Flat.WitnessGeneration
+open Clean.Air.Flat.WitnessGeneration
 
 def result : Except String (List ℕ × Bool × Bool) :=
   match femtoCairoGenerate (p := pBabybear) (memorySize := 8) testProgram testProgram_valid

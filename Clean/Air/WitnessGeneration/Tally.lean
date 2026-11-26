@@ -18,7 +18,7 @@ Reasoning about a tally only needs its net multiplicities `Tally.net`, its deman
 and their lemmas: `net_add`, `mem_demands` and `isEmpty_iff`.
 -/
 
-namespace Air.Flat.WitnessGeneration
+namespace Clean.Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 
@@ -349,4 +349,4 @@ theorem isEmpty_iff (tally : Tally F) : tally.isEmpty ↔ ∀ key, tally.net key
 
 end Tally
 
-end Air.Flat.WitnessGeneration
+end Clean.Air.Flat.WitnessGeneration

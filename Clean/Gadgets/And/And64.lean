@@ -6,6 +6,8 @@ public import Clean.Gadgets.And.And8
 
 @[expose] public section
 
+open Clean
+
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]
 

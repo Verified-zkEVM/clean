@@ -11,7 +11,7 @@ public meta import Clean.Utils.Primes
 
 namespace OpcodeVm.WitnessGenerationTest
 
-open Air.Flat.WitnessGeneration
+open Clean.Air.Flat.WitnessGeneration
 
 def result (final : F pBabybear) : Except String (List ℕ × Bool × Bool) :=
   match generate (formalEnsemble exampleProgram exampleProgram_length).ensemble 1000

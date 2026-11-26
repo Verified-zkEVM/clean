@@ -4,6 +4,8 @@ public import Clean.Backends.Circom.TestWasmCompile
 
 public meta import Clean.Backends.Circom.TestWasmCompile
 
+open Clean
+
 @[expose] public section
 
 /-!
@@ -45,8 +47,8 @@ zero-divisor convention and compositions of arithmetic operations. -/
 #eval! withTools ["snarkjs"] do
   for nw in [1, 2] do
     for (x, y) in [(17, 3), (17, 0)] do
-      let a : Witgen.U64Expr (F p1009) := .const (UInt64.ofNat x)
-      let b : Witgen.U64Expr (F p1009) := .const (UInt64.ofNat y)
+      let a : U64Expr (F p1009) := .const (UInt64.ofNat x)
+      let b : U64Expr (F p1009) := .const (UInt64.ofNat y)
       let ops : List (Operation (F p1009)) :=
         [.witness 3 (.ir [] (.lit #v[
           .ofU64 (.div a b), .ofU64 (.mod a b),

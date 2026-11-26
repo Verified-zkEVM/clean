@@ -16,6 +16,8 @@ public import Clean.Circuit.Expression
 public import Clean.Circuit.Operations
 public import Clean.Backends.Circom.Compile
 
+open Clean
+
 public section
 
 open Lean

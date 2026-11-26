@@ -11,7 +11,7 @@ Turns the generated rows of every component into the tables of an ensemble witne
 facts that the witness type requires: row widths, table heights and fixed cells.
 -/
 
-namespace Air.Flat.WitnessGeneration
+namespace Clean.Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 
@@ -72,4 +72,4 @@ def assembleTables :
         throw (.assembly "generated table contains a row of the wrong width")
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")
 
-end Air.Flat.WitnessGeneration
+end Clean.Air.Flat.WitnessGeneration

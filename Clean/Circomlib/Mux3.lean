@@ -7,6 +7,8 @@ public import Clean.Gadgets.Boolean
 
 @[expose] public section
 
+open Clean
+
 namespace Circomlib
 open Circuit
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

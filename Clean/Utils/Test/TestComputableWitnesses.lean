@@ -10,6 +10,8 @@ public import Clean.Gadgets.SHA256.Xor32
 public import Clean.Gadgets.IsZero
 public import Clean.Circomlib.Mux1
 
+open Clean
+
 @[expose] public section
 
 /-!

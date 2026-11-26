@@ -10,6 +10,8 @@ public import Clean.Utils.Tactics
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.IsZero
 
 variable {F : Type} [FiniteField F] [DecidableEq F]

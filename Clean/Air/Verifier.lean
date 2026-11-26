@@ -2,6 +2,8 @@ module
 
 public import Clean.Air.Circuit
 
+open Clean
+
 @[expose] public section
 
 variable {F : Type} [FiniteField F]
@@ -43,8 +45,8 @@ def interactions (operations : Operations F) : List (AbstractInteraction F) :=
   operations.map Operation.interaction
 
 @[circuit_norm]
-def circuitOperations (operations : Operations F) : _root_.Operations F :=
-  operations.interactions.map _root_.Operation.interact
+def circuitOperations (operations : Operations F) : Clean.Operations F :=
+  operations.interactions.map Clean.Operation.interact
 
 attribute [circuit_norm] List.filterMap_nil List.filterMap_cons
 
@@ -70,12 +72,12 @@ lemma channel_mem_of_mem_interactions {operations : Operations F}
 
 @[circuit_norm]
 lemma circuitOperations_interactions (operations : Operations F) :
-    (_root_.Operations.interactions (circuitOperations operations)) = interactions operations := by
+    (Clean.Operations.interactions (circuitOperations operations)) = interactions operations := by
   induction operations with
   | nil => rfl
   | cons operation operations ih =>
       change Operation.interaction operation ::
-        (_root_.Operations.interactions (circuitOperations operations)) =
+        (Clean.Operations.interactions (circuitOperations operations)) =
           Operation.interaction operation :: interactions operations
       rw [ih]
 
@@ -83,7 +85,7 @@ lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F)
     (env : Environment F) :
     operations.circuitOperations.InChannelsOrGuaranteesFull
       operations.channelsWithGuarantees env := by
-  rw [_root_.Operations.InChannelsOrGuaranteesFull, circuitOperations_interactions]
+  rw [Clean.Operations.InChannelsOrGuaranteesFull, circuitOperations_interactions]
   intro interaction h_interaction
   simp only [interactions, List.mem_map] at h_interaction
   obtain ⟨operation, h_operation, rfl⟩ := h_interaction
@@ -100,7 +102,7 @@ lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F)
     (env : Environment F) :
     operations.circuitOperations.InChannelsOrRequirementsFull
       operations.channelsWithRequirements env := by
-  rw [_root_.Operations.InChannelsOrRequirementsFull, circuitOperations_interactions]
+  rw [Clean.Operations.InChannelsOrRequirementsFull, circuitOperations_interactions]
   intro interaction h_interaction
   simp only [interactions, List.mem_map] at h_interaction
   obtain ⟨operation, h_operation, rfl⟩ := h_interaction
@@ -151,7 +153,7 @@ lemma pure_def {α : Type} (value : α) :
 def operations {α : Type} (program : VerifierM F α) : Verifier.Operations F := program.2
 
 @[reducible, circuit_norm]
-def circuitOperations {α : Type} (program : VerifierM F α) : _root_.Operations F :=
+def circuitOperations {α : Type} (program : VerifierM F α) : Clean.Operations F :=
   program.operations.circuitOperations
 
 @[circuit_norm]
@@ -192,7 +194,7 @@ abbrev operations (program : Program F PublicIO) : Operations F :=
   (program.main (varFromOffset PublicIO 0)).operations
 
 @[circuit_norm]
-abbrev circuitOperations (program : Program F PublicIO) : _root_.Operations F :=
+abbrev circuitOperations (program : Program F PublicIO) : Clean.Operations F :=
   program.operations.circuitOperations
 
 @[circuit_norm]

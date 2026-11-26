@@ -5,7 +5,7 @@ public import Clean.Air.WitnessGeneration.Generation
 
 @[expose] public section
 
-namespace Air.Flat
+namespace Clean.Air.Flat
 variable {F : Type}
 
 variable [FiniteField F]
@@ -681,4 +681,4 @@ noncomputable abbrev interactionsWith (tables : Tables F) (channel : RawChannel 
   simp [interactionsWith, Table.interactionsWith, circuit_norm]
 end Tables
 
-end Air.Flat
+end Clean.Air.Flat

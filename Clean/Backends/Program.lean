@@ -2,6 +2,8 @@ module
 
 public import Clean.Air.WitnessGeneration
 
+open Clean
+
 @[expose] public section
 
 /-!
@@ -33,7 +35,7 @@ def localHasSort (locals : List LocalSort) (index : ℕ) (sort : LocalSort) : Bo
 
 mutual
 
-def fexprWellFormed (locals : List LocalSort) : Witgen.FExpr F → Bool
+def fexprWellFormed (locals : List LocalSort) : FExpr F → Bool
   | .expr _ | .const _ => true
   | .localVar index => localHasSort locals index .field
   | .add left right | .mul left right =>
@@ -47,11 +49,11 @@ def fexprWellFormed (locals : List LocalSort) : Witgen.FExpr F → Bool
       fexprListWellFormed locals values && u64exprWellFormed locals index
   | .dataGet _ _ row _ | .hintGet _ _ row _ => u64exprWellFormed locals row
 
-def fexprListWellFormed (locals : List LocalSort) : List (Witgen.FExpr F) → Bool
+def fexprListWellFormed (locals : List LocalSort) : List (FExpr F) → Bool
   | [] => true
   | value :: values => fexprWellFormed locals value && fexprListWellFormed locals values
 
-def u64exprWellFormed (locals : List LocalSort) : Witgen.U64Expr F → Bool
+def u64exprWellFormed (locals : List LocalSort) : U64Expr F → Bool
   | .const _ | .idx => true
   | .localVar index => localHasSort locals index .u64
   | .val value => fexprWellFormed locals value
@@ -63,7 +65,7 @@ def u64exprWellFormed (locals : List LocalSort) : Witgen.U64Expr F → Bool
       bexprWellFormed locals condition && u64exprWellFormed locals thenValue &&
         u64exprWellFormed locals elseValue
 
-def bexprWellFormed (locals : List LocalSort) : Witgen.BExpr F → Bool
+def bexprWellFormed (locals : List LocalSort) : BExpr F → Bool
   | .true | .false => true
   | .feq left right | .flt left right =>
       fexprWellFormed locals left && fexprWellFormed locals right
@@ -75,36 +77,36 @@ def bexprWellFormed (locals : List LocalSort) : Witgen.BExpr F → Bool
 
 end
 
-def vexprWellFormed (locals : List LocalSort) : {n : ℕ} → Witgen.VExpr F n → Bool
+def vexprWellFormed (locals : List LocalSort) : {n : ℕ} → VExpr F n → Bool
   | _, .lit values => values.toList.all (fexprWellFormed locals)
   | _, .mapRange _ body => fexprWellFormed locals body
   | _, .envRange _ => true
   | _, .bitsOf value => fexprWellFormed locals value
   | _, .append left right => vexprWellFormed locals left && vexprWellFormed locals right
 
-def appendStepSort (locals : List LocalSort) : Witgen.Step F → List LocalSort
+def appendStepSort (locals : List LocalSort) : Step F → List LocalSort
   | .letF _ => locals ++ [.field]
   | .letU _ => locals ++ [.u64]
 
-def stepsWellFormedFrom : List LocalSort → List (Witgen.Step F) → Bool
+def stepsWellFormedFrom : List LocalSort → List (Step F) → Bool
   | _, [] => true
   | locals, .letF value :: steps =>
       fexprWellFormed locals value && stepsWellFormedFrom (locals ++ [.field]) steps
   | locals, .letU value :: steps =>
       u64exprWellFormed locals value && stepsWellFormedFrom (locals ++ [.u64]) steps
 
-def stepSorts (initial : List LocalSort) (steps : List (Witgen.Step F)) : List LocalSort :=
+def stepSorts (initial : List LocalSort) (steps : List (Step F)) : List LocalSort :=
   steps.foldl appendStepSort initial
 
-def witnessProgramWellFormed {n : ℕ} (steps : List (Witgen.Step F))
-    (output : Witgen.VExpr F n) : Bool :=
+def witnessProgramWellFormed {n : ℕ} (steps : List (Step F))
+    (output : VExpr F n) : Bool :=
   stepsWellFormedFrom [] steps && vexprWellFormed (stepSorts [] steps) output
 
 /-- A witness program, whose local references all have the sort of an earlier step. -/
 structure WitnessBlock (F : Type) [FiniteField F] where
   outputWidth : ℕ
-  steps : List (Witgen.Step F)
-  output : Witgen.VExpr F outputWidth
+  steps : List (Step F)
+  output : VExpr F outputWidth
   well_formed : witnessProgramWellFormed steps output = true
 
 def cellWellFormed (locals : List LocalSort) : Cell F → Bool
@@ -113,7 +115,7 @@ def cellWellFormed (locals : List LocalSort) : Cell F → Bool
 
 /-- The input program of a generation mode: its `let`-steps, and its input cells. -/
 structure InputProgram (F : Type) [FiniteField F] where
-  steps : List (Witgen.Step F)
+  steps : List (Step F)
   cells : List (Cell F)
   well_formed :
     (stepsWellFormedFrom [] steps && cells.all (cellWellFormed (stepSorts [] steps))) = true
@@ -135,7 +137,7 @@ structure DemandProgram (F : Type) [FiniteField F] where
   channel : String
   trigger : Channel.Direction
   /-- The guard, as a condition on the message cells. -/
-  guard : Witgen.BExpr F
+  guard : BExpr F
   /-- The input of a new row, reading the message cells. -/
   input : InputProgram F
   /-- The input column of the multiplicity cell. -/
@@ -149,7 +151,7 @@ inductive ModeProgram (F : Type) [FiniteField F] where
   `multiplicity`. `rowOf` reads the message cells. -/
   | preallocated (channel : String) (trigger : Channel.Direction) (rows : UInt64)
       (input : InputProgram F)
-      (rowOf : Witgen.U64Expr F) (multiplicity : ℕ)
+      (rowOf : U64Expr F) (multiplicity : ℕ)
 
 /-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
@@ -207,7 +209,7 @@ def expressionsBadVariable (width : ℕ) (expressions : List (Expression F)) : O
   expressions.findSome? (expressionBadVariable width)
 
 def lowerWitness (component operation : ℕ) {width : ℕ}
-    (code : Witgen.WitgenIR F width) : Except LoweringError (WitnessBlock F) :=
+    (code : WitgenIR F width) : Except LoweringError (WitnessBlock F) :=
   match code with
   | .native _ => .error (.nativeWitness component operation)
   | .ir steps output =>
@@ -224,7 +226,7 @@ def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F)) :
     | _ => return none
 
 def lowerInputProgram {Input : TypeMap} [ProvableType Input] (index : ℕ)
-    (cells : Vector (Cell F) (size Input)) (steps : List (Witgen.Step F)) :
+    (cells : Vector (Cell F) (size Input)) (steps : List (Step F)) :
     Except LoweringError (InputProgram F) :=
   let cells := cells.toList
   if h : (stepsWellFormedFrom [] steps && cells.all (cellWellFormed (stepSorts [] steps))) = true

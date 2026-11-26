@@ -2,6 +2,8 @@ module
 
 public import Clean.Circomlib.Poseidon.Repeat
 
+open Clean
+
 @[expose] public section
 
 namespace Circomlib.Poseidon

@@ -8,6 +8,8 @@ public import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Rotation64Bits
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]

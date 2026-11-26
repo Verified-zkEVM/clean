@@ -10,6 +10,8 @@ public meta import Clean.Utils.Primes
 
 @[expose] public section
 
+open Clean
+
 section
 def circuit := do
   let x ← witness (F := F pBabybear) 246

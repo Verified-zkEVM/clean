@@ -16,6 +16,8 @@ public import Clean.Gadgets.IsZero
 
 @[expose] public section
 
+open Clean
+
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets
 open Specs.BLAKE3

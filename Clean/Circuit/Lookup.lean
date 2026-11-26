@@ -4,6 +4,8 @@ public import Clean.Circuit.Provable
 public import Clean.Circuit.WitnessIR
 
 @[expose] public section
+
+namespace Clean
 variable {F : Type} {α : Type} {n : ℕ}
 variable {Row : TypeMap} [ProvableType Row]
 
@@ -71,7 +73,7 @@ def Table.toRaw (table : Table F Row) : RawTable F where
   imply_soundness _ row := table.imply_soundness _ (fromElements row)
   implied_by_completeness _ row := table.implied_by_completeness _ (fromElements row)
 
-def ProverData.getTable (data : ProverData F) {Row : TypeMap} [ProvableType Row]
+def _root_.ProverData.getTable (data : ProverData F) {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) : Array (Row F) :=
   data.getRows table.name Row
 
@@ -160,27 +162,27 @@ def Table.fromStatic (table : StaticTable F Row) : Table F Row :=
 namespace Table
 
 /-- Read a typed row from committed prover data. -/
-def dataGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
+def dataGet (table : Table F Row) (row : U64Expr F) : Row (FExpr F) :=
   Witgen.dataGet table.name Row row
 
 /-- Read a typed row from prover hints. -/
-def hintGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
+def hintGet (table : Table F Row) (row : U64Expr F) : Row (FExpr F) :=
   fromElements <| Vector.mapFinRange (size Row) fun col =>
-    Witgen.FExpr.hintGet table.name (size Row) row col
+    FExpr.hintGet table.name (size Row) row col
 
 @[circuit_norm]
-lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
+lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : U64Expr F) (ctx : Ctx F) :
     Witgen.eval ctx (table.dataGet row) =
       ((ctx.env.data.getTable table)[(row.eval ctx).toNat]?.getD default) := by
   exact Witgen.eval_dataGet table.name Row row ctx
 
 @[circuit_norm]
-lemma eval_hintGet [FiniteField F] (table : Table F Row) (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
+lemma eval_hintGet [FiniteField F] (table : Table F Row) (row : U64Expr F) (ctx : Ctx F) :
     Witgen.eval ctx (table.hintGet row) =
       fromElements (((ctx.env.hint table.name (size Row))[(row.eval ctx).toNat]?).getD default) := by
   simp only [Witgen.eval, hintGet]
   rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements, Vector.map_mapFinRange]
-  simp only [Witgen.FExpr.eval]
+  simp only [Witgen.FExprOver.eval, WitgenEnv.hint_eq]
   by_cases h : (row.eval ctx).toNat < (ctx.env.hint table.name (size Row)).size
   · simp [h]
     rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
@@ -188,3 +190,5 @@ lemma eval_hintGet [FiniteField F] (table : Table F Row) (row : Witgen.U64Expr F
     simp only [default, ProvableType.toElements_fromElements]
 
 end Table
+
+end Clean

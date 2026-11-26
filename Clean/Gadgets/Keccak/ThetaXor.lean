@@ -7,6 +7,8 @@ public import Clean.Specs.Keccak256
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Keccak256.ThetaXor
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

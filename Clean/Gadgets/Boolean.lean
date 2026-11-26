@@ -8,6 +8,8 @@ public import Clean.Circuit.Formal
 
 @[expose] public section
 
+open Clean
+
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
 def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
 
@@ -200,7 +202,7 @@ namespace Boolean
 /- `mk` is private on purpose: a `Boolean` may only be produced by `witness`, which emits the
 booleanity constraint. Its body therefore stays unexposed, or it would leak the private
 constructor into the public scope. -/
-@[no_expose] def witness (e : Witgen.FExpr (F p)) := do
+@[no_expose] def witness (e : FExpr (F p)) := do
   let x ← witnessVar (.ofFExpr e)
   assertZero (var x * (var x - 1))
   return Boolean.mk x

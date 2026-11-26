@@ -9,7 +9,7 @@ public meta import Clean.Examples.BinaryFibonacci.Ensemble
 
 namespace BinaryFibonacci.WitnessGenerationTest
 
-open Air.Flat.WitnessGeneration
+open Clean.Air.Flat.WitnessGeneration
 
 def steps : ℕ := 100
 

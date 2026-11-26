@@ -9,7 +9,7 @@ public import Clean.Air.Verifier
 
 @[expose] public section
 
-namespace Air.Flat
+namespace Clean.Air.Flat
 universe u
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -87,7 +87,7 @@ def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness 
 lemma EnsembleWitness.data_getPublicInput {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
     witness.data.getPublicInput PublicIO = witness.publicInput := by
   rw [ProverData.getPublicInput_eq_eval]
-  exact ProvableType.eval_fromInput_varFromOffset_zero witness.publicInput _
+  exact ProvableType.Clean.eval_fromInput_varFromOffset_zero witness.publicInput _
 
 @[circuit_norm]
 lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
@@ -575,4 +575,4 @@ variable {ens : Ensemble F PublicIO} {ProverInput : TypeMap} [ProvableType Prove
 end
 
 end Ensemble
-end Air.Flat
+end Clean.Air.Flat

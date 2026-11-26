@@ -7,6 +7,8 @@ public meta import Clean.Utils.Tactics.ProvableStructNaming
 -- also non-meta: the pass runs `circuit_norm` with these simprocs wherever the tactic is used
 public import Clean.Circuit.StructEvalSimprocs
 
+open Clean
+
 /-!
 # `computable_witnesses`
 
@@ -122,12 +124,12 @@ or arithmetic in the circuit's parameters), so that offset side conditions reach
 arithmetic. A child is never unfolded otherwise. -/
 def reduceLocalLengthCore : Simp.DSimproc := fun e => do
   let .const name _ := e.getAppFn | return .continue
-  unless name == `FormalCircuitBase.localLength || name == ``ElaboratedCircuit.localLength do
+  unless name == `Clean.FormalCircuitBase.localLength || name == ``ElaboratedCircuit.localLength do
     return .continue
   if e.hasLooseBVars || e.hasMVar then return .continue
   let w := (← withDefault <| whnf e).headBeta
   let stuck := w.find? fun sub =>
-    sub.isConstOf `FormalCircuitBase.localLength || sub.isConstOf ``ElaboratedCircuit.localLength ||
+    sub.isConstOf `Clean.FormalCircuitBase.localLength || sub.isConstOf ``ElaboratedCircuit.localLength ||
       sub.isConstOf ``Operations.localLength || sub.isConstOf ``Circuit
   if w == e || stuck.isSome then return .continue
   return .visit w
@@ -169,7 +171,7 @@ output or a loop accumulator. Its whole-vector equation is a rewrite rule (or a 
 stands, and rewrites element access as well, so it is not decomposed. -/
 def isAtomEval (e : Expr) : Bool :=
   e.isAppOf ``Eval.eval && e.getAppNumArgs ≥ 1 &&
-    (e.appArg!.isFVar || e.appArg!.isAppOfArity `FormalCircuitBase.output 9 ||
+    (e.appArg!.isFVar || e.appArg!.isAppOfArity `Clean.FormalCircuitBase.output 9 ||
       e.appArg!.isAppOfArity ``Fin.foldl 4)
 
 /-- An equation between computed vectors is decided elementwise (`Vector.ext_iff`), where element
@@ -388,7 +390,7 @@ def run (hints : Array Term) : TacticM Unit := do
     let chain ← match t.appArg!.getAppFn.constName? with
       | some main => wrapperChain main
       | none => pure #[]
-    let t ← deltaExpand t fun c => c == `FormalCircuitBase.ComputableWitnesses || chain.contains c
+    let t ← deltaExpand t fun c => c == `Clean.FormalCircuitBase.ComputableWitnesses || chain.contains c
     let g ← g.change (← Core.betaReduce t)
     return [(← g.introN 4 [`n, `input, `env, `env']).2]
   -- the pass at the environments of the main goal, its last two `ProverEnvironment`s

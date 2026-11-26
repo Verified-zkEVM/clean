@@ -15,6 +15,8 @@ public import Clean.Types.U32
 
 @[expose] public section
 
+open Clean
+
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 namespace Examples.HintExample

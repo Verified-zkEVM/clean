@@ -12,7 +12,7 @@ that don't fit their components, for example a preallocated component without a 
 Most of these checks should become types or proof obligations of the generation instead.
 -/
 
-namespace Air.Flat.WitnessGeneration
+namespace Clean.Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -81,7 +81,7 @@ structure DataRead where
 
 mutual
 
-def fexprDataReads : Witgen.FExpr F → List DataRead
+def fexprDataReads : FExpr F → List DataRead
   | .expr _ | .const _ | .localVar _ => []
   | .add left right | .mul left right => fexprDataReads left ++ fexprDataReads right
   | .inv value => fexprDataReads value
@@ -93,11 +93,11 @@ def fexprDataReads : Witgen.FExpr F → List DataRead
       { key, width, column := column.val } :: u64exprDataReads row
   | .hintGet _ _ row _ => u64exprDataReads row
 
-def fexprListDataReads : List (Witgen.FExpr F) → List DataRead
+def fexprListDataReads : List (FExpr F) → List DataRead
   | [] => []
   | value :: values => fexprDataReads value ++ fexprListDataReads values
 
-def u64exprDataReads : Witgen.U64Expr F → List DataRead
+def u64exprDataReads : U64Expr F → List DataRead
   | .const _ | .idx | .localVar _ => []
   | .val value => fexprDataReads value
   | .add left right | .mul left right | .div left right | .mod left right |
@@ -106,7 +106,7 @@ def u64exprDataReads : Witgen.U64Expr F → List DataRead
   | .ite condition thenValue elseValue =>
       bexprDataReads condition ++ u64exprDataReads thenValue ++ u64exprDataReads elseValue
 
-def bexprDataReads : Witgen.BExpr F → List DataRead
+def bexprDataReads : BExpr F → List DataRead
   | .true | .false => []
   | .feq left right | .flt left right => fexprDataReads left ++ fexprDataReads right
   | .neq left right | .lt left right => u64exprDataReads left ++ u64exprDataReads right
@@ -116,18 +116,18 @@ def bexprDataReads : Witgen.BExpr F → List DataRead
 
 end
 
-def vexprDataReads : {n : ℕ} → Witgen.VExpr F n → List DataRead
+def vexprDataReads : {n : ℕ} → VExpr F n → List DataRead
   | _, .lit values => values.toList.flatMap fexprDataReads
   | _, .mapRange _ body => fexprDataReads body
   | _, .envRange _ => []
   | _, .bitsOf value => fexprDataReads value
   | _, .append left right => vexprDataReads left ++ vexprDataReads right
 
-def stepDataReads : Witgen.Step F → List DataRead
+def stepDataReads : Step F → List DataRead
   | .letF value => fexprDataReads value
   | .letU value => u64exprDataReads value
 
-def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
+def witnessDataReads : {n : ℕ} → WitgenIR F n → List DataRead
   | _, .native _ => []
   | _, .ir steps output => steps.flatMap stepDataReads ++ vexprDataReads output
 
@@ -153,7 +153,7 @@ def dataReaders (component : Component F) : List (DataReader × List DataRead) :
 
 /-- Whether the input program of a preallocated row is computed from the row index, except for its
 witness cells, which may also read the hint. -/
-def rowProgramValid (steps : List (Witgen.Step F)) (cells : List (Cell F)) : Bool :=
+def rowProgramValid (steps : List (Step F)) (cells : List (Cell F)) : Bool :=
   steps.all (·.validForRow .fixed) && cells.all fun
     | .fixed value => value.validForRow .fixed
     | .witness value => value.validForRow .prover
@@ -222,4 +222,4 @@ def validateGeneration (ens : Ensemble F PublicIO) :
   | .error error => .error error
   | .ok multiplicities => .ok { multiplicities, valid := hvalid }
 
-end Air.Flat.WitnessGeneration
+end Clean.Air.Flat.WitnessGeneration

@@ -5,6 +5,8 @@ public import Clean.Air.Lookup
 public import Clean.Air.WitnessGeneration
 public import Clean.Examples.FemtoCairo.FemtoCairo
 
+open Clean
+
 @[expose] public section
 
 namespace Examples.FemtoCairo.FlatAir

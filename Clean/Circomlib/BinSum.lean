@@ -11,6 +11,8 @@ public import Clean.Circomlib.Bitify
 
 @[expose] public section
 
+open Clean
+
 namespace Circomlib
 open Utils.Bits Expression
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

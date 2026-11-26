@@ -5,6 +5,8 @@ public import Clean.Utils.Tactics.ComputableWitnesses
 
 @[expose] public section
 
+namespace Clean
+
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
 section
@@ -518,3 +520,5 @@ def channels (circuit : FormalCircuitBase F Input Output) :=
   circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements
 end FormalCircuitBase
 end
+
+end Clean

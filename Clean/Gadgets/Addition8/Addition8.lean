@@ -5,6 +5,8 @@ public import Clean.Gadgets.Boolean
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

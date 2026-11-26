@@ -4,7 +4,10 @@ public import Clean.Air.FlatEnsemble
 
 @[expose] public section
 
-open Air.Flat (Component Table Tables ChannelInterface)
+namespace Clean
+
+open Air (Flat.Table)
+open Air.Flat (Component Tables ChannelInterface)
 open Air.Flat.ChannelInterface (channelsWithGuarantees channelsWithRequirements)
 variable {F : Type} {α β : Type*} [ChannelInterface α F] [ChannelInterface β F]
 
@@ -220,7 +223,7 @@ lemma partialBalancedChannel_of_balancedInteractions {tables : Tables F} {channe
 For ordered channels, we can always instantiate partial balance at an initial sublist.
 -/
 theorem partialBalancedChannel_of_cons_of_orderedChannelLt
-  {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
+  {table : Flat.Table F} {tables : Tables F} (same_data : table.data = tables.data)
   {channel : RawChannel F} :
   table.Constraints →
   PartialBalancedChannel (.cons table tables same_data) channel →
@@ -236,7 +239,7 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt
     grw [List.perm_append_comm_assoc]
   constructor
   · intro a
-    use Table.channel_eq_of_mem_interactionsWith
+    use Flat.Table.channel_eq_of_mem_interactionsWith
     exact same_channel a
   rw [forall_and]
   rcases not_in_reqs_or with channel_not_in_grts | channel_not_in_reqs
@@ -245,14 +248,14 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt
   · simp_all
   · right
     have channel_reqs := table.requirements_of_not_mem_of_constraints table_constraints channel_not_in_reqs
-    rw [Table.channelRequirements_iff_forall, same_data] at channel_reqs
+    rw [Flat.Table.channelRequirements_iff_forall, same_data] at channel_reqs
     exact ⟨ channel_reqs, extra_reqs ⟩
 
 /--
 For ordered channels, we can always instantiate partial balance at an initial sublist.
 -/
 lemma partialBalancedChannel_of_cons_of_orderedChannel
-  {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
+  {table : Flat.Table F} {tables : Tables F} (same_data : table.data = tables.data)
   {channel : RawChannel F} :
   table.Constraints →
   PartialBalancedChannel (tables.cons table same_data) channel →
@@ -268,7 +271,7 @@ on a list of tables by induction. This lemma captures the main step.
 -/
 lemma guarantees_of_requirements_cons
   -- given a list of tables, and one additional table
-  {table : Table F} {tables : Tables F} (same_data : table.data = tables.data)
+  {table : Flat.Table F} {tables : Tables F} (same_data : table.data = tables.data)
   -- and a channel that is consistent, ordered on the new table, and partially balanced on the combined tables
   {channel : RawChannel F} [channel.Consistent] :
   table.Constraints →
@@ -297,7 +300,7 @@ lemma guarantees_of_requirements_cons
   have subset_channelInteractions : table.interactionsWith channel ⊆ channelInteractions := by
     simp only [channelInteractions, circuit_norm]
   suffices all_grts : ∀ i ∈ channelInteractions, i.Guarantees tables.data by
-    rw [Table.channelGuarantees_iff_forall, same_data]
+    rw [Flat.Table.channelGuarantees_iff_forall, same_data]
     intro i hi
     exact all_grts i (subset_channelInteractions hi)
   -- this works since we can prove all channel _requirements_
@@ -307,11 +310,11 @@ lemma guarantees_of_requirements_cons
     intro i h_mem
     rcases h_mem with h_mem_table | h_mem_old | h_mem_extra
     -- for the new table, we can just use the requirements assumption
-    · rw [Table.channelRequirements_iff_forall, same_data] at reqs
+    · rw [Flat.Table.channelRequirements_iff_forall, same_data] at reqs
       use table.channel_eq_of_mem_interactionsWith h_mem_table
       exact reqs _ h_mem_table
     · obtain ⟨ table', h_table', i_mem_table ⟩ := h_mem_old
-      simp only [Table.channelRequirements_iff_forall] at ih
+      simp only [Flat.Table.channelRequirements_iff_forall] at ih
       specialize ih table' h_table'
       simp only [tables.same_data _ h_table'] at ih
       use table'.channel_eq_of_mem_interactionsWith i_mem_table
@@ -353,7 +356,7 @@ lemma partialBalancedChannel_of_sublist {subtables tables : Tables F} {channel :
   · simp [circuit_norm, or_imp]
     constructor
     · intro i
-      use fun _ _ => Table.channel_eq_of_mem_interactionsWith
+      use fun _ _ => Flat.Table.channel_eq_of_mem_interactionsWith
       exact same_channel i
     rcases no_grts_or_extra_reqs with no_grts | extra_reqs
     · simp only [List.mem_flatMap, not_exists, not_and] at no_grts
@@ -369,8 +372,8 @@ lemma partialBalancedChannel_of_sublist {subtables tables : Tables F} {channel :
     have ht' : t ∈ tables.tables := by
       apply perm.symm.subset
       simp [ht]
-    rw [← tables.same_data _ ht', ← Table.channelRequirements_iff_forall]
-    apply Table.requirements_of_not_mem_of_constraints
+    rw [← tables.same_data _ ht', ← Flat.Table.channelRequirements_iff_forall]
+    apply Flat.Table.requirements_of_not_mem_of_constraints
     exact otherConstraints _ ht
     exact otherReqs _ ht
   -- balance
@@ -421,7 +424,7 @@ lemma guarantees_of_requirements_append
     apply reqs _ (List.mem_of_mem_eraseIdx ht')
 
 /-- Helper lemma that uses circuit soundness, to strengthen guarantees to include requirements -/
-lemma iff_guarantees_of_constraints {table : Table F} {finished : List (RawChannel F)} :
+lemma iff_guarantees_of_constraints {table : Flat.Table F} {finished : List (RawChannel F)} :
   table.Assumptions →
   table.Constraints →
   table.component.circuit.channelsWithGuarantees ⊆ finished →
@@ -431,7 +434,7 @@ lemma iff_guarantees_of_constraints {table : Table F} {finished : List (RawChann
   constructor; simp_all
   intro grts
   have all_grts : table.Guarantees := by
-    rw [Table.guarantees_iff_channelGuarantees]
+    rw [Flat.Table.guarantees_iff_channelGuarantees]
     intro channel h_channel
     exact grts _ (subset_finished h_channel)
   -- constraints ∧ guarantees → requirements → channelRequirements
@@ -552,9 +555,9 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 namespace Ensemble
 @[circuit_norm]
 def OrderedChannel (ens : Ensemble F PublicIO) (channel : RawChannel F) : Prop :=
-  _root_.OrderedChannelRefl channel ens.verifier ∧
-  _root_.OrderedChannel channel ens.tables ∧
-  _root_.OrderedChannelLt channel ens.tables [ens.verifier]
+  Clean.OrderedChannelRefl channel ens.verifier ∧
+  Clean.OrderedChannel channel ens.tables ∧
+  Clean.OrderedChannelLt channel ens.tables [ens.verifier]
 
 @[circuit_norm]
 abbrev OrderedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
@@ -908,3 +911,5 @@ def toFormal (soundEns : SoundEnsemble F PublicIO balance)
     exact soundEns.soundChannels
 end SoundEnsemble
 end Air.Flat
+
+end Clean

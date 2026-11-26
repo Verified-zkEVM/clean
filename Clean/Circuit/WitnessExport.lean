@@ -3,6 +3,8 @@ module
 public import Clean.Circuit.Json
 public import Clean.Circuit.Formal
 
+open Clean
+
 /-!
 # Witness-generation export
 
@@ -38,7 +40,7 @@ variable {F : Type}
 
 /-- A witness program is exportable iff it is structured IR (`.native` closures are
 the migration escape hatch and cannot be serialized). -/
-def WitgenIR.exportable {m : ℕ} : WitgenIR F m → Bool
+def WitgenIROver.exportable {m : ℕ} : WitgenIR F m → Bool
   | .native _ => false
   | .ir _ _ => true
 
@@ -56,7 +58,7 @@ variable [ToJson F]
 
 mutual
 
-def FExpr.toJson : FExpr F → Json
+def FExprOver.toJson : FExpr F → Json
   | .expr e => Json.mkObj [("type", "expr"), ("expr", Lean.toJson e)]
   | .const c => Json.mkObj [("type", "const"), ("value", Lean.toJson c)]
   | .localVar i => Json.mkObj [("type", "localVar"), ("index", Lean.toJson i)]
@@ -67,7 +69,7 @@ def FExpr.toJson : FExpr F → Json
   | .ite c t e => Json.mkObj [("type", "ite"),
       ("cond", c.toJson), ("then", t.toJson), ("else", e.toJson)]
   | .listGet xs i => Json.mkObj [("type", "listGet"),
-      ("items", Json.arr (FExpr.listToJson xs).toArray), ("index", i.toJson)]
+      ("items", Json.arr (FExprOver.listToJson xs).toArray), ("index", i.toJson)]
   | .dataGet key n row col => Json.mkObj [("type", "dataGet"),
       ("table", Lean.toJson key), ("width", Lean.toJson n),
       ("row", row.toJson), ("col", Lean.toJson col.val)]
@@ -75,11 +77,11 @@ def FExpr.toJson : FExpr F → Json
       ("table", Lean.toJson key), ("width", Lean.toJson n),
       ("row", row.toJson), ("col", Lean.toJson col.val)]
 
-def FExpr.listToJson : List (FExpr F) → List Json
+def FExprOver.listToJson : List (FExpr F) → List Json
   | [] => []
-  | x :: xs => x.toJson :: FExpr.listToJson xs
+  | x :: xs => x.toJson :: FExprOver.listToJson xs
 
-def U64Expr.toJson : U64Expr F → Json
+def U64ExprOver.toJson : U64Expr F → Json
   | .const n => Json.mkObj [("type", "const"), ("value", Lean.toJson n.toNat)]
   | .val x => Json.mkObj [("type", "val"), ("arg", x.toJson)]
   | .idx => Json.mkObj [("type", "idx")]
@@ -96,7 +98,7 @@ def U64Expr.toJson : U64Expr F → Json
   | .ite c t e => Json.mkObj [("type", "ite"),
       ("cond", c.toJson), ("then", t.toJson), ("else", e.toJson)]
 
-def BExpr.toJson : BExpr F → Json
+def BExprOver.toJson : BExpr F → Json
   | .true => Json.mkObj [("type", "true")]
   | .false => Json.mkObj [("type", "false")]
   | .feq x y => Json.mkObj [("type", "eq"), ("lhs", x.toJson), ("rhs", y.toJson)]
@@ -109,11 +111,11 @@ def BExpr.toJson : BExpr F → Json
 
 end
 
-instance : ToJson (FExpr F) := ⟨FExpr.toJson⟩
-instance : ToJson (U64Expr F) := ⟨U64Expr.toJson⟩
-instance : ToJson (BExpr F) := ⟨BExpr.toJson⟩
+instance : ToJson (FExpr F) := ⟨FExprOver.toJson⟩
+instance : ToJson (U64Expr F) := ⟨U64ExprOver.toJson⟩
+instance : ToJson (BExpr F) := ⟨BExprOver.toJson⟩
 
-def VExpr.toJson {n : ℕ} : VExpr F n → Json
+def VExprOver.toJson {n : ℕ} : VExpr F n → Json
   | .lit es => Json.mkObj [("type", "elements"), ("elements", Lean.toJson es.toList)]
   | .mapRange n body => Json.mkObj [("type", "mapRange"),
       ("n", Lean.toJson n), ("body", body.toJson)]
@@ -124,22 +126,24 @@ def VExpr.toJson {n : ℕ} : VExpr F n → Json
   | .append a b => Json.mkObj [("type", "append"),
       ("left", a.toJson), ("right", b.toJson)]
 
-instance {n : ℕ} : ToJson (VExpr F n) := ⟨VExpr.toJson⟩
+instance {n : ℕ} : ToJson (VExpr F n) := ⟨VExprOver.toJson⟩
 
-def Step.toJson : Step F → Json
+def StepOver.toJson : Step F → Json
   | .letF e => Json.mkObj [("sort", "field"), ("value", Lean.toJson e)]
   | .letU e => Json.mkObj [("sort", "u64"), ("value", Lean.toJson e)]
 
-instance : ToJson (Step F) := ⟨Step.toJson⟩
+instance : ToJson (Step F) := ⟨StepOver.toJson⟩
 
 /-- Serialize a witness program; fails on `.native`. -/
-def WitgenIR.toJson? {m : ℕ} : WitgenIR F m → Except String Json
+def WitgenIROver.toJson? {m : ℕ} : WitgenIR F m → Except String Json
   | .native _ => .error "witness program contains a native (closure) witness"
   | .ir steps out => .ok <| Json.mkObj [
       ("steps", Lean.toJson steps),
       ("output", out.toJson)]
 
 end Witgen
+
+namespace Clean
 
 /-! ## Operation-level export -/
 
@@ -229,3 +233,5 @@ macro "#assert_exportable " c:term : command =>
 /-- Pretty-print the witgen export JSON of the given circuit (or formal circuit). -/
 macro "#witgen_json " c:term : command =>
   `(#eval do IO.println (← WitgenExport.jsonString $c))
+
+end Clean

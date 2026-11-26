@@ -19,11 +19,12 @@ public import Clean.Circuit.Operations
 public import Clean.Backends.Circom.Ast
 public import Clean.Backends.Circom.Binary
 
+open Clean
+
 public section
 
 namespace Backends.Circom
 
-open Witgen (FExpr U64Expr BExpr VExpr Step)
 open Ast (ValType Instr Func Module BinOp UnOp RelOp)
 
 variable {F : Type} [FiniteField F]

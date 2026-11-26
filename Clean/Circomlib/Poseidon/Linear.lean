@@ -5,6 +5,8 @@ public import Clean.Circuit
 public import Clean.Specs.PoseidonOptimized
 public import Clean.Utils.Tactics.CircuitProofStart
 
+open Clean
+
 @[expose] public section
 
 namespace Circomlib.Poseidon

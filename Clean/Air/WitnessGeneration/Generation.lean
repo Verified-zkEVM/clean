@@ -49,40 +49,40 @@ preallocated one those whose `rowOf` row carries them. For example, the opcode t
 share its state channel, and each table's guard checks the opcode at the state's `pc`.
 -/
 
-namespace Air.Flat.WitnessGeneration
+namespace Clean.Air.Flat.WitnessGeneration
 
 variable {F : Type}
 
 /-- How generation fills one input cell of a component row. -/
 inductive Cell (F : Type) where
   /-- A fixed column: a value the verifier knows, computed from the row index alone. -/
-  | fixed (value : Witgen.FExpr F)
+  | fixed (value : FExpr F)
   /-- A value the prover computes. -/
-  | witness (value : Witgen.FExpr F)
+  | witness (value : FExpr F)
   /-- The multiplicity of the component's interaction on its channel opposite to the trigger, which
   generation counts. -/
   | multiplicity
 
 namespace Cell
 
-instance : Coe (Witgen.FExpr F) (Cell F) := ⟨.witness⟩
+instance : Coe (FExpr F) (Cell F) := ⟨.witness⟩
 instance : Coe (Expression F) (Cell F) := ⟨fun e => .witness (.expr e)⟩
 instance {n : ℕ} [OfNat F n] : OfNat (Cell F) n := ⟨.witness (OfNat.ofNat n)⟩
 instance {M : TypeMap} [ProvableType M] : Coe (M (Expression F)) (M (Cell F)) where
   coe v := fromElements (toElements v |>.map fun e => .witness (.expr e))
 
 /-- The value of the cell in a row whose multiplicity is `multiplicity`. -/
-def eval [FiniteField F] (ctx : Witgen.Ctx F) (multiplicity : F) : Cell F → F
+def eval [FiniteField F] (ctx : Ctx F) (multiplicity : F) : Cell F → F
   | .fixed value | .witness value => value.eval ctx
   | .multiplicity => multiplicity
 
 /-- An input value agrees with the cell evaluated in `ctx`, if the cell is fixed. -/
 @[circuit_norm]
-def FixedMatches [FiniteField F] (ctx : Witgen.Ctx F) : Cell F → F → Prop
+def FixedMatches [FiniteField F] (ctx : Ctx F) : Cell F → F → Prop
   | .fixed value, input => input = value.eval ctx
   | .witness _, _ | .multiplicity, _ => True
 
-instance [FiniteField F] (ctx : Witgen.Ctx F) : ∀ (cell : Cell F) (input : F),
+instance [FiniteField F] (ctx : Ctx F) : ∀ (cell : Cell F) (input : F),
     Decidable (FixedMatches ctx cell input)
   | .fixed value, input => inferInstanceAs (Decidable (input = value.eval ctx))
   | .witness _, _ | .multiplicity, _ => inferInstanceAs (Decidable True)
@@ -99,14 +99,14 @@ end Cell
 
 /-- The input cells a program computes, as a vector, and its `let`-steps. -/
 def inputCells {Input : TypeMap} [ProvableType Input] (program : Witgen.M F (Input (Cell F))) :
-    Vector (Cell F) (size Input) × List (Witgen.Step F) :=
+    Vector (Cell F) (size Input) × List (Step F) :=
   let (cells, steps) := program #[]
   (toElements cells, steps.toList)
 
 /-- The context in which the cells of a program are evaluated: `env`, at row `row`. -/
 @[circuit_norm]
-def inputContext [FiniteField F] (steps : List (Witgen.Step F)) (env : ProverEnvironment F)
-    (row : ℕ) : Witgen.Ctx F :=
+def inputContext [FiniteField F] (steps : List (Step F)) (env : ProverEnvironment F)
+    (row : ℕ) : Ctx F :=
   { env, locals := Witgen.evalSteps env steps #[] row, idx := row }
 
 /-- Evaluate an input program in `env` at row `row`, with multiplicity `multiplicity`. -/
@@ -132,7 +132,7 @@ structure DemandMode (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType 
   /-- Which of these messages the component answers, by default all of them. Components sharing a
   channel, like the opcode tables of a VM, are told apart by guards. A guard is a witness program
   over the message, so it can read prover data and hints, like the opcode at the message's `pc`. -/
-  guard : Var Message F → Witgen.BExpr F := fun _ => .true
+  guard : Var Message F → BExpr F := fun _ => .true
   /-- The input of a new row, built from the message it answers. A multiplicity cell starts at the
   demanded count. -/
   input : Var Message F → Witgen.M F (Input (Cell F))
@@ -155,10 +155,10 @@ structure PreallocatedMode (F : Type) (Input : TypeMap) [ProvableType Input] whe
   height : UInt64
   /-- The input of row `i`. Its `let`-steps and fixed cells are computed from `i` alone; its witness
   cells may also read the hint. Its multiplicity cell starts at 0. -/
-  input (i : Witgen.U64Expr F) : Witgen.M F (Input (Cell F))
+  input (i : U64Expr F) : Witgen.M F (Input (Cell F))
   /-- The index of the row that answers a demanded message, computed from the message and the hint.
   Indices at or above `height` mean that no row answers it. -/
-  rowOf : Var Message F → Witgen.U64Expr F
+  rowOf : Var Message F → U64Expr F
 
 variable [FiniteField F]
 
@@ -172,12 +172,12 @@ instance {Input : TypeMap} [ProvableType Input] (mode : PreallocatedMode F Input
 
 /-- The guard as a condition on the cells of the message. -/
 def DemandMode.guardCondition {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
-    Witgen.BExpr F :=
+    BExpr F :=
   mode.guard (varFromOffset mode.Message 0)
 
 /-- `rowOf` as a program on the cells of the message. -/
 def PreallocatedMode.rowIndex {Input : TypeMap} [ProvableType Input]
-    (mode : PreallocatedMode F Input) : Witgen.U64Expr F :=
+    (mode : PreallocatedMode F Input) : U64Expr F :=
   mode.rowOf (varFromOffset mode.Message 0)
 
 /-- How the generator builds the rows of a component with input `Input`. -/
@@ -195,7 +195,7 @@ def channelName : Generation F Input → String
 
 /-- The input cells of a row, with the program's `let`-steps: those of a demand row, whose message
 is in the first cells of the environment, or those of a preallocated row, whose index is `.idx`. -/
-def cells : Generation F Input → Vector (Cell F) (size Input) × List (Witgen.Step F)
+def cells : Generation F Input → Vector (Cell F) (size Input) × List (Step F)
   | .demand mode => inputCells (mode.input (varFromOffset mode.Message 0))
   | .preallocated mode => inputCells (mode.input .idx)
 
@@ -237,4 +237,4 @@ def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
 def nextPowerOfTwo (value : ℕ) : ℕ :=
   nextPowerOfTwoAux (max value 1) value 1
 
-end Air.Flat.WitnessGeneration
+end Clean.Air.Flat.WitnessGeneration

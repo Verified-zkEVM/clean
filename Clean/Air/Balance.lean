@@ -5,6 +5,8 @@ public import Clean.Gadgets.Boolean
 
 @[expose] public section
 
+namespace Clean
+
 variable {F : Type} [FiniteField F]
 variable {Message : TypeMap} [ProvableType Message]
 
@@ -294,16 +296,16 @@ See `Vm.lean` for a detailed motivation and application of the main theorem,
 -/
 
 -- Missing stlib lemma needed below
-lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ} (hi : i < l.length) :
+lemma _root_.List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ} (hi : i < l.length) :
     (l.eraseIdx i).countP p = l.countP p - (if p l[i] then 1 else 0) := by
   suffices (l.eraseIdx i).countP p + (if p l[i] then 1 else 0) = l.countP p by omega
   induction l generalizing i with
   | nil => nomatch hi
   | cons a l ih =>
     cases i with
-    | zero => simp [countP_cons]
+    | zero => simp [List.countP_cons]
     | succ i =>
-      simp only [eraseIdx_cons_succ, countP_cons, getElem_cons_succ]
+      simp only [List.eraseIdx_cons_succ, List.countP_cons, List.getElem_cons_succ]
       rw [← ih (Nat.lt_of_succ_lt_succ hi)]
       ring_nf
 
@@ -520,3 +522,5 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_if
   have := theorem_active i (by simpa using hi)
   simp only [List.getElem_map] at this
   exact this requirements
+
+end Clean

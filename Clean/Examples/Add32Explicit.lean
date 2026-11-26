@@ -8,6 +8,8 @@ public import Clean.Gadgets.Boolean
 
 @[expose] public section
 
+open Clean
+
 open Gadgets.Addition32Full (Inputs Outputs)
 
 def circuit32 input := Gadgets.Addition32Full.main (p:=pBabybear) input

@@ -8,6 +8,8 @@ public import Clean.Utils.Tactics.ProvableStructDeriving
 
 @[expose] public section
 
+open Clean
+
 namespace Gadgets.Conditional
 
 section
@@ -69,9 +71,9 @@ theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumpt
   -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
   intro i hi
-  rw [ProvableType.eval_fromElements]
+  rw [ProvableType.Clean.eval_fromElements]
   rw [ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
-  simp only [circuit_norm, ProvableType.getElem_eval_toElements, h_selector, h_ifTrue, h_ifFalse]
+  simp only [circuit_norm, ProvableType.Clean.getElem_eval_toElements, h_selector, h_ifTrue, h_ifFalse]
 
   -- Case split on the selector value
   cases h_assumptions with
@@ -122,8 +124,8 @@ theorem eval_ifElse_output {M : TypeMap} [ProvableType M] {env}
   -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
   intro i hi
-  rw [ProvableType.eval_fromElements]
-  simp only [circuit_norm, Vector.getElem_ofFn, ProvableType.getElem_eval_toElements]
+  rw [ProvableType.Clean.eval_fromElements]
+  simp only [circuit_norm, Vector.getElem_ofFn, ProvableType.Clean.getElem_eval_toElements]
 end
 
 end Gadgets.Conditional
