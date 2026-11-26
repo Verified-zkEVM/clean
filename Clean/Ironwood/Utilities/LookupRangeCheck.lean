@@ -2038,7 +2038,8 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
         apply FloorPlanner.RegionSynthesisSummary.ext
         all_goals
           simp [rangeCheckAtDecomposedBody, rangeCheckAtDecomposedSynthesisSummary,
-            rangeCheckLoopSummary, hn, circuit_norm, synthesis_summary_norm] <;> omega
+            rangeCheckLoopSummary, hn, circuit_norm, synthesis_summary_norm]
+        all_goals omega
       registered := by keygen_registration
       lookupSelectorAnchorRequirements cfg _ _ _ :=
         LookupRangeCheck.lookupSelectorAnchorRequirements cfg

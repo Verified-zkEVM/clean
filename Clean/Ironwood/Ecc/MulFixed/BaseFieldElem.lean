@@ -339,8 +339,8 @@ theorem canonicityRegion_synthesisSummary_eq
         ((canonicityRegion cfg alpha z84 alphaPrime z13 z44 z43).operations self) =
       canonicityRegionSynthesisSummary cfg := by
   apply FloorPlanner.RegionSynthesisSummary.ext
-  all_goals simp only [canonicityRegionSynthesisSummary, canonicityRegion,
-    circuit_norm, canonGate, synthesis_summary_norm] <;> try omega
+  all_goals (simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+    circuit_norm, canonGate, synthesis_summary_norm]; try omega)
 
 @[synthesis_summary_norm]
 theorem canonicityRegionSynthesisSummary_hasNoFixedColumns (cfg : Config) :
@@ -1819,7 +1819,7 @@ theorem synthesize_keygenRegistered
            FormalRegionCircuit.Configured.gates, FormalRegionCircuit.Configured.lookups,
            FormalRegionCircuit.Configured.fixedColumns, FormalRegionCircuit.Configured.permutationColumns,
            FormalRegionCircuit.Configured.inputCells, FormalRegionCircuit.Configured.ofPure,
-           keygen_spine, keygen_norm, keygen_output_norm, id] at * <;> tauto)
+           keygen_spine, keygen_norm, keygen_output_norm, id] at *; tauto)
   constructor
   · apply FormalRegionCircuit.call_keygenRegistered
       Add.add cfg.superConfig.addConfig addConfigured
@@ -1830,18 +1830,20 @@ theorem synthesize_keygenRegistered
     all_goals ((try rw [Add.add_inputCells]); intros; simp only [addConfigured, cfg, program,
       FormalRegionCircuit.Configured.gates, FormalRegionCircuit.Configured.lookups,
       FormalRegionCircuit.Configured.fixedColumns, FormalRegionCircuit.Configured.permutationColumns,
-      keygen_spine, keygen_norm, keygen_output_norm] at * <;> tauto)
+      keygen_spine, keygen_norm, keygen_output_norm] at *)
+    all_goals tauto
   constructor
   · apply witnessCheck13_keygenRegistered <;>
-      (intros; simp only [
+      simp only [
            FormalRegionCircuit.Configured.gates, FormalRegionCircuit.Configured.lookups,
            FormalRegionCircuit.Configured.permutationColumns,
-           keygen_spine, keygen_norm, keygen_output_norm] at * <;> tauto)
+           keygen_spine, keygen_norm, keygen_output_norm] at *
   · apply canonicityRegion_keygenRegistered <;>
       (intros; simp only [
            FormalRegionCircuit.Configured.gates, FormalRegionCircuit.Configured.lookups,
            FormalRegionCircuit.Configured.permutationColumns,
-           keygen_spine, keygen_norm, keygen_output_norm] at * <;> tauto)
+           keygen_spine, keygen_norm, keygen_output_norm] at *)
+    all_goals tauto
 
 theorem synthesize_copyCellsAssignedFrom
     (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp)

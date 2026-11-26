@@ -447,8 +447,6 @@ private theorem canon_bit_witness (wb1 wd1 : WitgenIR Fp 1)
   have hg := h.2.2
   rw [FormalRegionCircuit.toFormal_call_extendsWitnesses] at hg
   simp only [CommitIvk.bundle, circuit_norm] at hg
-  try simp only [Nat.add_assoc, Nat.reduceAdd] at hg
-  try simp only [Nat.add_assoc, Nat.reduceAdd]
   exact ⟨hg.2.2.2.2.1, hg.2.2.2.2.2.2.2.2.2.2.2.2.2.1⟩
 
 /-- Build direction for stage 1: the three short-check chunks give the stage. -/

@@ -265,12 +265,10 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
         (fun j => if h : j < n then k ⟨j, h⟩ else false)
         (fun i => by
           have hbp := (hk i).2.1
-          beta_reduce
           rw [show offset + (↑i + 1) + 1 = offset + ↑i + 2 from by omega,
             show offset + (↑i + 1) = offset + ↑i + 1 from by omega]
           exact congrArg₂ Point.mk hbp.1 hbp.2 ▸ rfl)
         (fun i => by
-          beta_reduce
           rw [dite_eq_left i.isLt]
           have ha := (hk i).2.2
           rw [show offset + (↑i + 1) + 1 = offset + ↑i + 2 from by omega,

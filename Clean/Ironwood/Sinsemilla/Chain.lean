@@ -464,7 +464,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     · -- the slot's ProverSpec, off the child's
       intro A' B' hA'x hA'y hchain'
       have hres := hPS A' B'
-        (by rw [hA'x]; try with_unfolding_all rfl)
+        (by rw [hA'x])
         (by rw [hA'y]; by_cases hi : i = 0 <;> simp [hi, reads])
         hchain'
       exact hres
@@ -1751,7 +1751,6 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       (fun j r => if h : j < ns.length then msF ⟨j, h⟩ r else 0)
       (by
         intro j r
-        beta_reduce
         by_cases h : j < ns.length
         · rw [dite_eq_left h]
           exact hbF ⟨j, h⟩ r
@@ -1760,7 +1759,6 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       ns 0 offset input.pieces (by omega)
       (by
         intro j
-        beta_reduce
         simp only [Nat.zero_add, dite_eq_left j.isLt]
         have hzsv := hzsF j
         rw [eval_cells (M := fields (ns.getD j.val 0 + 1)),
@@ -1787,7 +1785,6 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             Cell.of_rowOffset, Cell.of_column, Environment.get_advice] using hv)
       (by
         intro j
-        beta_reduce
         simp only [Nat.zero_add]
         obtain ⟨hsec, hyck⟩ := hGg j
         rw [(hQg j)] at hyck

@@ -2275,11 +2275,6 @@ theorem synthCrossAddressChecks_keygenRegistered
       gates lookups fixedColumns permutationColumns := by
   simp only [synthCrossAddressChecks, keygen_spine]
   keygen_registration
-  all_goals
-    first
-    | simpa only [keygen_output_norm] using hadvice 0
-    | rename_i row
-      fin_cases row <;> simp_all
 
 @[keygen_helper]
 theorem synthCrossAddressChecks_copyCellsAssigned

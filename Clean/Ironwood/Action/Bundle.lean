@@ -787,7 +787,7 @@ private theorem synthWitness_keygenRegistered (G : Generators)
   have hwitnessY := configure_output_witnessPoint_y_mem_permutationRequests G counts
   dsimp only [synthWitness, loadPrivate, Sinsemilla.load]
   simp_all only [keygen_spine]
-  repeat' constructor
+  repeat' constructor!
   all_goals
     first
     | apply Ecc.WitnessPoint.pointFormal.call_keygenRegistered_ofCertificate
@@ -918,7 +918,7 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
   repeat' first
     | (guard_target =~ (_ ∧ _); constructor)
   all_goals
-    first
+    try first
     | apply
         (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
           B.merkleQ_onCurve 0 16 (by norm_num)
@@ -946,8 +946,6 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
         (commitIvkCertificate G B counts)
     | apply AddressIntegrity.circuit.call_keygenRegistered_ofCertificate
         (addressIntegrityCertificate G counts)
-    | exact configure_output_orchardGate_mem_gates G counts
-    | skip
   all_goals simp_all only [keygen_norm, keygen_output_norm,
     synthWitness_output, actionConfigureContext_permutationColumns,
     Nat.reduceEqDiff, ite_false]
@@ -959,7 +957,6 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
     rcases hcell with rfl | rfl | rfl | rfl
     all_goals first
       | exact hadvice 0
-      | exact hwitnessX
       | exact hwitnessY
 
 private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
@@ -986,7 +983,7 @@ private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
   repeat' first
     | (guard_target =~ (_ ∧ _); constructor)
   all_goals
-    first
+    try first
     | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
         B.noteQ_onCurve).call_keygenRegistered_ofCertificate
         (noteCommitOldCertificate G B counts)
@@ -996,7 +993,6 @@ private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
     | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
         (eccConfigureCertificate G counts).witnessPointNonIdFormal
     | exact configure_output_orchardGate_mem_gates G counts
-    | skip
   all_goals simp_all only [keygen_norm, keygen_output_norm,
     synthWitness_output, synthChecks_output,
     actionConfigureContext_permutationColumns,
@@ -2314,8 +2310,6 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   simp only [Point.eval_eq, circuit_norm,
     Nat.add_zero] at hGdNS hPkNS
   -- the "constrain equal" region: derived cm_old = witnessed cm_old
-  try simp only [circuit_norm] at hEqR
-  try simp only [circuit_norm] at hOrch
   -- ── assemble the statement ──
   simp only [Spec, SpecBase, extractBase, extract, cellRead, circuit_norm,
     Nat.add_zero, Nat.add_assoc]
@@ -2691,8 +2685,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
         (h := by
           intro j hj
-          simp only [extract, cellRead, ite_eq_left hj]
-          try simp only [circuit_norm, explicit_provable_type])]
+          simp only [extract, cellRead, ite_eq_left hj])]
       rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
           (fun j => (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j) _ 16))
@@ -2759,8 +2752,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           intro j hj
           simp only [extract, cellRead,
             show ¬(16 + j < 16) from by omega, ite_false,
-            show 16 + j - 16 = j from by omega]
-          try with_unfolding_all rfl)
+            show 16 + j - 16 = j from by omega])
         (hn := by with_unfolding_all exact hM1mid)]
       exact hRootP
     -- ── the remaining child contracts (for the instance rows and the gate) ──
@@ -3651,7 +3643,6 @@ theorem soundnessPost
   -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
   -- `base_output` bridge rewrites below fire.
   subst x_gen_out_0
-  try simp only [mainPost, circuit_norm] at hc
   have hPre := hc.1
   have hX := hc.2
   clear hc
@@ -3731,7 +3722,6 @@ theorem completenessPost
   -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
   -- `base_output` bridge rewrites below fire.
   subst x_gen_out_0
-  try simp only [mainPost, circuit_norm] at hwit ⊢
   obtain ⟨-, hWx⟩ := hwit
   -- the base chunk was consumed by circuit_proof_start (completeness mode), so the goal opens
   -- with the base child's preconditions rather than its witness constraints.

@@ -131,7 +131,7 @@ theorem canonical_top_decomp {x lo top : Fp}
     (hcanon : top = 1 → lo.val < tPNat) :
     x.val = lo.val + top.val * 2 ^ 254 ∧
       lo.val = bitrange x.val 0 254 ∧ top.val = bitrange x.val 254 1 := by
-  haveI : Fact (1 < PALLAS_BASE_CARD) := ⟨by norm_num [PALLAS_BASE_CARD]⟩
+  have : Fact (1 < PALLAS_BASE_CARD) := ⟨by norm_num [PALLAS_BASE_CARD]⟩
   have hp := pallasBaseCard_eq
   have htv : top.val < 2 := by rcases htop with h | h <;> subst h <;> simp [ZMod.val_one]
   have hwrap : lo.val + top.val * 2 ^ 254 < PALLAS_BASE_CARD := by

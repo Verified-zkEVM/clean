@@ -316,11 +316,9 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
                                ((place self + (offset + r) : ℕ) : ℤ) } })
         (fun j => if h : j < n then m ⟨j, h⟩ else 0)
         (fun i => by
-          beta_reduce
           rw [dite_eq_left i.isLt]
           exact hm i)
         (fun i => by
-          beta_reduce
           rw [dite_eq_left i.isLt]
           have ha := (hspec i).2.2.2
           rw [show offset + (↑i + 1) = offset + ↑i + 1 from by omega]
@@ -725,7 +723,7 @@ theorem circuitBody_copyCellsAssigned (G : Generators) (w : ℕ) (final : Bool)
   repeat' apply And.intro
   all_goals first
     | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]; done)
     | keygen_registration
 
 /-- The hash-piece body writes only its round selector column: `1` on each
@@ -841,7 +839,6 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
         (fun r => if r < w then ms0 r else mw)
         (by
           intro r hr
-          beta_reduce
           rw [ite_eq_left (show r ≤ w by omega)]
           rcases Nat.lt_or_ge r w with hrw | hrw
           · rw [ite_eq_left hrw, ite_eq_left (show r + 1 ≤ w by omega)]
@@ -860,7 +857,6 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
             rw [hzw]
             ring)
         (by
-          beta_reduce
           rw [ite_eq_right (by omega)])
       beta_reduce at hkey ⊢
       rw [ite_eq_left (by omega : 0 ≤ w), Nat.add_zero] at hkey
@@ -876,7 +872,6 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
         (fun r => if r < w then ms0 r else mw)
         (by
           intro sIdx hs
-          beta_reduce
           rw [ite_eq_left hs]
           have hj := hwc ⟨sIdx, hs⟩
           simp only [circuit_norm] at hj
@@ -889,7 +884,6 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
               show offset + 1 + sIdx = offset + (sIdx + 1) from by omega] at hj
             exact hj)
         (by
-          beta_reduce
           rw [ite_eq_right (by omega)]
           exact hzw)
         (w - i) i (by omega)
@@ -905,7 +899,6 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
       simp only [yA, xR]
       linear_combination h2y
     · -- the chain contract, from the loop's fold
-      beta_reduce
       intro A hAon hAx hAyA B hB
       rw [← h_output_first_xA] at hAx
       rw [← h_output_first_xA, ← h_output_first_xP, ← h_output_first_lambda1,

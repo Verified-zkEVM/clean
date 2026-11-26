@@ -442,7 +442,7 @@ theorem roundSynthesize_copyCellsAssigned
   repeat' apply And.intro
   all_goals first
     | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]; done)
     | keygen_registration
   all_goals
     apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom (self := Add.add)
@@ -1169,7 +1169,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         (by simp [circuit_norm, input_eq]) numBits
         (fun i hpre => by
           obtain ⟨b, h1, h2, h3⟩ := region_1 i hpre
-          refine ⟨b, ?_, ?_, ?_⟩ <;> beta_reduce
+          refine ⟨b, ?_, ?_, ?_⟩
           · rw [show (↑i + 1) * 2 = ↑i * 2 + 2 from by ring]
             exact h1
           · rw [RegionCircuit.foldAcc_succ]
@@ -1252,9 +1252,8 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         (by simp [circuit_norm, input_eq]) (by simpa using region_0) numBits
         (fun i hpre => by
           obtain ⟨hAV, hBV, hzP⟩ := hpre
-          beta_reduce at hAV hzP
           obtain ⟨hSpec, hPSacc, hPSz⟩ := round_spec i ⟨hAV, hBV⟩ hzP
-          refine ⟨⟨⟨hAV, hBV⟩, hzP⟩, ?_, ?_⟩ <;> beta_reduce
+          refine ⟨⟨⟨hAV, hBV⟩, hzP⟩, ?_, ?_⟩
           · rw [RegionCircuit.foldAcc_succ]
             simp only [round_output, circuit_norm, ← point_eval_toEnvironment] at hPSacc ⊢
             exact hPSacc

@@ -262,7 +262,7 @@ def permuteElaborated :
       repeat' apply And.intro
       all_goals first
         | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-           simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+           simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]; done)
         | keygen_registration }
 
 /-- Chain a per-row step family into a `Fin.foldl` (the donor `Permute.value` shape). -/
