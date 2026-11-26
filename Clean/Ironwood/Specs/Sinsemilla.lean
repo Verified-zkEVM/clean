@@ -509,7 +509,7 @@ theorem noteCommitChunks_inj
         = noteCommitChunks gdX' gdY' pkdX' pkdY' v' rho' psi') :
     gdX = gdX' ∧ gdY = gdY' ∧ pkdX = pkdX' ∧ pkdY = pkdY' ∧ v = v' ∧ rho = rho'
       ∧ psi = psi' := by
-  have hK : (2 : ℕ) ^ (K * 109) = 2 ^ 1090 := by norm_num [K]
+  have hK : (2 : ℕ) ^ (K * 109) = 2 ^ 1090 := by rw [show K * 109 = 1090 by rfl]
   have hbound : ∀ {a b c d e f g : ℕ}, a < 2 ^ 255 → b < 2 → c < 2 ^ 255 → d < 2 →
       e < 2 ^ 64 → f < 2 ^ 255 → g < 2 ^ 255 →
       noteCommitMessage a b c d e f g < 2 ^ (K * 109) := by
@@ -566,7 +566,7 @@ theorem commitIvkChunks_inj {ak nk ak' nk' : ℕ}
     intro x y hx hy
     unfold commitIvkMessage
     have hK : (2 : ℕ) ^ (K * 51) = 2 ^ 255 * 2 ^ 255 := by
-      rw [← pow_add]; norm_num [K]
+      rw [← pow_add, show K * 51 = 255 + 255 by rfl]
     calc x + 2 ^ 255 * y < 2 ^ 255 + 2 ^ 255 * y := by omega
       _ = 2 ^ 255 * (y + 1) := by ring
       _ ≤ 2 ^ 255 * 2 ^ 255 := Nat.mul_le_mul_left _ hy

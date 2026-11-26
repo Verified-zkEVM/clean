@@ -168,6 +168,7 @@ private theorem noteCommitChunks_segment_g (gdX gdY pkdX pkdY v rho psi : ℕ)
   chunksOf_eq_of_mod_eq
     (noteCommitChunks_segment_g_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho)
 
+set_option exponentiation.threshold 1080 in
 private theorem noteCommitChunks_segment_h_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
