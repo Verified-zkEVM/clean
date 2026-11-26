@@ -590,7 +590,7 @@ private theorem configure_selectorRequirements
     RhoCanonicity.configure, PsiCanonicity.configure,
     YCanonicity.configure]
   simp [Configure.output_selector, Configure.finalCounts_selector,
-    Configure.output_bind, Configure.finalCounts_bind, Configure.output_pure,
+    Configure.finalCounts_bind,
     Configure.finalCounts_pure, Configure.finalCounts_createGate]
 
 instance (advices : Fin 10 → Column .advice) :

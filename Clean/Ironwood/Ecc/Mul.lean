@@ -1132,17 +1132,17 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     have hHiOut := hHiAccCl 2 (by rw [hAcc2]) (le_refl 2) (by norm_num)
     -- the hi z-cell 124 (= z₁₃₀) and z-cell 0 (= k₂₅₄), as chainNat casts on the output cells
     have hHiZ124 := hHiCells 124 (by omega)
-    simp only [← hi_acc_eq, ← hi_zs_eq] at hHiZ124
+    simp only [← hi_zs_eq] at hHiZ124
     simp only [keygen_output_norm] at hHiZ124
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZ124
     have hK254v := hHiCells 0 (by omega)
-    simp only [← hi_acc_eq, ← hi_zs_eq] at hK254v
+    simp only [← hi_zs_eq] at hK254v
     simp only [keygen_output_norm] at hK254v
     simp only [circuit_norm, Vector.getElem_ofFn] at hK254v
     -- the output cells (`output_eq` components)
     obtain ⟨⟨hOResX, hOResY⟩, hOZ0, hOZ130, hOK254⟩ := output_eq
     -- the hi accumulator at its concrete cells
-    simp only [← hi_acc_eq, ← hi_zs_eq] at hHiOut
+    simp only [← hi_acc_eq] at hHiOut
     simp only [keygen_output_norm] at hHiOut
     simp only [circuit_norm] at hHiOut
     -- lo half: ∃ bitsLo, RoundInvariant 126 with entering z = z₁₃₀, entering acc = hi.acc
@@ -1156,17 +1156,17 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     -- the lo accumulator, entering at m = accScalar 2 bitsHi 125
     have hmB := m_bounds bitsHi bitsLo
     have hLoOut := hLoAccCl (accScalar 2 bitsHi 125)
-      (by simp only [← hi_acc_eq, ← hi_zs_eq]
+      (by simp only [← hi_acc_eq]
           simp only [keygen_output_norm]
           simp only [circuit_norm]
           exact hHiOut)
       hmB.1 hmB.2.1
-    simp only [← lo_x_eq, ← lo_y_eq, ← lo_zs_eq] at hLoOut
+    simp only [← lo_x_eq, ← lo_y_eq] at hLoOut
     simp only [keygen_output_norm] at hLoOut
     simp only [circuit_norm] at hLoOut
     -- complete rounds: ∃ bitsC, RoundInvariant 3 with entering acc = lo.acc
     have hM2pos : 1 ≤ accScalar (accScalar 2 bitsHi 125) bitsLo 126 := hmB.2.2.1
-    simp only [← lo_x_eq, ← lo_y_eq, ← lo_zs_eq] at comp_spec
+    simp only [← lo_x_eq, ← lo_y_eq] at comp_spec
     simp only [keygen_output_norm, circuit_norm] at comp_spec
     obtain ⟨bitsC, hCompRI⟩ := comp_spec
       ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
@@ -1178,7 +1178,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [hLoOut, accPoint_nsmul assumptions _ hM2pos bitsC 3] at hCompAccEq
     -- the complete-phase z-chain, continued from the lo chain
     have hLoZ125 := hLoCells 125 (by omega)
-    simp only [← lo_x_eq, ← lo_y_eq, ← lo_zs_eq] at hLoZ125
+    simp only [← lo_zs_eq] at hLoZ125
     simp only [keygen_output_norm] at hLoZ125
     simp only [circuit_norm, Vector.getElem_ofFn] at hLoZ125
     have hCompZ0 := hCompChain ⟨0, by omega⟩
@@ -1191,7 +1191,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         simpa using h)
     -- z₁ (= comp zs[2]) as a chainNat cast on its concrete cell
     have hz1cast := hCompCells 2 (by omega)
-    simp only [← comp_acc_eq, ← comp_zs_eq] at hz1cast
+    simp only [← comp_zs_eq] at hz1cast
     simp only [keygen_output_norm] at hz1cast
     simp only [circuit_norm, Vector.getElem_ofFn] at hz1cast
     have hz1read : env.advice cfg.completeConfig.zComplete ((place self + offLsb : ℕ) : ℤ)
@@ -1203,9 +1203,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [region_1] at hLsbX
     rw [region_2] at hLsbY
     -- the final add's `q` summand and the comp accumulator, at the shared spelling
-    simp only [← comp_acc_eq, ← comp_zs_eq] at result_spec
+    simp only [← comp_acc_eq] at result_spec
     simp only [keygen_output_norm, circuit_norm] at result_spec
-    simp only [← comp_acc_eq, ← comp_zs_eq] at hCompAccV hCompAccEq
+    simp only [← comp_acc_eq] at hCompAccV hCompAccEq
     simp only [keygen_output_norm, circuit_norm] at hCompAccV hCompAccEq
     -- the accumulated-scalar closed forms
     have hM3pos : 1 ≤ accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 :=
@@ -1348,22 +1348,22 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       norm_num
     have hHiCells := chain_cast (n := 124) _ _ 0 bits hentry hHiZ0 hHiZstep
     have hHiOut := hHiAccCl 2 (by rw [hAcc2]) (le_refl 2) (by norm_num)
-    simp only [← hi_acc_eq, ← hi_zs_eq] at hHiOut
+    simp only [← hi_acc_eq] at hHiOut
     simp only [keygen_output_norm] at hHiOut
     simp only [circuit_norm] at hHiOut
     have hHiZ124 := hHiCells 124 (by omega)
-    simp only [← hi_acc_eq, ← hi_zs_eq] at hHiZ124
+    simp only [← hi_zs_eq] at hHiZ124
     simp only [keygen_output_norm] at hHiZ124
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZ124
     have hHiZtop := hHiCells 0 (by omega)
-    simp only [← hi_acc_eq, ← hi_zs_eq] at hHiZtop
+    simp only [← hi_zs_eq] at hHiZtop
     simp only [keygen_output_norm] at hHiZtop
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZtop
     -- lo half: honest RoundInvariant, chained
     have hmB := m_bounds bits (fun i => bits (125 + i))
     have hHiAccP : eval (⟨place, env⟩ : Placed ProverEnvironment Fp) hi_acc
         = accScalar 2 bits 125 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      simp only [← hi_acc_eq, ← hi_zs_eq]
+      simp only [← hi_acc_eq]
       simp only [keygen_output_norm, circuit_norm]
       exact hHiOut
     obtain ⟨-, hLoPS⟩ := lo_spec hOnC ⟨hOnC, accScalar 2 bits 125, hHiAccP, hmB.1, hmB.2.1⟩
@@ -1373,15 +1373,15 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
       (by rw [← hOZ130]; exact hHiZ124) hLoZ0 hLoZstep
     have hLoOut := hLoAccCl (accScalar 2 bits 125) (by rw [hHiAccP]) hmB.1 hmB.2.1
-    simp only [← lo_x_eq, ← lo_y_eq, ← lo_zs_eq] at hLoOut
+    simp only [← lo_x_eq, ← lo_y_eq] at hLoOut
     simp only [keygen_output_norm] at hLoOut
     simp only [circuit_norm] at hLoOut
     have hLoZ125 := hLoCells 125 (by omega)
-    simp only [← lo_x_eq, ← lo_y_eq, ← lo_zs_eq] at hLoZ125
+    simp only [← lo_zs_eq] at hLoZ125
     simp only [keygen_output_norm] at hLoZ125
     simp only [circuit_norm, Vector.getElem_ofFn] at hLoZ125
     -- complete rounds: honest RoundInvariant
-    simp only [← lo_x_eq, ← lo_y_eq, ← lo_zs_eq] at comp_spec
+    simp only [← lo_x_eq, ← lo_y_eq] at comp_spec
     simp only [keygen_output_norm, circuit_norm] at comp_spec
     obtain ⟨hCompSpecV, hCompPS⟩ := comp_spec
       ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
@@ -1402,7 +1402,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         have h := hCompChain ⟨b.val + 1, by omega⟩
         simpa using h)
     have hz1cast := hCompCells 2 (by omega)
-    simp only [← comp_acc_eq, ← comp_zs_eq] at hz1cast
+    simp only [← comp_zs_eq] at hz1cast
     simp only [keygen_output_norm] at hz1cast
     simp only [circuit_norm, Vector.getElem_ofFn] at hz1cast
     -- the honest chain values, `kBits`-driven
@@ -1417,9 +1417,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       refine z0_cell_value input_alpha rfl ?_
       exact region_1
     -- ── assemble: premise bundles + parent constraints + the honest cell values ──
-    simp only [← lo_x_eq, ← lo_y_eq, ← lo_zs_eq, ← comp_acc_eq, ← comp_zs_eq]
+    simp only [← lo_x_eq, ← lo_y_eq, ← comp_acc_eq]
     simp only [keygen_output_norm, circuit_norm]
-    simp only [← comp_acc_eq, ← comp_zs_eq] at hCompAccVv
+    simp only [← comp_acc_eq] at hCompAccVv
     simp only [keygen_output_norm, circuit_norm] at hCompAccVv
     have hz1read : env.advice cfg.completeConfig.zComplete ((place self + offLsb : ℕ) : ℤ)
         = ((kNat input_alpha / 2 : ℕ) : Fp) := by

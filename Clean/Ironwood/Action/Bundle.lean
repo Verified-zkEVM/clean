@@ -3668,7 +3668,7 @@ theorem soundnessPost
   have h2 := hX 2
   have h3 := hX 3
   clear hX
-  simp only [circuit_norm, List.get!Internal, Fin.isValue,
+  simp only [circuit_norm, Fin.isValue,
     Fin.val_zero, Fin.val_one, Nat.reduceMod, Nat.mul_one,
     Nat.add_zero] at h0 h1 h2 h3
   obtain ⟨ha00, -, -, -, ha04, ha05, -, -, -, -, hG0⟩ := h0
@@ -3748,7 +3748,7 @@ theorem completenessPost
     have hw2 := hWx 2
     have hw3 := hWx 3
     clear hWx
-    simp only [circuit_norm, List.get!Internal, Fin.isValue,
+    simp only [circuit_norm, Fin.isValue,
       Fin.val_zero, Nat.mul_one, Nat.add_zero] at hw0 hw1 hw2 hw3
     -- the four honest `dca · (old − new) = 0` products
     have hdx : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
@@ -3805,7 +3805,7 @@ theorem completenessPost
         ring
     intro i
     fin_cases i
-    all_goals simp only [circuit_norm, List.get!Internal, Fin.isValue,
+    all_goals simp only [circuit_norm, Fin.isValue,
       Nat.mul_one, Nat.add_zero]
     · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw0
       refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
@@ -3814,8 +3814,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
-        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
-          List.get!Internal, Nat.reduceMod, circuit_norm]
+        simp only [GetElem?.getElem!,
+          List.get!Internal, circuit_norm]
         linear_combination hdx
       · rw [w6, w0]
         ring
@@ -3828,8 +3828,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
-        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
-          List.get!Internal, Nat.reduceMod, circuit_norm]
+        simp only [GetElem?.getElem!,
+          List.get!Internal, circuit_norm]
         linear_combination hdy
       · rw [w6, w0]
         ring
@@ -3842,8 +3842,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
-        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
-          List.get!Internal, Nat.reduceMod, circuit_norm]
+        simp only [GetElem?.getElem!,
+          List.get!Internal, circuit_norm]
         linear_combination hpx
       · rw [w6, w0]
         ring
@@ -3856,8 +3856,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
-        simp only [GetElem?.getElem!, List.instGetElem?NatLtLength,
-          List.get!Internal, Nat.reduceMod, circuit_norm]
+        simp only [GetElem?.getElem!,
+          List.get!Internal, circuit_norm]
         linear_combination hpy
       · rw [w6, w0]
         ring

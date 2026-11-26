@@ -113,8 +113,8 @@ private theorem commit_regionCount
           { p := hashOut.point, q := blindOut }
         pure result).operations i)
       = 4 := by
-  simp only [Circuit.operations_bind, Circuit.operations_pure,
-    Operations.regionCount_append, Operations.regionCount]
+  simp only [Circuit.operations_bind,
+    Operations.regionCount_append]
   rw [show ∀ (j : RegionIndex) (inp : Var (Sinsemilla.Chain.Inputs ns.length) Fp),
       Operations.regionCount
         (((HashToPoint.hashCircuit G ns Q hQ hns).call hcfg inp).operations j) = 1
@@ -312,7 +312,7 @@ def commit (G : Generators) (ns : List ℕ)
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
         simp only [operations, program, Configure.output_pure, synthesize,
-          Circuit.operations_bind, Circuit.operations_pure,
+          Circuit.operations_bind,
           keygen_norm, keygen_spine]
         exact ⟨(HashToPoint.hashCircuit G ns Q hQ hns)
             |>.call_lookupSelectorAssignmentsAgree
@@ -322,7 +322,7 @@ def commit (G : Generators) (ns : List ℕ)
       lookupSelectorsAnchoredBy_of_registered := by
         intro cfg _ hconfig input self anchor _ _
         simp only [synthesize, Circuit.operations_bind,
-          Circuit.operations_pure, List.append_nil, circuit_norm]
+          circuit_norm]
         apply Operations.LookupSelectorsAnchoredBy.append
         · exact (Ecc.MulFixed.FullWidth.circuit R)
             |>.call_lookupSelectorsAnchoredBy
@@ -335,8 +335,8 @@ def commit (G : Generators) (ns : List ℕ)
             cfg.2.2 hconfig.2.2 _ (self + 3) anchor (by trivial)
       copyCellsAssigned := by
         intro cfg counts configured input self
-        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
-          List.append_nil, Configure.output_pure, circuit_norm]
+        simp only [synthesize, Circuit.operations_bind,
+          Configure.output_pure, circuit_norm]
         apply Operations.CopyCellsAssignedFrom.append
         · apply (Ecc.MulFixed.FullWidth.circuit R)
             |>.call_copyCellsAssignedFrom cfg.1 configured.1 input.r self
@@ -394,7 +394,7 @@ def commit (G : Generators) (ns : List ℕ)
         · simp only [synthesize, circuit_norm, synthesis_summary_norm]
       lookupActivationsWellFormed := by
         intro cfg input self
-        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+        simp only [synthesize, Circuit.operations_bind,
           Operations.LookupActivationsWellFormed, List.forall_append,
           circuit_norm]
         exact ⟨(Ecc.MulFixed.FullWidth.circuit R)
@@ -631,7 +631,7 @@ theorem commit_call_output_cells_assigned
     { pieces := input.pieces } (region + 2)
   have hadd := Ecc.Add.addFormal_call_output_cells_assigned cfg.2.2
     { p := hash.point, q := blind } (region + 3)
-  simp only [commit, synthesize, Circuit.operations_bind, Circuit.operations_pure,
+  simp only [commit, synthesize, Circuit.operations_bind,
     FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
     FormalCircuit.call_regionCount', Operations.assignedCellsFrom_append,
     circuit_norm, Ecc.Add.addFormal_output_cells, List.mem_append,
@@ -658,7 +658,6 @@ theorem commit_call_hash_z_cell_assigned
     R cfg.1 input.r self
   rw [FormalCircuit.call_operations]
   simp only [commit, synthesize, Circuit.operations_bind,
-    Circuit.operations_pure, List.append_nil,
     Operations.assignedCellsFrom_append,
     FormalCircuit.nextRegionIndex_call',
     hmul,

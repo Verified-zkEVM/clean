@@ -223,7 +223,7 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     { keygenRequirements := keygenRequirements V R
       registered := by
           intro cfg counts hconfig input self
-          simp only [Circuit.operations_bind, Circuit.operations_pure,
+          simp only [Circuit.operations_bind,
             Operations.KeygenRegistered.append, FormalCircuit.call_regionCount',
             Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount,
             Nat.add_assoc, Nat.reduceAdd, circuit_norm]
@@ -272,7 +272,7 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
         simp only [operations, program, Configure.output_pure,
-          Circuit.operations_bind, Circuit.operations_pure,
+          Circuit.operations_bind,
           FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
           FormalCircuit.call_regionCount',
         Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount,
@@ -280,8 +280,8 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
           keygen_norm, keygen_spine]
       lookupSelectorsAnchoredBy_of_registered := by
         intro cfg _ hconfig input self anchor _ _
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
-          List.append_nil, circuit_norm]
+        simp only [Circuit.operations_bind,
+          circuit_norm]
         apply Operations.LookupSelectorsAnchoredBy.append
         · exact (Ecc.MulFixed.Short.circuit V)
             |>.call_lookupSelectorsAnchoredBy cfg.1 hconfig.1 _ self
@@ -319,7 +319,7 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
                     (self + 4)))
         · simp only [circuit_norm, synthesis_summary_norm]
       lookupActivationsWellFormed cfg input self := by
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
+        simp only [Circuit.operations_bind,
           Operations.LookupActivationsWellFormed, List.forall_append,
           circuit_norm]
         exact ⟨(Ecc.MulFixed.Short.circuit V)
@@ -337,7 +337,7 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
         simp only [synthesisSummary, circuit_norm, synthesis_summary_norm]
       output_eq := by
         intro cfg input i
-        simp only [Circuit.output_bind, Circuit.output_pure,
+        simp only [Circuit.output_bind,
           FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
           FormalCircuit.call_regionCount',
         Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, circuit_norm,
@@ -441,7 +441,7 @@ theorem circuit_call_output_cells_assigned
     { p := shortOutput, q := fullWidthOutput } (region + 4)
   simp only [Ecc.Add.addFormal_output_cells, shortInput, shortOutput,
     fullWidthOutput] at hadd
-  simp only [circuit, Circuit.operations_bind, Circuit.operations_pure,
+  simp only [circuit, Circuit.operations_bind,
     FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
     FormalCircuit.call_regionCount',
         Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Operations.assignedCellsFrom_append, List.mem_append,

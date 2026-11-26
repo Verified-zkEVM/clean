@@ -549,7 +549,7 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       (swapProgram.finalCounts counts) ()).mono
     · intro gate hgate
       simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
-        ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hgate
+        List.mem_append] at hgate
       simp only
       unfold configure
       apply Configure.mem_gates_delta_bind_right
@@ -558,7 +558,7 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       · simpa [gateInput, swapProgram] using hgate
     · intro argument hargument
       simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
-        ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hargument
+        List.mem_append] at hargument
       simp only
       unfold configure
       apply Configure.mem_lookups_delta_bind_right
@@ -567,7 +567,7 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       · simpa [gateInput, swapProgram] using hargument
     · intro column hcolumn
       simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
-        ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hcolumn
+        List.mem_append] at hcolumn
       rcases hcolumn with hcolumn | hcolumn
       · exact False.elim (List.not_mem_nil hcolumn)
       unfold configure
@@ -575,7 +575,7 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       simpa [gateInput, swapProgram] using hcolumn
     · intro column hcolumn
       simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
-        ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hcolumn
+        List.mem_append] at hcolumn
       rcases hcolumn with hcolumn | hcolumn
       · apply List.mem_append_left
         change column ∈ Gate.permutationColumns gateInput at hcolumn
@@ -1591,7 +1591,6 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
             ElaboratedCircuit.keygenRequirements,
             KeygenRequirements.inputPermutationColumns,
             HashToPoint.hashCircuit, FormalRegionCircuit.toFormal,
-            ElaboratedRegionCircuit.keygenRequirements,
             HashToPoint.hashRegion] at hcolumn
           simp only [HashToPoint.witnessMessagePiece, Circuit.output,
             assignRegion, assignAdvice] at hcolumn

@@ -809,7 +809,7 @@ theorem Configured.permutationColumns_eq (G : Generators) (ns : List ℕ) (Q : P
   simp only [keygen_norm, FormalCircuit.Configured.permutationColumns,
     FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
     hashCircuit, FormalRegionCircuit.toFormal,
-    ElaboratedRegionCircuit.keygenRequirements, hashRegion,
+    hashRegion,
     Configure.delta_pure, List.append_nil]
   rfl
 

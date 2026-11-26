@@ -158,8 +158,8 @@ theorem mem_rangeCheckLookup_auxiliarySelectorIndices (K : ℕ) (cfg : Config K)
     LookupArgument.auxiliarySelectorIndices, List.mem_filter] at hselector
   rcases hselector with ⟨hselector, hne⟩
   simp only [rangeCheckInputFor, List.flatMap_cons, List.flatMap_nil,
-    List.append_nil, Expression.selectorIndices, List.mem_append,
-    List.not_mem_nil] at hselector
+    List.append_nil, Expression.selectorIndices, List.mem_append
+    ] at hselector
   rcases hselector with hselector | hselector
   · have hmaster : selector = cfg.qLookup.index := by
       simpa only [Expression.selectorIndices_querySelector,
@@ -167,7 +167,7 @@ theorem mem_rangeCheckLookup_auxiliarySelectorIndices (K : ℕ) (cfg : Config K)
     exact False.elim ((bne_iff_ne.mp hne) hmaster)
   · simp only [Expression.selectorIndices_querySelector,
       Expression.selectorIndices_queryAdvice, List.mem_singleton, ComplexSelector.toSelector,
-      Expression.sub_def, Expression.selectorIndices, List.nil_append, List.mem_append,
+      Expression.sub_def, Expression.selectorIndices, List.nil_append,
       List.not_mem_nil, or_false] at hselector
     tauto
 
@@ -1423,8 +1423,8 @@ def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
         zLast := AssignedCell.of self (offset + numWords) cfg.runningSum }
     output_eq := by
       intro cfg offset input self
-      cases strict <;> simp only [rangeCheckBody, circuit_norm, Bool.false_eq_true,
-        ite_false, ite_true]
+      cases strict <;> simp only [rangeCheckBody, circuit_norm, Bool.false_eq_true
+        ]
     synthesisSummary_eq := by
       intro cfg offset input self
       apply FloorPlanner.RegionSynthesisSummary.ext
@@ -1570,7 +1570,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     -- resolve the output cells (case on `strict` to compute the tail ops)
     rcases hbstrict : strict with _ | _ <;>
       simp only [hbstrict, circuit_norm,
-        Bool.false_eq_true, ite_true, ite_false] at _hTailC ⊢ <;>
+        Bool.false_eq_true] at _hTailC ⊢ <;>
       rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
         show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain]]
     · -- strict = false: telescoped decomposition, strict conjunct already discharged by simp
@@ -1852,7 +1852,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
     obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hwords
     rcases hbstrict : strict with _ | _ <;>
       simp only [hbstrict, circuit_norm,
-        Bool.false_eq_true, ite_true, ite_false] at _hTailC h_output ⊢ <;>
+        Bool.false_eq_true] at _hTailC h_output ⊢ <;>
       obtain ⟨hOz0, hOzLast⟩ := h_output <;>
       rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
         show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain],
@@ -1900,7 +1900,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
         rw [hzn, Nat.div_eq_of_lt heInputLt, Nat.cast_zero]
     · -- ProverSpec, first conjunct: `output_z0` is the positional cell
       cases strict <;>
-        · simp only [circuit_norm, Bool.false_eq_true, ite_false, ite_true] at h_output
+        · simp only [circuit_norm, Bool.false_eq_true] at h_output
           rw [heCell]
           exact h_output.1.symm
     · -- ProverSpec, C6: `output_zLast = ↑(elt.val / 2^{K·numWords})`
@@ -1908,7 +1908,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
       simp only [zChain] at hzn
       rw [← hzn]
       cases strict <;>
-        · simp only [circuit_norm, Bool.false_eq_true, ite_false, ite_true] at h_output
+        · simp only [circuit_norm, Bool.false_eq_true] at h_output
           exact h_output.2.symm
 
 @[keygen_norm, keygen_spine]
