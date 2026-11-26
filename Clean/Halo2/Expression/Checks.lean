@@ -1,5 +1,9 @@
-import Clean.Halo2.ConstraintSystem
-import Clean.Halo2.QueryCorrect
+module
+
+public import Clean.Halo2.ConstraintSystem
+public import Clean.Halo2.QueryCorrect
+
+@[expose] public section
 
 /-! Executable forms of the local gate and lookup laws, so that a closure's body can be checked
 by evaluation rather than by a proof elaborated at each call site. -/

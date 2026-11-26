@@ -1,5 +1,9 @@
-import Clean.Halo2.TopLevel
-import Clean.Halo2.Configure.Extensions
+module
+
+public import Clean.Halo2.TopLevel
+public import Clean.Halo2.Configure.Extensions
+
+@[expose] public section
 
 /-! The zcash compiler's domain: closed circuits recording no midnight-zk entry. Soundness does
 not need it, since shadows carry every stated meaning; a claim that a zcash key is the key of

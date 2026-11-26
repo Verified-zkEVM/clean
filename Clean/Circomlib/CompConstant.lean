@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Circomlib.Bitify
-import Clean.Circomlib.CompConstantLemmas
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Circomlib.Bitify
+public import Clean.Circomlib.CompConstantLemmas
+
+@[expose] public section
 
 open Clean
 
@@ -118,12 +122,6 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     let out : F p := env.get (i₀ + 127 + 1 + 135)
     let input_val : ℕ := fromBits (input.map ZMod.val)
 
-    have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
-      intro j hj
-      have := congrArg (fun v => v[j]) h_input
-      simp only [Vector.getElem_map] at this
-      exact this
-
     have h_parts' :
         ∀ i : Fin 127,
           parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] c := by
@@ -136,7 +134,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [circuit_norm]
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega
-      simp only [h_input_eval _ hi2, h_input_eval _ hi2p1]
+      simp only [h_input]
       simp only [computePart, bCoeff, aCoeff, Bool.and_eq_true]
       have h_pow_le : (2 : ℕ)^(i : ℕ) ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega : (i : ℕ) ≤ 128)
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by
@@ -176,10 +174,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     have h_bits' : bits = fieldToBits 135 sout := by
       show Vector.mapRange 135 (fun i => env.get (i₀ + 127 + 1 + i)) = fieldToBits 135 (env.get (i₀ + 127))
-      have h_bits_valid' := h_bits_valid
-      simp only [Vector.map_mapRange, circuit_norm] at h_bits_valid'
       ext j hj
-      have h_bits_j := congrArg (fun v => v[j]) h_bits_valid'
+      have h_bits_j := congrArg (fun v => v[j]) h_bits_valid
       simp only [Vector.getElem_mapRange] at h_bits_j ⊢
       exact h_bits_j
 
@@ -206,12 +202,6 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     let parts : Vector (F p) 127 := Vector.mapRange 127 fun i => env.get (i₀ + i)
     let sout : F p := env.get (i₀ + 127)
 
-    have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
-      intro j hj
-      have := congrArg (fun v => v[j]) h_input
-      simp only [Vector.getElem_map] at this
-      exact this
-
     have h_parts' :
         ∀ i : Fin 127,
           parts[i] = computePart i.val input[i.val * 2] input[i.val * 2 + 1] c := by
@@ -223,7 +213,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [circuit_norm]
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega
-      simp only [h_input_eval _ hi2, h_input_eval _ hi2p1]
+      simp only [h_input]
       simp only [computePart, bCoeff, aCoeff, Bool.and_eq_true]
       have h_pow_le : (2 : ℕ)^(i : ℕ) ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega : (i : ℕ) ≤ 128)
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by
@@ -299,7 +289,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     and_intros
     · ext i hi
       have h_parts_i := h_parts ⟨i, hi⟩
-      simpa [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval] using h_parts_i
+      simp only [Vector.getElem_mapRange, circuit_norm]
+      exact h_parts_i
     · exact h_sout
     · exact h_sout_lt
     · exact h_out

@@ -88,21 +88,34 @@ def paddedValues (place : RegionIndex → Nat) (env : Environment F)
     (summands : Array (AssignedCell F)) (zero : AssignedCell F) : List Nat :=
   (summands ++ Array.replicate (7 - summands.size) zero).toList.map (cellValue place env)
 
-def summandPrograms (summands : Array (AssignedCell F)) (zero : AssignedCell F) : List (NExpr F) :=
+def summandPrograms (summands : Array (AssignedCell F)) (zero : AssignedCell F) : List (U64Expr F) :=
   (summands ++ Array.replicate (7 - summands.size) zero).toList.map WitnessIR.readNat
 
 theorem summandPrograms_eval (summands : Array (AssignedCell F)) (zero : AssignedCell F)
-    (env : Placed ProverEnvironment F) :
-    (summandPrograms summands zero).map (fun expression => expression.eval { env }) =
+    (env : Placed ProverEnvironment F)
+    (zeroValue : cellValue env.place env.env.toEnvironment zero = 0)
+    (inputs : ∀ cell ∈ summands, cellValue env.place env.env.toEnvironment cell < 2 ^ 32) :
+    (summandPrograms summands zero).map (fun expression => (expression.eval { env }).toNat) =
       paddedValues env.place env.env.toEnvironment summands zero := by
   simp only [summandPrograms, paddedValues, List.map_map, Function.comp_def,
     WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2]
-  rfl
+  apply List.map_congr_left
+  intro cell hcell
+  have hlt : cellValue env.place env.env.toEnvironment cell < 2 ^ 32 := by
+    rw [Array.toList_append, List.mem_append] at hcell
+    rcases hcell with hcell | hcell
+    · exact inputs cell (Array.mem_def.mpr hcell)
+    · simp only [Array.toList_replicate, List.mem_replicate] at hcell
+      rw [hcell.2, zeroValue]
+      decide
+  exact Nat.mod_eq_of_lt (hlt.trans (by decide))
 
 /-- The actual source remainder assignment, evaluated without any constraint
 assumption. Its bound follows from modulo, so field interpretation is canonical. -/
 theorem addMod_output_honest {place : RegionIndex → Nat} {self : RegionIndex}
     {env : ProverEnvironment F} (summands : Array (AssignedCell F)) (zero : AssignedCell F)
+    (zeroValue : cellValue place env.toEnvironment zero = 0)
+    (inputs : ∀ cell ∈ summands, cellValue place env.toEnvironment cell < 2 ^ 32)
     (witnesses : RegionOperations.ExtendsWitnesses place self env
       ((addMod summands zero).operations self)) :
     cellValue place env.toEnvironment ((addMod summands zero).output self) =
@@ -113,13 +126,21 @@ theorem addMod_output_honest {place : RegionIndex → Nat} {self : RegionIndex}
   rw [WitnessIR.eval_program, WitnessIR.eval_sum32] at returned
   change env.advice ⟨2⟩ (place self : Nat) =
     (Witness.sum32 ((summandPrograms summands zero).map (fun expression =>
-      expression.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) })) : F) at returned
-  rw [summandPrograms_eval] at returned
+      (expression.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat)) : F) at returned
+  rw [summandPrograms_eval summands zero ⟨place, env⟩ zeroValue inputs] at returned
   have small : Witness.sum32 (paddedValues place env.toEnvironment summands zero) <
       BLS12_381.scalarFieldSize := (Witness.sum32_lt _).trans (by decide +kernel)
   simpa only [cellValue, addMod_output, shaCell, circuit_norm, Synthesis.shaAdvice,
     Nat.add_zero, ZMod.val_natCast_of_lt small,
     show (#[6,0,7,1,2,3,4,5] : Array Nat)[4]! = 2 from rfl] using congrArg (fun v:F => v.val) returned
+
+private theorem sum_lt_u64_of_le_seven {values : List Nat}
+    (hcount : values.length ≤ 7) (hvalues : ∀ v ∈ values, v < Witness.wordModulus) :
+    values.sum < 2 ^ 64 := by
+  have hcarry := Witness.carry32_lt_eight values hcount hvalues
+  have hdiv : values.sum / Witness.wordModulus < 8 := hcarry
+  dsimp [Witness.wordModulus] at hdiv
+  omega
 
 /-- Completeness of the actual addition helper together with the other tuple
 assigned on its last lookup row. The caller supplies that tuple's genuine
@@ -129,8 +150,8 @@ theorem addMod_complete {place : RegionIndex → Nat} {self : RegionIndex}
     (summands : Array (AssignedCell F)) (zero : AssignedCell F)
     (size : summands.size ≤ 7) (zeroValue : cellValue place env.toEnvironment zero = 0)
     (inputs : ∀ cell ∈ summands, cellValue place env.toEnvironment cell < 2 ^ 32)
-    (mateWidth : Nat) (mateValue : NExpr F) (supported : mateWidth ∈ spreadWidths)
-    (mateBound : mateValue.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) } < 2 ^ mateWidth)
+    (mateWidth : Nat) (mateValue : U64Expr F) (supported : mateWidth ∈ spreadWidths)
+    (mateBound : (mateValue.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat < 2 ^ mateWidth)
     (mateWitness : RegionOperations.ExtendsWitnesses place self env
       ((plainAndSpread mateWidth 2 0 mateValue).operations self))
     (witnesses : RegionOperations.ExtendsWitnesses place self env
@@ -138,14 +159,18 @@ theorem addMod_complete {place : RegionIndex → Nat} {self : RegionIndex}
     RegionOperations.Constraints place self env.toEnvironment
       ((addMod summands zero).operations self) := by
   have output := addMod_output_honest (place := place) (self := self) (env := env)
-    summands zero witnesses
+    summands zero zeroValue inputs witnesses
   have hcount : (paddedValues place env.toEnvironment summands zero).length ≤ 7 := by
     simp only [paddedValues, List.length_map, Array.length_toList, paddedTerms_size summands zero size]
     exact Nat.le_refl 7
   have hvalues := paddedValues_bounded summands zero zeroValue inputs
-  have carryBound : (WitnessIR.carry32 (summandPrograms summands zero)).eval
-      { env := (⟨place,env⟩ : Placed ProverEnvironment F) } < 2 ^ 3 := by
-    rw [WitnessIR.eval_carry32, summandPrograms_eval]
+  have hsumBound : ((summandPrograms summands zero).map fun expression =>
+      (expression.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat).sum < 2 ^ 64 := by
+    rw [summandPrograms_eval summands zero ⟨place, env⟩ zeroValue inputs]
+    exact sum_lt_u64_of_le_seven hcount hvalues
+  have carryBound : ((WitnessIR.carry32 (summandPrograms summands zero)).eval
+      { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat < 2 ^ 3 := by
+    rw [WitnessIR.eval_carry32 _ _ hsumBound, summandPrograms_eval summands zero ⟨place, env⟩ zeroValue inputs]
     exact Witness.carry32_lt_eight _ hcount hvalues
   have math := (Prepare.honest_addMod _ hcount hvalues).2.2
   rw [addMod_eq] at witnesses ⊢
@@ -166,9 +191,10 @@ theorem addMod_complete {place : RegionIndex → Nat} {self : RegionIndex}
   refine ⟨?_, c0, c1, c2, c3, c4, c5, c6, lookup, carry.1⟩
   apply addMod_gate_complete (place := place) (self := self) (env := env.toEnvironment) (row := 1)
   have outputField := congrArg (fun n:Nat => (n:F)) output
+  rw [WitnessIR.eval_carry32 _ _ hsumBound,
+    summandPrograms_eval summands zero ⟨place, env⟩ zeroValue inputs] at carry
   norm_num [cellValue, addMod_output, shaCell, scopy, circuit_norm, Gates.read, Synthesis.shaAdvice,
-    Nat.cast_add, Int.add_assoc, ParityGadget.plainAndSpread_output,
-    WitnessIR.eval_carry32, summandPrograms_eval] at c0 c1 c2 c3 c4 c5 c6 carry outputField ⊢
+    Nat.cast_add, Int.add_assoc, ParityGadget.plainAndSpread_output] at c0 c1 c2 c3 c4 c5 c6 carry outputField ⊢
   change env.advice ⟨3⟩ _ + env.advice ⟨4⟩ _ + env.advice ⟨3⟩ _ +
     env.advice ⟨4⟩ _ + env.advice ⟨2⟩ _ + env.advice ⟨3⟩ _ + env.advice ⟨4⟩ _ =
     env.advice ⟨2⟩ _ + env.advice ⟨7⟩ _ * (4294967296:F)
@@ -182,19 +208,20 @@ theorem addMod_complete {place : RegionIndex → Nat} {self : RegionIndex}
 /-- The actual limb helper assigns the mathematical spread of its bounded
 integer limb. This rewrites the source spread computation once for all layouts. -/
 theorem limb_honest {place : RegionIndex → Nat} {self : RegionIndex}
-    {env : ProverEnvironment F} (value : NExpr F) (slice : Witness.Slice)
+    {env : ProverEnvironment F} (value : U64Expr F) (slice : Witness.Slice)
     (offset index : Nat) (supported : slice.2 ∈ spreadWidths)
     (witnesses : RegionOperations.ExtendsWitnesses place self env
-      ((plainAndSpread slice.2 offset index (WitnessIR.limb value slice)).operations self)) :
-    let n := value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }
+      ((plainAndSpread slice.2 offset index (WitnessIR.limb value slice)).operations self))
+    (h1 : slice.1 < 64 := by decide) (h2 : slice.2 < 64 := by decide) :
+    let n := (value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat
     let output := (plainAndSpread slice.2 offset index (WitnessIR.limb value slice)).output self
     env.fixed ⟨index⟩ (place self + offset : Nat) = (slice.2 : F) ∧
       output.plain.eval place env.toEnvironment = (Witness.limb n slice : F) ∧
       output.spread.eval place env.toEnvironment = (spread (Witness.limb n slice) : F) := by
   have h := plainAndSpread_honest (place := place) (self := self) (env := env)
-    slice.2 offset index _ supported (limb_bound value slice ⟨place,env⟩) witnesses
-  simp only [WitnessIR.eval_limb] at h
-  have small : Witness.limb (value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }) slice < 2 ^ 32 :=
+    slice.2 offset index _ supported (limb_bound value slice ⟨place,env⟩ h1 h2) witnesses
+  rw [WitnessIR.eval_limb _ _ _ h1 h2] at h
+  have small : Witness.limb ((value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat) slice < 2 ^ 32 :=
     (Witness.limb_lt _ _).trans_le
       (Nat.pow_le_pow_right (by decide) ((spreadWidth_le_twelve supported).trans (by decide)))
   rw [Witness.spread32_eq_spread _ small] at h
@@ -272,13 +299,15 @@ theorem aRegion_complete {place : RegionIndex → Nat} {self : RegionIndex}
   simp only [aRegion, circuit_norm, activation_a, true_and] at witnesses
   obtain ⟨addition, expanded, limb0, limb1, limb2, limb3, limb4⟩ := witnesses
   let value := WitnessIR.readNat (shaCell self 4 0)
-  let word := value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }
-  have wordBound : word < 2 ^ 32 := by
-    change cellValue place env.toEnvironment (shaCell self 4 0) < 2 ^ 32
+  let word := (value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat
+  have cellSmall : cellValue place env.toEnvironment (shaCell self 4 0) < 2 ^ 32 := by
     have h := (addMod_output_honest (place := place) (self := self) (env := env)
-      summands zero addition).trans_lt (Witness.sum32_lt _)
-    simpa only [cellValue, addMod_output, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2,
-      Witness.wordModulus] using h
+      summands zero zeroValue inputs addition).trans_lt (Witness.sum32_lt _)
+    simpa only [cellValue, addMod_output, Witness.wordModulus] using h
+  have wordEq : word = cellValue place env.toEnvironment (shaCell self 4 0) := by
+    simpa only [word, value, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2, cellValue] using
+      Nat.mod_eq_of_lt (cellSmall.trans (by decide))
+  have wordBound : word < 2 ^ 32 := wordEq ▸ cellSmall
   have h0 := limb_honest (place := place) (self := self) (env := env)
     value (22,10) 0 0 (by decide +kernel) limb0
   have h1 := limb_honest (place := place) (self := self) (env := env)
@@ -301,8 +330,8 @@ theorem aRegion_complete {place : RegionIndex → Nat} {self : RegionIndex}
   have row2 := (addMod_facts (place := place) (self := self) (env := env.toEnvironment)
     summands zero size addConstraints).2.1
   have plainField : (word:F) = env.advice ⟨2⟩ (place self : Nat) := by
-    simp only [word, value, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2,
-      shaCell, circuit_norm, Synthesis.shaAdvice, Nat.add_zero]
+    rw [wordEq]
+    simp only [cellValue, shaCell, circuit_norm, Synthesis.shaAdvice, Nat.add_zero]
     rfl
   rw [WitnessIR.eval_program, WitnessIR.eval_spread32] at expanded
   change env.advice ⟨2⟩ (place self+1:Nat) = (Witness.spread32 word:F) at expanded
@@ -337,13 +366,15 @@ theorem eRegion_complete {place : RegionIndex → Nat} {self : RegionIndex}
   simp only [eRegion, circuit_norm, activation_e, true_and] at witnesses
   obtain ⟨addition, expanded, limb0, limb1, limb2, limb3, limb4⟩ := witnesses
   let value := WitnessIR.readNat (shaCell self 4 0)
-  let word := value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }
-  have wordBound : word < 2 ^ 32 := by
-    change cellValue place env.toEnvironment (shaCell self 4 0) < 2 ^ 32
+  let word := (value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat
+  have cellSmall : cellValue place env.toEnvironment (shaCell self 4 0) < 2 ^ 32 := by
     have h := (addMod_output_honest (place := place) (self := self) (env := env)
-      summands zero addition).trans_lt (Witness.sum32_lt _)
-    simpa only [cellValue, addMod_output, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2,
-      Witness.wordModulus] using h
+      summands zero zeroValue inputs addition).trans_lt (Witness.sum32_lt _)
+    simpa only [cellValue, addMod_output, Witness.wordModulus] using h
+  have wordEq : word = cellValue place env.toEnvironment (shaCell self 4 0) := by
+    simpa only [word, value, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2, cellValue] using
+      Nat.mod_eq_of_lt (cellSmall.trans (by decide))
+  have wordBound : word < 2 ^ 32 := wordEq ▸ cellSmall
   have h0 := limb_honest (place := place) (self := self) (env := env)
     value (25,7) 0 0 (by decide +kernel) limb0
   have h1 := limb_honest (place := place) (self := self) (env := env)
@@ -366,8 +397,8 @@ theorem eRegion_complete {place : RegionIndex → Nat} {self : RegionIndex}
   have row2 := (addMod_facts (place := place) (self := self) (env := env.toEnvironment)
     summands zero size addConstraints).2.1
   have plainField : (word:F) = env.advice ⟨2⟩ (place self : Nat) := by
-    simp only [word, value, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2,
-      shaCell, circuit_norm, Synthesis.shaAdvice, Nat.add_zero]
+    rw [wordEq]
+    simp only [cellValue, shaCell, circuit_norm, Synthesis.shaAdvice, Nat.add_zero]
     rfl
   rw [WitnessIR.eval_program, WitnessIR.eval_spread32] at expanded
   change env.advice ⟨2⟩ (place self+1:Nat) = (Witness.spread32 word:F) at expanded
@@ -402,13 +433,15 @@ theorem messageRegion_complete {place : RegionIndex → Nat} {self : RegionIndex
   simp only [messageRegion, circuit_norm, activation_message, true_and, and_true] at witnesses
   obtain ⟨addition, limb0, limb1, limb2, limb3, limb4, bit1, bit2, bit3⟩ := witnesses
   let value := WitnessIR.readNat (shaCell self 4 0)
-  let word := value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }
-  have wordBound : word < 2 ^ 32 := by
-    change cellValue place env.toEnvironment (shaCell self 4 0) < 2 ^ 32
+  let word := (value.eval { env := (⟨place,env⟩ : Placed ProverEnvironment F) }).toNat
+  have cellSmall : cellValue place env.toEnvironment (shaCell self 4 0) < 2 ^ 32 := by
     have h := (addMod_output_honest (place := place) (self := self) (env := env)
-      summands zero addition).trans_lt (Witness.sum32_lt _)
-    simpa only [cellValue, addMod_output, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2,
-      Witness.wordModulus] using h
+      summands zero zeroValue inputs addition).trans_lt (Witness.sum32_lt _)
+    simpa only [cellValue, addMod_output, Witness.wordModulus] using h
+  have wordEq : word = cellValue place env.toEnvironment (shaCell self 4 0) := by
+    simpa only [word, value, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2, cellValue] using
+      Nat.mod_eq_of_lt (cellSmall.trans (by decide))
+  have wordBound : word < 2 ^ 32 := wordEq ▸ cellSmall
   have h0 := limb_honest (place := place) (self := self) (env := env)
     value (20,12) 0 0 (by decide +kernel) limb0
   have h1 := limb_honest (place := place) (self := self) (env := env)
@@ -431,10 +464,10 @@ theorem messageRegion_complete {place : RegionIndex → Nat} {self : RegionIndex
   have row2 := (addMod_facts (place := place) (self := self) (env := env.toEnvironment)
     summands zero size addConstraints).2.1
   have plainField : (word:F) = env.advice ⟨2⟩ (place self : Nat) := by
-    simp only [word, value, WitnessIR.eval_readNat, Halo2.WitgenEnv.readVar_halo2,
-      shaCell, circuit_norm, Synthesis.shaAdvice, Nat.add_zero]
+    rw [wordEq]
+    simp only [cellValue, shaCell, circuit_norm, Synthesis.shaAdvice, Nat.add_zero]
     rfl
-  simp only [WitnessIR.eval_program, WitnessIR.eval_limb] at bit1 bit2 bit3
+  rw [WitnessIR.eval_program, WitnessIR.eval_limb _ _ _ (by decide) (by decide)] at bit1 bit2 bit3
   change env.advice ⟨5⟩ (place self : Nat) = (Witness.limb word (19,1):F) at bit1
   change env.advice ⟨5⟩ (place self+1:Nat) = (Witness.limb word (18,1):F) at bit2
   change env.advice ⟨5⟩ (place self+2:Nat) = (Witness.limb word (17,1):F) at bit3

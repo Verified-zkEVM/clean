@@ -1,5 +1,9 @@
-import Clean.Halo2.Compiler.GateOperations
-import Clean.Halo2.Keygen.GateProjection
+module
+
+public import Clean.Halo2.Compiler.GateOperations
+public import Clean.Halo2.Keygen.GateProjection
+
+@[expose] public section
 
 /-! # Semantics of packed selectors in a row assignment -/
 

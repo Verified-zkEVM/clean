@@ -1,5 +1,9 @@
-import Clean.Halo2.CircuitTypeDeriving
-import Clean.Halo2.WitnessIR
+module
+
+public import Clean.Halo2.CircuitTypeDeriving
+public import Clean.Halo2.WitnessIR
+
+@[expose] public section
 
 /-!
 Regression test for Halo2's `deriving CircuitType`: a mixed record of ordinary
@@ -14,7 +18,7 @@ structure Inputs (F : Type) where
   x : F
   ys : Vector F 4
   ir : Unconstrained field F
-  n : UnconstrainedNat F
+  n : UnconstrainedU64 F
 deriving CircuitType
 
 -- the derived instance is the halo2 one, and `Var` is the companion structure
@@ -28,7 +32,7 @@ example : DecomposableStruct Inputs.Var := inferInstance
 example (v : Inputs.Var F) : AssignedCell F := v.x
 example (v : Inputs.Var F) : Vector (AssignedCell F) 4 := v.ys
 example (v : Inputs.Var F) : Witgen.MOver F (AssignedCell F) (FExpr F) := v.ir
-example (v : Inputs.Var F) : Witgen.MOver F (AssignedCell F) (NExpr F) := v.n
+example (v : Inputs.Var F) : Witgen.MOver F (AssignedCell F) (U64Expr F) := v.n
 
 -- Value view: verifier values for provable fields, hints erased
 example (v : Inputs.Value F) : F := v.x
@@ -38,7 +42,7 @@ example (v : Inputs.Value F) : Unit := v.n
 -- ProverValue view: everything visible (hints at their evaluated sort)
 example (v : Inputs.ProverValue F) : F := v.x
 example (v : Inputs.ProverValue F) : F := v.ir
-example (v : Inputs.ProverValue F) : ℕ := v.n
+example (v : Inputs.ProverValue F) : UInt64 := v.n
 
 -- evaluation dispatches field-wise
 example (env : Placed Environment F) (v : Inputs.Var F) :

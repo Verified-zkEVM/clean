@@ -1,5 +1,9 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.Expression
+module
+
+public import Lean.Elab.Tactic
+public import Clean.Halo2.Expression
+
+@[expose] public section
 
 /-!
 # Selector-freedom tactic

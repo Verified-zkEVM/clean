@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.FloorPlanner.RegionShape
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.RegionShape
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 
@@ -1350,7 +1354,7 @@ structure PlacementLaw
     ∀ column ∈ columns,
       (before.getD column #[]).Fits row length
 
-private def FirstFitLaw
+def FirstFitLaw
     (fuel : ℕ) (allocations : CircuitAllocations)
     (columns : List RegionColumn) (length start : ℕ)
     (slack : Option ℕ) : Prop :=
@@ -1664,7 +1668,7 @@ theorem PlacementEffect.equivalent_before_of_none
   intro column
   rw [heffect column, hresult]
 
-private def FirstFitEffect
+def FirstFitEffect
     (fuel : ℕ) (allocations : CircuitAllocations)
     (columns : List RegionColumn) (length start : ℕ)
     (slack : Option ℕ) : Prop :=
@@ -2483,7 +2487,7 @@ theorem firstFit_drop_dominated_suffix
           rw [← hspaces]
           simpa only [leftInitialized, rightInitialized, spaces] using hresult
 
-private def FirstFitCongruent
+def FirstFitCongruent
     (fuel : ℕ) (allocations : CircuitAllocations)
     (columns : List RegionColumn) (length start : ℕ)
     (slack : Option ℕ) : Prop :=
@@ -3335,13 +3339,13 @@ def placedShapes (shapes : List RegionShape)
     (pairs : List (ℕ × ℕ)) : List (RegionShape × ℕ) :=
   shapes.zip (pairs.map (·.2))
 
-private def PlacedRecords (allocations : CircuitAllocations)
+def PlacedRecords (allocations : CircuitAllocations)
     (placed : List (RegionShape × ℕ)) : Prop :=
   ∀ item ∈ placed, ∀ column ∈ item.1.columns,
     (item.2, item.1.rowCount) ∈
       (allocations.getD column #[]).toList
 
-private def PlacedFits (allocations : CircuitAllocations)
+def PlacedFits (allocations : CircuitAllocations)
     (placed : List (RegionShape × ℕ)) : Prop :=
   ∀ item ∈ placed, ∀ column ∈ item.1.columns,
     (allocations.getD column #[]).Fits item.2 item.1.rowCount

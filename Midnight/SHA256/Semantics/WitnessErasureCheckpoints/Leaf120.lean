@@ -14,7 +14,5 @@ theorem round52Checked : Checked StructuralCheckpoints.round52Action
     sha256_structural_unfold round52
     sha256_witness_unfold round52
     cbv
-    repeat' apply And.intro
-    all_goals trivial
 
 end Midnight.SHA256.Semantics.WitnessErasureCheckpoints

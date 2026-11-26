@@ -1,13 +1,16 @@
-import Clean.Circuit
-import Clean.Gadgets.Xor.ByteXorTable
-import Clean.Utils.Primes
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Xor.ByteXorTable
+
+@[expose] public section
 
 open Clean
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.And.And8
-open Xor (ByteXorTable)
+open Gadgets.Xor (ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -24,11 +27,10 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   z.val = x.val &&& y.val
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
-  let ⟨x, y⟩ := input
-  let and ← witness (x.val &&& y.val).toField
+  let and ← witness (input.x.val &&& input.y.val).toField
   -- we prove AND correct using an XOR lookup and the following identity:
-  let xor := x + y - 2*and
-  lookup ByteXorTable (x, y, xor)
+  let xor := input.x + input.y - 2*and
+  lookup ByteXorTable (input.x, input.y, xor)
   return and
 
 -- AND / XOR identity that justifies the circuit
@@ -109,8 +111,10 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   intro i env ⟨ x_var, y_var ⟩ h_env ⟨ x, y ⟩ h_input h_assumptions
-  simp_all only [HAnd.hAnd, AndOp.and, Witgen.NExprOver.eval, circuit_norm, main, Assumptions, ByteXorTable, Inputs.mk.injEq]
+  -- destructure the byte bounds first, so that the `u64Wrap` simproc can discharge
+  -- the `% 2^64` truncations coming from the witness IR
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
+  simp_all only [circuit_norm, main, ByteXorTable, Inputs.mk.injEq]
   set w : F p := ZMod.val x &&& ZMod.val y
   have hw : w = ZMod.val x &&& ZMod.val y := rfl
 
@@ -131,7 +135,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
     rw [two_and_val, x_y_val]
     exact two_and_le_add hx_byte hy_byte
 
-  change (x + y - 2*w).val = x.val ^^^ y.val
   rw [ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 

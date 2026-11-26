@@ -1,6 +1,17 @@
-import Clean.Halo2.Keygen.FloorPlanner.V1Correctness
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.V1Correctness
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner.Pdqsort
+
+private theorem sortedLE_map_toDual_of_sortedGE {α : Type} {f : α → ℕ} {l : List α}
+    (h : (l.map f).SortedGE) :
+    (l.map fun x => OrderDual.toDual (f x)).SortedLE := by
+  rw [List.sortedLE_iff_pairwise, List.pairwise_map]
+  rw [List.sortedGE_iff_pairwise, List.pairwise_map] at h
+  exact h.imp fun hle => OrderDual.toDual_le_toDual.mpr hle
 
 /-- Stable canonical ordering of index-free V1 region summaries. -/
 def stableRegionSort (summaries : List RegionShapeSummary) :
@@ -46,7 +57,7 @@ theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort_interchangeable
         (fun summary => (OrderDual.toDual summary.key))).SortedLE := by
     have hsorted := quicksort_sorted summaries.toArray
       RegionShapeSummary.key |>.reverse
-    change (actualAscending.reverse.map RegionShapeSummary.key).SortedGE
+    apply sortedLE_map_toDual_of_sortedGE
     simpa only [actualAscending, List.map_reverse] using hsorted
   have hcanonicalSorted :
       (canonicalAscending.reverse.map
@@ -56,7 +67,7 @@ theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort_interchangeable
       rw [hcanonicalKeys]
       exact List.sortedLE_mergeSort
     have hreverse := hsorted.reverse
-    change (canonicalAscending.reverse.map RegionShapeSummary.key).SortedGE
+    apply sortedLE_map_toDual_of_sortedGE
     simpa only [List.map_reverse] using hreverse
   have hactualReversePerm :
       actualAscending.reverse.Perm summaries.reverse :=
@@ -134,8 +145,7 @@ theorem sortedSummaryOrder_key_sorted {F : Type} (ops : Operations F) :
           (OrderDual.toDual shape.key)).SortedLE := by
     have hascending :=
       Pdqsort.quicksort_sorted shapes.toArray RegionShape.key |>.reverse
-    change ((Pdqsort.quicksort shapes.toArray
-      (Pdqsort.lessBy RegionShape.key)).toList.reverse.map RegionShape.key).SortedGE
+    apply Pdqsort.sortedLE_map_toDual_of_sortedGE
     simpa only [List.map_reverse] using hascending
   unfold Pdqsort.lessBy at hsorted
   simpa only [sortedSummaryOrder, sortedRegionOrder, shapes, List.map_map,

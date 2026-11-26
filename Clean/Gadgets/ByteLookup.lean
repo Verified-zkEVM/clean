@@ -1,5 +1,9 @@
-import Clean.Circuit.Basic
-import Clean.Utils.Field
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Utils.Field
+
+@[expose] public section
 
 open Clean
 

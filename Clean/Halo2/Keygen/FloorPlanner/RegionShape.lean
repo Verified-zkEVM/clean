@@ -1,10 +1,14 @@
-import Clean.Halo2.SynthesisSummary.Operations
-import Clean.Halo2.Operations.LookupSelectors
-import Mathlib.Data.List.GetD
-import Mathlib.Data.List.Nodup
-import Mathlib.Data.List.Perm.Basic
-import Mathlib.Data.List.Sort
-import Mathlib.Data.List.TakeDrop
+module
+
+public import Clean.Halo2.SynthesisSummary.Operations
+public import Clean.Halo2.Operations.LookupSelectors
+public import Mathlib.Data.List.GetD
+public import Mathlib.Data.List.Nodup
+public import Mathlib.Data.List.Perm.Basic
+public import Mathlib.Data.List.Sort
+public import Mathlib.Data.List.TakeDrop
+
+@[expose] public section
 
 /-!
 # Floor-planner region shapes
@@ -98,20 +102,37 @@ def placeSelectorActivations (starts : List ℕ) :
         (selector, starts.getD index 0 + row)) ++
       placeSelectorActivations starts (index + 1) rest
 
+def regionActivationsAt (starts : List ℕ) (index : ℕ)
+    (body : RegionOperations F) : List (ℕ × ℕ) :=
+  body.flatMap fun operation =>
+    match operation with
+    | .enableGate gate row =>
+        [(gate.selector.index, starts.getD index 0 + row)]
+    | .enableLookup _ enabled row =>
+        enabled.map fun selector =>
+          (selector.index, starts.getD index 0 + row)
+    | _ => []
+
 theorem activations_cons (starts : List ℕ) (index : ℕ)
     (body : RegionOperations F) (rest : List (ℕ × RegionOperations F)) :
     activations starts ((index, body) :: rest) =
+      regionActivationsAt starts index body ++ activations starts rest := rfl
+
+theorem regionActivationsAt_eq_map_selectorActivations
+    (starts : List ℕ) (index : ℕ) (body : RegionOperations F) :
+    regionActivationsAt starts index body =
       (body.flatMap FloorPlanner.regionOperationSelectorActivations).map
-          (fun (selector, row) => (selector, starts.getD index 0 + row)) ++
-        activations starts rest := by
-  simp only [activations, List.flatMap_cons]
-  congr 1
+        fun (selector, row) =>
+          (selector, starts.getD index 0 + row) := by
   induction body with
   | nil => rfl
   | cons operation operations inductionHypothesis =>
-      simp only [List.flatMap_cons, List.map_append, inductionHypothesis]
+      simp only [regionActivationsAt, List.flatMap_cons, List.map_append]
+      rw [← regionActivationsAt]
+      rw [inductionHypothesis]
       cases operation <;>
-        simp [FloorPlanner.regionOperationSelectorActivations, Function.comp_def]
+        simp [FloorPlanner.regionOperationSelectorActivations,
+          Function.comp_def]
 
 /-- The exact selector-activation stream can be reconstructed from the reduced
 synthesis summary and the planner's region starts. -/
@@ -131,7 +152,8 @@ theorem activations_eq_placeSelectorActivations
             FloorPlanner.SynthesisSummary.ofRegion_regionSelectorActivations,
             List.singleton_append, placeSelectorActivations,
             FloorPlanner.regionSynthesisSummary_selectorActivations_eq_flatMap]
-          rw [inductionHypothesis]
+          rw [regionActivationsAt_eq_map_selectorActivations,
+            inductionHypothesis]
       | constrainInstance cell column row =>
           simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
             FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
@@ -237,10 +259,10 @@ private theorem orderedInsert_append_of_rel_right
   induction left with
   | nil =>
       cases right with
-      | nil => rfl
+      | nil => simp
       | cons head tail =>
           simp only [List.nil_append, List.orderedInsert_cons]
-          rw [if_pos (hrel head (by simp))]
+          rw [ite_eq_left (hrel head (by simp))]
           simp only [List.orderedInsert_nil, List.singleton_append]
   | cons head tail inductionHypothesis =>
       simp only [List.cons_append, List.orderedInsert_cons]
@@ -259,7 +281,7 @@ private theorem orderedInsert_append_of_not_rel_left
   | nil => rfl
   | cons head tail inductionHypothesis =>
       simp only [List.cons_append, List.orderedInsert_cons]
-      rw [if_neg (hrel head (by simp)), inductionHypothesis]
+      rw [ite_eq_right (hrel head (by simp)), inductionHypothesis]
       intro candidate hcandidate
       exact hrel candidate (by simp [hcandidate])
 
@@ -281,7 +303,7 @@ private theorem sortRegionColumns_cons
       List.orderedInsert (fun left right =>
         RegionColumn.lt left right = true) head
         (sortRegionColumns tail) := by
-  rfl
+  simp [sortRegionColumns]
 
 private theorem physicalColumns_column_cons
     (kind : ColumnKind) (index : ℕ) (tail : List RegionColumn) :
@@ -313,7 +335,7 @@ theorem sortRegionColumns_eq_physical_append_selectors
       sortRegionColumns (physicalColumns columns) ++
         sortRegionColumns (selectorColumns columns) := by
   induction columns with
-  | nil => rfl
+  | nil => simp [sortRegionColumns, physicalColumns, selectorColumns]
   | cons head tail inductionHypothesis =>
       cases head with
       | column kind index =>

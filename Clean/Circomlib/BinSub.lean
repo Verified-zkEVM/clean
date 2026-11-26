@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Gadgets.Bits
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Gadgets.Bits
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 open Clean
 
@@ -42,14 +46,14 @@ lemma inputLinearSub_eval_eq_sub {n : ℕ} [NeZero n] (env : Environment (F p))
     Expression.eval env (inputLinearSub n input) =
       fieldFromBits input_val[0] + 2^n - fieldFromBits input_val[1] := by
   simp only [inputLinearSub, circuit_norm, eval_foldl]
-  simp only [ProvableType.Clean.getElem_eval_fields, getElem_eval_vector, h_eval]
+  simp only [h_eval]
   have h_foldl_split := Fin.foldl_split_mul_add_distrib (α:=F p) (fun j k => input_val[j][k]) (fun i => 2^i) (n:=n)
   simp_all only [Fin.getElem_fin, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.mod_succ]
   simp [fieldFromBits_as_sum]
 
 -- Lemma: (Left) folding `n` times over an accumulator that starts as `(0, 1)`, and doubling each time the right element of the accumulator, results in having `2^n` as the right element of the pair
 lemma foldl_acc1_powerof2 {n : ℕ} (env : Environment (F p)) (f : Expression (F p) × Expression (F p) → ℕ → Expression (F p)) :
-  Expression.eval env (Fin.foldl n (fun acc i ↦ (f acc i, acc.2 + acc.2)) (0, 1)).2 = (2^n : F p) := by
+  Expression.eval env (Fin.foldl n (fun acc i ↦ (f acc i, acc.2 * 2)) (0, 1)).2 = (2^n : F p) := by
   induction n with
   | zero => simp_all only [Fin.foldl_zero, pow_zero, circuit_norm]
   | succ n' ihn' => simp_all +arith [Fin.foldl_succ_last, circuit_norm, two_mul, pow_succ, mul_comm]
@@ -57,7 +61,7 @@ lemma foldl_acc1_powerof2 {n : ℕ} (env : Environment (F p)) (f : Expression (F
 -- Lemma: Conversion to bitstring equals the evaluation of the conversion with explicit accumulator and variables
 lemma foldl_explicit {n : ℕ} {m : ℕ} (h_le : m <= n) (env : Environment (F p)) (offset : ℕ) (h_bool : ∀ i : Fin n, IsBool (env.get (offset + i))) :
   Fin.foldl m (fun acc k ↦ acc + env.get (offset + k) * 2^k.val) 0 =
-    Expression.eval env (Fin.foldl m (fun acc i ↦ (acc.1 + var { index := offset + i } * acc.2, acc.2 + acc.2)) (0, 1)).1 := by
+    Expression.eval env (Fin.foldl m (fun acc i ↦ (acc.1 + var { index := offset + i } * acc.2, acc.2 * 2)) (0, 1)).1 := by
   induction m with
   | zero => simp_all +arith [Expression.eval]
   | succ m' ihm' =>
@@ -93,15 +97,6 @@ lemma soundness_lhs_eval {n : ℕ} [NeZero n] (env : Environment (F p)) (input_v
 -- Lemma: Boolean property from fieldToBits
 lemma fieldToBits_boolean {n : ℕ} (x : F p) (i : Fin n) : IsBool (fieldToBits n x)[i] :=
   fieldToBits_bits i.val i.isLt
-
-private lemma cast_mod_two_boolean (value : ℕ) : IsBool ((value.mod 2 : ℕ) : F p) := by
-  rcases Nat.mod_two_eq_zero_or_one value with h | h
-  · change value.mod 2 = 0 at h
-    rw [h]
-    simp [IsBool]
-  · change value.mod 2 = 1 at h
-    rw [h]
-    simp [IsBool]
 
 -- Lemma: fieldFromBits produces values bounded by 2^n
 lemma fieldFromBits_bound {n : ℕ} (bits : Vector (F p) n) (h_bool : ∀ i : Fin n, IsBool bits[i]) :
@@ -160,7 +155,7 @@ lemma completeness_aux_div {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (env : Env
         exact ⟨input_fieldFromBits_bound input h_assumptions 0, input_fieldFromBits_bound input h_assumptions 1⟩
       have h_lin_lt : (Expression.eval env (inputLinearSub n input_var)).val < 2^(n+1) := by
         rw [soundness_lhs_eval env input_var input h_input]
-        convert lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout using 1
+        exact lin_bound _ _ h_lin_lt.1 h_lin_lt.2 hnout
       have h_aux_one : (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n < 2 := by
         exact Nat.div_lt_of_lt_mul h_lin_lt
       grind
@@ -188,7 +183,7 @@ lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (en
     (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i])
     (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
     Expression.eval env (inputLinearSub n input_var) =
-    Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 +
+    Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 * 2)) (0, 1)).1 +
     env.get (i₀ + n) * 2 ^ n := by
   -- 1. Convert Circuit Fold to Summation
   rw [←foldl_explicit (le_refl n) env i₀ h_out_binary]
@@ -255,18 +250,20 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
     (2^n : F p)
 
   -- Witness output bits
-  let out ← witnessVector n (.range n fun i => ((lin.val >>> i) % 2).toField)
+  let out ← witnessVector n (lin.bits n)
 
   -- Witness aux bit
   -- the borrow bit is exactly the nth bit of lin
-  let aux ← witness ((lin.val >>> n) % 2).toField
+  let aux ← witness (lin.bit n)
 
   -- Calculate output linear sum and constrain bits
-  let (lout, _) ← Circuit.foldlRange n ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) i => do
+  let (lout, _) ← Circuit.foldlRangeDynamic n ((0 : Expression (F p)), (1 : Expression (F p))) fun (lout, e2) i => do
     -- Ensure out[i] is binary
     out[i] * (out[i] - 1) === 0
     let lout := lout + out[i] * e2
-    return (lout, e2 + e2)
+    -- `e2 * 2` (not `e2 + e2`): see Circomlib.Num2Bits.main — doubling a shared
+    -- expression subtree makes the compiler's flattening exponential.
+    return (lout, e2 * 2)
 
   -- Ensure aux is binary
   aux * (aux - 1) === 0
@@ -310,7 +307,8 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     have h_out_bool : ∀ i < n, IsBool (env.get (i₀ + i)) := by
       intro i hi
       specialize h_out_constrs ⟨i, hi⟩
-      simpa [sub_eq_zero, IsBool] using h_out_constrs
+      simp only [mul_eq_zero, sub_eq_zero] at h_out_constrs
+      exact h_out_constrs
 
     -- Step 2: Establish that the aux bit is Boolean
     have h_aux_bool : IsBool (env.get (i₀ + n)) := by
@@ -324,9 +322,11 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Step 4: Analyze the Right Hand Side (RHS) of the main equation
     -- Link the circuit's reconstruction loop to `fieldFromBits` of the output vars
     -- Hint: Use `foldl_explicit` and `Bits.fieldFromBits_eval`
-    let out_vars : Vector (Expression (F p)) n := Vector.mapRange n (fun i ↦ var { index := i₀ + i })
-    have h_rhs_eval : Expression.eval env (Fin.foldl n (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 = fieldFromBits (Vector.map (Expression.eval env) out_vars) := by
-      -- By definition of `fieldFromBits`, we know that `fieldFromBits (Vector.map (Expression.eval env) out_vars)` is the sum of the bits of `out_vars` multiplied by their respective powers of 2.
+    have h_rhs_eval : Expression.eval env (Fin.foldl n
+        (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 * 2)) (0, 1)).1 =
+        fieldFromBits (Vector.mapRange n fun i => env.get (i₀ + i)) := by
+      -- By definition of `fieldFromBits`, the right-hand side is the sum of the output bits
+      -- multiplied by their respective powers of 2.
       apply Eq.symm; exact (by
       convert foldl_explicit _ _ _ _ using 1;
       any_goals exact fun i => h_out_bool _ i.2;
@@ -334,8 +334,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         -- By definition of `fieldFromBits`, we know that it is equal to the foldl of the same operation.
         have h_fieldFromBits_eq_foldl : ∀ (bits : Vector (F p) n), Utils.Bits.fieldFromBits bits = Fin.foldl n (fun (acc : F p) (k : Fin n) => acc + bits[k] * 2 ^ (k : ℕ)) 0 := by exact fieldFromBits_as_sum;
         convert h_fieldFromBits_eq_foldl _;
-        simp +decide only [Fin.getElem_fin, Vector.getElem_map, Vector.getElem_mapRange];
-        rfl;
+        simp +decide only [Fin.getElem_fin, Vector.getElem_mapRange];
       · norm_num)
 
     -- Final Conclusion: Assemble the parts
@@ -349,9 +348,6 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
 
     -- Decompose the witness generation assumption (h_env) into parts for 'out' and 'aux'
     rcases h_env with ⟨h_env_out, h_env_aux⟩
-    simp only [HShiftRight.hShiftRight, ShiftRight.shiftRight, HDiv.hDiv, Div.div,
-      HMod.hMod, Mod.mod, Witgen.NExprOver.eval, Witgen.FExprOver.eval,
-      Expression.val, circuit_norm] at h_env_out h_env_aux
 
     -- Step 1: Define 'lin' for clarity
     set lin := Expression.eval env (inputLinearSub n input_var)
@@ -359,13 +355,14 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Step 2: Establish that the 'out' bits in the environment are binary
     have h_out_binary : ∀ (i : Fin n), IsBool (env.get (i₀ + ↑i)) := by
       rintro ⟨i, h⟩
-      rw [h_env_out ⟨i, h⟩]
-      exact cast_mod_two_boolean _
+      simp only [h_env_out ⟨i, h⟩, IsBool]
+      rcases Nat.mod_two_eq_zero_or_one (_ >>> i) with hb | hb <;> rw [hb] <;> simp
 
     -- Step 3: Establish that the 'aux' bit is binary
     have h_aux_binary : IsBool (env.get (i₀ + n)) := by
       rw [h_env_aux]
-      exact cast_mod_two_boolean _
+      simp only [IsBool]
+      rcases Nat.mod_two_eq_zero_or_one (_ >>> n) with hb | hb <;> rw [hb] <;> simp
 
     -- Final Goal: Prove the conjunction of constraints
     and_intros
@@ -387,12 +384,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         rfl
       have h_env_aux' : env.get (i₀ + n) =
           if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0 := by
-        rw [h_env_aux]
-        change (((Expression.eval env (inputLinearSub n input_var)).val.shiftRight n).mod 2 : F p) = _
-        have hshift := Nat.shiftRight_eq_div_pow
-          (Expression.eval env (inputLinearSub n input_var)).val n
-        change (Expression.eval env (inputLinearSub n input_var)).val.shiftRight n = _ at hshift
-        rw [hshift]
+        rw [h_env_aux, Nat.shiftRight_eq_div_pow]
         show (↑((Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2) : F p) = _
         rcases Nat.mod_two_eq_zero_or_one
           ((Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n) with hb | hb <;>

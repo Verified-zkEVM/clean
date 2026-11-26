@@ -116,11 +116,11 @@ instance instForInRange {β : Type} (r : Std.Legacy.Range) (init : β)
     ElaboratedConfigure (Array.mapM.map f as i bs) := by
   rw [Array.mapM.map]
   by_cases h : i < as.size
-  · rw [dif_pos h]
+  · rw [dite_eq_left h]
     refine @Halo2.ElaboratedConfigure.bind F _ _ (f as[i]) inferInstance _ ?_
     intro b
     exact mapMLoop f as (i + 1) (bs.push b)
-  · rw [dif_neg h]
+  · rw [dite_eq_right h]
     exact Halo2.ElaboratedConfigure.pure bs
 termination_by as.size - i
 

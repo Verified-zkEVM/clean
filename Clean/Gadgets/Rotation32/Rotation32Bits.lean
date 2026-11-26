@@ -1,9 +1,13 @@
-import Clean.Types.U32
-import Clean.Circuit.Subcircuit
-import Clean.Gadgets.Rotation32.Theorems
-import Clean.Gadgets.Rotation32.Rotation32Bytes
-import Clean.Gadgets.ByteDecomposition.ByteDecomposition
-import Clean.Circuit.Provable
+module
+
+public import Clean.Types.U32
+public import Clean.Circuit.Subcircuit
+public import Clean.Gadgets.Rotation32.Theorems
+public import Clean.Gadgets.Rotation32.Rotation32Bytes
+public import Clean.Gadgets.ByteDecomposition.ByteDecomposition
+public import Clean.Circuit.Provable
+
+@[expose] public section
 
 open Clean
 
@@ -115,6 +119,7 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 where
   elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
+  computableWitnesses := by computable_witnesses [U32.toLimbs, U32.fromLimbs, Vector.getElem_rotate]
   soundness := soundness offset
   completeness := completeness offset
 

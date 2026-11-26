@@ -1,5 +1,9 @@
-import Clean.Halo2.Operations
-import Mathlib.Tactic.Tauto
+module
+
+public import Clean.Halo2.Operations
+public import Mathlib.Tactic.Tauto
+
+@[expose] public section
 
 /-!
 # Full Halo2 circuit satisfaction, split by constraint family

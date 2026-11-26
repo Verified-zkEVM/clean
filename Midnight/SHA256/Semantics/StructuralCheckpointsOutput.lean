@@ -30,7 +30,7 @@ def feedforwardChunk : List Step :=
 theorem feedforwardChecked : Checkpoint feedforwardAction round63After feedforwardOutput feedforwardAfter feedforwardChunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def serialize0Action : Synthesis.Build (Array Cell) :=
   do
@@ -46,7 +46,7 @@ def serialize0Chunk : List Step :=
 theorem serialize0Checked : Checkpoint serialize0Action feedforwardAfter serialize0Output serialize0After serialize0Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def serialize1Action : Synthesis.Build (Array Cell) :=
   do
@@ -62,7 +62,7 @@ def serialize1Chunk : List Step :=
 theorem serialize1Checked : Checkpoint serialize1Action serialize0After serialize1Output serialize1After serialize1Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def serialize2Action : Synthesis.Build (Array Cell) :=
   do
@@ -78,7 +78,7 @@ def serialize2Chunk : List Step :=
 theorem serialize2Checked : Checkpoint serialize2Action serialize1After serialize2Output serialize2After serialize2Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def serialize3Action : Synthesis.Build (Array Cell) :=
   do
@@ -94,7 +94,7 @@ def serialize3Chunk : List Step :=
 theorem serialize3Checked : Checkpoint serialize3Action serialize2After serialize3Output serialize3After serialize3Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def serialize4Action : Synthesis.Build (Array Cell) :=
   do
@@ -110,7 +110,7 @@ def serialize4Chunk : List Step :=
 theorem serialize4Checked : Checkpoint serialize4Action serialize3After serialize4Output serialize4After serialize4Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def serialize5Action : Synthesis.Build (Array Cell) :=
   do
@@ -126,7 +126,7 @@ def serialize5Chunk : List Step :=
 theorem serialize5Checked : Checkpoint serialize5Action serialize4After serialize5Output serialize5After serialize5Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def serialize6Action : Synthesis.Build (Array Cell) :=
   do
@@ -142,7 +142,7 @@ def serialize6Chunk : List Step :=
 theorem serialize6Checked : Checkpoint serialize6Action serialize5After serialize6Output serialize6After serialize6Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def serialize7Action : Synthesis.Build (Array Cell) :=
   do
@@ -158,7 +158,7 @@ def serialize7Chunk : List Step :=
 theorem serialize7Checked : Checkpoint serialize7Action serialize6After serialize7Output serialize7After serialize7Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def publicAction : Synthesis.Build (Unit) :=
   do

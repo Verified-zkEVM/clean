@@ -1,8 +1,10 @@
-import Clean.Table.Basic
-import Clean.Table.WitnessGeneration
-import Clean.Circuit.Json
+module
 
-open Clean
+public import Clean.Table.Basic
+public import Clean.Table.WitnessGeneration
+public import Clean.Circuit.Json
+
+@[expose] public section
 
 open Lean
 

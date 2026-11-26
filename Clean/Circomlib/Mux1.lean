@@ -1,8 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Tactics
-import Clean.Gadgets.Equality
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Tactics
+public import Clean.Gadgets.Equality
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 open Clean
 
@@ -33,11 +36,9 @@ template MultiMux1(n) {
 }
 -/
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
-  let { c, s } := input
-
   -- Witness and constrain output vector
-  let out <== c.map fun (c0, c1) =>
-    (c1 - c0) * s + c0
+  let out <== input.c.map fun (c0, c1) =>
+    (c1 - c0) * input.s + c0
   return out
 
 lemma Vector.mapRange_one {α : Type} (f : ℕ → α) :
@@ -57,8 +58,6 @@ lemma Vector.getElem_map_singleton_flatten {α β : Type} {n : ℕ} (v : Vector 
   simp only [Vector.getElem_map (fun x => #v[f x]) hi]
   rfl
 
--- Note: Use the existing lemma getElem_eval_vector from Provable.lean instead
-
 def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
   main := main n
 
@@ -72,42 +71,15 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
   soundness := by
-    simp only [circuit_norm, main]
-    intro offset env input_var input h_input h_assumptions h_output i hi
-    -- The output at position i is (c[i][1] - c[i][0]) * s + c[i][0]
-    -- We need to show this equals if s = 0 then c[i][0] else c[i][1]
-
-    -- h_output gives us the equality of evaluated vectors
-
-    -- Get the i-th element equality from h_output
-    -- h_output gives us equality of vectors, extract element i
-    have h_output_i := congrArg (fun v => v[i]) h_output
-    -- Simplify the outer Vector.map on both sides
-    simp only [Vector.getElem_map] at h_output_i
-    -- Now we need to show that (Vector.mapRange n fun i => var { index := offset + i })[i] = var { index := offset + i }
-    simp only [Vector.getElem_mapRange] at h_output_i
-
-    simp only [circuit_norm] at h_output_i
-    simp only [h_output_i]
-
-    -- Now we can work with the components
-    rw [← h_input] at h_assumptions ⊢
-    -- Extract the fact that s is boolean
-    -- IsBool means s = 0 ∨ s = 1
-    simp only [eval_vector]
-    simp only [Vector.getElem_map]
-    simp only at h_assumptions
-
-    cases h_assumptions with
-      | inl h0 =>
-        -- When s = 0
-        rw [h0]
-        simp only [mul_zero, circuit_norm]
-      | inr h1 =>
-        -- When s = 1
-        rw [h1]
-        simp only [mul_one, circuit_norm]
-        norm_num
+    circuit_proof_start
+    intro i hi
+    have h_holds_i := congrArg (fun v => v[i]) h_holds
+    simp only [circuit_norm, Vector.getElem_map, Vector.getElem_mapRange] at h_holds_i
+    rw [h_holds_i, h_input.1]
+    rcases h_assumptions with h0 | h1
+    · simp [h0]
+    · simp only [h1, mul_one, one_ne_zero, ite_false]
+      ring
 
   completeness := by
     circuit_proof_start
@@ -116,11 +88,11 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- Left side: eval of varFromOffset
     simp only [Vector.getElem_map, Vector.getElem_mapRange]
     -- Now simplify the left side: Expression.eval env (var { index := offset + 1 * i })
-    simp only [Expression.eval]
+    simp only [circuit_norm]
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
     rw [h_env_i]
-    simp only [Expression.eval_sub]
+    simp only [h_input.1]
 
 end MultiMux1
 
@@ -150,10 +122,11 @@ template Mux1() {
 }
 -/
 def main (input : Var Inputs (F p)) := do
-  let { c, s } := input
-
   -- Call MultiMux1 with n=1
-  let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
+  let mux_out ← MultiMux1.circuit 1 {
+    c := #v[(input.c[0], input.c[1])]
+    s := input.s
+  }
   return mux_out[0]
 
 def circuit : FormalCircuit (F p) Inputs field where
@@ -168,22 +141,14 @@ def circuit : FormalCircuit (F p) Inputs field where
     output = if s = 0 then c[0] else c[1]
 
   soundness := by
-    simp only [circuit_norm, main]
-    intro _ _ _ input h_input h_assumptions h_subcircuit_sound
-    rw[← h_input] at *
-    clear input
-    clear h_input
-    simp only [MultiMux1.circuit, circuit_norm] at h_subcircuit_sound h_assumptions ⊢
-    specialize h_subcircuit_sound h_assumptions 0 (by omega)
-    simpa only [eval_vector, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero,
-      circuit_norm, Nat.add_zero] using h_subcircuit_sound
+    circuit_proof_start [MultiMux1.circuit]
+    specialize h_holds h_assumptions 0 (by omega)
+    simp only [circuit_norm] at h_holds
+    exact h_holds
 
   completeness := by
-    simp only [circuit_norm, main]
-    intros offset env input_var h_env input h_input h_s
-    simp only [MultiMux1.circuit, circuit_norm]
-    rw [← h_input] at h_s
-    simp_all
+    circuit_proof_start [MultiMux1.circuit]
+    exact h_assumptions
 
 end Mux1
 

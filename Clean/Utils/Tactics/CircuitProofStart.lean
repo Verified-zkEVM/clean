@@ -1,6 +1,10 @@
-import Lean
-import Clean.Circuit.Formal
-import Clean.Utils.Tactics.ProvableStructSimp
+module
+
+public meta import Lean
+public meta import Clean.Circuit.Formal
+public meta import Clean.Utils.Tactics.ProvableStructSimp
+
+public meta section
 
 open Clean
 
@@ -132,7 +136,7 @@ elab_rules : tactic
   evalTactic (← `(tactic| try dsimp +instances only [$(mkIdent `elaborated):ident] at *)) -- sometimes `main` is hidden behind `elaborated`
   evalTactic (← `(tactic| try dsimp +instances only [$(mkIdent `main):ident] at *))
 
-  -- needed because `decompose_provable_struct` would time out on `(ElaboratedCircuit.WithData ...).output` like terms
+  -- needed because struct-var destructuring would time out on `(ElaboratedCircuit.WithData ...).output` like terms
   try (evalTactic (← `(tactic| dsimp only [ElaboratedCircuit.withData, ElaboratedCircuit.output]))) catch _ => pure ()
 
   -- collapse the `field`/`id` type synonym everywhere, so that hypotheses and goals
@@ -154,7 +158,8 @@ elab_rules : tactic
 
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_input):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+  try (evalTactic (← `(tactic| simp +instances only [circuit_norm,
+    $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()
@@ -163,10 +168,6 @@ elab_rules : tactic
   -- `field F`-typed statements (e.g. from unfolded Specs)
   try (evalTactic (← `(tactic| dsimp only [field, id_eq, CircuitType.var_of_provableType,
     CircuitType.value_of_provableType, CircuitType.proverValue_of_provableType] at *))) catch _ => pure ()
-
-  -- Expose the stored output projection after the circuit wrapper has been
-  -- unfolded by user-supplied simplification rules.
-  try (evalTactic (← `(tactic| dsimp only [FormalCircuitBase.output, ElaboratedCircuit.output, Circuit.output, Expression.eval] at $(mkIdent `h_holds):ident))) catch _ => pure ()
 
 -- core version only, for experimentation with variants of this tactic
 elab "circuit_proof_start_core" : tactic => do

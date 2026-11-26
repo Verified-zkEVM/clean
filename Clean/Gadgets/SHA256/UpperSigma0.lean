@@ -1,5 +1,8 @@
-import Clean.Gadgets.WitnessEvaluation
-import Clean.Gadgets.SHA256.LowerSigma0
+module
+
+public import Clean.Gadgets.SHA256.LowerSigma0
+
+@[expose] public section
 
 open Clean
 
@@ -146,11 +149,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
          2 * env.get (i₀ + i.val) * Expression.eval env (rotr32 22 input_var)[i.val]) = 0 := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
-  set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + (32 + 32 * 0) + i} : Expression (F p))) with hz_def
+  set z : fields 32 (F p) := Vector.mapRange 32 fun i => env.get (i₀ + (32 + 32 * 0) + i)
+    with hz_def
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
-    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    intro i; simp [z, Vector.getElem_mapRange]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 2).val] + input[(i + 13).val] -
         2 * input[(i + 2).val] * input[(i + 13).val])
@@ -164,15 +166,18 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [upperSigma0, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
+  obtain ⟨h_env1, h_env2⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr2 := eval_rotr32 env.toEnvironment input_var input h_input 2 i
     have hr13 := eval_rotr32 env.toEnvironment input_var input h_input 13 i
     have h1 := h_env1 i
-    simp only [Witgen.eval_xor, circuit_norm] at h1
     rw [h1, hr2, hr13]
     have b2 : input[(i + 2).val] = (0 : F p) ∨ input[(i + 2).val] = 1 := h_assumptions (i + 2)
     have b13 : input[(i + 13).val] = (0 : F p) ∨ input[(i + 13).val] = 1 := h_assumptions (i + 13)
+    -- the witness IR computes the xor on `u64`s; the operands are bits, so nothing wraps
+    have b2v : ZMod.val input[(i + 2).val] < 2 := IsBool.val_lt_two b2
+    have b13v : ZMod.val input[(i + 13).val] < 2 := IsBool.val_lt_two b13
+    simp only [circuit_norm]
     have hc : ((input[(i + 2).val].val ^^^ input[(i + 13).val].val : ℕ) : F p) =
         input[(i + 2).val] + input[(i + 13).val] -
           2 * input[(i + 2).val] * input[(i + 13).val] := by
@@ -184,8 +189,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hr22 := eval_rotr32 env.toEnvironment input_var input h_input 22 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [Witgen.eval_xor, circuit_norm, mul_zero, zero_add] at h2
-    simp only [Witgen.eval_xor, circuit_norm] at h1
+    simp only [circuit_norm, mul_zero] at h2
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr2, hr13, hr22]
     have b2 : input[(i + 2).val] = (0 : F p) ∨ input[(i + 2).val] = 1 := h_assumptions (i + 2)
     have b13 : input[(i + 13).val] = (0 : F p) ∨ input[(i + 13).val] = 1 := h_assumptions (i + 13)
@@ -203,10 +207,17 @@ theorem completeness : Completeness (F p) main Assumptions := by
           2 * ((r2.val ^^^ r13.val : ℕ) : F p) * r22 := by
       rw [← IsBool.xor_eq_val_xor hxor1_bool b22, ZMod.natCast_val]
       exact ZMod.cast_id p _
+    -- the witness IR computes the xors on `u64`s; all operands are bits, so nothing wraps
+    have b2v : ZMod.val r2 < 2 := IsBool.val_lt_two b2
+    have b13v : ZMod.val r13 < 2 := IsBool.val_lt_two b13
+    have b22v : ZMod.val r22 < 2 := IsBool.val_lt_two b22
+    have hxor1v : ZMod.val (((r2.val ^^^ r13.val : ℕ) : F p)) < 2 := IsBool.val_lt_two hxor1_bool
+    simp only [circuit_norm]
     rw [hxor3, hxor1]; ring
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by computable_witnesses [rotr32, Vector.getElem_rotate]
 
 end UpperSigma0
 end Gadgets.SHA256

@@ -42,7 +42,7 @@ theorem spread_testBit_even (n i : Nat) : (spread n).testBit (2 * i) = n.testBit
     rw [spread_unfold, Nat.add_comm]
     change (2 ^ 2 * spread (n / 2) + n % 2).testBit (2 * (i + 1)) = _
     rw [Nat.testBit_two_pow_mul_add _ (by omega : n % 2 < 2 ^ 2)]
-    simp only [show ¬ 2 * (i + 1) < 2 by omega, if_false,
+    simp only [show ¬ 2 * (i + 1) < 2 by omega, ite_false,
       show 2 * (i + 1) - 2 = 2 * i by omega, ih, Nat.testBit_div_two]
 
 /-- Odd positions are zero, so the expansion has no hidden payload bits. -/
@@ -57,7 +57,7 @@ theorem spread_testBit_odd (n i : Nat) : (spread n).testBit (2 * i + 1) = false 
     rw [spread_unfold, Nat.add_comm]
     change (2 ^ 2 * spread (n / 2) + n % 2).testBit (2 * (i + 1) + 1) = _
     rw [Nat.testBit_two_pow_mul_add _ (by omega : n % 2 < 2 ^ 2)]
-    simpa only [show ¬ 2 * (i + 1) + 1 < 2 by omega, if_false,
+    simpa only [show ¬ 2 * (i + 1) + 1 < 2 by omega, ite_false,
       show 2 * (i + 1) + 1 - 2 = 2 * i + 1 by omega] using ih (n / 2)
 
 /-- Characterization in both directions by the full bit-interleaving relation. -/

@@ -1,12 +1,16 @@
-import Clean.Circuit
-import Clean.Gadgets.Xor.ByteXorTable
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Xor.ByteXorTable
+
+@[expose] public section
 
 open Clean
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Or.Or8
-open Xor (ByteXorTable)
+open Gadgets.Xor (ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -23,11 +27,10 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   z.val = x.val ||| y.val ∧ z.val < 256
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
-  let ⟨x, y⟩ := input
-  let or ← witness (x.val ||| y.val).toField
+  let or ← witness (input.x.val ||| input.y.val).toField
   -- we prove OR correct using an XOR lookup
-  let xor := 2*or - x - y
-  lookup ByteXorTable (x, y, xor)
+  let xor := 2*or - input.x - input.y
+  lookup ByteXorTable (input.x, input.y, xor)
   return or
 
 -- OR / XOR identity that justifies the circuit
@@ -47,9 +50,14 @@ private theorem or_times_two_sub_xor {x y : ℕ} (hx : x < 256) (hy : y < 256) :
   have h_xor_byte : x ^^^ y < 256 := Nat.xor_lt_two_pow (n:=8) hx hy
 
   have h_mod_2_to_16 : (2 * (x ||| y)) % 2^16 = (x + y + (x ^^^ y)) % 2^16 := by
-    simpa only [UInt16.toNat_mul, UInt16.toNat_add, UInt16.toNat_or,
-      UInt16.toNat_xor, UInt16.toNat_ofNat', UInt16.toNat_ofNat, Nat.reduceMod,
-      x16, y16, hx16, hy16, Nat.mod_add_mod, Nat.mod_mod] using h_u16
+    conv_lhs => rw [←hx16, ←hy16]
+    conv_rhs => rw [←hx16, ←hy16]
+    simp only [x16, y16] at h_u16
+    simp only [← UInt16.toNat_or]
+    norm_num at h_u16 ⊢
+    rw [Nat.mod_eq_of_lt (show x < 65536 by omega), Nat.mod_eq_of_lt (show y < 65536 by omega)]
+      at h_u16 ⊢
+    exact h_u16
 
   have h_lhs : 2 * (x ||| y) < 2^16 := by linarith
   have h_rhs : x + y + (x ^^^ y) < 2^16 := by linarith
@@ -75,6 +83,7 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
+@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
   elaborate_circuit
 
@@ -114,12 +123,11 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
   constructor
   · assumption
   simp only [value_goal]
-  show Nat.bitwise _ _ _ < 2 ^ 8
-  exact Nat.bitwise_lt_two_pow hx_byte hy_byte
+  exact Nat.or_lt_two_pow (n := 8) hx_byte hy_byte
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   circuit_proof_start [ByteXorTable]
-  simp_all only [HOr.hOr, OrOp.or, Witgen.NExprOver.eval, circuit_norm, true_and]
+  simp_all only [true_and]
   obtain ⟨ hx_byte, hy_byte ⟩ := h_assumptions
   set w : F p := ZMod.val input_x ||| ZMod.val input_y
   have hw : w = ZMod.val input_x ||| ZMod.val input_y := rfl
@@ -142,7 +150,7 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
     rw [two_or_val, x_y_val]
     exact two_or_ge_add hx_byte hy_byte
 
-  change (2*w - input_x - input_y).val = input_x.val ^^^ input_y.val
+  simp only [w]
   rw [← or_times_two_sub_xor']
   · rw [ZMod.val_sub]
     · rw [ZMod.val_sub]

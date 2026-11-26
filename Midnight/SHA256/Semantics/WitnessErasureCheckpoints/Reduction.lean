@@ -19,7 +19,10 @@ elab "sha256_erasure_reduction" " in " declaration:command : command => do
     elabCommand (← `(command| attribute [local cbv_opaque] BLS12_381.instFieldScalarField ZMod.instField ZMod.commRing
         Chips.Synthesis.constant Synthesis.blockFromBytes WitnessCircuit.constant WitnessCircuit.blockFromBytes
         SHA256.activation byteRangeRows spreadRows List.map List.append List.concat
-        Witgen.WitgenIROver.ofFExpr WitnessIR.program))
+        Witgen.WitgenIROver.ofFExpr WitnessIR.program WitnessIR.readNat WitnessIR.spread32
+        WitnessIR.compactEven WitnessIR.evenBits WitnessIR.oddBits WitnessIR.negateSpread
+        WitnessIR.limb WitnessIR.limbs WitnessIR.weighted WitnessIR.sum WitnessIR.sum32
+        WitnessIR.carry32 UInt64.ofNat))
     elabCommand (← `(command| attribute [local cbv_eval] StructuralNormalization.blockFromBytes_eq
         Chips.SynthesisCheckpoint.Reduction.constant_canonical
         LinearNormalization.blockFromBytes_eq LinearNormalization.constant_eq

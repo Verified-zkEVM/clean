@@ -1,4 +1,8 @@
-import Clean.Gadgets.SHA256.BitwiseOps
+module
+
+public import Clean.Gadgets.SHA256.BitwiseOps
+
+@[expose] public section
 
 open Clean
 
@@ -28,19 +32,20 @@ private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F 
 
 /-- IR expression for the ℕ value of a vector of bit-variables: `Σ a[i].val · 2^i`
 (authoring-time fold; the witness-IR counterpart of `evalBitsNat`). -/
-private def bitsVal (a : Var (fields 32) (F p)) : NExpr (F p) :=
+def bitsVal (a : Var (fields 32) (F p)) : U64Expr (F p) :=
   (List.finRange 32).foldr
     (fun i acc => a[i.val].val * (2^i.val : ℕ) + acc) 0
 
 omit h_large in
 private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) :
-    (bitsVal a).eval { env } = evalBitsNat env a := by
+    (bitsVal a).eval { env } = UInt64.ofNat (evalBitsNat env a) := by
   rw [evalBitsNat, Fin.sum_univ_def, bitsVal, List.sum_eq_foldr, List.foldr_map]
   generalize List.finRange 32 = l
   induction l with
   | nil => rfl
   | cons i l ih =>
-    simp only [List.foldr_cons, circuit_norm, ih]
+    simp only [circuit_norm] at ih
+    simp only [List.foldr_cons, circuit_norm, ih, UInt64.ofNat_add, UInt64.ofNat_mul]
 
 /-- Add two 32-bit words mod 2^32.
     Both inputs are assumed to have boolean values in each bit position. -/
@@ -125,8 +130,9 @@ omit h_large in
 /-- fromBitsExpr evaluated at concrete inputs = (valueBits bits : F p) -/
 private lemma fromBitsExpr_eval_normalized (env : Environment (F p))
     (bits_var : Var (fields 32) (F p)) (bits : Vector (F p) 32)
-    (h_eval : Vector.map (Expression.eval env) bits_var = bits) :
+    (h_eval : eval env bits_var = bits) :
     Expression.eval env (fromBitsExpr bits_var) = (valueBits bits : F p) := by
+  rw [CircuitType.eval_var_fields] at h_eval
   show Expression.eval env (Utils.Bits.fieldFromBitsExpr bits_var) = _
   simp only [Utils.Bits.fieldFromBits_eval]
   rw [h_eval, fieldFromBits_eq_valueBits]
@@ -135,19 +141,18 @@ omit h_large in
 /-- For normalized bits with p > 2^32, (fromBitsExpr bits_var).val = valueBits bits -/
 private lemma fromBitsExpr_val_eq (env : Environment (F p))
     (bits_var : Var (fields 32) (F p)) (bits : Vector (F p) 32)
-    (h_eval : Vector.map (Expression.eval env) bits_var = bits)
+    (h_eval : eval env bits_var = bits)
     (h_norm : Normalized bits) (hp : 2^32 < p) :
     (Expression.eval env (fromBitsExpr bits_var)).val = valueBits bits := by
   rw [fromBitsExpr_eval_normalized env bits_var bits h_eval]
   exact ZMod.val_natCast_of_lt (by linarith [valueBits_lt_two_pow bits h_norm])
 
-omit h_large in
+omit [Fact p.Prime] h_large in
 /-- The z output variable vector evaluates to env.get at the witness offsets -/
 private lemma z_var_eval (env : Environment (F p)) (i₀ : ℕ) :
-    Vector.map (Expression.eval env)
-      (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))
+    (Vector.mapRange 32 fun i => env.get (i₀ + i))
     = Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
-  ext i; simp [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+  ext i; simp [Vector.getElem_mapRange]
 
 omit h_large in
 /-- IsBool from boolean constraint x * (x - 1) = 0 -/
@@ -170,13 +175,14 @@ omit h_large in
 /-- evalBitsNat env a = valueBits a when the variables evaluate to a -/
 private lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
     (a_var : Var (fields 32) (F p)) (a : fields 32 (F p))
-    (h : Vector.map (Expression.eval env.toEnvironment) a_var = a) :
+    (h : eval env.toEnvironment a_var = a) :
     evalBitsNat env a_var = valueBits a := by
+  rw [CircuitType.eval_var_fields] at h
   subst h
   unfold evalBitsNat valueBits
   apply Finset.sum_congr rfl
   intro i _
-  simp [Vector.getElem_map]
+  simp
 
 /-- testBit equals div/mod expression -/
 private lemma testBit_ite_eq (n i : ℕ) : (if n.testBit i = true then 1 else 0 : ℕ) = n / 2^i % 2 := by
@@ -255,9 +261,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     fromBitsExpr_val_eq env input_var_a input_a h_input_a ha hp32
   have h_fb : (Expression.eval env (fromBitsExpr input_var_b)).val = valueBits input_b :=
     fromBitsExpr_val_eq env input_var_b input_b h_input_b hb hp32
-  have h_z_eval : Vector.map (Expression.eval env)
+  have h_z_eval : eval env
       (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))) =
-      Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := z_var_eval env i₀
+      Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
+    simp only [circuit_norm]; exact z_var_eval env i₀
   have h_fz : (Expression.eval env (fromBitsExpr
       (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))))).val = vz :=
     fromBitsExpr_val_eq env _ _ h_z_eval h_z_norm hp32
@@ -310,20 +317,28 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
-  have h_shiftExpr (ctx : Ctx (F p)) (a b : NExpr (F p)) :
-      (a >>> b).eval ctx = a.eval ctx >>> b.eval ctx := rfl
-  simp only [h_shiftExpr, bitsVal_eval] at h_env_z
-  simp only [Witgen.NExprOver.eval] at h_env_z
-  simp only [Array.getElem?_singleton, ite_true] at h_env_z
-  have h_add (a b : NExpr (F p)) :
-      (a + b).eval { env } = a.eval { env } + b.eval { env } := rfl
-  simp only [h_shiftExpr, h_add, bitsVal_eval] at h_env_cout
-  simp only [Witgen.NExprOver.eval] at h_env_cout
-  simp only [Nat.shiftRight_eq_div_pow] at h_env_z h_env_cout
+  -- The witnessed values are `evalBitsNat` of the inputs, which equal `valueBits`
+  have h_evalBits_a : evalBitsNat env input_var_a = valueBits input_a :=
+    evalBitsNat_eq_valueBits env input_var_a input_a h_input_a
+  have h_evalBits_b : evalBitsNat env input_var_b = valueBits input_b :=
+    evalBitsNat_eq_valueBits env input_var_b input_b h_input_b
+  -- valueBits bounds
+  have hva_lt : valueBits input_a < 2^32 := valueBits_lt_two_pow input_a ha
+  have hvb_lt : valueBits input_b < 2^32 := valueBits_lt_two_pow input_b hb
+  -- These bounds have to be in context *before* normalizing the witness equations, so
+  -- that the `u64Wrap` simproc can discharge the `% 2^64` truncations introduced by the
+  -- `UInt64`-sorted witness IR.
+  have ha_lt : evalBitsNat env input_var_a < 2^32 := by omega
+  have hb_lt : evalBitsNat env input_var_b < 2^32 := by omega
+  simp only [bitsVal_eval, UInt64.toNat_ofNat', Nat.shiftRight_eq_div_pow,
+    Witgen.u64Wrap] at h_env_z h_env_cout
   set S := evalBitsNat env input_var_a + evalBitsNat env input_var_b with hS_def
   have h_p_large := h_large.elim
   have h33 : (2:ℕ)^33 = 2^32 + 2^32 := by norm_num
   have hp32 : (2:ℕ)^32 < p := by linarith
+  have hS_eq : S = valueBits input_a + valueBits input_b := by
+    rw [hS_def, h_evalBits_a, h_evalBits_b]
+  have hS_lt_33 : S < 2^33 := by rw [hS_eq]; linarith
   refine ⟨fun i => ?_, ?_, ?_⟩
   · -- Boolean constraint for z[i]: z[i] * (z[i] - 1) = 0
     have henv_i := h_env_z i
@@ -335,17 +350,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rcases Nat.mod_two_eq_zero_or_one (S / 2^32) with h | h <;>
       rw [h] <;> push_cast <;> ring
   · -- Linear constraint: FA + FB - FZ - 2^32 * cout = 0 in F p
-    -- We prove evalBitsNat env a = valueBits input_a, similarly for b
-    have h_evalBits_a : evalBitsNat env input_var_a = valueBits input_a :=
-      evalBitsNat_eq_valueBits env input_var_a input_a h_input_a
-    have h_evalBits_b : evalBitsNat env input_var_b = valueBits input_b :=
-      evalBitsNat_eq_valueBits env input_var_b input_b h_input_b
-    have hS_eq : S = valueBits input_a + valueBits input_b := by
-      rw [hS_def, h_evalBits_a, h_evalBits_b]
-    -- valueBits bounds
-    have hva_lt : valueBits input_a < 2^32 := valueBits_lt_two_pow input_a ha
-    have hvb_lt : valueBits input_b < 2^32 := valueBits_lt_two_pow input_b hb
-    have hS_lt_33 : S < 2^33 := by rw [hS_eq]; linarith
     -- Bit decomposition of S % 2^32: S % 2^32 = ∑ i, (S%2^32 / 2^i % 2) * 2^i
     have h_S_mod_lt : S % 2^32 < 2^32 := Nat.mod_lt _ (by norm_num)
     -- S / 2^32 ∈ {0, 1} since S < 2^33
@@ -366,13 +370,11 @@ theorem completeness : Completeness (F p) main Assumptions := by
         ((valueBits input_b : ℕ) : F p) :=
       fromBitsExpr_eval_normalized env.toEnvironment input_var_b input_b h_input_b
     -- For FZ, compute via fieldFromBits_eval
-    have h_z_eval : Vector.map (Expression.eval env.toEnvironment)
-        (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))) =
+    have h_z_eval : (Vector.mapRange 32 fun i => env.get (i₀ + i)) =
         Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) :=
       z_var_eval env.toEnvironment i₀
     -- z's evaluated bits equal Vector.ofFn (fun i => ((S%2^32/2^i%2 : ℕ) : F p))
-    have h_z_eval' : Vector.map (Expression.eval env.toEnvironment)
-        (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))) =
+    have h_z_eval' : (Vector.mapRange 32 fun i => env.get (i₀ + i)) =
         Vector.ofFn fun i : Fin 32 => ((S % 2^32 / 2^i.val % 2 : ℕ) : F p) := by
       rw [h_z_eval]
       ext i hi
@@ -383,7 +385,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
         (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))) =
         ((S % 2^32 : ℕ) : F p) := by
       show Expression.eval env.toEnvironment (Utils.Bits.fieldFromBitsExpr _) = _
-      simp only [Utils.Bits.fieldFromBits_eval]
+      simp only [Utils.Bits.fieldFromBits_eval, circuit_norm]
       rw [h_z_eval']
       exact fieldFromBits_bit_decomp (S % 2^32) h_S_mod_lt hp32
     -- cout value
@@ -403,8 +405,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rw [sub_sub, sub_eq_zero]
     exact hF
 
-def circuit [Fact (p > 2^33)] : FormalCircuit (F p) Inputs (fields 32) where
+def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by computable_witnesses [bitsVal_eval, evalBitsNat]
 
 end Add32
 end Gadgets.SHA256

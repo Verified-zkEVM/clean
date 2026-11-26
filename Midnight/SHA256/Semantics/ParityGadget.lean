@@ -19,15 +19,15 @@ attribute [local cbv_opaque] BLS12_381.instFieldScalarField ZMod.instField ZMod.
 @[circuit_norm] theorem enable_output (selector row : Nat) (self : RegionIndex) :
     (WitnessCircuit.enable selector row).output self = () := rfl
 
-@[circuit_norm] theorem sa_output (index row : Nat) (value : NExpr F) (self : RegionIndex) :
+@[circuit_norm] theorem sa_output (index row : Nat) (value : U64Expr F) (self : RegionIndex) :
     (sa index row value).output self = .of self row (⟨Synthesis.shaAdvice[index]!⟩ : Column .advice) := rfl
 
-@[circuit_norm] theorem sa_operations (index row : Nat) (value : NExpr F) (self : RegionIndex) :
+@[circuit_norm] theorem sa_operations (index row : Nat) (value : U64Expr F) (self : RegionIndex) :
     (sa index row value).operations self =
       [.assignAdvice ⟨Synthesis.shaAdvice[index]!⟩ row (WitnessIR.program value)] := rfl
 
 @[circuit_norm] theorem plainAndSpread_output (width offset index : Nat)
-    (value : NExpr F) (self : RegionIndex) :
+    (value : U64Expr F) (self : RegionIndex) :
     (plainAndSpread width offset index value).output self =
       ⟨.of self offset (⟨Synthesis.shaAdvice[2*index]!⟩ : Column .advice),
        .of self offset (⟨Synthesis.shaAdvice[2*index+1]!⟩ : Column .advice)⟩ := by
@@ -36,7 +36,7 @@ attribute [local cbv_opaque] BLS12_381.instFieldScalarField ZMod.instField ZMod.
 /-- Complete constraint view of the source helper. Both native lookup tuples
 are enabled; this helper fixes just its own tuple's tag. -/
 theorem plainAndSpread_constraints (place : RegionIndex → Nat) (self : RegionIndex)
-    (env : Environment F) (width offset index : Nat) (value : NExpr F) :
+    (env : Environment F) (width offset index : Nat) (value : U64Expr F) :
     RegionOperations.Constraints place self env
       ((plainAndSpread width offset index value).operations self) ↔
     RegionOperations.Constraints place self env (activation 4 offset) ∧
@@ -46,7 +46,7 @@ theorem plainAndSpread_constraints (place : RegionIndex → Nat) (self : RegionI
 /-- Width-tagged table meaning of the actual helper's returned cells. -/
 theorem plainAndSpread_lookup {place : RegionIndex → Nat} {self : RegionIndex}
     {env : Environment F} (table : SpreadTable env) (width offset : Nat) (index : Fin 2)
-    (value : NExpr F)
+    (value : U64Expr F)
     (satisfied : RegionOperations.Constraints place self env
       ((plainAndSpread width offset index.val value).operations self)) :
     SpreadLookup (width : F)
@@ -60,7 +60,7 @@ theorem plainAndSpread_lookup {place : RegionIndex → Nat} {self : RegionIndex}
   · simpa [plainAndSpread_output, Synthesis.shaAdvice, circuit_norm] using facts.2 ▸ tuples.2
 
 /-- A finite expansion of the source's two three-iteration loops. -/
-def expanded (odd : Bool) (offset : Nat) (value : NExpr F) : Region (AssignedCell F) := do
+def expanded (odd : Bool) (offset : Nat) (value : U64Expr F) : Region (AssignedCell F) := do
   enable 11 (offset+1)
   let index := if odd then 1 else 0
   let evens := WitnessIR.limbs Witness.parityLayout (WitnessIR.evenBits value)
@@ -73,7 +73,7 @@ def expanded (odd : Bool) (offset : Nat) (value : NExpr F) : Region (AssignedCel
   let _ ← plainAndSpread 10 (offset+2) (1-index) odds[2]!
   sa 4 offset (if odd then WitnessIR.oddBits value else WitnessIR.evenBits value)
 
-theorem spread111110_expanded (odd : Bool) (offset : Nat) (value : NExpr F) :
+theorem spread111110_expanded (odd : Bool) (offset : Nat) (value : U64Expr F) :
     spread111110 odd offset value = expanded odd offset value := by
   funext self
   unfold spread111110 expanded
@@ -81,7 +81,7 @@ theorem spread111110_expanded (odd : Bool) (offset : Nat) (value : NExpr F) :
   simp only [List.append_assoc, List.append_nil]
 
 @[circuit_norm] theorem spread111110_output (odd : Bool) (offset : Nat)
-    (value : NExpr F) (self : RegionIndex) :
+    (value : U64Expr F) (self : RegionIndex) :
     (spread111110 odd offset value).output self = .of self offset (⟨2⟩ : Column .advice) := by
   rw [spread111110_expanded]
   simp only [expanded, circuit_norm]
@@ -91,7 +91,7 @@ theorem spread111110_expanded (odd : Bool) (offset : Nat) (value : NExpr F) :
 six assignments, including the case where the odd plane is returned first. -/
 theorem spread111110_facts {place : RegionIndex → Nat} {self : RegionIndex}
     {env : Environment F} (table : SpreadTable env) (odd : Bool) (offset : Nat)
-    (value : NExpr F)
+    (value : U64Expr F)
     (satisfied : RegionOperations.Constraints place self env
       ((spread111110 odd offset value).operations self)) :
     RegionOperations.Constraints place self env (activation 11 (offset+1)) ∧

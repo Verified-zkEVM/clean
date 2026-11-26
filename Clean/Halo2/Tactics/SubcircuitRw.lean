@@ -1,5 +1,9 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.Subcircuit
+module
+
+public import Lean.Elab.Tactic
+public import Clean.Halo2.Subcircuit
+
+@[expose] public section
 
 /-!
 # `subcircuit_rw` — the polarity-aware monotone subcircuit rewriter
@@ -74,7 +78,7 @@ open Lean Elab Tactic Meta
 
 namespace Halo2
 
-initialize registerTraceClass `Halo2.subcircuit_rw
+meta initialize registerTraceClass `Halo2.subcircuit_rw
 
 /-! ## Congruence lemmas (the hand-rolled monotone walker's leaves)
 
@@ -392,6 +396,8 @@ read `child`/`config`/`offset`/`input`, and read `place`/`env`/`self` (or `i₀`
 `Constraints` head's own arguments.
 -/
 
+meta section
+
 namespace SubcircuitRw
 
 /-- View `p` as a disjunction `a ∨ b` (`Lean.Expr.and?` has no `Or` counterpart). -/
@@ -432,7 +438,7 @@ structure ChunkMatch where
 
 /-- Peel the empty prefix left behind when a monadic call is projected through a packed
 result. This is an administrative `Circuit` bind, not part of the child call boundary. -/
-private def stripEmptyAppend (operations : Expr) : Expr :=
+def stripEmptyAppend (operations : Expr) : Expr :=
   let fn := operations.getAppFn
   let args := operations.getAppArgs
   if fn.isConstOf ``List.append && args.size == 3 && args[1]!.getAppFn.isConstOf ``List.nil then
@@ -442,7 +448,7 @@ private def stripEmptyAppend (operations : Expr) : Expr :=
 
 /-- Recover the pair underneath a second projection. Depending on elaboration, projections
 appear either as `Prod.snd` applications or kernel projection nodes. -/
-private def prodSndArg? (expression : Expr) : Option Expr :=
+def prodSndArg? (expression : Expr) : Option Expr :=
   match expression with
   | .proj typeName 1 pair => if typeName == ``Prod then some pair else none
   | _ =>
@@ -1244,5 +1250,7 @@ def evalSubcircuitRw : Tactic := fun stx => do
   | `(tactic| subcircuit_rw) =>
     SubcircuitRw.runCompleteness
   | _ => throwUnsupportedSyntax
+
+end
 
 end Halo2

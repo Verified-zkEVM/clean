@@ -63,7 +63,7 @@ def stamp (coefficient next : F) (row : Nat) : RegionCircuit F Unit := do
   return ()
 
 def byteExpr (word : AssignedCell F) (index : Nat) : FExpr F :=
-  .ofNat (WitnessIR.limb (WitnessIR.readNat word) (8 * index, 8))
+  .ofU64 (WitnessIR.limb (WitnessIR.readNat word) (8 * index, 8))
 
 /-- Exact source recurrence, retaining the initial zero in each chunk fold. -/
 def remainingExpr (word : AssignedCell F) : Nat → FExpr F

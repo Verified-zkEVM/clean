@@ -1,8 +1,12 @@
-import Clean.Types.U64
-import Clean.Circuit.Subcircuit
-import Clean.Gadgets.Rotation64.Theorems
-import Clean.Circuit.Provable
-import Clean.Gadgets.ByteDecomposition.ByteDecomposition
+module
+
+public import Clean.Types.U64
+public import Clean.Circuit.Subcircuit
+public import Clean.Gadgets.Rotation64.Theorems
+public import Clean.Circuit.Provable
+public import Clean.Gadgets.ByteDecomposition.ByteDecomposition
+
+@[expose] public section
 
 open Clean
 
@@ -113,6 +117,8 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
   elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
+  computableWitnesses := by
+    computable_witnesses [U64.toLimbs, U64.fromLimbs, Vector.getElem_rotate]
   soundness := soundness offset
   completeness := completeness offset
 }

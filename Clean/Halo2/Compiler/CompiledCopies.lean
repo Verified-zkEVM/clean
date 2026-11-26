@@ -1,9 +1,13 @@
-import Clean.Halo2.Compiler.ConstraintFamilies
-import Clean.Halo2.Compiler.CopyLayout
-import Clean.Halo2.Keygen.Domain
-import Mathlib.Data.List.Forall2
-import Clean.Utils.ListZip
-import Clean.Halo2.Compiler.Fixed
+module
+
+public import Clean.Halo2.Compiler.ConstraintFamilies
+public import Clean.Halo2.Compiler.CopyLayout
+public import Clean.Halo2.Keygen.Domain
+public import Mathlib.Data.List.Forall2
+public import Clean.Utils.ListZip
+public import Clean.Halo2.Compiler.Fixed
+
+@[expose] public section
 
 /-!
 # Copy compilation and its semantics

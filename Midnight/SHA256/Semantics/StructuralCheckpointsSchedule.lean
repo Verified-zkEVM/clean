@@ -50,7 +50,7 @@ def inputChunk : List Step :=
 theorem inputChecked : Checkpoint inputAction beginCursor inputOutput inputAfter inputChunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def initialAction : Synthesis.Build (Synthesis.Compression) :=
   Synthesis.initialState
@@ -85,7 +85,7 @@ def initialChunk : List Step :=
 theorem initialChecked : Checkpoint initialAction inputAfter initialOutput initialAfter initialChunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def paddingAction : Synthesis.Build (Array Cell) :=
   Synthesis.pad inputOutput
@@ -100,7 +100,7 @@ def paddingChunk : List Step :=
 theorem paddingChecked : Checkpoint paddingAction initialAfter paddingOutput paddingAfter paddingChunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def packingAction : Synthesis.Build (Array Cell) :=
   Synthesis.blockFromBytes paddingOutput
@@ -119,7 +119,7 @@ def packingChunk : List Step :=
 theorem packingChecked : Checkpoint packingAction paddingAfter packingOutput packingAfter packingChunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare0Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -134,7 +134,7 @@ def prepare0Chunk : List Step :=
 theorem prepare0Checked : Checkpoint prepare0Action packingAfter prepare0Output prepare0After prepare0Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare1Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -149,7 +149,7 @@ def prepare1Chunk : List Step :=
 theorem prepare1Checked : Checkpoint prepare1Action prepare0After prepare1Output prepare1After prepare1Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare2Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -164,7 +164,7 @@ def prepare2Chunk : List Step :=
 theorem prepare2Checked : Checkpoint prepare2Action prepare1After prepare2Output prepare2After prepare2Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare3Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -179,7 +179,7 @@ def prepare3Chunk : List Step :=
 theorem prepare3Checked : Checkpoint prepare3Action prepare2After prepare3Output prepare3After prepare3Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare4Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -194,7 +194,7 @@ def prepare4Chunk : List Step :=
 theorem prepare4Checked : Checkpoint prepare4Action prepare3After prepare4Output prepare4After prepare4Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare5Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -209,7 +209,7 @@ def prepare5Chunk : List Step :=
 theorem prepare5Checked : Checkpoint prepare5Action prepare4After prepare5Output prepare5After prepare5Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare6Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -224,7 +224,7 @@ def prepare6Chunk : List Step :=
 theorem prepare6Checked : Checkpoint prepare6Action prepare5After prepare6Output prepare6After prepare6Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare7Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -239,7 +239,7 @@ def prepare7Chunk : List Step :=
 theorem prepare7Checked : Checkpoint prepare7Action prepare6After prepare7Output prepare7After prepare7Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare8Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -254,7 +254,7 @@ def prepare8Chunk : List Step :=
 theorem prepare8Checked : Checkpoint prepare8Action prepare7After prepare8Output prepare8After prepare8Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare9Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -269,7 +269,7 @@ def prepare9Chunk : List Step :=
 theorem prepare9Checked : Checkpoint prepare9Action prepare8After prepare9Output prepare9After prepare9Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare10Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -284,7 +284,7 @@ def prepare10Chunk : List Step :=
 theorem prepare10Checked : Checkpoint prepare10Action prepare9After prepare10Output prepare10After prepare10Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare11Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -299,7 +299,7 @@ def prepare11Chunk : List Step :=
 theorem prepare11Checked : Checkpoint prepare11Action prepare10After prepare11Output prepare11After prepare11Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare12Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -314,7 +314,7 @@ def prepare12Chunk : List Step :=
 theorem prepare12Checked : Checkpoint prepare12Action prepare11After prepare12Output prepare12After prepare12Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare13Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -329,7 +329,7 @@ def prepare13Chunk : List Step :=
 theorem prepare13Checked : Checkpoint prepare13Action prepare12After prepare13Output prepare13After prepare13Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare14Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -344,7 +344,7 @@ def prepare14Chunk : List Step :=
 theorem prepare14Checked : Checkpoint prepare14Action prepare13After prepare14Output prepare14After prepare14Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def prepare15Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -359,7 +359,7 @@ def prepare15Chunk : List Step :=
 theorem prepare15Checked : Checkpoint prepare15Action prepare14After prepare15Output prepare15After prepare15Chunk := by
   intro priorTrace
   cases priorTrace with
-  | mk data => cbv <;> simp
+  | mk data => cbv
 
 def expand16Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -382,7 +382,7 @@ theorem expand16Checked : Checkpoint expand16Action prepare15After expand16Outpu
     dsimp only [expand16Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand17Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -405,7 +405,7 @@ theorem expand17Checked : Checkpoint expand17Action expand16After expand17Output
     dsimp only [expand17Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand18Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -428,7 +428,7 @@ theorem expand18Checked : Checkpoint expand18Action expand17After expand18Output
     dsimp only [expand18Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand19Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -451,7 +451,7 @@ theorem expand19Checked : Checkpoint expand19Action expand18After expand19Output
     dsimp only [expand19Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand20Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -474,7 +474,7 @@ theorem expand20Checked : Checkpoint expand20Action expand19After expand20Output
     dsimp only [expand20Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand21Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -497,7 +497,7 @@ theorem expand21Checked : Checkpoint expand21Action expand20After expand21Output
     dsimp only [expand21Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand22Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -520,7 +520,7 @@ theorem expand22Checked : Checkpoint expand22Action expand21After expand22Output
     dsimp only [expand22Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand23Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -543,7 +543,7 @@ theorem expand23Checked : Checkpoint expand23Action expand22After expand23Output
     dsimp only [expand23Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand24Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -566,7 +566,7 @@ theorem expand24Checked : Checkpoint expand24Action expand23After expand24Output
     dsimp only [expand24Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand25Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -589,7 +589,7 @@ theorem expand25Checked : Checkpoint expand25Action expand24After expand25Output
     dsimp only [expand25Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand26Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -612,7 +612,7 @@ theorem expand26Checked : Checkpoint expand26Action expand25After expand26Output
     dsimp only [expand26Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand27Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -635,7 +635,7 @@ theorem expand27Checked : Checkpoint expand27Action expand26After expand27Output
     dsimp only [expand27Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand28Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -658,7 +658,7 @@ theorem expand28Checked : Checkpoint expand28Action expand27After expand28Output
     dsimp only [expand28Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand29Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -681,7 +681,7 @@ theorem expand29Checked : Checkpoint expand29Action expand28After expand29Output
     dsimp only [expand29Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand30Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -704,7 +704,7 @@ theorem expand30Checked : Checkpoint expand30Action expand29After expand30Output
     dsimp only [expand30Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand31Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -727,7 +727,7 @@ theorem expand31Checked : Checkpoint expand31Action expand30After expand31Output
     dsimp only [expand31Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand32Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -750,7 +750,7 @@ theorem expand32Checked : Checkpoint expand32Action expand31After expand32Output
     dsimp only [expand32Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand33Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -773,7 +773,7 @@ theorem expand33Checked : Checkpoint expand33Action expand32After expand33Output
     dsimp only [expand33Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand34Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -796,7 +796,7 @@ theorem expand34Checked : Checkpoint expand34Action expand33After expand34Output
     dsimp only [expand34Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand35Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -819,7 +819,7 @@ theorem expand35Checked : Checkpoint expand35Action expand34After expand35Output
     dsimp only [expand35Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand36Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -842,7 +842,7 @@ theorem expand36Checked : Checkpoint expand36Action expand35After expand36Output
     dsimp only [expand36Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand37Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -865,7 +865,7 @@ theorem expand37Checked : Checkpoint expand37Action expand36After expand37Output
     dsimp only [expand37Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand38Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -888,7 +888,7 @@ theorem expand38Checked : Checkpoint expand38Action expand37After expand38Output
     dsimp only [expand38Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand39Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -911,7 +911,7 @@ theorem expand39Checked : Checkpoint expand39Action expand38After expand39Output
     dsimp only [expand39Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand40Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -934,7 +934,7 @@ theorem expand40Checked : Checkpoint expand40Action expand39After expand40Output
     dsimp only [expand40Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand41Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -957,7 +957,7 @@ theorem expand41Checked : Checkpoint expand41Action expand40After expand41Output
     dsimp only [expand41Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand42Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -980,7 +980,7 @@ theorem expand42Checked : Checkpoint expand42Action expand41After expand42Output
     dsimp only [expand42Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand43Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1003,7 +1003,7 @@ theorem expand43Checked : Checkpoint expand43Action expand42After expand43Output
     dsimp only [expand43Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand44Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1026,7 +1026,7 @@ theorem expand44Checked : Checkpoint expand44Action expand43After expand44Output
     dsimp only [expand44Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand45Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1049,7 +1049,7 @@ theorem expand45Checked : Checkpoint expand45Action expand44After expand45Output
     dsimp only [expand45Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand46Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1072,7 +1072,7 @@ theorem expand46Checked : Checkpoint expand46Action expand45After expand46Output
     dsimp only [expand46Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand47Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1095,7 +1095,7 @@ theorem expand47Checked : Checkpoint expand47Action expand46After expand47Output
     dsimp only [expand47Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand48Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1118,7 +1118,7 @@ theorem expand48Checked : Checkpoint expand48Action expand47After expand48Output
     dsimp only [expand48Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand49Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1141,7 +1141,7 @@ theorem expand49Checked : Checkpoint expand49Action expand48After expand49Output
     dsimp only [expand49Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand50Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1164,7 +1164,7 @@ theorem expand50Checked : Checkpoint expand50Action expand49After expand50Output
     dsimp only [expand50Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand51Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1187,7 +1187,7 @@ theorem expand51Checked : Checkpoint expand51Action expand50After expand51Output
     dsimp only [expand51Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand52Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1210,7 +1210,7 @@ theorem expand52Checked : Checkpoint expand52Action expand51After expand52Output
     dsimp only [expand52Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand53Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1233,7 +1233,7 @@ theorem expand53Checked : Checkpoint expand53Action expand52After expand53Output
     dsimp only [expand53Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand54Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1256,7 +1256,7 @@ theorem expand54Checked : Checkpoint expand54Action expand53After expand54Output
     dsimp only [expand54Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand55Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1279,7 +1279,7 @@ theorem expand55Checked : Checkpoint expand55Action expand54After expand55Output
     dsimp only [expand55Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand56Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1302,7 +1302,7 @@ theorem expand56Checked : Checkpoint expand56Action expand55After expand56Output
     dsimp only [expand56Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand57Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1325,7 +1325,7 @@ theorem expand57Checked : Checkpoint expand57Action expand56After expand57Output
     dsimp only [expand57Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand58Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1348,7 +1348,7 @@ theorem expand58Checked : Checkpoint expand58Action expand57After expand58Output
     dsimp only [expand58Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand59Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1371,7 +1371,7 @@ theorem expand59Checked : Checkpoint expand59Action expand58After expand59Output
     dsimp only [expand59Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand60Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1394,7 +1394,7 @@ theorem expand60Checked : Checkpoint expand60Action expand59After expand60Output
     dsimp only [expand60Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand61Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1417,7 +1417,7 @@ theorem expand61Checked : Checkpoint expand61Action expand60After expand61Output
     dsimp only [expand61Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand62Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1440,7 +1440,7 @@ theorem expand62Checked : Checkpoint expand62Action expand61After expand62Output
     dsimp only [expand62Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def expand63Action : Synthesis.Build (Array Synthesis.Word) :=
   do
@@ -1463,7 +1463,7 @@ theorem expand63Checked : Checkpoint expand63Action expand62After expand63Output
     dsimp only [expand63Action, Synthesis.compressionRound, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def scheduleOutput : Array Cell := expand63Output.map (·.combined.plain)
 

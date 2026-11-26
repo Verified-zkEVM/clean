@@ -30,7 +30,7 @@ def suffix (bytes : Array Cell) : Build (Array Cell) := do
 theorem source_body (input : Vector (WitgenIR F 1) 24) :
     WitnessCircuit.body input = (do let bytes ← WitnessCircuit.assignBytes input; suffix bytes) := by
   unfold WitnessCircuit.body suffix finish Rounds.source Digest.serialize
-  simp only [WitnessBuild.pure_bind, WitnessBuild.bind_pure]
+  simp only [WitnessBuild.bind_pure]
 
 attribute [local irreducible] WitnessCircuit.body
 

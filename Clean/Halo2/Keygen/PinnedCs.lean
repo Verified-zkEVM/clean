@@ -1,5 +1,9 @@
-import Clean.Halo2.Keygen.Projection
-import Clean.Halo2.Formal
+module
+
+public import Clean.Halo2.Keygen.Projection
+public import Clean.Halo2.Formal
+
+@[expose] public section
 
 /-!
 # `PinnedConstraintSystem` — the pinned constraint system, derived from a circuit

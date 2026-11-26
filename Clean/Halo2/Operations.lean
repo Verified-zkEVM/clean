@@ -1,7 +1,11 @@
-import Clean.Halo2.Configure
-import Clean.Halo2.KeygenAttr
-import Clean.Halo2.Provable
-import Clean.Halo2.WitnessIR
+module
+
+public import Clean.Halo2.Configure
+public import Clean.Halo2.KeygenAttr
+public import Clean.Halo2.Provable
+public import Clean.Halo2.WitnessIR
+
+@[expose] public section
 
 /-!
 # Halo2 synthesize-layer operations — DESIGN SKETCH

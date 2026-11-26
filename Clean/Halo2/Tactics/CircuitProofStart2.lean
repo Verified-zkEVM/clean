@@ -1,8 +1,12 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Halo2.Tactics.CircuitProofStart
-import Clean.Halo2.Tactics.AbstractOutputs
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Clean.Halo2.Subcircuit
+public meta import Clean.Halo2.Tactics.SubcircuitRw
+public meta import Clean.Halo2.Tactics.CircuitProofStart
+public meta import Clean.Halo2.Tactics.AbstractOutputs
+
+public meta section
 
 /-!
 # `circuit_proof_start2` — the atomic-binds proof prefix (CPS v2)
@@ -726,14 +730,13 @@ def run (sound region : Bool) (terms : Option (Array Term)) : TacticM Unit := do
     else
       if sound then ``FormalCircuit.soundness_iff else ``FormalCircuit.completeness_iff
   let idx : Name := if region then `self else `i₀
+  CircuitProofStart.applyIffMpr iffName
   if sound then
-    run? (← `(tactic| rw [$(mkIdent iffName):ident]))
     run? (← `(tactic| intro $(mkIdent idx):ident $(mkIdent `env):ident
       $(mkIdent `input_var):ident $(mkIdent `input):ident $(mkIdent `output):ident
       $(mkIdent `input_eq):ident $(mkIdent `output_eq):ident $(mkIdent `env_assumptions):ident
       $(mkIdent `assumptions):ident $(mkIdent `constraints):ident))
   else
-    run? (← `(tactic| rw [$(mkIdent iffName):ident]))
     run? (← `(tactic| intro $(mkIdent idx):ident $(mkIdent `env):ident
       $(mkIdent `input_var):ident $(mkIdent `input):ident $(mkIdent `output):ident
       $(mkIdent `input_eq):ident $(mkIdent `output_eq):ident $(mkIdent `witnesses):ident

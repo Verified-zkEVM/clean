@@ -1,6 +1,10 @@
-import Clean.Utils.FieldDomainParams
-import Clean.Halo2.Compiler.CopyLayout
-import Clean.Halo2.TopLevel
+module
+
+public import Clean.Utils.FieldDomainParams
+public import Clean.Halo2.Compiler.CopyLayout
+public import Clean.Halo2.TopLevel
+
+@[expose] public section
 
 /-! # Compiled permutation-column rows
 

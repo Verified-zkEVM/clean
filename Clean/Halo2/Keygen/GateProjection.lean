@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.Semantics
+module
+
+public import Clean.Halo2.Keygen.Semantics
+
+@[expose] public section
 
 /-!
 # Selector-compressed gate soundness

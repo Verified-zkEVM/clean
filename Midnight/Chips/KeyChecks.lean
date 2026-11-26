@@ -109,7 +109,7 @@ private theorem foldl_insert_mem (L : List LayoutLawful.Write) (m : Std.HashMap 
       · right
         simp only [List.map_cons, List.mem_cons]
         exact Or.inl (beq_iff_eq.mp hb).symm
-      · rw [if_neg hb] at hv
+      · rw [ite_eq_right hb] at hv
         exact Or.inl ⟨v', hv⟩
     · exact Or.inr (List.mem_cons_of_mem _ hc)
 

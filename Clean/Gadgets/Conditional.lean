@@ -1,8 +1,12 @@
-import Clean.Circuit.Provable
-import Clean.Circuit.Subcircuit
-import Clean.Gadgets.Boolean
-import Clean.Utils.Tactics
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Circuit.Provable
+public import Clean.Circuit.Subcircuit
+public import Clean.Gadgets.Boolean
+public import Clean.Utils.Tactics
+public import Clean.Utils.Tactics.ProvableStructDeriving
+
+@[expose] public section
 
 open Clean
 
@@ -62,29 +66,26 @@ instance elaborated [DecidableEq F] : ElaboratedCircuit F (Inputs M) M main := b
 
 theorem soundness [DecidableEq F] : Soundness F (Input := Inputs M) main Assumptions Spec := by
   circuit_proof_start
-  rcases input
-  simp only [Inputs.mk.injEq] at h_input
   rcases h_input with ⟨h_selector, h_ifTrue, h_ifFalse⟩
-  simp only at h_assumptions
 
   -- Show that the result equals the conditional expression
   rw [ProvableType.ext_iff]
   intro i hi
   rw [ProvableType.Clean.eval_fromElements]
   rw [ProvableType.toElements_fromElements, Vector.getElem_map, Vector.getElem_ofFn]
-  simp only [Expression.eval_sub, Expression.eval, ProvableType.Clean.getElem_eval_toElements, h_selector, h_ifTrue, h_ifFalse]
+  simp only [circuit_norm, ProvableType.Clean.getElem_eval_toElements, h_selector, h_ifTrue, h_ifFalse]
 
   -- Case split on the selector value
   cases h_assumptions with
   | inl h_zero =>
     simp only [h_zero]
     have : (0 : F) = 1 ↔ False := by simp
-    simp only [this, if_false]
+    simp only [this, ite_false]
     ring_nf
   | inr h_one =>
     simp only [h_one]
     have : (1 : F) = 1 ↔ True := by simp
-    simp only [if_true]
+    simp only [ite_true]
     ring_nf
 
 theorem completeness [DecidableEq F] : Completeness F (Input := Inputs M) main Assumptions := by
@@ -106,7 +107,7 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
 Conditional selection.
 -/
 @[circuit_norm]
-def ifElse [FiniteField F] [DecidableEq F] {M : TypeMap} [ProvableType M]
+def ifElse [DecidableEq F] {M : TypeMap} [ProvableType M]
   (selector : Expression F) (ifTrue ifFalse : M (Expression F)) : Circuit F (M (Expression F)) :=
   circuit { selector, ifTrue, ifFalse }
 
@@ -124,7 +125,7 @@ theorem eval_ifElse_output {M : TypeMap} [ProvableType M] {env}
   rw [ProvableType.ext_iff]
   intro i hi
   rw [ProvableType.Clean.eval_fromElements]
-  simp only [circuit_norm, Vector.getElem_map, Vector.getElem_ofFn, ProvableType.Clean.getElem_eval_toElements]
+  simp only [circuit_norm, Vector.getElem_ofFn, ProvableType.Clean.getElem_eval_toElements]
 end
 
 end Gadgets.Conditional
