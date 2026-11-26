@@ -29,11 +29,6 @@ lean_lib Halo2 where
   requiresModuleSystem := true
   platformIndependent := true
 
-lean_lib Zcash where
-  roots := #[`Clean.Ironwood]
-  requiresModuleSystem := true
-  platformIndependent := true
-
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
   requiresModuleSystem := true
