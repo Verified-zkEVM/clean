@@ -1,7 +1,11 @@
-import Clean.Circuit.Loops
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.Xor.Xor64
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 open Clean
 
@@ -13,9 +17,9 @@ structure Inputs (F : Type) where
   d : KeccakRow F
 deriving ProvableStruct
 
-def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
-  | { state, d } => .mapFinRange 25 fun i =>
-    Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
+def main (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+  .mapFinRange 25 fun i =>
+    Xor64.circuit ⟨inputs.state[i.val], inputs.d[i.val / 5]⟩
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main := by
   elaborate_circuit
@@ -40,11 +44,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
   -- rewrite goal
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, thetaXor_loop, eval_vector, KeccakState.value, KeccakRow.value]
-
-  -- simplify constraints
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [circuit_norm, h_input] at h_holds
+  simp only [circuit_norm, thetaXor_loop, KeccakState.value, KeccakRow.value]
 
   -- use assumptions, prove goal
   intro i
@@ -53,7 +53,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env ⟨state_var, d_var⟩ h_env ⟨state, d⟩ h_input ⟨state_norm, d_norm⟩
-  simp only [circuit_norm, eval_vector, Inputs.mk.injEq, Vector.ext_iff] at h_input
+  simp only [circuit_norm, Inputs.mk.injEq] at h_input
   simp only [h_input, main, circuit_norm, Xor64.circuit, Xor64.Assumptions]
   intro i
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩

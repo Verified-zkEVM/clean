@@ -1,4 +1,8 @@
-import Clean.Ironwood.Action.Shape.Compilation
+module
+
+public import Clean.Ironwood.Action.Shape.Compilation
+
+@[expose] public section
 
 namespace Zcash.Circuits.Action
 

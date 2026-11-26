@@ -1,5 +1,9 @@
-import Clean.Halo2.Provable
-import Clean.Halo2.Basic
+module
+
+public import Clean.Halo2.Provable
+public import Clean.Halo2.Basic
+
+@[expose] public section
 
 /-!
 # `UnconstrainedNative` in Halo2-Clean — genuinely external prover hints

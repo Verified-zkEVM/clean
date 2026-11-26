@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.FloorPlanner.RegionShape
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.RegionShape
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 

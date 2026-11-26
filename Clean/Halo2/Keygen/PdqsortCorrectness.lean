@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.PdqsortPermutation
+module
+
+public import Clean.Halo2.Keygen.PdqsortPermutation
+
+@[expose] public section
 
 /-! Ordering correctness of the legacy pdqsort implementation. -/
 
@@ -207,19 +211,19 @@ theorem swp_values
     rw [Array.getElem_setIfInBounds (xs := array.setIfInBounds left array[right]!)
       (by simpa using hindex)]
     by_cases hindexRight : right = index
-    · rw [if_pos hindexRight]
+    · rw [ite_eq_left hindexRight]
       subst index
       by_cases heq : right = left
       · subst left
         simp
       · simp [heq]
-    · rw [if_neg hindexRight,
+    · rw [ite_eq_right hindexRight,
         Array.getElem_setIfInBounds hindex]
       by_cases hindexLeft : left = index
-      · rw [if_pos hindexLeft]
+      · rw [ite_eq_left hindexLeft]
         subst index
         simp
-      · rw [if_neg hindexLeft]
+      · rw [ite_eq_right hindexLeft]
         have hleftIndex : index ≠ left := Ne.symm hindexLeft
         have hrightIndex : index ≠ right := Ne.symm hindexRight
         simp [hleftIndex, hrightIndex,
@@ -501,7 +505,6 @@ theorem heapsort_step_heap
   have hread (index : ℕ) (hindex : index < boundary) :
       next[index]! = repaired[index]! := by
     have hlistRead := congrArg (fun items : List T => items[index]!) hprefixList
-    dsimp only at hlistRead
     rw [← arrayToList_getElem! next index,
       ← arrayToList_getElem! repaired index]
     have htake : (next.toList.take boundary)[index]! =
@@ -580,7 +583,7 @@ theorem heapsort_step_prefix_le_root
     have hread := congrFun (swp_values key array 0 boundary (by omega) hfit)
       position.val
     rw [hread]
-    simp only [swapAt, if_neg hzero, if_neg hnotBoundary]
+    simp only [swapAt, ite_eq_right hzero, ite_eq_right hnotBoundary]
     exact hheap.root_max _ _ position.val (by omega)
 
 def CrossBoundary {T : Type}
@@ -696,7 +699,7 @@ private theorem extraction_reverse_sorted
         rw [List.take_append_drop] at hresult
         exact hresult
       · have hpositive : 0 < count := Nat.zero_lt_of_ne_zero hzero
-        simp only [ge_iff_le, show 1 ≤ count by omega, if_true]
+        simp only [ge_iff_le, show 1 ≤ count by omega, ite_true]
         let swapped := swp array 0 count
         let prefixArray := swapped.extract 0 count
         let repaired := siftDown prefixArray (lessBy key) 0
@@ -813,10 +816,10 @@ private theorem forIn_if_yield_eq_pure_foldl
   | cons item items inductionHypothesis =>
       simp only [List.forIn_cons, List.foldl_cons]
       by_cases hcondition : condition item
-      · rw [if_pos hcondition, if_pos hcondition]
+      · rw [ite_eq_left hcondition, ite_eq_left hcondition]
         simp only [pure_bind]
         exact inductionHypothesis _
-      · rw [if_neg hcondition, if_neg hcondition]
+      · rw [ite_eq_right hcondition, ite_eq_right hcondition]
         simp only [pure_bind]
         exact inductionHypothesis _
 
@@ -842,8 +845,7 @@ theorem heapsort_sorted
             let repaired := siftDown prefixArray (lessBy key) 0
             overwrite swapped 0 repaired
           else current) heapified := by
-    simp only [heapsort]
-    simp only [pure_bind]
+    simp only [heapsort, pure_bind]
     rw [forIn_yield_eq_pure_foldl]
     simp only [pure_bind]
     rw [forIn_if_yield_eq_pure_foldl]
@@ -851,7 +853,7 @@ theorem heapsort_sorted
   rw [hdefinition]
   exact hsorted
 
-private def orderingContracts
+private theorem orderingContracts
     {T : Type} [Inhabited T] (key : T → ℕ) :
     OrderingContracts T key where
   heapsort_sorted := fun array => heapsort_sorted array key

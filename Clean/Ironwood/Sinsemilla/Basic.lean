@@ -1,9 +1,13 @@
-import Clean.Ironwood.Sinsemilla.ChainTheorems
-import Clean.Halo2
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.Basic
+module
+
+public import Clean.Ironwood.Sinsemilla.ChainTheorems
+public import Clean.Halo2
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.Basic
+
+@[expose] public section
 
 /-!
 The Sinsemilla generator table — the `2^K` independent generators `S(r)` in three fixed columns
@@ -302,16 +306,15 @@ theorem chain_eq_suffix_sum {w : ℕ} (zV : ℕ → Fp) (ms : ℕ → ℕ)
     (n := d + 1)
     (by
       intro s hs
-      dsimp only
-      rw [if_pos (show s ≤ d by omega)]
+      rw [ite_eq_left (show s ≤ d by omega)]
       rcases Nat.lt_or_ge s d with hsd | hsd
-      · rw [if_pos (show s + 1 ≤ d by omega), show r + (s + 1) = r + s + 1 by omega]
+      · rw [ite_eq_left (show s + 1 ≤ d by omega), show r + (s + 1) = r + s + 1 by omega]
         exact hword (r + s) (by omega)
       · obtain rfl : s = d := by omega
-        rw [if_neg (show ¬ s + 1 ≤ s by omega), mul_zero, _root_.add_zero,
+        rw [ite_eq_right (show ¬ s + 1 ≤ s by omega), mul_zero, _root_.add_zero,
           show r + s = w by omega]
         exact hlast)
-    (by dsimp only; rw [if_neg (show ¬ d + 1 ≤ d by omega)])
+    (by rw [ite_eq_right (show ¬ d + 1 ≤ d by omega)])
   simpa using h
 
 /-! ### The Sinsemilla step bridges
@@ -351,17 +354,17 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
     xa' = B.x ∧ ya' = B.y := by
   unfold step Point.doubleAndAdd at hstep
   by_cases hc₁ : A = 0 ∨ S m = 0 ∨ A.x = (S m).x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at hstep
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₁] at hstep
     simp at hstep
-  rw [Point.incompleteAdd_def, if_neg hc₁] at hstep
+  rw [Point.incompleteAdd_def, ite_eq_right hc₁] at hstep
   push Not at hc₁
   obtain ⟨hA0, hS0, hAxS⟩ := hc₁
   set R : Point Fp := A + S m with hR_def
   change Point.incompleteAdd R A = some B at hstep
   by_cases hc₂ : R = 0 ∨ A = 0 ∨ R.x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at hstep
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₂] at hstep
     simp at hstep
-  rw [Point.incompleteAdd_def, if_neg hc₂] at hstep
+  rw [Point.incompleteAdd_def, ite_eq_right hc₂] at hstep
   push Not at hc₂
   obtain ⟨hR0, -, hRxA⟩ := hc₂
   have hB : B = R + A := by
@@ -371,7 +374,7 @@ theorem step_honest (S : ℕ → Point Fp) {A B : Point Fp} {m : ℕ}
       ({ x := P.x, y := P.y } : Point Fp) ≠ Point.zero := by
     intro P hP h
     apply hP
-    simpa [Point.zero_def] using h
+    simpa only [Point.zero, Point.zero_def] using h
   have hRadd := Point.nondegenerateAdd_eq_add
     (p := { x := A.x, y := A.y }) (q := { x := (S m).x, y := (S m).y })
     (point_ne_zero hA0) (point_ne_zero hS0) hAxS

@@ -1,88 +1,92 @@
-import Clean.Ironwood.Specs.Types
-import Clean.Ironwood.Specs.Bitrange
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.PallasCert
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Ironwood.Specs.SinsemillaGenerators
-import Clean.Ironwood.Utilities.RunningSum
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Ecc.MulTheorems
-import Clean.Ironwood.Ecc.MulIncompleteTheorems
-import Clean.Ironwood.Ecc.MulCompleteTheorems
-import Clean.Ironwood.Ecc.MulOverflowTheorems
-import Clean.Ironwood.Ecc.MulAssignTheorems
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
-import Clean.Ironwood.Ecc.MulFixed.CertCheck
-import Clean.Ironwood.Ecc.MulFixed.Certs.NullifierK
-import Clean.Ironwood.Ecc.MulFixed.Certs.ValueCommitR
-import Clean.Ironwood.Ecc.MulFixed.Certs.SpendAuthG
-import Clean.Ironwood.Ecc.MulFixed.Certs.CommitIvkR
-import Clean.Ironwood.Ecc.MulFixed.Certs.NoteCommitR
-import Clean.Ironwood.Ecc.MulFixed.Certs.ValueCommitV
-import Clean.Ironwood.Sinsemilla.HVec
-import Clean.Ironwood.Sinsemilla.ChipTheorems
-import Clean.Ironwood.Sinsemilla.ChainTheorems
-import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
-import Clean.Ironwood.Poseidon.Constants
-import Clean.Ironwood.Poseidon.Pow5Theorems
-import Clean.Ironwood.Poseidon.SpongeTheorems
-import Clean.Ironwood.Poseidon.HashTheorems
-import Clean.Ironwood.NoteCommit.CanonicityTheorems
-import Clean.Ironwood.NoteCommit.DecomposeTheorems
-import Clean.Ironwood.NoteCommit.MainTheorems
-import Clean.Ironwood.CommitIvk.GateTheorems
-import Clean.Ironwood.CommitIvk.ChunkTheorems
-import Clean.Ironwood.CommitIvk.MainTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.WitnessPoint
-import Clean.Ironwood.Ecc.AddIncomplete
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulIncomplete
-import Clean.Ironwood.Ecc.MulComplete
-import Clean.Ironwood.Ecc.MulOverflow
-import Clean.Ironwood.Ecc.Mul
-import Clean.Ironwood.Ecc.MulFixed
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
-import Clean.Ironwood.Ecc.MulFixed.FullWidth
-import Clean.Ironwood.Ecc.MulFixed.Short
-import Clean.Ironwood.Utilities.LookupRangeCheck
-import Clean.Ironwood.CommitIvk.Gate
-import Clean.Ironwood.CommitIvk.Bundle
-import Clean.Ironwood.CommitIvk.Composite
-import Clean.Ironwood.NoteCommit.Gates
-import Clean.Ironwood.NoteCommit.Decompose
-import Clean.Ironwood.NoteCommit.Canonicity
-import Clean.Ironwood.NoteCommit.Composites
-import Clean.Ironwood.NoteCommit.YComposite
-import Clean.Ironwood.NoteCommit.Main
-import Clean.Ironwood.NoteCommit.MainBundle
-import Clean.Ironwood.CommitIvk.Main
-import Clean.Ironwood.CommitIvk.MainBundle
-import Clean.Ironwood.Utilities.AddChip
-import Clean.Ironwood.Poseidon.Pow5
-import Clean.Ironwood.Poseidon.Rounds
-import Clean.Ironwood.Poseidon.Permute
-import Clean.Ironwood.Poseidon.Hash
-import Clean.Ironwood.Sinsemilla.Basic
-import Clean.Ironwood.Sinsemilla.HashPiece
-import Clean.Ironwood.Sinsemilla.Chain
-import Clean.Ironwood.Action.DeriveNullifier
-import Clean.Ironwood.Action.ValueCommit
-import Clean.Ironwood.Action.SpendAuthority
-import Clean.Ironwood.Action.AddressIntegrity
-import Clean.Ironwood.Ecc.Chip
-import Clean.Ironwood.Action.Circuit
-import Clean.Ironwood.Action.Bundle
-import Clean.Ironwood.Action.RealBases
-import Clean.Ironwood.Action.Spec
-import Clean.Ironwood.Action.Separation
-import Clean.Ironwood.Action.Shape
+module
+
+public import Clean.Ironwood.Specs.Types
+public import Clean.Ironwood.Specs.Bitrange
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.PallasCert
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Ironwood.Specs.SinsemillaGenerators
+public import Clean.Ironwood.Utilities.RunningSum
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulTheorems
+public import Clean.Ironwood.Ecc.MulIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulCompleteTheorems
+public import Clean.Ironwood.Ecc.MulOverflowTheorems
+public import Clean.Ironwood.Ecc.MulAssignTheorems
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+public import Clean.Ironwood.Ecc.MulFixed.CertCheck
+public import Clean.Ironwood.Ecc.MulFixed.Certs.NullifierK
+public import Clean.Ironwood.Ecc.MulFixed.Certs.ValueCommitR
+public import Clean.Ironwood.Ecc.MulFixed.Certs.SpendAuthG
+public import Clean.Ironwood.Ecc.MulFixed.Certs.CommitIvkR
+public import Clean.Ironwood.Ecc.MulFixed.Certs.NoteCommitR
+public import Clean.Ironwood.Ecc.MulFixed.Certs.ValueCommitV
+public import Clean.Ironwood.Sinsemilla.HVec
+public import Clean.Ironwood.Sinsemilla.ChipTheorems
+public import Clean.Ironwood.Sinsemilla.ChainTheorems
+public import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
+public import Clean.Ironwood.Poseidon.Constants
+public import Clean.Ironwood.Poseidon.Pow5Theorems
+public import Clean.Ironwood.Poseidon.SpongeTheorems
+public import Clean.Ironwood.Poseidon.HashTheorems
+public import Clean.Ironwood.NoteCommit.CanonicityTheorems
+public import Clean.Ironwood.NoteCommit.DecomposeTheorems
+public import Clean.Ironwood.NoteCommit.MainTheorems
+public import Clean.Ironwood.CommitIvk.GateTheorems
+public import Clean.Ironwood.CommitIvk.ChunkTheorems
+public import Clean.Ironwood.CommitIvk.MainTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.WitnessPoint
+public import Clean.Ironwood.Ecc.AddIncomplete
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulIncomplete
+public import Clean.Ironwood.Ecc.MulComplete
+public import Clean.Ironwood.Ecc.MulOverflow
+public import Clean.Ironwood.Ecc.Mul
+public import Clean.Ironwood.Ecc.MulFixed
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
+public import Clean.Ironwood.Ecc.MulFixed.FullWidth
+public import Clean.Ironwood.Ecc.MulFixed.Short
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+public import Clean.Ironwood.CommitIvk.Gate
+public import Clean.Ironwood.CommitIvk.Bundle
+public import Clean.Ironwood.CommitIvk.Composite
+public import Clean.Ironwood.NoteCommit.Gates
+public import Clean.Ironwood.NoteCommit.Decompose
+public import Clean.Ironwood.NoteCommit.Canonicity
+public import Clean.Ironwood.NoteCommit.Composites
+public import Clean.Ironwood.NoteCommit.YComposite
+public import Clean.Ironwood.NoteCommit.Main
+public import Clean.Ironwood.NoteCommit.MainBundle
+public import Clean.Ironwood.CommitIvk.Main
+public import Clean.Ironwood.CommitIvk.MainBundle
+public import Clean.Ironwood.Utilities.AddChip
+public import Clean.Ironwood.Poseidon.Pow5
+public import Clean.Ironwood.Poseidon.Rounds
+public import Clean.Ironwood.Poseidon.Permute
+public import Clean.Ironwood.Poseidon.Hash
+public import Clean.Ironwood.Sinsemilla.Basic
+public import Clean.Ironwood.Sinsemilla.HashPiece
+public import Clean.Ironwood.Sinsemilla.Chain
+public import Clean.Ironwood.Action.DeriveNullifier
+public import Clean.Ironwood.Action.ValueCommit
+public import Clean.Ironwood.Action.SpendAuthority
+public import Clean.Ironwood.Action.AddressIntegrity
+public import Clean.Ironwood.Ecc.Chip
+public import Clean.Ironwood.Action.Circuit
+public import Clean.Ironwood.Action.Bundle
+public import Clean.Ironwood.Action.RealBases
+public import Clean.Ironwood.Action.Spec
+public import Clean.Ironwood.Action.Separation
+public import Clean.Ironwood.Action.Shape
+
+@[expose] public section
 
 /-!
 # Ironwood circuits

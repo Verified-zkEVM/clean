@@ -1,8 +1,10 @@
-import Clean.Circuit
-import Clean.Utils.Primes
-import Clean.Utils.Field
-import Clean.Types.U64
-import Clean.Gadgets.Xor.ByteXorTable
+module
+
+public import Clean.Circuit
+public import Clean.Types.U64
+public import Clean.Gadgets.Xor.ByteXorTable
+
+@[expose] public section
 
 open Clean
 
@@ -18,26 +20,25 @@ structure Inputs (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
-  let ⟨x, y⟩ := input
   let z ← witness <|
-    let z0 := (x.x0.val ^^^ y.x0.val).toField
-    let z1 := (x.x1.val ^^^ y.x1.val).toField
-    let z2 := (x.x2.val ^^^ y.x2.val).toField
-    let z3 := (x.x3.val ^^^ y.x3.val).toField
-    let z4 := (x.x4.val ^^^ y.x4.val).toField
-    let z5 := (x.x5.val ^^^ y.x5.val).toField
-    let z6 := (x.x6.val ^^^ y.x6.val).toField
-    let z7 := (x.x7.val ^^^ y.x7.val).toField
+    let z0 := (input.x.x0.val ^^^ input.y.x0.val).toField
+    let z1 := (input.x.x1.val ^^^ input.y.x1.val).toField
+    let z2 := (input.x.x2.val ^^^ input.y.x2.val).toField
+    let z3 := (input.x.x3.val ^^^ input.y.x3.val).toField
+    let z4 := (input.x.x4.val ^^^ input.y.x4.val).toField
+    let z5 := (input.x.x5.val ^^^ input.y.x5.val).toField
+    let z6 := (input.x.x6.val ^^^ input.y.x6.val).toField
+    let z7 := (input.x.x7.val ^^^ input.y.x7.val).toField
     U64.mk z0 z1 z2 z3 z4 z5 z6 z7
 
-  lookup ByteXorTable (x.x0, y.x0, z.x0)
-  lookup ByteXorTable (x.x1, y.x1, z.x1)
-  lookup ByteXorTable (x.x2, y.x2, z.x2)
-  lookup ByteXorTable (x.x3, y.x3, z.x3)
-  lookup ByteXorTable (x.x4, y.x4, z.x4)
-  lookup ByteXorTable (x.x5, y.x5, z.x5)
-  lookup ByteXorTable (x.x6, y.x6, z.x6)
-  lookup ByteXorTable (x.x7, y.x7, z.x7)
+  lookup ByteXorTable (input.x.x0, input.y.x0, z.x0)
+  lookup ByteXorTable (input.x.x1, input.y.x1, z.x1)
+  lookup ByteXorTable (input.x.x2, input.y.x2, z.x2)
+  lookup ByteXorTable (input.x.x3, input.y.x3, z.x3)
+  lookup ByteXorTable (input.x.x4, input.y.x4, z.x4)
+  lookup ByteXorTable (input.x.x5, input.y.x5, z.x5)
+  lookup ByteXorTable (input.x.x6, input.y.x6, z.x6)
+  lookup ByteXorTable (input.x.x7, input.y.x7, z.x7)
   return z
 
 def Assumptions (input : Inputs (F p)) :=
@@ -97,11 +98,12 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   exact Nat.mod_eq_of_lt (by linarith [p_large_enough.elim])
 
 theorem completeness : Completeness (F p) main Assumptions := by
-  intro i0 env input_var h_env input h_input as
-  let ⟨⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩, ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩⟩ := input
-  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U64.mk.injEq] at h_input
-  simp only [Assumptions, circuit_norm, U64.Normalized] at as
-  simp only [h_input, circuit_norm, main, ByteXorTable] at h_env ⊢
+  circuit_proof_start [ByteXorTable]
+  rcases input_x with ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩
+  rcases input_y with ⟨ y0, y1, y2, y3, y4, y5, y6, y7 ⟩
+  simp only [circuit_norm, explicit_provable_type, U64.mk.injEq] at h_input
+  simp only [circuit_norm, U64.Normalized] at h_assumptions
+  simp only [h_input, circuit_norm] at h_env ⊢
   simp only [circuit_norm, explicit_provable_type, U64.mk.injEq] at h_env ⊢
   simp_all [circuit_norm, xor_val]
 

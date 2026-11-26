@@ -1,5 +1,9 @@
-import Clean.Halo2.Tactics.ProvableTypeSimp
-import Clean.Ironwood.Ecc.Basic
+module
+
+public import Clean.Halo2.Tactics.ProvableTypeSimp
+public import Clean.Ironwood.Ecc.Basic
+
+@[expose] public section
 
 /-!
 Regression tests for `provable_type_simp` (halo2). Each asserts a shape or a consumption

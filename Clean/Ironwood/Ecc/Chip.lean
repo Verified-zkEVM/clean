@@ -1,11 +1,15 @@
-import Clean.Ironwood.Ecc.WitnessPoint
-import Clean.Ironwood.Ecc.AddIncomplete
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.Mul
-import Clean.Ironwood.Ecc.MulFixed
-import Clean.Ironwood.Ecc.MulFixed.FullWidth
-import Clean.Ironwood.Ecc.MulFixed.Short
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
+module
+
+public import Clean.Ironwood.Ecc.WitnessPoint
+public import Clean.Ironwood.Ecc.AddIncomplete
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.Mul
+public import Clean.Ironwood.Ecc.MulFixed
+public import Clean.Ironwood.Ecc.MulFixed.FullWidth
+public import Clean.Ironwood.Ecc.MulFixed.Short
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
+
+@[expose] public section
 
 /-!
 # Orchard-protocol ECC chip configure
@@ -122,7 +126,7 @@ theorem configure_output_mulFixedBaseField_lookupConfig
     MulFixed.FullWidth.configure,
     MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
-@[reducible] private def configureInferred
+@[reducible] def configureInferred
     (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) :
@@ -130,7 +134,7 @@ theorem configure_output_mulFixedBaseField_lookupConfig
   unfold configure
   infer_instance
 
-private theorem configure_selectorRequirements
+theorem configure_selectorRequirements
     (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) (counts) :
@@ -279,7 +283,7 @@ theorem advice_mem_permutationRequests (advices : Fin 10 → Column .advice)
     exact Configure.mem_permutationRequests_delta_enableEquality _ _
 
 /-- The keygen context produced locally by one aggregate ECC configure run. -/
-private def configureDeltaContext (advices : Fin 10 → Column .advice)
+def configureDeltaContext (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
     KeygenContext Fp :=
@@ -408,6 +412,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro gate hgate
         simp only [WitnessPoint.pointFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hgate
         simp only [configureDeltaContext]
@@ -418,6 +423,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro argument hargument
         simp only [WitnessPoint.pointFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hargument
         simp only [configureDeltaContext]
@@ -428,6 +434,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro column hcolumn
         simp only [WitnessPoint.pointFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
         simp only [configureDeltaContext]
@@ -438,6 +445,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro column hcolumn
         simp only [WitnessPoint.pointFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
         simp only [configureDeltaContext]
@@ -451,6 +459,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro gate hgate
         simp only [WitnessPoint.pointNonIdFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hgate
         simp only [configureDeltaContext]
@@ -461,6 +470,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro argument hargument
         simp only [WitnessPoint.pointNonIdFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hargument
         simp only [configureDeltaContext]
@@ -471,6 +481,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro column hcolumn
         simp only [WitnessPoint.pointNonIdFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
         simp only [configureDeltaContext]
@@ -481,6 +492,7 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         intro column hcolumn
         simp only [WitnessPoint.pointNonIdFormal,
           FormalRegionCircuit.toFormal_keygenRequirements,
+          FormalRegionCircuit.toFormal_configure,
           WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
         simp only [configureDeltaContext]
@@ -806,11 +818,12 @@ def configureCertificate (advices : Fin 10 → Column .advice)
   let fullCounts := fullProgram.finalCounts mulFixedCounts
   let shortProgram := MulFixed.Short.configure mulFixedConfig
   let shortCounts := shortProgram.finalCounts fullCounts
-  have hrunningColumns : ∀ column,
-      column ∈ MulFixed.runningSumKeygenRequirements.permutationColumns
-        mulFixedConfig core.addIncomplete.configured →
-      column ∈ (configureContext advices lagrangeCoeffs rangeCheck counts).permutationColumns := by
-    intro column hcolumn
+  have hrunningColumns :
+      ∀ (configured : MulFixed.runningSumKeygenRequirements.configLawful mulFixedConfig) column,
+        column ∈ MulFixed.runningSumKeygenRequirements.permutationColumns
+          mulFixedConfig configured →
+        column ∈ (configureContext advices lagrangeCoeffs rangeCheck counts).permutationColumns := by
+    intro configured column hcolumn
     rw [MulFixed.configure_output_runningSumPermutationColumns] at hcolumn
     have haddColumns : Add.permutationColumns addConfig =
         ([advices 0, advices 1, advices 2, advices 3] : List AnyColumn) :=
@@ -1020,7 +1033,7 @@ def configureCertificate (advices : Fin 10 → Column .advice)
       simp only [MulFixed.Short.circuit, FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements, List.mem_append] at hcolumn
       rcases hcolumn with (hrunning | hadd) | hshort
-      · exact hrunningColumns column hrunning
+      · exact hrunningColumns _ column hrunning
       · exact core.add.permutationColumns_of_configured column hadd
       · apply List.mem_cons_of_mem
         unfold configure
@@ -1091,7 +1104,7 @@ def configureCertificate (advices : Fin 10 → Column .advice)
       simp only [MulFixed.FullWidth.circuit, FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements, List.mem_append] at hcolumn
       rcases hcolumn with (hrunning | hadd) | hfull
-      · exact hrunningColumns column hrunning
+      · exact hrunningColumns _ column hrunning
       · exact core.add.permutationColumns_of_configured column hadd
       · apply List.mem_cons_of_mem
         unfold configure
@@ -1177,7 +1190,7 @@ def configureCertificate (advices : Fin 10 → Column .advice)
         FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
         MulFixed.BaseFieldElem.keygenRequirements, List.mem_append] at hcolumn
       rcases hcolumn with ((hrunning | hadd) | hrange) | hbase
-      · exact hrunningColumns column hrunning
+      · exact hrunningColumns _ column hrunning
       · exact core.add.permutationColumns_of_configured column hadd
       · simp only [List.mem_singleton] at hrange
         rw [hrange]

@@ -1,14 +1,18 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.MulTheorems
-import Clean.Ironwood.Ecc.MulAssignTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulIncomplete
-import Clean.Ironwood.Ecc.MulComplete
-import Clean.Ironwood.Ecc.MulOverflow
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.MulTheorems
+public import Clean.Ironwood.Ecc.MulAssignTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulIncomplete
+public import Clean.Ironwood.Ecc.MulComplete
+public import Clean.Ironwood.Ecc.MulOverflow
+
+@[expose] public section
 
 /-!
 Variable-base scalar multiplication: computes `alpha • base` where `alpha : Fp` is a Pallas
@@ -258,7 +262,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
   have hPv : P.Valid := Or.inl hP
   cases bit
   · -- bit = false: the step point is −P
-    simp only [Bool.false_eq_true, if_false]
+    simp only [Bool.false_eq_true, ite_false]
     apply (ext_toSW_iff
       (valid_add (valid_nsmul hPv a) (valid_add (valid_neg hPv) (valid_nsmul hPv a)))
       (valid_nsmul hPv _)).mpr
@@ -267,7 +271,7 @@ private theorem point_step_nsmul {P : Point Fp} (hP : P.OnCurve) (a : ℕ) (ha :
       toSW_nsmul hPv a, toSW_nsmul hPv]
     simpa using Ecc.Mul.nsmul_step (P.toSW hPv) a ha false
   · -- bit = true: the step point is P
-    simp only [if_true]
+    simp only [ite_true]
     apply (ext_toSW_iff
       (valid_add (valid_nsmul hPv a) (valid_add hPv (valid_nsmul hPv a)))
       (valid_nsmul hPv _)).mpr
@@ -403,7 +407,7 @@ private theorem zChain_split {n : ℕ} {zin : Fp} {zs : Vector Fp (n + 1)} {bits
   · intro b
     have hb := h ⟨b.val + 1, by omega⟩
     simp only [Fin.getElem_fin] at hb
-    rw [dif_neg (show ¬ (b.val + 1 = 0) by omega)] at hb
+    rw [dite_eq_right (show ¬ (b.val + 1 = 0) by omega)] at hb
     simpa using hb
 
 /-- Prover-side `acc`-component of an evaluated `MulComplete.Output 3` literal. -/
@@ -1031,11 +1035,13 @@ def mainElaborated : ElaboratedRegionCircuit Fp Config Config Inputs MainOutputs
   keygenRequirements := mainKeygenRequirements
   registered := by
     intro cfg counts hconfig offset input region
-    simpa only [Configure.output_pure, Configure.delta_pure, List.append_nil] using
+    simpa only [Configure.output_pure, Configure.delta_pure, Configure.fixedColumns_pure,
+      List.append_nil] using
       mainSynthesize_keygenRegistered cfg hconfig input region
   copyCellsAssigned := by
     intro cfg counts hconfig offset input region
-    simpa only [Configure.output_pure, mainKeygenRequirements] using
+    simpa only [Configure.output_pure, mainKeygenRequirements,
+      RegionOperations.CopyCellsAssigned] using
       mainSynthesize_copyCellsAssigned cfg hconfig input region
   lookupSelectorAssignmentsAgree_of_registered := by
     intro cfg counts hconfig offset input region program operations hregistered
@@ -1106,6 +1112,14 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
   soundness := by
     circuit_proof_start2 [mainSynthesize, Add.add, MulIncomplete.double_and_add,
       MulComplete.assign_region, lsbGate]
+    have hi_acc_eq := congrArg (fun o => o.acc) hi_eq
+    have hi_zs_eq := congrArg (fun o => o.zs) hi_eq
+    have lo_x_eq := congrArg (fun o => o.acc.x) lo_eq
+    have lo_y_eq := congrArg (fun o => o.acc.y) lo_eq
+    have lo_zs_eq := congrArg (fun o => o.zs) lo_eq
+    have comp_acc_eq := congrArg (fun o => o.acc) comp_eq
+    have comp_zs_eq := congrArg (fun o => o.zs) comp_eq
+    dsimp only at hi_acc_eq hi_zs_eq lo_x_eq lo_y_eq lo_zs_eq comp_acc_eq comp_zs_eq
     have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl assumptions
     -- init add: acc = base + base = [2]base
     obtain ⟨hAccV, hAcc2⟩ := acc_spec hbaseV
@@ -1122,17 +1136,17 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     have hHiOut := hHiAccCl 2 (by rw [hAcc2]) (le_refl 2) (by norm_num)
     -- the hi z-cell 124 (= z₁₃₀) and z-cell 0 (= k₂₅₄), as chainNat casts on the output cells
     have hHiZ124 := hHiCells 124 (by omega)
-    rw [← hi_eq] at hHiZ124
+    simp only [← hi_zs_eq] at hHiZ124
     simp only [keygen_output_norm] at hHiZ124
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZ124
     have hK254v := hHiCells 0 (by omega)
-    rw [← hi_eq] at hK254v
+    simp only [← hi_zs_eq] at hK254v
     simp only [keygen_output_norm] at hK254v
     simp only [circuit_norm, Vector.getElem_ofFn] at hK254v
     -- the output cells (`output_eq` components)
     obtain ⟨⟨hOResX, hOResY⟩, hOZ0, hOZ130, hOK254⟩ := output_eq
     -- the hi accumulator at its concrete cells
-    rw [← hi_eq] at hHiOut
+    simp only [← hi_acc_eq] at hHiOut
     simp only [keygen_output_norm] at hHiOut
     simp only [circuit_norm] at hHiOut
     -- lo half: ∃ bitsLo, RoundInvariant 126 with entering z = z₁₃₀, entering acc = hi.acc
@@ -1146,17 +1160,17 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     -- the lo accumulator, entering at m = accScalar 2 bitsHi 125
     have hmB := m_bounds bitsHi bitsLo
     have hLoOut := hLoAccCl (accScalar 2 bitsHi 125)
-      (by rw [← hi_eq]
+      (by simp only [← hi_acc_eq]
           simp only [keygen_output_norm]
           simp only [circuit_norm]
           exact hHiOut)
       hmB.1 hmB.2.1
-    rw [← lo_eq] at hLoOut
+    simp only [← lo_x_eq, ← lo_y_eq] at hLoOut
     simp only [keygen_output_norm] at hLoOut
     simp only [circuit_norm] at hLoOut
     -- complete rounds: ∃ bitsC, RoundInvariant 3 with entering acc = lo.acc
     have hM2pos : 1 ≤ accScalar (accScalar 2 bitsHi 125) bitsLo 126 := hmB.2.2.1
-    rw [← lo_eq] at comp_spec
+    simp only [← lo_x_eq, ← lo_y_eq] at comp_spec
     simp only [keygen_output_norm, circuit_norm] at comp_spec
     obtain ⟨bitsC, hCompRI⟩ := comp_spec
       ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
@@ -1168,11 +1182,11 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [hLoOut, accPoint_nsmul assumptions _ hM2pos bitsC 3] at hCompAccEq
     -- the complete-phase z-chain, continued from the lo chain
     have hLoZ125 := hLoCells 125 (by omega)
-    rw [← lo_eq] at hLoZ125
+    simp only [← lo_zs_eq] at hLoZ125
     simp only [keygen_output_norm] at hLoZ125
     simp only [circuit_norm, Vector.getElem_ofFn] at hLoZ125
     have hCompZ0 := hCompChain ⟨0, by omega⟩
-    simp only [if_pos] at hCompZ0
+    simp only [ite_eq_left] at hCompZ0
     have hCompCells := chain_cast (n := 2) _ _
       (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC
       (by rw [hLoZ125]) hCompZ0
@@ -1181,7 +1195,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         simpa using h)
     -- z₁ (= comp zs[2]) as a chainNat cast on its concrete cell
     have hz1cast := hCompCells 2 (by omega)
-    rw [← comp_eq] at hz1cast
+    simp only [← comp_zs_eq] at hz1cast
     simp only [keygen_output_norm] at hz1cast
     simp only [circuit_norm, Vector.getElem_ofFn] at hz1cast
     have hz1read : env.advice cfg.completeConfig.zComplete ((place self + offLsb : ℕ) : ℤ)
@@ -1193,9 +1207,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [region_1] at hLsbX
     rw [region_2] at hLsbY
     -- the final add's `q` summand and the comp accumulator, at the shared spelling
-    rw [← comp_eq] at result_spec
+    simp only [← comp_acc_eq] at result_spec
     simp only [keygen_output_norm, circuit_norm] at result_spec
-    rw [← comp_eq] at hCompAccV hCompAccEq
+    simp only [← comp_acc_eq] at hCompAccV hCompAccEq
     simp only [keygen_output_norm, circuit_norm] at hCompAccV hCompAccEq
     -- the accumulated-scalar closed forms
     have hM3pos : 1 ≤ accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 :=
@@ -1236,8 +1250,11 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         have hcy : env.advice cfg.addConfig.yP ((place self + offLsb : ℕ) : ℤ)
             = -input_base_y := by
           linear_combination hLsbY + input_base_y * hk0
-        obtain ⟨hResV, hResEq⟩ := result_spec
-          ⟨by rw [hcx, hcy]; exact Point.valid_neg hbaseV, hCompAccV⟩
+        obtain ⟨hResV, hResEq⟩ := result_spec (by
+          constructor
+          · simpa only [hcx, hcy, Point.neg_def, Point.ofCoords, Point.coords,
+              CompElliptic.CurveForms.ShortWeierstrass.neg] using Point.valid_neg hbaseV
+          · exact hCompAccV)
         rw [hcx, hcy, show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -({ x := input_base_x, y := input_base_y } : Point Fp) from rfl,
           hCompAccEq, point_neg_add_nsmul assumptions hM3pos] at hResEq
@@ -1251,13 +1268,14 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
                   = input_base_x from by linear_combination hLsbX - input_base_x * hk0,
                 show env.advice cfg.addConfig.yP ((place self + offLsb : ℕ) : ℤ)
                   = -input_base_y from by linear_combination hLsbY + input_base_y * hk0]
-              exact Point.valid_neg hbaseV, hCompAccV⟩
+              simpa only [Point.neg_def, Point.ofCoords, Point.coords,
+                CompElliptic.CurveForms.ShortWeierstrass.neg] using Point.valid_neg hbaseV, hCompAccV⟩
         exact hResV
     · -- k₀ = 1: the correction point is the identity, the result is [M₃]•base
       refine ⟨bitsHi, bitsLo, bitsC, true, hK254bit, hOZ130.symm.trans hHiZ124, ?_, ?_, ?_⟩
       · -- z₀ = 2·z₁ + 1
         push_cast
-        simp only [if_true]
+        simp only [ite_true]
         rw [hz1read] at hk1
         linear_combination -hk1
       · have hcx : env.advice cfg.addConfig.xP ((place self + offLsb : ℕ) : ℤ) = 0 := by
@@ -1279,6 +1297,14 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
   completeness := by
     circuit_proof_start2 [mainSynthesize, Add.add, MulIncomplete.double_and_add,
       MulComplete.assign_region, lsbGate]
+    have hi_acc_eq := congrArg (fun o => o.acc) hi_eq
+    have hi_zs_eq := congrArg (fun o => o.zs) hi_eq
+    have lo_x_eq := congrArg (fun o => o.acc.x) lo_eq
+    have lo_y_eq := congrArg (fun o => o.acc.y) lo_eq
+    have lo_zs_eq := congrArg (fun o => o.zs) lo_eq
+    have comp_acc_eq := congrArg (fun o => o.acc) comp_eq
+    have comp_zs_eq := congrArg (fun o => o.zs) comp_eq
+    dsimp only at hi_acc_eq hi_zs_eq lo_x_eq lo_y_eq lo_zs_eq comp_acc_eq comp_zs_eq
     have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := assumptions
     have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl hOnC
     -- the honest working-scalar bits, as a local opaque constant
@@ -1326,22 +1352,22 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       norm_num
     have hHiCells := chain_cast (n := 124) _ _ 0 bits hentry hHiZ0 hHiZstep
     have hHiOut := hHiAccCl 2 (by rw [hAcc2]) (le_refl 2) (by norm_num)
-    rw [← hi_eq] at hHiOut
+    simp only [← hi_acc_eq] at hHiOut
     simp only [keygen_output_norm] at hHiOut
     simp only [circuit_norm] at hHiOut
     have hHiZ124 := hHiCells 124 (by omega)
-    rw [← hi_eq] at hHiZ124
+    simp only [← hi_zs_eq] at hHiZ124
     simp only [keygen_output_norm] at hHiZ124
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZ124
     have hHiZtop := hHiCells 0 (by omega)
-    rw [← hi_eq] at hHiZtop
+    simp only [← hi_zs_eq] at hHiZtop
     simp only [keygen_output_norm] at hHiZtop
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZtop
     -- lo half: honest RoundInvariant, chained
     have hmB := m_bounds bits (fun i => bits (125 + i))
-    have hHiAccP : eval (⟨place, env⟩ : Placed ProverEnvironment Fp) hi.acc
+    have hHiAccP : eval (⟨place, env⟩ : Placed ProverEnvironment Fp) hi_acc
         = accScalar 2 bits 125 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
-      rw [← hi_eq]
+      simp only [← hi_acc_eq]
       simp only [keygen_output_norm, circuit_norm]
       exact hHiOut
     obtain ⟨-, hLoPS⟩ := lo_spec hOnC ⟨hOnC, accScalar 2 bits 125, hHiAccP, hmB.1, hmB.2.1⟩
@@ -1351,15 +1377,15 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
       (by rw [← hOZ130]; exact hHiZ124) hLoZ0 hLoZstep
     have hLoOut := hLoAccCl (accScalar 2 bits 125) (by rw [hHiAccP]) hmB.1 hmB.2.1
-    rw [← lo_eq] at hLoOut
+    simp only [← lo_x_eq, ← lo_y_eq] at hLoOut
     simp only [keygen_output_norm] at hLoOut
     simp only [circuit_norm] at hLoOut
     have hLoZ125 := hLoCells 125 (by omega)
-    rw [← lo_eq] at hLoZ125
+    simp only [← lo_zs_eq] at hLoZ125
     simp only [keygen_output_norm] at hLoZ125
     simp only [circuit_norm, Vector.getElem_ofFn] at hLoZ125
     -- complete rounds: honest RoundInvariant
-    rw [← lo_eq] at comp_spec
+    simp only [← lo_x_eq, ← lo_y_eq] at comp_spec
     simp only [keygen_output_norm, circuit_norm] at comp_spec
     obtain ⟨hCompSpecV, hCompPS⟩ := comp_spec
       ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
@@ -1372,7 +1398,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     simp only [MulComplete.RoundInvariant, hW251] at hCompPS
     obtain ⟨hCompChain, -⟩ := hCompPS
     have hCompZ0 := hCompChain ⟨0, by omega⟩
-    simp only [if_pos] at hCompZ0
+    simp only [ite_eq_left] at hCompZ0
     have hCompCells := chain_cast (n := 2) _ _
       (chainNat (chainNat 0 bits 125) (fun i => bits (125 + i)) 126) (fun i => bits (251 + i))
       (by rw [hLoZ125]) hCompZ0
@@ -1380,7 +1406,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         have h := hCompChain ⟨b.val + 1, by omega⟩
         simpa using h)
     have hz1cast := hCompCells 2 (by omega)
-    rw [← comp_eq] at hz1cast
+    simp only [← comp_zs_eq] at hz1cast
     simp only [keygen_output_norm] at hz1cast
     simp only [circuit_norm, Vector.getElem_ofFn] at hz1cast
     -- the honest chain values, `kBits`-driven
@@ -1395,9 +1421,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       refine z0_cell_value input_alpha rfl ?_
       exact region_1
     -- ── assemble: premise bundles + parent constraints + the honest cell values ──
-    rw [← lo_eq, ← comp_eq]
+    simp only [← lo_x_eq, ← lo_y_eq, ← comp_acc_eq]
     simp only [keygen_output_norm, circuit_norm]
-    rw [← comp_eq] at hCompAccVv
+    simp only [← comp_acc_eq] at hCompAccVv
     simp only [keygen_output_norm, circuit_norm] at hCompAccVv
     have hz1read : env.advice cfg.completeConfig.zComplete ((place self + offLsb : ℕ) : ℤ)
         = ((kNat input_alpha / 2 : ℕ) : Fp) := by
@@ -1425,23 +1451,24 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     · -- bool_check on the honest bit
       rw [hz0v, hz1read, hsplit, hbits]
       rcases Bool.dichotomy (kBits input_alpha 254) with h | h <;>
-        simp only [h, Bool.false_eq_true, if_false, if_true] <;> ring
+        simp only [h, Bool.false_eq_true, ite_false, ite_true] <;> ring
     · -- x-switch on the honest correction point
       rw [hz0v, hz1read, hsplit, hbits, region_4, region_2]
       rcases Bool.dichotomy (kBits input_alpha 254) with h | h <;>
-        simp only [h, Bool.false_eq_true, if_false, if_true] <;> ring
+        simp only [h, Bool.false_eq_true, ite_false, ite_true] <;> ring
     · -- y-switch on the honest correction point
       rw [hz0v, hz1read, hsplit, hbits, region_5, region_3]
       rcases Bool.dichotomy (kBits input_alpha 254) with h | h <;>
-        simp only [h, Bool.false_eq_true, if_false, if_true] <;> ring
+        simp only [h, Bool.false_eq_true, ite_false, ite_true] <;> ring
     · -- the honest correction point is valid (identity or −base)
       rw [region_4, region_5]
       rcases Bool.dichotomy (kBits input_alpha 254) with h | h <;> rw [h]
-      · simp only [Bool.false_eq_true, if_false]
+      · simp only [Bool.false_eq_true, ite_false]
         rw [show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -{ x := input_base_x, y := input_base_y } from rfl]
-        exact Point.valid_neg hbaseV
-      · simp only [if_true]
+        simpa only [Point.neg_def, Point.ofCoords, Point.coords,
+                CompElliptic.CurveForms.ShortWeierstrass.neg] using Point.valid_neg hbaseV
+      · simp only [ite_true]
         exact Point.valid_zero
 
 /-- The main region exposes its reduced synthesis footprint. -/
@@ -1611,7 +1638,7 @@ theorem synthesize_synthesisSummary_eq (cfg : Config)
 
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
-private theorem synthesize_regionCount (cfg : Config)
+theorem synthesize_regionCount (cfg : Config)
     (input : Var Inputs Fp) (i : RegionIndex) :
     Operations.regionCount ((synthesize cfg input).operations i) = 4 := by
   simp only [synthesize, circuit_norm]
@@ -1732,7 +1759,7 @@ private def overflowConfigured
     (completeProgram.finalCounts
       (loProgram.finalCounts (hiProgram.finalCounts counts))) ()
 
-private theorem synthesize_keygenRegistered
+theorem synthesize_keygenRegistered
     (configInput :
       Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
     (counts : ConfigureCounts)
@@ -1757,35 +1784,45 @@ private theorem synthesize_keygenRegistered
         input i
     case hgates =>
       intro gate hgate
-      simp only [mainConfigured, FormalCircuit.Configured.ofPure_gates,
+      simp only [mainConfigured, FormalCircuit.Configured.reduceGates,
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hgate
-      rw [mainKeygenRequirements_gates] at hgate
+      dsimp only [mainKeygenRequirements] at hgate
       simp only [FormalRegionCircuit.Configured.gates,
         FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
         keygenRequirements] at hgate ⊢
       aesop
     case hlookups =>
       intro argument hargument
-      simp only [mainConfigured, FormalCircuit.Configured.ofPure_lookups,
+      simp only [mainConfigured, FormalCircuit.Configured.reduceLookups,
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hargument
-      rw [mainKeygenRequirements_lookups] at hargument
+      dsimp only [mainKeygenRequirements] at hargument
       simp only [FormalRegionCircuit.Configured.lookups,
         FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
         keygenRequirements] at hargument ⊢
       aesop
-    case hfixedColumns => keygen_registration
-    case hpermutationColumns =>
+    case hfixedColumns =>
       intro column hcolumn
-      simp only [mainConfigured,
-        FormalCircuit.Configured.ofPure_permutationColumns,
+      simp only [mainConfigured, FormalCircuit.Configured.reduceFixedColumns,
         FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements] at hcolumn
-      rw [mainKeygenRequirements_permutationColumns] at hcolumn
+      dsimp only [mainKeygenRequirements] at hcolumn
+      simp only [FormalRegionCircuit.Configured.fixedColumns,
+        FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
+        keygenRequirements] at hcolumn ⊢
+      aesop
+    case hpermutationColumns =>
+      intro column hcolumn
+      simp only [mainConfigured,
+        FormalCircuit.Configured.reducePermutationColumns,
+        FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
+        FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements] at hcolumn
+      dsimp only [mainKeygenRequirements] at hcolumn
       simp only [FormalRegionCircuit.Configured.permutationColumns,
         FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements,
@@ -1811,7 +1848,13 @@ private theorem synthesize_keygenRegistered
         FormalCircuit.Configured.lookups, FormalCircuit.keygenRequirements,
         MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hargument ⊢
       aesop
-    case hfixedColumns => keygen_registration
+    case hfixedColumns =>
+      intro column hcolumn
+      simp only [keygen_norm, configure, overflowConfigured,
+        keygenRequirements,
+        FormalCircuit.Configured.fixedColumns, FormalCircuit.keygenRequirements,
+        MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hcolumn ⊢
+      aesop
     case hpermutationColumns =>
       intro column hcolumn
       simp only [keygen_norm, configure, overflowConfigured,
@@ -1875,7 +1918,7 @@ private theorem synthesize_keygenRegistered
         apply Configure.mem_permutationRequests_delta_bind_left
         exact hcolumn
 
-private theorem synthesize_copyCellsAssigned
+theorem synthesize_copyCellsAssigned
     (configInput :
       Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
     (counts : ConfigureCounts)
@@ -1894,7 +1937,7 @@ private theorem synthesize_copyCellsAssigned
         (mainConfigured configInput counts hconfig) input self
     intro cell hcell
     simp only [mainConfigured,
-      FormalCircuit.Configured.ofPure_inputCells,
+      FormalCircuit.Configured.reduceInputCells,
       FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
       FormalRegionCircuit.keygenRequirements,
       ElaboratedRegionCircuit.keygenRequirements,
@@ -1921,7 +1964,7 @@ private theorem synthesize_copyCellsAssigned
     · exact List.mem_append_right _
         (mainCircuit_call_overflowInput_cells_assigned _ input self).2.2
 
-@[reducible] private def mulElaborated :
+@[reducible] def mulElaborated :
     ElaboratedCircuit Fp
       (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
       Config Inputs Point
@@ -2082,7 +2125,7 @@ def mul :
       exact point_card_reduce hOnC _
     -- ── assemble ──
     rcases Bool.dichotomy k0 with hk | hk <;> rw [hk] at hZ0 hResEq <;>
-      simp only [Bool.false_eq_true, if_false, if_true] at hZ0 hResEq
+      simp only [Bool.false_eq_true, ite_false, ite_true] at hZ0 hResEq
     · -- k₀ = 0
       have hK := hKpart 0 (by omega) (by
         push_cast

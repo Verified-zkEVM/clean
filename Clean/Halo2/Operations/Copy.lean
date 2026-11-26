@@ -1,4 +1,8 @@
-import Clean.Halo2.Operations
+module
+
+public import Clean.Halo2.Operations
+
+@[expose] public section
 
 namespace Halo2
 

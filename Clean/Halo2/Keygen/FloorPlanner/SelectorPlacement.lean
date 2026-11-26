@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.FloorPlanner.Allocations
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.Allocations
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 
@@ -108,7 +112,7 @@ theorem SummarySelectorsAnchoredBy.combine
   rw [RegionSynthesisSummary.toRegionShapeSummary_columns,
     RegionSynthesisSummary.combine_columns, mem_unionColumns_iff] at hselector
   rcases hselector with hselector | hselector
-  · have hanchor := hleft selector (by simpa using hselector)
+  · have hanchor := hleft selector (by simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hselector)
     have hanchor' : anchor selector ∈ physicalColumns left.columns := by
       simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hanchor
     obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hanchor
@@ -119,7 +123,7 @@ theorem SummarySelectorsAnchoredBy.combine
       mem_unionColumns_iff]
     exact Or.inl
       ((column_mem_physicalColumns_iff kind index left.columns).mp hphysical)
-  · have hanchor := hright selector (by simpa using hselector)
+  · have hanchor := hright selector (by simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hselector)
     have hanchor' : anchor selector ∈ physicalColumns right.columns := by
       simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hanchor
     obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hanchor
@@ -156,7 +160,7 @@ theorem SelectorAnchoredBy.ofRegion
     {summary : RegionSynthesisSummary} {anchor : ℕ → RegionColumn}
     (hsummary : SummarySelectorsAnchoredBy summary.toRegionShapeSummary anchor) :
     SelectorAnchoredBy (SynthesisSummary.ofRegion summary).regionShapes anchor := by
-  simpa [SelectorAnchoredBy] using hsummary
+  simpa [SelectorAnchoredBy, SynthesisSummary.ofRegion] using hsummary
 
 theorem SelectorAnchoredBy.combine
     {left right : SynthesisSummary} {anchor : ℕ → RegionColumn}
@@ -233,14 +237,14 @@ theorem PlacementEffect.selectorAllocationsDominatedBy
       dsimp only at hinterval ⊢
       by_cases hselector : RegionColumn.selector selector ∈ columns
       · have hanchor := hanchors selector hselector
-        rw [if_pos hselector, Allocations.mem_insert_iff] at hinterval
-        rw [if_pos hanchor, Allocations.mem_insert_iff]
+        rw [ite_eq_left hselector, Allocations.mem_insert_iff] at hinterval
+        rw [ite_eq_left hanchor, Allocations.mem_insert_iff]
         exact hinterval.imp_right (hbefore selector interval)
-      · rw [if_neg hselector] at hinterval
+      · rw [ite_eq_right hselector] at hinterval
         by_cases hanchor : anchor selector ∈ columns
-        · rw [if_pos hanchor, Allocations.mem_insert_iff]
+        · rw [ite_eq_left hanchor, Allocations.mem_insert_iff]
           exact Or.inr (hbefore selector interval hinterval)
-        · rw [if_neg hanchor]
+        · rw [ite_eq_right hanchor]
           exact hbefore selector interval hinterval
 
 end V1
@@ -863,14 +867,17 @@ theorem placeSummary_physicalEquivalent
       simpa only [hresult, RegionShapeSummary.withoutSelectors] using
         hbefore kind index
   | some row =>
-      simp only [RegionShapeSummary.withoutSelectors]
-      have hmember := physical_mem_sorted_full_iff kind index
-        summary.columns
+      dsimp only
+      have hmember :
+          RegionColumn.column kind index ∈ sortRegionColumns summary.columns ↔
+          RegionColumn.column kind index ∈ sortRegionColumns summary.withoutSelectors.columns :=
+        physical_mem_sorted_full_iff kind index summary.columns
       by_cases hcolumn : RegionColumn.column kind index ∈
           sortRegionColumns summary.columns
-      · rw [if_pos hcolumn, if_pos (hmember.mp hcolumn),
+      · rw [ite_eq_left hcolumn, ite_eq_left (hmember.mp hcolumn),
           hbefore kind index]
-      · rw [if_neg hcolumn, if_neg (mt hmember.mpr hcolumn),
+        rfl
+      · rw [ite_eq_right hcolumn, ite_eq_right (mt hmember.mpr hcolumn),
           hbefore kind index]
 
 theorem placeSummary_withoutSelectors_row_congruent

@@ -1,7 +1,17 @@
-import Clean.Ironwood.Fixtures.Project
-import Clean.Ironwood.Fixtures.AddPre
-import Clean.Ironwood.Fixtures.AddPost
-import Clean.Ironwood.Ecc.Add
+module
+
+public import Clean.Ironwood.Fixtures.Project
+public import Clean.Ironwood.Fixtures.AddPre
+public import Clean.Ironwood.Fixtures.AddPost
+public import Clean.Ironwood.Ecc.Add
+
+-- `#guard` below executes compiled code from these modules.
+public meta import Clean.Ironwood.Fixtures.Project
+public meta import Clean.Ironwood.Fixtures.AddPre
+public meta import Clean.Ironwood.Fixtures.AddPost
+public meta import Clean.Ironwood.Ecc.Add
+
+@[expose] public section
 
 /-!
 # VK-match test: the complete-addition (`add::Config`) gadget

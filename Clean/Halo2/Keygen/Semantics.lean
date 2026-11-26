@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.PinnedCs
+module
+
+public import Clean.Halo2.Keygen.PinnedCs
+
+@[expose] public section
 
 /-!
 # The VK-match projection preserves evaluation
@@ -120,8 +124,9 @@ theorem selReplacement_eval (d : SelCompress) (v : Query → F) :
   · simp only [hcase, ite_false, Option.map_some]
     congr 1
     show (_ : Expression F Query).eval v = _
-    simp only [Expression.eval, sub_eq_add_neg]
-    ring
+    simp only [HSub.hSub, Sub.sub, Neg.neg, Expression.eval]
+    rw [neg_one_mul]
+    exact (sub_eq_add_neg _ _).symm
 
 /-- Where no member of the combination is active the packed cell is `0`, and the
 replacement vanishes. -/
@@ -140,7 +145,7 @@ theorem selReplacement_eval_of_other (d : SelCompress) (v : Query → F)
   rw [List.mem_filterMap]
   refine ⟨i₀ - 1, by rw [List.mem_range]; omega, ?_⟩
   have h : i₀ - 1 + 1 = i₀ := by omega
-  rw [h, if_neg hne, sub_self]
+  rw [h, ite_eq_right hne, sub_self]
 
 /-- At the selector's own enabled rows the packed cell holds `assignedRoot`, and the
 replacement is nonzero: the root itself is nonzero (`1 ≤ root`), and every other member's
@@ -164,7 +169,7 @@ theorem selReplacement_eval_of_root (d : SelCompress) (v : Query → F)
     rw [List.mem_range] at hx
     by_cases hroot : x + 1 = d.assignedRoot
     · simp [hroot] at hx0
-    · rw [if_neg hroot, Option.some_inj] at hx0
+    · rw [ite_eq_right hroot, Option.some_inj] at hx0
       rw [sub_eq_zero] at hx0
       exact hroot (hcast _ _ (by omega) hlen hx0)
 
@@ -193,9 +198,9 @@ theorem selReplacement_selectorFree (d : SelCompress) :
   obtain ⟨j, _, hj⟩ := hf
   by_cases hcase : j + 1 = d.assignedRoot
   · simp [hcase] at hj
-  · rw [if_neg hcase, Option.some_inj] at hj
+  · rw [ite_eq_right hcase, Option.some_inj] at hj
     subst hj
-    simp [Expression.SelectorFree]
+    simp [HSub.hSub, Sub.sub, Neg.neg, Expression.SelectorFree]
 
 /-- Compression leaves exactly the uncovered selector atoms: the substituted expression
 is selector-free iff the map covers every selector occurrence. -/
@@ -283,9 +288,9 @@ theorem selReplacement_queriesResolved (description : SelCompress)
     obtain ⟨index, _, hresult⟩ := hfactor
     by_cases hroot : index + 1 = description.assignedRoot
     · simp [hroot] at hresult
-    · rw [if_neg hroot, Option.some_inj] at hresult
+    · rw [ite_eq_right hroot, Option.some_inj] at hresult
       subst factor
-      simpa [Expression.QueriesResolved] using hpacked
+      simpa [HSub.hSub, Sub.sub, Expression.instSub, Expression.instNeg, Neg.neg, Expression.QueriesResolved] using hpacked
 
 /-- Selector substitution preserves resolution when every replacement's packed query
 has been registered by selector compression. -/
@@ -632,9 +637,9 @@ private theorem eraseExpr_mulConstant (e : Expression F Query) (c : F) (s : Quer
       = (eraseExpr e s).product (.constant c) := by
   cases e with
   | const c' => exact absurd rfl (he c')
-  | var q => simp only [eraseExpr, if_true]
-  | add a b => simp only [eraseExpr, if_true]
-  | mul a b => simp only [eraseExpr, if_true]
+  | var q => simp only [eraseExpr, ite_true]
+  | add a b => simp only [eraseExpr, ite_true]
+  | mul a b => simp only [eraseExpr, ite_true]
 
 private theorem eraseExpr_mul_const_mul_const_of_ne_one (e : Expression F Query) (c one : F)
     (s : QueryState) (he : ∀ c' : F, e = .const c' → False) (hone : ¬one = 1) :
@@ -643,9 +648,9 @@ private theorem eraseExpr_mul_const_mul_const_of_ne_one (e : Expression F Query)
           (eraseExpr (.mul (.const c) (.const one)) s) := by
   cases e with
   | const c' => exact absurd rfl (he c')
-  | var q => simp only [eraseExpr, if_neg hone]
-  | add a b => simp only [eraseExpr, if_neg hone]
-  | mul a b => simp only [eraseExpr, if_neg hone]
+  | var q => simp only [eraseExpr, ite_eq_right hone]
+  | add a b => simp only [eraseExpr, ite_eq_right hone]
+  | mul a b => simp only [eraseExpr, ite_eq_right hone]
 
 private theorem eraseExpr_mul_const (e : Expression F Query) (c : F) (s : QueryState)
     (he : ∀ c' : F, e = .const c' → False) :
@@ -737,14 +742,14 @@ theorem eraseExpr_eval (fE aE iE : ℕ → F) (v : Query → F)
   | case6 e queries ih =>
       simp only [Expression.SelectorFree, true_and] at hfree
       simp only [Expression.QueriesResolved, true_and] at hresolved
-      simp only [eraseExpr, if_true]
+      simp only [eraseExpr, ite_true]
       rw [RichExpression.eval, ih hfree hresolved hint,
         show (Expression.mul (.const (-1)) e).eval v = -1 * e.eval v from rfl]
       ring
   | case7 c e queries hc ih =>
       simp only [Expression.SelectorFree, true_and] at hfree
       simp only [Expression.QueriesResolved, true_and] at hresolved
-      simp only [eraseExpr, if_neg hc]
+      simp only [eraseExpr, ite_eq_right hc]
       rw [RichExpression.eval, RichExpression.eval, ih hfree hresolved hint]
       rfl
   | case8 e c queries he ih =>

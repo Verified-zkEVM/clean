@@ -1,6 +1,10 @@
-import Clean.Halo2.Tactics.AbstractOutputs
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Ironwood.Ecc.WitnessPoint
+module
+
+public import Clean.Halo2.Tactics.AbstractOutputs
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Ironwood.Ecc.WitnessPoint
+
+@[expose] public section
 
 /-!
 # Test: `abstract_outputs` — the occurrence-inventory matrix

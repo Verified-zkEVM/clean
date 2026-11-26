@@ -1,17 +1,21 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Utils.Tactics.ProvableStructDeriving
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulFixed.FullWidth
-import Clean.Ironwood.Sinsemilla.Basic
-import Clean.Ironwood.Sinsemilla.HashPiece
-import Clean.Ironwood.Sinsemilla.Chain
-import Clean.Ironwood.Sinsemilla.HashToPoint
-import Clean.Halo2.CircuitTypeDeriving
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Utils.Tactics.ProvableStructDeriving
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulFixed.FullWidth
+public import Clean.Ironwood.Sinsemilla.Basic
+public import Clean.Ironwood.Sinsemilla.HashPiece
+public import Clean.Ironwood.Sinsemilla.Chain
+public import Clean.Ironwood.Sinsemilla.HashToPoint
+public import Clean.Halo2.CircuitTypeDeriving
+
+@[expose] public section
 
 /-!
 # Sinsemilla commit domain
@@ -19,7 +23,7 @@ import Clean.Halo2.CircuitTypeDeriving
 `commit(msg, r) = hash_to_point(Q, msg) + [r]·R`, keeping the per-piece running sums `zs`
 (`NoteCommit`/`CommitIvk` read individual `zs[i][j]` cells). The `[r]·R` leg is full-width
 fixed-base scalar mul (`Ecc.MulFixed.FullWidth.circuit R`): the blinding scalar enters as the
-input's nat-valued reading program `r`, the child derives its 85 window witnesses from it, and the
+input's limb-valued reading program `r`, the child derives its 85 window witnesses from it, and the
 scalar it encodes is extraction data, so the commitment `Spec` is stated at the extracted scalar.
 
 The `Chain.circuit` enters at an accumulator seeded from the domain point `Q`: the wrapper assigns
@@ -62,14 +66,14 @@ structure Config (BCfg : Type) where
 
 /-! ## Inputs / Output -/
 
-/-- The message pieces and the blinding scalar's nat-valued reading program `r` (a prover hint —
+/-- The message pieces and the blinding scalar's limb-valued reading program `r` (a prover hint —
 Rust `Value<pallas::Scalar>`; the full-width child derives its 85 window witnesses from it and the
 scalar it encodes is the child's extraction data). -/
 structure Input (k : ℕ) (F : Type) where
   -- The message pieces (the whole `k`-piece message).
   pieces : Vector F k
-  -- The blinding scalar's nat-valued reading program (prover hint).
-  r : UnconstrainedNat F
+  -- The blinding scalar's limb-valued reading program (prover hint).
+  r : UnconstrainedLimbs 4 F
 deriving CircuitType
 
 structure Output (ns : List ℕ) (F : Type) where
@@ -85,9 +89,9 @@ deriving ProvableStruct
 the `[r]R` leg is the `Ecc.MulFixed.FullWidth` bundle. -/
 
 /-- `CommitDomain::blinding_factor` is the bare `[r]R` — exactly the full-width fixed-base
-mul bundle, whose input is the blinding scalar's nat-valued reading program. -/
+mul bundle, whose input is the blinding scalar's limb-valued reading program. -/
 def blindingFactor (R : FixedBase) :
-    FormalCircuit Fp Ecc.MulFixed.Config Ecc.MulFixed.FullWidth.Config UnconstrainedNat Point :=
+    FormalCircuit Fp Ecc.MulFixed.Config Ecc.MulFixed.FullWidth.Config (UnconstrainedLimbs 4) Point :=
   Ecc.MulFixed.FullWidth.circuit R
 
 /-! ## The `commit` bundle -/
@@ -96,7 +100,7 @@ open Specs.Sinsemilla (hashToPoint)
 
 /-- The region count of `commit`: the blinding child's two regions, the hash region, the
 final complete addition. -/
-private theorem commit_regionCount
+theorem commit_regionCount
     (G : Generators) (ns : List ℕ)
     (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve)
@@ -113,8 +117,8 @@ private theorem commit_regionCount
           { p := hashOut.point, q := blindOut }
         pure result).operations i)
       = 4 := by
-  simp only [Circuit.operations_bind, Circuit.operations_pure,
-    Operations.regionCount_append, Operations.regionCount]
+  simp only [Circuit.operations_bind,
+    Operations.regionCount_append]
   rw [show ∀ (j : RegionIndex) (inp : Var (Sinsemilla.Chain.Inputs ns.length) Fp),
       Operations.regionCount
         (((HashToPoint.hashCircuit G ns Q hQ hns).call hcfg inp).operations j) = 1
@@ -224,8 +228,26 @@ def commit (G : Generators) (ns : List ℕ)
           Operations.KeygenRegistered.append, circuit_norm]
         constructor
         · apply (Ecc.MulFixed.FullWidth.circuit R)
-            |>.call_keygenRegistered configInput.1 configured.1 input.r self <;>
-              keygen_registration
+            |>.call_keygenRegistered configInput.1 configured.1 input.r self
+          · intro gate hgate
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inl hgate)
+          · intro argument hargument
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inl hargument)
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.fixedColumns_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inl hcolumn)
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.delta_pure,
+              KeygenRequirements.inputPermutationColumns,
+              List.nil_append, List.mem_append]
+            exact Or.inl (Or.inl (Or.inl hcolumn))
+          · rw [Ecc.MulFixed.FullWidth.circuit_inputCells_eq]
+            simp only [List.forall_nil]
         constructor
         · apply (HashToPoint.hashCircuit G ns Q hQ hns)
             |>.call_keygenRegistered configInput.2.1 configured.2.1 _ (self + 2)
@@ -255,12 +277,46 @@ def commit (G : Generators) (ns : List ℕ)
             rcases List.mem_map.mp hcell with ⟨assigned, hassigned, rfl⟩
             exact Or.inr ⟨assigned.cell, ⟨assigned, hassigned, rfl⟩, rfl⟩
         · apply Ecc.Add.addFormal.call_keygenRegistered
-            configInput.2.2 configured.2.2 _ (self + 3) <;>
-              keygen_registration
+            configInput.2.2 configured.2.2 _ (self + 3)
+          · intro gate hgate
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inr hgate
+          · intro argument hargument
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inr hargument
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.fixedColumns_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inr hcolumn
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.delta_pure,
+              KeygenRequirements.inputPermutationColumns,
+              List.nil_append, List.mem_append]
+            exact Or.inl (Or.inr hcolumn)
+          · simp only [Ecc.Add.addFormal_inputCells,
+              HashToPoint.hashCircuit_output_point_x, HashToPoint.hashCircuit_output_point_y,
+              Ecc.MulFixed.FullWidth.circuit_output_cells, AssignedCell.of_cell,
+              Configure.output_pure, keygenRequirements, Configure.delta_pure,
+              KeygenRequirements.inputPermutationColumns, List.nil_append,
+              List.forall_cons, List.forall_nil, Cell.of_column, and_true, List.mem_append]
+            refine ⟨Or.inl (Or.inl (Or.inr ?_)), Or.inl (Or.inl (Or.inr ?_)),
+              Or.inl (Or.inl (Or.inl ?_)), Or.inl (Or.inl (Or.inl ?_))⟩
+            · rw [HashToPoint.Configured.permutationColumns_eq G ns Q hQ hns configured.2.1]
+              simp
+            · rw [HashToPoint.Configured.permutationColumns_eq G ns Q hQ hns configured.2.1]
+              simp
+            · apply hmulAdd
+              simp only [Ecc.Add.permutationColumns, List.mem_cons, List.not_mem_nil]
+              tauto
+            · apply hmulAdd
+              simp only [Ecc.Add.permutationColumns, List.mem_cons, List.not_mem_nil]
+              tauto
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
         simp only [operations, program, Configure.output_pure, synthesize,
-          Circuit.operations_bind, Circuit.operations_pure,
+          Circuit.operations_bind,
           keygen_norm, keygen_spine]
         exact ⟨(HashToPoint.hashCircuit G ns Q hQ hns)
             |>.call_lookupSelectorAssignmentsAgree
@@ -270,7 +326,7 @@ def commit (G : Generators) (ns : List ℕ)
       lookupSelectorsAnchoredBy_of_registered := by
         intro cfg _ hconfig input self anchor _ _
         simp only [synthesize, Circuit.operations_bind,
-          Circuit.operations_pure, List.append_nil, circuit_norm]
+          circuit_norm]
         apply Operations.LookupSelectorsAnchoredBy.append
         · exact (Ecc.MulFixed.FullWidth.circuit R)
             |>.call_lookupSelectorsAnchoredBy
@@ -283,8 +339,8 @@ def commit (G : Generators) (ns : List ℕ)
             cfg.2.2 hconfig.2.2 _ (self + 3) anchor (by trivial)
       copyCellsAssigned := by
         intro cfg counts configured input self
-        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
-          List.append_nil, Configure.output_pure, circuit_norm]
+        simp only [synthesize, Circuit.operations_bind,
+          Configure.output_pure, circuit_norm]
         apply Operations.CopyCellsAssignedFrom.append
         · apply (Ecc.MulFixed.FullWidth.circuit R)
             |>.call_copyCellsAssignedFrom cfg.1 configured.1 input.r self
@@ -342,7 +398,7 @@ def commit (G : Generators) (ns : List ℕ)
         · simp only [synthesize, circuit_norm, synthesis_summary_norm]
       lookupActivationsWellFormed := by
         intro cfg input self
-        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+        simp only [synthesize, Circuit.operations_bind,
           Operations.LookupActivationsWellFormed, List.forall_append,
           circuit_norm]
         exact ⟨(Ecc.MulFixed.FullWidth.circuit R)
@@ -374,9 +430,8 @@ def commit (G : Generators) (ns : List ℕ)
   Assumptions _ := True
 
   Witness := fun F => Sinsemilla.Chain.ChainWit ns F × (Vector F 85 × Fq)
-  extract := fun (bcfg, hcfg, _) input i₀ env =>
-    ((HashToPoint.hashCircuit G ns Q hQ hns).extract hcfg
-      { pieces := input.pieces } (i₀ + 2) env,
+  extract := fun (bcfg, hcfg, _) _ i₀ env =>
+    (Sinsemilla.Chain.extract ns (fun _ => Q.y) hcfg 0 (i₀ + 2) env,
      Ecc.MulFixed.FullWidth.fwExtract bcfg i₀ env)
 
   Spec input output wit :=
@@ -406,51 +461,30 @@ def commit (G : Generators) (ns : List ℕ)
     have hHashS := hashOut_spec
       (by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE) trivial
     rw [HashToPoint.hashCircuit_spec_eq] at hHashS
+    rw [HashToPoint.hashCircuit_extract] at wit_hashOut_eq
+    subst wit_hashOut_eq
     obtain ⟨chunks, hPC, hZs, -, hContract⟩ := hHashS
-    -- input eval landing: bridge to the whole-struct `input_eq`
-    have hPC' : PieceChunks ns input.pieces chunks := by
-      rw [← input_eq]
-      exact hPC
-    refine ⟨chunks, hPC', hZs, ?_⟩
+    refine ⟨chunks, hPC, hZs, ?_⟩
     intro B hB
-    have hcoords := hContract B hB
-    -- the hash output point value IS the eval'd point (projection commute; go through
-    -- the componentwise `ProvableStruct.Halo2.eval` — the flat eval of the whole symbolic-size
-    -- Output struct is a whnf wall)
-    have hpoint : (ProvableStruct.Halo2.eval place env hashOut).point
-        = (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp) := by
-      rw [ProvableType.Halo2.eval_cells]; rfl
     -- the hash point equals B
-    have hPB : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
+    have hPB : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut_point
         : Value Point Fp) = B := by
+      obtain ⟨hx, hy⟩ := hContract B hB
       obtain ⟨bx, byv⟩ := B
-      have hx : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp).x = bx := by
-        rw [← hpoint]; exact hcoords.1
-      have hy : (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp).y = byv := by
-        rw [← hpoint]; exact hcoords.2
+      simp only at hx hy
       rw [← hx, ← hy]
     -- B is a valid point (the chunks are generator indices)
     have hBvalid : B.Valid :=
       Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
         (Sinsemilla.Chain.pieceChunks_bound hPC) hB
-    -- the complete addition's contract (input literal already eval'd componentwise)
-    have hAddS := result_spec trivial (by
-      show (eval (⟨place, env⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp).Valid ∧
-        (eval (⟨place, env⟩ : Placed Environment Fp) blindOut
-          : Value Point Fp).Valid
-      constructor
-      · rw [hPB]; exact hBvalid
-      · rw [hBl]; exact R.smul_valid _)
-    obtain ⟨hVout, hSum⟩ := hAddS
-    have hresult : (eval (⟨place, env⟩ : Placed Environment Fp) result
-        : Value Point Fp) = { x := output_x, y := output_y } := by
-      rw [← result_eq]
-      rw [Ecc.Add.addFormal_output, Ecc.Add.add_output_cells]
-      rw [ProvableType.Halo2.eval_cells, Sinsemilla.Chain.point_eval_literal]
+    -- the complete addition's contract
+    obtain ⟨hVout, hSum⟩ := out_spec trivial ⟨by rw [hPB]; exact hBvalid,
+      by rw [hBl]; exact R.smul_valid _⟩
+    have hresult : (eval (⟨place, env⟩ : Placed Environment Fp)
+        (Ecc.Add.addFormal.output cfg { p := hashOut_point, q := blindOut } (i₀ + 1 + 2))
+          : Value Point Fp) = { x := output_x, y := output_y } := by
+      rw [Ecc.Add.addFormal_output_cells, ProvableType.Halo2.eval_cells,
+        Sinsemilla.Chain.point_eval_literal]
       congr 1
       · exact output_eq.1
       · exact output_eq.2
@@ -471,12 +505,12 @@ def commit (G : Generators) (ns : List ℕ)
     -- the pieces value bridge: the hint-erased eval of the message-piece cells equals
     -- the prover-view piece value (`input_eq` lands the whole struct; the hint-erased
     -- and prover-view evals of a pure-provable var agree up to defeq)
-    have hpe : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var.pieces
-        : Value (fields ns.length) Fp) = input.pieces := by
-      rw [← input_eq, ProvableType.Halo2.eval_var, ProvableType.Halo2.eval_var_prover]
+    have hpe : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var_pieces
+        : Value (fields ns.length) Fp) = input_pieces := by
+      rw [← input_eq.1, ProvableType.Halo2.eval_var, ProvableType.Halo2.eval_var_prover]
     -- the hash child's honest-prover precondition, transported to the minted witness
     have hPAhash : (HashToPoint.hashCircuit G ns Q hQ hns).ProverAssumptions
-        ({ pieces := eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var.pieces }
+        ({ pieces := eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) input_var_pieces }
           : Value (Sinsemilla.Chain.Inputs ns.length) Fp)
         wit_hashOut env.hint := by
       rw [← wit_hashOut_eq, HashToPoint.hashCircuit_proverAssumptions_eq]
@@ -488,31 +522,23 @@ def commit (G : Generators) (ns : List ℕ)
     rw [HashToPoint.hashCircuit_proverSpec_eq] at hPSHash
     have hres := hPSHash ⟨bx, byv⟩ (by
       simp only [hpe]; exact hB0)
-    -- projection commute through the componentwise `ProvableStruct.Halo2.eval` (the flat
-    -- eval of the whole symbolic-size Output struct is a whnf wall)
-    have hpointP : (ProvableStruct.Halo2.eval place env.toEnvironment hashOut).point
-        = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point
-          : Value Point Fp) := by
-      rw [ProvableType.Halo2.eval_cells]; rfl
     -- the hash point equals the honest B0
-    have hPB0 : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point : Value Point Fp)
-        = (⟨bx, byv⟩ : Point Fp) := by
-      have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point : Value Point Fp).x = bx := by
-        rw [← hpointP]; exact hres.1
-      have hy : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point : Value Point Fp).y = byv := by
-        rw [← hpointP]; exact hres.2
+    have hPB0 : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut_point
+        : Value Point Fp) = (⟨bx, byv⟩ : Point Fp) := by
+      obtain ⟨hx, hy⟩ := hres
+      simp only at hx hy
       rw [← hx, ← hy]
     have hB0valid : (⟨bx, byv⟩ : Point Fp).Valid :=
       Specs.Sinsemilla.hashToPoint_valid (Or.inl hQ)
         (Sinsemilla.Chain.pieceChunks_bound
-          (Sinsemilla.Chain.pieceChunks_honestChunks ns input.pieces hPBounds)) hB0
+          (Sinsemilla.Chain.pieceChunks_honestChunks ns input_pieces hPBounds)) hB0
     refine ⟨⟨by rw [Ecc.MulFixed.FullWidth.circuit_envAssumptions_eq]; exact hMulE,
       by rw [Ecc.MulFixed.FullWidth.circuit_assumptions_eq]; trivial,
       by rw [Ecc.MulFixed.FullWidth.circuit_proverAssumptions_eq]; trivial⟩,
       ⟨by rw [HashToPoint.hashCircuit_envAssumptions_eq]; exact hTableE, trivial,
         hPAhash⟩,
       trivial, ?_, trivial⟩
-    show (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut.point
+    show (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) hashOut_point
         : Value Point Fp).Valid ∧
       (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) blindOut
         : Value Point Fp).Valid
@@ -609,7 +635,7 @@ theorem commit_call_output_cells_assigned
     { pieces := input.pieces } (region + 2)
   have hadd := Ecc.Add.addFormal_call_output_cells_assigned cfg.2.2
     { p := hash.point, q := blind } (region + 3)
-  simp only [commit, synthesize, Circuit.operations_bind, Circuit.operations_pure,
+  simp only [commit, synthesize, Circuit.operations_bind,
     FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
     FormalCircuit.call_regionCount', Operations.assignedCellsFrom_append,
     circuit_norm, Ecc.Add.addFormal_output_cells, List.mem_append,
@@ -636,7 +662,6 @@ theorem commit_call_hash_z_cell_assigned
     R cfg.1 input.r self
   rw [FormalCircuit.call_operations]
   simp only [commit, synthesize, Circuit.operations_bind,
-    Circuit.operations_pure, List.append_nil,
     Operations.assignedCellsFrom_append,
     FormalCircuit.nextRegionIndex_call',
     hmul,

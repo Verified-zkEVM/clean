@@ -1,5 +1,10 @@
-import Clean.Halo2.Formal.Tactics
-import Clean.Halo2.Lemmas
+module
+
+public import Clean.Halo2.FormalRegion.ToFormal
+public import Clean.Halo2.Formal.Tactics
+public import Clean.Halo2.Lemmas
+
+@[expose] public section
 
 /-!
 # Subcircuit composition: the call-boundary opacity contract
@@ -192,6 +197,8 @@ the kernel closing the metadata-to-literal gap definitionally — the same oblig
 the historical hand-written `rw [FormalCircuit.call_regionCount]; rfl` wrappers
 discharged. -/
 
+meta section
+
 /-- Per-bundle region-count bridge registry: bundle head constant ↦ proven
 `<base>_call_regionCount` lemma. Populated by `derive_contract_bridges` (and the
 `ElaboratedCircuit` autogenerator); consumed by `foldCallRegionCount`, which
@@ -293,6 +300,8 @@ def foldRegionCountMetaProc : Simproc := fun e => do
 simproc foldRegionCountMeta (Halo2.FormalCircuit.regionCount _ _) := foldRegionCountMetaProc
 attribute [circuit_norm] foldRegionCountMeta
 
+end
+
 /-- The closed-form fold state: the accumulator input var and the base region index
 *entering* round `m`. -/
 def FormalCircuit.foldState (c : ℕ → FormalCircuit F CI Cfg Input Output)
@@ -354,7 +363,7 @@ theorem FormalCircuit.foldCall_run (m : ℕ) :
     -- `call`'s triple shape is opaque now: open the round-`m` call application with
     -- `call_eq` (and reconcile the ops spelling via `call_operations`) rather than `rfl`
     simp only [Bind.bind, ih, FormalCircuit.foldOps, FormalCircuit.foldState,
-      FormalCircuit.call_eq, FormalCircuit.call_operations, List.append_nil]
+      FormalCircuit.call_eq, FormalCircuit.call_operations, Pure.pure, List.append_nil]
 
 theorem FormalCircuit.foldCall_operations (m : ℕ) :
     (FormalCircuit.foldCall c toInput config init m).operations i₀
@@ -430,7 +439,6 @@ theorem FormalCircuit.foldOps_synthesisSummary_constantSiteCount (m : ℕ) :
         inductionHypothesis, FormalCircuit.call_synthesisSummary,
         List.ofFn_succ', List.sum_concat]
       simp only [Fin.val_castSucc, Fin.val_last]
-      rfl
 
 /-- `foldCall`-spelled exact deferred-constant demand. -/
 @[synthesis_summary_norm]
@@ -466,7 +474,6 @@ theorem FormalCircuit.foldOps_synthesisSummary_columnOccupancy
         inductionHypothesis, FormalCircuit.call_synthesisSummary,
         List.ofFn_succ', List.sum_concat]
       simp only [Fin.val_castSucc, Fin.val_last]
-      rfl
 
 /-- `foldCall`-spelled exact occupancy of one column. -/
 @[synthesis_summary_norm]

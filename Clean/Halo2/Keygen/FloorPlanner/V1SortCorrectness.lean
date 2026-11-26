@@ -1,6 +1,17 @@
-import Clean.Halo2.Keygen.FloorPlanner.V1Correctness
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.V1Correctness
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner.Pdqsort
+
+private theorem sortedLE_map_toDual_of_sortedGE {α : Type} {f : α → ℕ} {l : List α}
+    (h : (l.map f).SortedGE) :
+    (l.map fun x => OrderDual.toDual (f x)).SortedLE := by
+  rw [List.sortedLE_iff_pairwise, List.pairwise_map]
+  rw [List.sortedGE_iff_pairwise, List.pairwise_map] at h
+  exact h.imp fun hle => OrderDual.toDual_le_toDual.mpr hle
 
 /-- Stable canonical ordering of index-free V1 region summaries. -/
 def stableRegionSort (summaries : List RegionShapeSummary) :
@@ -43,18 +54,20 @@ theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort_interchangeable
     rfl
   have hactualSorted :
       (actualAscending.reverse.map
-        (fun summary => (summary.key : OrderDual ℕ))).SortedLE := by
+        (fun summary => (OrderDual.toDual summary.key))).SortedLE := by
     have hsorted := quicksort_sorted summaries.toArray
       RegionShapeSummary.key |>.reverse
-    simpa only [List.map_reverse] using hsorted
+    apply sortedLE_map_toDual_of_sortedGE
+    simpa only [actualAscending, List.map_reverse] using hsorted
   have hcanonicalSorted :
       (canonicalAscending.reverse.map
-        (fun summary => (summary.key : OrderDual ℕ))).SortedLE := by
+        (fun summary => (OrderDual.toDual summary.key))).SortedLE := by
     have hsorted :
         (canonicalAscending.map RegionShapeSummary.key).SortedLE := by
       rw [hcanonicalKeys]
       exact List.sortedLE_mergeSort
     have hreverse := hsorted.reverse
+    apply sortedLE_map_toDual_of_sortedGE
     simpa only [List.map_reverse] using hreverse
   have hactualReversePerm :
       actualAscending.reverse.Perm summaries.reverse :=
@@ -124,16 +137,19 @@ namespace Halo2.FloorPlanner.V1
 area, independently of any concrete circuit. -/
 theorem sortedSummaryOrder_key_sorted {F : Type} (ops : Operations F) :
     ((sortedSummaryOrder ops).map fun summary =>
-      (summary.key : OrderDual ℕ)).SortedLE := by
+      (OrderDual.toDual summary.key)).SortedLE := by
   let shapes := measureRegions ops
   have hsorted :
       ((Pdqsort.quicksort shapes.toArray
         (Pdqsort.lessBy RegionShape.key)).toList.reverse.map fun shape =>
-          (shape.key : OrderDual ℕ)).SortedLE := by
+          (OrderDual.toDual shape.key)).SortedLE := by
     have hascending :=
       Pdqsort.quicksort_sorted shapes.toArray RegionShape.key |>.reverse
+    apply Pdqsort.sortedLE_map_toDual_of_sortedGE
     simpa only [List.map_reverse] using hascending
+  unfold Pdqsort.lessBy at hsorted
   simpa only [sortedSummaryOrder, sortedRegionOrder, shapes, List.map_map,
-    Array.toList_reverse, RegionShape.toSummary_key, Pdqsort.lessBy] using hsorted
+    Array.toList_reverse, Function.comp_def, RegionShape.toSummary_key,
+    Pdqsort.lessBy, RegionShape.key] using hsorted
 
 end Halo2.FloorPlanner.V1

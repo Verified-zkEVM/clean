@@ -1,7 +1,11 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Poseidon.HashTheorems
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Poseidon.HashTheorems
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -144,7 +148,7 @@ theorem padAndAddGate_selector (cfg : Config) :
   enableEquality (rcB 1).toAny
   enableEquality (rcB 2).toAny
 
-private instance (state : Fin 3 → Column .advice)
+instance (state : Fin 3 → Column .advice)
     (rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configureEqualities state rcB) := by
   unfold configureEqualities
@@ -155,7 +159,7 @@ private instance (state : Fin 3 → Column .advice)
   createGate (partialRoundsGate cfg)
   createGate (padAndAddGate cfg)
 
-private instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
+instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
   unfold configureGates
   infer_instance
 
@@ -210,14 +214,14 @@ theorem state_mem_configure_permutationRequests
     apply Configure.mem_permutationRequests_delta_bind_left
     exact Configure.mem_permutationRequests_delta_enableEquality _ _
 
-@[reducible] private def configureElaborated
+@[reducible] def configureElaborated
     (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configure state partialSbox rcA rcB) := by
   dsimp only [configure]
   infer_instance
 
-private theorem configure_constraintDegree
+theorem configure_constraintDegree
     (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) (counts) :
     ((configure state partialSbox rcA rcB).delta counts).constraintDegree = 6 := by

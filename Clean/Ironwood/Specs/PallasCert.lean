@@ -1,4 +1,8 @@
-import Clean.Ironwood.Specs.Pallas
+module
+
+public import Clean.Ironwood.Specs.Pallas
+
+@[expose] public section
 
 /-!
 # Witnessed-operation lemmas for concrete point chains
@@ -26,16 +30,14 @@ theorem add_of_witness {p q r : Point Fp} (l : Fp)
   have hl : (q.y - p.y) / (q.x - p.x) = l := by
     rw [← h1]
     field_simp
-  rcases p with ⟨px, py⟩
-  rcases q with ⟨qx, qy⟩
-  rcases r with ⟨rx, ry⟩
-  simp only [zero_def, add_def, ofCoords, coords, ShortWeierstrass.add, mk.injEq] at *
-  have hp0 : ¬(px, py) = (0, 0) := by grind
-  have hq0 : ¬(qx, qy) = (0, 0) := by grind
-  rw [if_neg hp0, if_neg hq0, if_neg hx]
-  refine ⟨?_, ?_⟩
-  · rw [h2, hl]; ring
-  · rw [h3, h2, hl]; ring
+  rw [← nondegenerateAdd_eq_add hp hq hx]
+  cases r with
+  | mk rx ry =>
+      simp only [nondegenerateAdd, ← div_eq_mul_inv, hl, mk.injEq]
+      constructor
+      · exact h2.symm
+      · rw [← h2]
+        exact h3.symm
 
 /-- Tangent doubling from a witnessed slope: if `l·(2·py) = 3·px² + a` and `r`'s
 coordinates satisfy the tangent formulas at `l`, then `p + p = r`. -/
@@ -52,14 +54,23 @@ theorem double_of_witness {p r : Point Fp} (l : Fp)
   have hyy : ¬(p.y + p.y = 0) := by
     intro h
     exact h2y (by rw [two_mul]; exact h)
-  rcases p with ⟨px, py⟩
-  rcases r with ⟨rx, ry⟩
-  simp only [zero_def, add_def, ofCoords, coords, ShortWeierstrass.add, mk.injEq] at *
-  have hp0 : ¬(px, py) = (0, 0) := by grind
-  rw [if_neg hp0, if_neg hp0, if_pos trivial, if_neg hyy]
-  refine ⟨?_, ?_⟩
-  · rw [h2, hl]; ring
-  · rw [h3, h2, hl]; ring
+  have hp0 : p.coords ≠ (0, 0) := by
+    intro h
+    apply hp
+    change ofCoords p.coords = (0 : Point Fp)
+    rw [h]
+    rfl
+  have hyy0 : p.coords.2 + p.coords.2 ≠ 0 := hyy
+  rw [add_def, ShortWeierstrass.add, ite_eq_right hp0, ite_eq_right hp0,
+    ite_eq_left rfl, ite_eq_right hyy0]
+  cases r with
+  | mk rx ry =>
+      simp only [ofCoords, coords, hl, mk.injEq]
+      dsimp only at h2 h3
+      constructor
+      · simpa only [pow_two] using h2.symm
+      · rw [pow_two, ← h2]
+        exact h3.symm
 
 /-- Negation from checked coordinates: `r = −p` when `r.x = p.x` and `r.y = −p.y`. -/
 theorem neg_of_witness {p r : Point Fp}

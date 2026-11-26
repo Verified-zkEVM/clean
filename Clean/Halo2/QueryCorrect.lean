@@ -1,11 +1,15 @@
-import Clean.Halo2.Expression
-import Clean.Halo2.QueryCorrectAttr
+module
+
+public import Clean.Halo2.Expression
+public import Clean.Halo2.QueryCorrectAttr
+
+@[expose] public section
 
 namespace Halo2
 
 variable {F : Type}
 
-attribute [query_correct] Expression.mulConstant
+attribute [query_correct] Expression.mulConstant Expression.sub_def Expression.neg_def
 
 /-- A declaration accepted by Halo 2's query-registration interface. -/
 @[query_correct]

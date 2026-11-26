@@ -1,7 +1,11 @@
-import Clean.Halo2.Attributes
-import Clean.Halo2.Basic
-import Clean.Halo2.Operations.LookupSelectors
-import Clean.Halo2.SynthesisSummary.Operations
+module
+
+public import Clean.Halo2.Attributes
+public import Clean.Halo2.Basic
+public import Clean.Halo2.Operations.LookupSelectors
+public import Clean.Halo2.SynthesisSummary.Operations
+
+@[expose] public section
 
 /-!
 # Composition lemmas: the deliberate simp set — DESIGN SKETCH
@@ -81,7 +85,7 @@ A circuit body may branch mid-do-block (`do … if c then A else B; …`); the d
 branch to an `ite` of `RegionCircuit`s that otherwise blocks `operations`/`output`/`Constraints`
 from descending. These `apply_ite` companions push each eliminator into both branches so
 `circuit_norm` normalizes them, landing the hypothesis as `if c then P₁ else P₂` over value-level
-props (which `by_cases`/`simp [if_pos]` consumers handle). `bind_ite` floats the branch above a
+props (which `by_cases`/`simp [ite_eq_left]` consumers handle). `bind_ite` floats the branch above a
 `>>=` so the bind-of-`ite` spelling reduces too. -/
 
 @[circuit_norm]
@@ -153,11 +157,8 @@ theorem operations_enable (gate : Gate F) (row : ℕ) (self : RegionIndex) :
 
 @[circuit_norm]
 theorem operations_enableLookup (arg : LookupArgument F) (auxiliarySelectors : List Selector)
-    (row : ℕ)
-    (hauxiliary : auxiliarySelectors.Forall fun selector =>
-      selector.index ∈ arg.selectorIndices)
-    (self : RegionIndex) :
-    (arg.enable auxiliarySelectors row hauxiliary).operations self =
+    (row : ℕ) (self : RegionIndex) :
+    (arg.enable auxiliarySelectors row).operations self =
       [.enableLookup arg (arg.masterSelector :: auxiliarySelectors) row] := rfl
 
 @[keygen_norm]
@@ -167,7 +168,7 @@ theorem lookupActivationsWellFormed_operations_enableLookup
     (hauxiliary : auxiliarySelectors.Forall fun selector =>
       selector.index ∈ arg.selectorIndices)
     (self : RegionIndex) :
-    (arg.enable auxiliarySelectors row hauxiliary).operations self
+    (arg.enable auxiliarySelectors row).operations self
       |>.LookupActivationsWellFormed := by
   rw [operations_enableLookup, RegionOperations.LookupActivationsWellFormed]
   rw [List.forall_cons]

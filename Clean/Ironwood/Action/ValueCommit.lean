@@ -1,11 +1,15 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Utils.Tactics.ProvableStructDeriving
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulFixed.FullWidth
-import Clean.Halo2.CircuitTypeDeriving
-import Clean.Ironwood.Ecc.MulFixed.Short
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Utils.Tactics.ProvableStructDeriving
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulFixed.FullWidth
+public import Clean.Halo2.CircuitTypeDeriving
+public import Clean.Ironwood.Ecc.MulFixed.Short
+
+@[expose] public section
 
 /-!
 # Orchard-protocol value commitment
@@ -29,10 +33,10 @@ open Halo2
 open Ecc.MulFixed (FixedBase)
 
 /-- The inputs: the short child's magnitude/sign cells and the blinding scalar's
-nat-valued reading program `rcv` (a prover hint — Rust `Value<pallas::Scalar>`; the
+limb-valued reading program `rcv` (a prover hint — Rust `Value<pallas::Scalar>`; the
 full-width child derives its window witnesses from it, the scalar is extraction data). -/
 structure Inputs (F : Type) where
-  rcv : UnconstrainedNat F
+  rcv : UnconstrainedLimbs 4 F
   magnitude : F
   sign : F
 deriving CircuitType
@@ -143,7 +147,8 @@ theorem synthesize_copyCellsAssignedFrom
   have hprefix : prefixOps.CopyCellsAssignedFrom self
       [input.magnitude.cell, input.sign.cell] := by
     apply hshort.append
-    simpa only [shortOps, FormalCircuit.call_regionCount', Nat.add_zero] using hfullWidth
+    simpa only [shortOps, FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Nat.add_zero] using hfullWidth
   have hadd : ((Ecc.Add.addFormal.call cfg.2.2
       { p := shortOutput, q := fullWidthOutput }).operations (self + 4))
       |>.CopyCellsAssignedFrom (self + 4)
@@ -158,35 +163,40 @@ theorem synthesize_copyCellsAssignedFrom
     · apply List.mem_append_right
       simpa only [prefixOps, shortOps, fullWidthOps,
         Operations.assignedCellsFrom_append,
-        FormalCircuit.call_regionCount', Nat.add_zero] using
+        FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Nat.add_zero] using
         List.mem_append_left (fullWidthOps.assignedCellsFrom (self + 2))
           hshortOutput.1
     · apply List.mem_append_right
       simpa only [prefixOps, shortOps, fullWidthOps,
         Operations.assignedCellsFrom_append,
-        FormalCircuit.call_regionCount', Nat.add_zero] using
+        FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Nat.add_zero] using
         List.mem_append_left (fullWidthOps.assignedCellsFrom (self + 2))
           hshortOutput.2
     · apply List.mem_append_right
       simpa only [prefixOps, shortOps, fullWidthOps,
         Operations.assignedCellsFrom_append,
-        FormalCircuit.call_regionCount', Nat.add_zero] using
+        FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Nat.add_zero] using
         List.mem_append_right (shortOps.assignedCellsFrom self)
           hfullWidthOutput.1
     · apply List.mem_append_right
       simpa only [prefixOps, shortOps, fullWidthOps,
         Operations.assignedCellsFrom_append,
-        FormalCircuit.call_regionCount', Nat.add_zero] using
+        FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Nat.add_zero] using
         List.mem_append_right (shortOps.assignedCellsFrom self)
           hfullWidthOutput.2
   have hall := hprefix.append (by
     simpa only [prefixOps, shortOps, fullWidthOps,
-      FormalCircuit.call_regionCount', Operations.regionCount_append,
+      FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Operations.regionCount_append,
       Nat.add_zero, Nat.add_assoc] using hadd)
   simpa only [Circuit.operations_bind, Circuit.operations_pure,
     FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
-    FormalCircuit.call_regionCount', Ecc.MulFixed.Short.circuit_regionCount,
-    Ecc.MulFixed.FullWidth.circuit_regionCount,
+    FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount,
     List.append_assoc, Nat.add_assoc, Nat.add_zero, shortInput, shortOps,
     shortOutput, fullWidthOps, fullWidthOutput, prefixOps] using hall
 
@@ -216,32 +226,66 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
   elaborated :=
     { keygenRequirements := keygenRequirements V R
       registered := by
-        intro cfg counts hconfig input self
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
-          Operations.KeygenRegistered.append, circuit_norm]
-        exact ⟨by
-          apply (Ecc.MulFixed.Short.circuit V).call_keygenRegistered
-              cfg.1 hconfig.1 _ self <;> keygen_registration,
-          by
+          intro cfg counts hconfig input self
+          simp only [Circuit.operations_bind,
+            Operations.KeygenRegistered.append, FormalCircuit.call_regionCount',
+            Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount,
+            Nat.add_assoc, Nat.reduceAdd, circuit_norm]
+          exact ⟨by
+            apply (Ecc.MulFixed.Short.circuit V).call_keygenRegistered
+                cfg.1 hconfig.1 _ self
+            · intro gate h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inl (Or.inl h)
+            · intro argument h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inl (Or.inl h)
+            · intro column h
+              simp only [keygenRequirements, List.mem_append]
+              exact Or.inl (Or.inl (Or.inl h))
+            · keygen_registration
+            · keygen_registration,
+            by
             apply (Ecc.MulFixed.FullWidth.circuit R).call_keygenRegistered
-                cfg.2.1 hconfig.2.1 input.rcv (self + 2) <;> keygen_registration,
-          by
+                cfg.2.1 hconfig.2.1 input.rcv (self + 2)
+            · intro gate h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inl (Or.inr h)
+            · intro argument h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inl (Or.inr h)
+            · intro column h
+              simp only [keygenRequirements, List.mem_append]
+              exact Or.inl (Or.inl (Or.inr h))
+            · keygen_registration
+            · keygen_registration,
+            by
             apply Ecc.Add.addFormal.call_keygenRegistered cfg.2.2
-                hconfig.2.2 _ (self + 4) <;> keygen_registration⟩
+                hconfig.2.2 _ (self + 4)
+            · intro gate h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inr h
+            · intro argument h
+              simp only [keygenRequirements, Configure.delta_pure, List.append_nil, List.mem_append]
+              exact Or.inr h
+            · intro column h
+              simp only [keygenRequirements, List.mem_append]
+              exact Or.inl (Or.inr h)
+            · keygen_registration
+            · keygen_registration⟩
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
         simp only [operations, program, Configure.output_pure,
-          Circuit.operations_bind, Circuit.operations_pure,
+          Circuit.operations_bind,
           FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
           FormalCircuit.call_regionCount',
-          Ecc.MulFixed.Short.circuit_regionCount,
-          Ecc.MulFixed.FullWidth.circuit_regionCount,
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount,
           Nat.add_assoc,
           keygen_norm, keygen_spine]
       lookupSelectorsAnchoredBy_of_registered := by
         intro cfg _ hconfig input self anchor _ _
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
-          List.append_nil, circuit_norm]
+        simp only [Circuit.operations_bind,
+          circuit_norm]
         apply Operations.LookupSelectorsAnchoredBy.append
         · exact (Ecc.MulFixed.Short.circuit V)
             |>.call_lookupSelectorsAnchoredBy cfg.1 hconfig.1 _ self
@@ -279,7 +323,7 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
                     (self + 4)))
         · simp only [circuit_norm, synthesis_summary_norm]
       lookupActivationsWellFormed cfg input self := by
-        simp only [Circuit.operations_bind, Circuit.operations_pure,
+        simp only [Circuit.operations_bind,
           Operations.LookupActivationsWellFormed, List.forall_append,
           circuit_norm]
         exact ⟨(Ecc.MulFixed.Short.circuit V)
@@ -297,9 +341,10 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
         simp only [synthesisSummary, circuit_norm, synthesis_summary_norm]
       output_eq := by
         intro cfg input i
-        simp only [Circuit.output_bind, Circuit.output_pure,
+        simp only [Circuit.output_bind,
           FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
-          FormalCircuit.call_regionCount', circuit_norm,
+          FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, circuit_norm,
           Ecc.Add.addFormal_output_cells] }
 
   EnvAssumptions := fun (scfg, fcfg, _) env =>
@@ -325,14 +370,14 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     obtain ⟨hSEnv, hFEnv⟩ := env_assumptions
     obtain ⟨hm_lt, hcases⟩ := commitment_spec hSEnv
     have hBl := blind_spec hFEnv
-    have hAddS := cv_spec ⟨by
+    have hAddS := out_spec ⟨by
         rcases hcases with ⟨-, h⟩ | ⟨-, h⟩ <;> rw [h] <;> exact V.smul_valid _,
       by rw [hBl]; exact R.smul_valid _⟩
     refine ⟨hm_lt, ?_⟩
-    rw [Ecc.Add.addFormal_output_cells] at cv_eq
     have hcv : ({ x := output_x, y := output_y } : Point Fp) =
-        eval (⟨place, env⟩ : Placed Environment Fp) cv := by
-      rw [← cv_eq]
+        eval (⟨place, env⟩ : Placed Environment Fp)
+          (Ecc.Add.addFormal.output cfg { p := commitment, q := blind } (i₀ + 4)) := by
+      rw [Ecc.Add.addFormal_output_cells]
       simp only [Point.eval_eq, circuit_norm]
       simp_all
     rcases hcases with ⟨hsign, hCm⟩ | ⟨hsign, hCm⟩
@@ -400,14 +445,12 @@ theorem circuit_call_output_cells_assigned
     { p := shortOutput, q := fullWidthOutput } (region + 4)
   simp only [Ecc.Add.addFormal_output_cells, shortInput, shortOutput,
     fullWidthOutput] at hadd
-  simp only [circuit, Circuit.operations_bind, Circuit.operations_pure,
+  simp only [circuit, Circuit.operations_bind,
     FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
-    FormalCircuit.call_regionCount', Operations.assignedCellsFrom_append,
-    Ecc.MulFixed.Short.circuit_regionCount,
-    Ecc.MulFixed.FullWidth.circuit_regionCount, List.mem_append,
+    FormalCircuit.call_regionCount',
+        Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Operations.assignedCellsFrom_append, List.mem_append,
     AssignedCell.of_cell, Nat.add_assoc, Nat.reduceAdd]
-  exact ⟨Or.inr (Or.inr (Or.inl hadd.1)),
-    Or.inr (Or.inr (Or.inl hadd.2))⟩
+  exact ⟨Or.inr (Or.inr hadd.1), Or.inr (Or.inr hadd.2)⟩
 
 /-- A value commitment requests only the short scalar's strict-decomposition
 constant allocation. -/

@@ -1,5 +1,9 @@
-import Clean.Ironwood.NoteCommit.Gates
-import Clean.Ironwood.NoteCommit.DecomposeTheorems
+module
+
+public import Clean.Ironwood.NoteCommit.Gates
+public import Clean.Ironwood.NoteCommit.DecomposeTheorems
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):

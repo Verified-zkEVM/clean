@@ -1,8 +1,12 @@
-import Clean.Ironwood.Ecc.MulTheorems
-import Clean.Ironwood.Ecc.MulIncompleteTheorems
-import Clean.Ironwood.Ecc.MulCompleteTheorems
-import Clean.Ironwood.Ecc.MulOverflowTheorems
-import Clean.Ironwood.Ecc.AddTheorems
+module
+
+public import Clean.Ironwood.Ecc.MulTheorems
+public import Clean.Ironwood.Ecc.MulIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulCompleteTheorems
+public import Clean.Ironwood.Ecc.MulOverflowTheorems
+public import Clean.Ironwood.Ecc.AddTheorems
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs::Config::assign`
@@ -130,13 +134,13 @@ theorem nsmul_step (B : SWPoint Pallas.curve) (A : ℕ) (hA : 1 ≤ A)
     A • B + ((if bit then B else -B) + A • B)
       = (2 * A + (if bit then 1 else 0) * 2 - 1) • B := by
   cases bit
-  · simp only [Bool.false_eq_true, if_false]
+  · simp only [Bool.false_eq_true, ite_false]
     have h2 : (2 * A + 0 * 2 - 1) • B + B = A • B + A • B := by
       rw [← succ_nsmul, show 2 * A + 0 * 2 - 1 + 1 = A + A from by omega, add_nsmul]
     calc A • B + (-B + A • B) = (A • B + A • B) + -B := by abel
       _ = ((2 * A + 0 * 2 - 1) • B + B) + -B := by rw [h2]
       _ = (2 * A + 0 * 2 - 1) • B := by abel
-  · simp only [if_true]
+  · simp only [ite_true]
     rw [show 2 * A + 1 * 2 - 1 = A + (A + 1) from by omega, add_nsmul, add_nsmul,
       one_nsmul]
     abel
@@ -220,7 +224,7 @@ theorem k_canonical {alpha k254 z130 : Fp} {K Zhi R : ℕ} {b254 : Bool}
     exact h2
   cases hb : b254 with
   | true =>
-    rw [hb, if_pos rfl] at hk254
+    rw [hb, ite_eq_left rfl] at hk254
     -- z130 = 2^124, hence Zhi = 2^124 over ℕ
     have hz : z130 = (2 ^ 124 : Fp) := by
       rcases hdisj2 with h | h
@@ -256,7 +260,7 @@ theorem k_canonical {alpha k254 z130 : Fp} {K Zhi R : ℕ} {b254 : Bool}
     norm_num at hs' hsLoLt hRlt hsplit hZhi
     omega
   | false =>
-    rw [hb, if_neg (by simp)] at hk254
+    rw [hb, ite_eq_right (by simp)] at hk254
     have hKlt : K < 2 ^ 254 := by
       have h := hmsbF hb
       norm_num at h hRlt hsplit ⊢

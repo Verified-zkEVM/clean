@@ -1,7 +1,11 @@
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/base_field_elem.rs`.
@@ -245,7 +249,7 @@ theorem windowScalar_partialSum (ks : ℕ → ℕ) :
       = (∑ j ∈ Finset.range 84, ks j * 8 ^ j) + ks 84 * 8 ^ 84 from
     Finset.sum_range_succ _ _]
   unfold MulFixed.windowScalar
-  rw [if_pos rfl, hsplit]
+  rw [ite_eq_left rfl, hsplit]
   push_cast
   ring
 
@@ -388,7 +392,7 @@ private theorem rowTailValue_u (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
 /-- The evaluated row program is the honest `rowTailValue`, stated at symbolic `w` and
 an opaque base-field element `α`, where every reduction is cheap. The LHS is the
 `circuit_norm` normal form of the witness-IR completeness hypothesis:
-`FiniteField.fromNat`/`FiniteField.val` from `NExpr.toField`/`Expression.val`, and one
+`FiniteField.fromNat`/`FiniteField.val` from `U64Expr.toField`/`Expression.val`, and one
 range-guarded window-table read per column from the `.listGet` evaluation (see
 `rowProgram_value` in `FullWidth.lean`). -/
 private theorem rowProgram_value (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
@@ -401,7 +405,7 @@ private theorem rowProgram_value (B : MulFixed.FixedBase) (α : Fp) (w : ℕ) :
         B.u w (FiniteField.val α / 8 ^ w % 8) else 0)
     = rowTailValue B α w := by
   have h8 : FiniteField.val α / 8 ^ w % 8 < 8 := Nat.mod_lt _ (by norm_num)
-  simp only [dif_pos h8]
+  simp only [dite_eq_left h8]
   rfl
 
 /-- The running sum step relation on honest values. -/

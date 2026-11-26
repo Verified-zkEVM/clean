@@ -1,7 +1,11 @@
-import Mathlib.Algebra.Field.Basic
-import Clean.Circuit.SimpGadget
-import Clean.Circuit.Expression
-import Clean.Halo2.SelectorFreeAttr
+module
+
+public import Mathlib.Algebra.Field.Basic
+public import Clean.Circuit.SimpGadget
+public import Clean.Circuit.Expression
+public import Clean.Halo2.SelectorFreeAttr
+
+@[expose] public section
 
 /-!
 # Halo2 variables, expressions and environments
@@ -80,6 +84,7 @@ structure ComplexSelector where
   index : ℕ
 deriving DecidableEq, Repr
 
+@[implicit_reducible]
 def ComplexSelector.toSelector (selector : ComplexSelector) : Selector :=
   ⟨selector.index, false⟩
 
@@ -377,6 +382,16 @@ instance : Add (Expression F L) where add := add
 instance : Neg (Expression F L) where neg e := mul (const (-1)) e
 instance : Sub (Expression F L) where sub e₁ e₂ := add e₁ (-e₂)
 instance : Mul (Expression F L) where mul := mul
+
+/-- Expose the existing subtraction tree to structural proof automation. -/
+@[simp, circuit_norm, selector_free]
+theorem sub_def (left right : Expression F L) :
+    left - right = .add left (.mul (.const (-1)) right) := rfl
+
+/-- Expose the existing negation tree to structural proof automation. -/
+@[simp, circuit_norm, selector_free]
+theorem neg_def (value : Expression F L) :
+    -value = .mul (.const (-1)) value := rfl
 
 /-- Rust `e * Expression::Constant(c)` — a genuine right-constant `Product` node (NOT
 `Scaled`, which is Rust's `e * (c : F)` and is spelled `e * (c : F)` here). The marker

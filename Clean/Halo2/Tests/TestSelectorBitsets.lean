@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.SelectorBitsets
+module
+
+public import Clean.Halo2.Keygen.SelectorBitsets
+
+@[expose] public section
 
 namespace Halo2.Tests.TestSelectorBitsets
 

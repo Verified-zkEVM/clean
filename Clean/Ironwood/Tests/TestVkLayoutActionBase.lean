@@ -1,4 +1,9 @@
-import Clean.Ironwood.Tests.TestVkLayoutAction
+module
+
+public import Clean.Ironwood.Tests.TestVkLayoutAction
+public meta import Clean.Ironwood.Tests.TestVkLayoutAction
+
+@[expose] public section
 
 /-!
 # VK-layout test: the pre-ironwood (fixed post-NU 6.2) Action circuit

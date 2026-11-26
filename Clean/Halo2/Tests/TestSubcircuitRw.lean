@@ -1,5 +1,9 @@
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Ironwood.Ecc.WitnessPoint
+module
+
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Ironwood.Ecc.WitnessPoint
+
+@[expose] public section
 
 /-!
 # Test: parent circuits composing subcircuits via the `subcircuit_rw` engine

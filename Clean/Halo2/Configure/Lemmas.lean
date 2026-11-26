@@ -1,4 +1,8 @@
-import Clean.Halo2.Configure.Selectors
+module
+
+public import Clean.Halo2.Configure.Selectors
+
+@[expose] public section
 
 namespace Halo2
 
@@ -7,6 +11,10 @@ variable {F : Type}
 namespace Configure
 
 variable {α β : Type}
+
+/-- A pure configuration returns its value and emits no arguments or allocations. -/
+@[simp] theorem plan_pure (value : α) (counts : ConfigureCounts) :
+    (pure value : Configure F α).plan counts = (value, {}, {}) := rfl
 
 @[simp] theorem delta_pure (value : α) (counts : ConfigureCounts) :
     delta (pure value : Configure F α) counts = {} :=
@@ -361,14 +369,16 @@ private theorem ConfigureDelta.queriedCells_instanceQueries_aux
       simp only [ConfigureDelta.instanceQueries_append,
         ConfigureDelta.queriedCell_instanceQueries, List.flatMap_cons,
         List.append_assoc]
+      cases cell with
+      | var query => cases query <;> rfl
+      | _ => rfl
 
 @[simp] theorem ConfigureDelta.queriedCells_instanceQueries
     (cells : List (Expression F Query)) :
     (ConfigureDelta.queriedCells cells).instanceQueries =
       ConfigureDelta.instanceQueriesOfCells cells := by
   rw [ConfigureDelta.queriedCells]
-  simpa [ConfigureDelta.instanceQueriesOfCells] using
-    ConfigureDelta.queriedCells_instanceQueries_aux
+  exact ConfigureDelta.queriedCells_instanceQueries_aux
       (F := F) cells {}
 
 @[simp] theorem Configure.delta_adviceColumn_instanceQueries
@@ -614,7 +624,7 @@ private theorem ConfigureDelta.queriedCells_fixedQueries_aux
 
 open Lean Meta Simp in
 /-- Reduce only the fixed-query projection of a named gate or lookup. -/
-def foldConfigureFixedQueriesProc : Simproc := fun expression => do
+meta def foldConfigureFixedQueriesProc : Simproc := fun expression => do
   unless expression.isAppOf ``ConfigureDelta.fixedQueriesOfCells do
     return .continue
   try
@@ -634,7 +644,7 @@ attribute [simp] foldConfigureFixedQueries
 
 open Lean Meta Simp in
 /-- Fold a named configure program only through its fixed-query projection. -/
-def foldConfigureFixedQueryProjectionProc : Simproc := fun expression => do
+meta def foldConfigureFixedQueryProjectionProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ConfigureDelta.fixedQueries do
     return .continue
   try
@@ -658,7 +668,7 @@ Reduce only the query-list projection of a named gate or lookup. This gives the
 configure normalizer an opacity boundary: it can discover that a large named gate has
 no instance queries without unfolding its constraints or any unrelated configure data.
 -/
-def foldConfigureInstanceQueriesProc : Simproc := fun expression => do
+meta def foldConfigureInstanceQueriesProc : Simproc := fun expression => do
   unless expression.isAppOf ``ConfigureDelta.instanceQueriesOfCells do
     return .continue
   try

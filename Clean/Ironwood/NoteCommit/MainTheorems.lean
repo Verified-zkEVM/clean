@@ -1,9 +1,13 @@
-import Clean.Ironwood.NoteCommit.CanonicityTheorems
-import Clean.Ironwood.NoteCommit.DecomposeTheorems
-import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
-import Clean.Ironwood.Specs.Bitrange
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Ironwood.NoteCommit.CanonicityTheorems
+public import Clean.Ironwood.NoteCommit.DecomposeTheorems
+public import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
+public import Clean.Ironwood.Specs.Bitrange
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 # `gadgets::note_commit` synthesis-level entry
@@ -168,6 +172,7 @@ private theorem noteCommitChunks_segment_g (gdX gdY pkdX pkdY v rho psi : ℕ)
   chunksOf_eq_of_mod_eq
     (noteCommitChunks_segment_g_mod gdX gdY pkdX pkdY v rho psi hgdX hgdY hpkdX hpkdY hv hrho)
 
+set_option exponentiation.threshold 1080 in
 private theorem noteCommitChunks_segment_h_word (gdX gdY pkdX pkdY v rho psi : ℕ)
     (hgdX : gdX < 2 ^ 255) (hgdY : gdY < 2)
     (hpkdX : pkdX < 2 ^ 255) (hpkdY : pkdY < 2)
@@ -375,6 +380,7 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
       (List.range 25).map msC := by
     rw [← chunksOf_mod (pkdX / 16) 25]
     convert hChunksC_low using 2
+    simp [bitrange, K]
   have hChunksD := chunksOf_eq_map_of_cast_sum hmsD hD
     (lt_trans hDValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsD 6) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
@@ -388,6 +394,7 @@ private theorem noteCommitChunks_eq_of_piece_digit_sums
       (List.range 25).map msF := by
     rw [← chunksOf_mod (rho / 16) 25]
     convert hChunksF_low using 2
+    simp [bitrange, K]
   have hChunksG := chunksOf_eq_map_of_cast_sum hmsG hG
     (lt_trans hGValueLt (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))
     (lt_trans (sum_digits_lt hmsG 25) (by norm_num [K, CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]))

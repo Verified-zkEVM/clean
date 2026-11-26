@@ -1,13 +1,18 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Halo2.Tactics.AbstractOutputs
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.MulCompleteTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Ecc.Add
-import Clean.Ironwood.Ecc.MulIncomplete
-import Clean.Halo2.CircuitTypeDeriving
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Halo2.Tactics.AbstractOutputs
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.MulCompleteTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Ecc.Add
+public import Clean.Ironwood.Ecc.MulIncomplete
+public import Clean.Halo2.CircuitTypeDeriving
+public import Clean.Circuit.WitnessIRLimbs
+
+@[expose] public section
 
 /-!
 Variable-base scalar multiplication, *complete* phase: the final three bits (`COMPLETE_RANGE`),
@@ -161,7 +166,9 @@ theorem stepBasePoint_valid {base : Point Fp} (hbase : base.Valid) (bit : Bool) 
     (stepBasePoint base bit).Valid := by
   simp only [stepBasePoint]
   rcases Bool.dichotomy bit with hb | hb <;> rw [hb]
-  · simpa using Point.valid_neg hbase
+  · simpa only [Point.neg_def, Point.ofCoords,
+      CompElliptic.CurveForms.ShortWeierstrass.neg, Point.coords,
+      Bool.false_eq_true, ite_false] using Point.valid_neg hbase
   · simpa using hbase
 
 /-- Validity is preserved by a complete round (the complete group law is total on valid points). -/
@@ -201,11 +208,12 @@ into `z_complete`, assigns the conditionally-negated `y_p`, and calls `add` twic
 `acc + tmp` at `r + 1`. -/
 
 /-- The working-scalar bit expressions for this phase: bit `i` is `kBitsWindow (alpha value)
- w i`, i.e. bit `254 − (w + i)` of `t_q + alpha.val`. A single bit-family program binds the
-scalar's reading program once and yields the window as plain expressions. -/
+ w i`, i.e. bit `254 − (w + i)` of `t_q + alpha.val`, computed on four 64-bit limbs. A single
+bit-family program binds the scalar's reading program once and yields the window as plain
+expressions. -/
 def kBitWindowExpr (alpha : FExpr Fp) (w i : ℕ) : BExpr Fp :=
-  .neq ((Witgen.NExprOver.add (.const Mul.tQNat) (.val alpha)).testBit
-    (.const (254 - (w + i)))) (.const 1)
+  .neq (((Witgen.LimbsOver.const Mul.tQNat 4).add (.ofField alpha 4)).window (254 - (w + i)) 1)
+    (.const 1)
 
 /-- Binds the scalar's reading program once, then produces the per-round window expressions. -/
 def kBitWindowProg (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (w : ℕ) :
@@ -228,10 +236,17 @@ theorem bexprsVal_kBitWindowExpr (alpha : FExpr Fp) (w : ℕ)
     bexprsVal (kBitWindowExpr alpha w) ctx
       = kBitsWindow (Witgen.FExprOver.eval ctx alpha) w := by
   funext i
-  simp only [bexprsVal, kBitWindowExpr, MulIncomplete.kBitsWindow,
-    Witgen.NExprOver.testBit, Witgen.BExprOver.eval, Witgen.NExprOver.eval,
-    Nat.testBit_eq_decide_div_mod_eq, Nat.shiftRight_eq_div_pow]
-  simp only [FiniteField.val_F]
+  have hv : ZMod.val (Witgen.FExprOver.eval ctx alpha) < 2 ^ 255 :=
+    lt_trans (ZMod.val_lt _) (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+  have hsum : Mul.tQNat + ZMod.val (Witgen.FExprOver.eval ctx alpha) < 2 ^ (64 * 4) := by
+    unfold Mul.tQNat; omega
+  simp only [bexprsVal, kBitWindowExpr, MulIncomplete.kBitsWindow, Witgen.BExprOver.eval,
+    Witgen.UInt64.eq_iff_toNat_eq, Witgen.LimbsOver.toNat_eval_window _ _ _ (by norm_num : 1 ≤ 64),
+    Witgen.LimbsOver.toNat_add, Witgen.LimbsOver.toNat_const, Witgen.LimbsOver.toNat_ofField,
+    FiniteField.val_F, Witgen.U64ExprOver.eval, UInt64.toNat_one,
+    Nat.mod_eq_of_lt (lt_trans hv (by norm_num) : _ < 2 ^ (64 * 4)),
+    Nat.mod_eq_of_lt (lt_of_le_of_lt (Nat.le_add_right _ _) hsum), Nat.mod_eq_of_lt hsum,
+    Nat.testBit_eq_decide_div_mod_eq, pow_one]
 
 /-- `kBitWindowProg`'s values are `kBitsWindow` of the scalar program's value. -/
 theorem ebitsVal_kBitWindowProg (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
@@ -289,10 +304,10 @@ theorem zWitExpr_eval (z : FExpr Fp) (ebits : ℕ → BExpr Fp) (iter : ℕ)
   induction iter with
   | zero =>
     simp only [zWitExpr, zRunValue, Witgen.FExprOver.eval, bexprsVal]
-    rcases (ebits 0).eval ctx |>.dichotomy with hb | hb <;> simp [hb]
+    rfl
   | succ i ih =>
     simp only [zWitExpr, zRunValue, Witgen.FExprOver.eval, bexprsVal, ih]
-    rcases (ebits (i + 1)).eval ctx |>.dichotomy with hb | hb <;> simp [hb]
+    rfl
 
 /-- `zWit`'s prover value: the honest running sum. -/
 theorem zWit_eval (z : AssignedCell Fp)
@@ -304,12 +319,12 @@ theorem zWit_eval (z : AssignedCell Fp)
   have hz := zWitExpr_eval (.expr z) bs iter
     { env, locals := Witgen.evalSteps env steps.toList }
   simp only [zWit, Witgen.MOver.toIRScalar, Witgen.MOver.toIR,
-    h, Witgen.WitgenIROver.eval,
+    h, Functor.map, Witgen.WitgenIROver.eval,
     Witgen.VExprOver.eval, circuit_norm, hz]
   have hbv : ebitsVal ebits env
       = bexprsVal bs { env, locals := Witgen.evalSteps env steps.toList } := by
     funext i
-    simp only [ebitsVal, bexprsVal, Witgen.MOver.evalBool, h]
+    simp only [ebitsVal, bexprsVal, Witgen.MOver.evalBool, Functor.map, h]
   rw [hbv]
   simp only [readCell, AssignedCell.eval]
 
@@ -431,7 +446,7 @@ theorem roundSynthesize_copyCellsAssigned
   repeat' apply And.intro
   all_goals first
     | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]; done)
     | keygen_registration
   all_goals
     apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom (self := Add.add)
@@ -449,8 +464,12 @@ theorem roundSynthesize_copyCellsAssigned
     rcases hcell with rfl | rfl | rfl | rfl
     · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
     · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
-    · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.1
-    · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.2
+    · simpa only [RegionCircuit.operations, FormalRegionCircuit.call, Add.add_output_cells,
+        AssignedCell.of_cell, RegionOperations.assignedCellsAfter,
+        RegionOperation.assignedCells] using hOutputCellsAssigned.1
+    · simpa only [RegionCircuit.operations, FormalRegionCircuit.call, Add.add_output_cells,
+        AssignedCell.of_cell, RegionOperations.assignedCellsAfter,
+        RegionOperation.assignedCells] using hOutputCellsAssigned.2
 
 def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs RoundOutput where
   configure := pure
@@ -600,7 +619,7 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
     rw [region_0, region_1, hzPrev, zRunValue_step input_z (kBitsWindow input_alpha w) iter]
     rcases Bool.dichotomy (kBitsWindow input_alpha w iter) with hb | hb <;>
       rw [hb] at region_2 ⊢ <;>
-      simp only [if_false, Bool.false_eq_true, if_true] at region_2 <;>
+      simp only [ite_false, Bool.false_eq_true, ite_true] at region_2 <;>
       rw [region_2] at tmp_spec ⊢
     · -- bit 0: U = (base.x, −base.y)
       have hUv : ({ x := input_base_x, y := -input_base_y } : Point Fp).Valid := by
@@ -718,14 +737,15 @@ theorem fold_sound {base A0 : Point Fp} (hA0 : A0.Valid) (hbase : base.Valid)
     dsimp only [] at hstep houtr hvalidr
     have hacc_succ : accPoint base A0 (fun j => if j = k then b else bits' j) (k + 1)
         = stepPoint base (accPoint base A0 bits' k) b := by
-      simp only [accPoint]
-      rw [accPoint_congr k (fun j hj => (if_neg (by omega : j ≠ k)))]
-      simp
+      have hcongr : accPoint base A0 (fun j => if j = k then b else bits' j) k
+          = accPoint base A0 bits' k :=
+        accPoint_congr k (fun j hj => by simp [show j ≠ k by omega])
+      simp [accPoint, hcongr]
     refine ⟨fun j => if j = k then b else bits' j, ?_, ?_, ?_⟩
     · intro j hj
       rcases Nat.lt_succ_iff_lt_or_eq.mp hj with hj' | rfl
-      · simpa only [if_neg (Nat.ne_of_lt hj')] using hchain j hj'
-      · simpa only [if_pos rfl] using hstep
+      · simpa only [ite_eq_right (Nat.ne_of_lt hj')] using hchain j hj'
+      · simpa only [ite_eq_left rfl, ite_true] using hstep
     · rw [houtr, hout, hacc_succ]
     · rw [hacc_succ, ← hout]
       rw [houtr] at hvalidr
@@ -766,7 +786,7 @@ theorem fold_complete {base A0 : Point Fp} (hA0 : A0.Valid) (hbase : base.Valid)
       rcases Nat.eq_zero_or_pos k with hk0 | hkpos
       · subst hk0
         simpa using hz0
-      · rw [if_neg (by omega), show k = (k - 1) + 1 from by omega]
+      · rw [ite_eq_right (by omega), show k = (k - 1) + 1 from by omega]
         exact hzk (k - 1) (by omega)
     obtain ⟨hCk, hacc_succ, hz_succ⟩ := hround ⟨k, by omega⟩ hpre
     dsimp only [] at hCk hacc_succ hz_succ
@@ -876,7 +896,8 @@ theorem foldr_roundSynthesisSummary_eq (numBits : ℕ) (cfg : Config)
       roundSynthesisSummary cfg (offset + i.val * 2)).foldr
         FloorPlanner.RegionSynthesisSummary.combine {} =
       roundsSynthesisSummary numBits cfg offset := by
-  simpa [roundSynthesisSummary, Nat.mul_comm, Nat.add_assoc] using
+  simpa [roundSynthesisSummary, roundsSynthesisSummary, Nat.mul_comm, Nat.add_assoc,
+    List.map_cons, List.map_nil] using
     (FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelectorPattern_eq_repeatColumnsWithSelectorPattern
         [(cfg.qDecompose.index, 1),
           (cfg.addConfig.qAdd.index, 0),
@@ -1011,28 +1032,9 @@ def assign_region (numBits : ℕ) (w : ℕ) :
               List.append_nil]
             apply FormalRegionCircuit.call_keygenRegistered (round w i)
             case hconfigured =>
-              apply FormalRegionCircuit.Configured.ofPure
-              · simpa only [configure_output_addConfig] using hconfig
-              · rfl
-            case hgates =>
-              intro gate hgate
-              simp only [FormalRegionCircuit.Configured.ofPure_gates,
-                FormalRegionCircuit.keygenRequirements,
-                ElaboratedRegionCircuit.keygenRequirements, round,
-                List.mem_append, List.mem_cons, List.not_mem_nil,
-                or_false] at hgate
-              simp only [configure_delta_gates, List.mem_append,
-                List.mem_singleton]
-              rcases hgate with hgate | hgate
-              · exact Or.inr hgate
-              · exact Or.inl hgate
-            case hlookups =>
-              intro argument hargument
-              simpa only [FormalRegionCircuit.Configured.ofPure_lookups,
-                FormalRegionCircuit.keygenRequirements,
-                ElaboratedRegionCircuit.keygenRequirements,
-                configure_delta_lookups, List.mem_append, List.not_mem_nil,
-                or_false, round] using hargument
+              exact .ofPure _ _ hconfig rfl
+            case hgates => keygen_registration
+            case hlookups => keygen_registration
             case hfixedColumns => keygen_registration
             case hpermutationColumns => keygen_registration
             case hinputCells =>
@@ -1095,9 +1097,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
               simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
                 List.append_nil]
               have hround : (round w i).Configured cfg := by
-                apply FormalRegionCircuit.Configured.ofPure
-                · simpa only [cfg, configure_output_addConfig] using hconfig
-                · rfl
+                exact .ofPure _ _ hconfig rfl
               apply FormalRegionCircuit.call_copyCellsAssignedFrom
                 (self := round w i) (hconfigured := hround)
               intro cell hcell
@@ -1173,7 +1173,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         (by simp [circuit_norm, input_eq]) numBits
         (fun i hpre => by
           obtain ⟨b, h1, h2, h3⟩ := region_1 i hpre
-          refine ⟨b, ?_, ?_, ?_⟩ <;> beta_reduce
+          refine ⟨b, ?_, ?_, ?_⟩
           · rw [show (↑i + 1) * 2 = ↑i * 2 + 2 from by ring]
             exact h1
           · rw [RegionCircuit.foldAcc_succ]
@@ -1197,10 +1197,10 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       beta_reduce at hstep
       rw [show (b.val + 1) * 2 = 2 * b.val + 2 from by ring] at hstep
       rcases Nat.eq_zero_or_pos b.val with hb0 | hbpos
-      · rw [if_pos hb0]
+      · rw [ite_eq_left hb0]
         rw [show offset + b.val * 2 = offset from by omega, region_0] at hstep
         exact hstep
-      · rw [if_neg (by omega)]
+      · rw [ite_eq_right (by omega)]
         rw [h_output_zs (b.val - 1) (by have := b.isLt; omega),
           show offset + 2 * (b.val - 1) + 2 = offset + b.val * 2 from by omega]
         exact hstep
@@ -1256,9 +1256,8 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         (by simp [circuit_norm, input_eq]) (by simpa using region_0) numBits
         (fun i hpre => by
           obtain ⟨hAV, hBV, hzP⟩ := hpre
-          beta_reduce at hAV hzP
           obtain ⟨hSpec, hPSacc, hPSz⟩ := round_spec i ⟨hAV, hBV⟩ hzP
-          refine ⟨⟨⟨hAV, hBV⟩, hzP⟩, ?_, ?_⟩ <;> beta_reduce
+          refine ⟨⟨⟨hAV, hBV⟩, hzP⟩, ?_, ?_⟩
           · rw [RegionCircuit.foldAcc_succ]
             simp only [round_output, circuit_norm, ← point_eval_toEnvironment] at hPSacc ⊢
             exact hPSacc
@@ -1279,10 +1278,10 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         show offset + 2 * b.val + 2 = offset + (b.val + 1) * 2 from by ring, hzb,
         zRunValue_step input_z (kBitsWindow input_alpha w) b.val]
       rcases Nat.eq_zero_or_pos b.val with hb0 | hbpos
-      · rw [if_pos hb0, if_pos hb0]
+      · rw [ite_eq_left hb0, ite_eq_left hb0]
       · have hzb1 := hzN (b.val - 1) (by have := b.isLt; omega)
         beta_reduce at hzb1
-        rw [if_neg (show ¬(b.val = 0) by omega), if_neg (show ¬(b.val = 0) by omega),
+        rw [ite_eq_right (show ¬(b.val = 0) by omega), ite_eq_right (show ¬(b.val = 0) by omega),
           h_output_zs (b.val - 1) (by have := b.isLt; omega),
           show offset + 2 * (b.val - 1) + 2 = offset + (b.val - 1 + 1) * 2 from by ring, hzb1]
     · -- accumulator validity
@@ -1336,9 +1335,15 @@ theorem assignRegion_output_acc_cells_assigned
   simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
     List.append_nil, List.flatMap_append, List.mem_append]
   exact ⟨Or.inr (Or.inl (Or.inr (Or.inr (by
-      simpa only [AssignedCell.of_cell, Nat.mul_comm] using hround.1)))),
+      simpa only [AssignedCell.of_cell, Nat.mul_comm, RegionOperations.assignedCells,
+        RegionCircuit.operations, FormalRegionCircuit.call, Bind.bind, Pure.pure,
+        List.append_nil, Var, CircuitTypeOver.Var,
+        ProvableType.Halo2.toCircuitType, instProvableTypePoint] using hround.1)))),
     Or.inr (Or.inl (Or.inr (Or.inr (by
-      simpa only [AssignedCell.of_cell, Nat.mul_comm] using hround.2))))⟩
+      simpa only [AssignedCell.of_cell, Nat.mul_comm, RegionOperations.assignedCells,
+        RegionCircuit.operations, FormalRegionCircuit.call, Bind.bind, Pure.pure,
+        List.append_nil, Var, CircuitTypeOver.Var,
+        ProvableType.Halo2.toCircuitType, instProvableTypePoint] using hround.2))))⟩
 
 /-- The complete-multiplication bundle exposes its reduced footprint. -/
 @[synthesis_summary_norm]

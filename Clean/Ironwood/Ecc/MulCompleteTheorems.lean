@@ -1,7 +1,11 @@
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.MulIncompleteTheorems
-import Clean.Ironwood.Ecc.AddTheorems
-import CompElliptic.CurveForms.ShortWeierstrass
+module
+
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.MulIncompleteTheorems
+public import Clean.Ironwood.Ecc.AddTheorems
+public import CompElliptic.CurveForms.ShortWeierstrass
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/complete.rs`.
@@ -142,14 +146,14 @@ private theorem bit_facts {zP zN bY yP : Fp}
       exact one_ne_zero (by linear_combination -hc)
     have hy := (hsel 0).1 h
     simp only [CompElliptic.CurveForms.ShortWeierstrass.neg, Prod.mk.injEq] at hy
-    rw [if_neg hcond, if_neg hcond]
+    rw [ite_eq_right hcond, ite_eq_right hcond]
     exact ⟨by rw [hz]; ring, hy.2⟩
   · have hz : zN = 2 * zP + 1 := by
       simp only [Complete.bit] at h
       linear_combination h
     have hy := (hsel 0).2 h
     simp only [Prod.mk.injEq] at hy
-    rw [if_pos hz, if_pos hz]
+    rw [ite_eq_left hz, ite_eq_left hz]
     exact ⟨hz, hy.2⟩
 
 /-- The honest assignment of one complete bit satisfies the decomposition gate. -/

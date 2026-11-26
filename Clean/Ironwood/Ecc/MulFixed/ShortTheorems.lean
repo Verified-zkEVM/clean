@@ -1,10 +1,14 @@
-import CompElliptic.CurveForms.ShortWeierstrass
-import CompElliptic.Curves.Pasta
-import CompElliptic.Fields.Pasta
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import CompElliptic.CurveForms.ShortWeierstrass
+public import CompElliptic.Curves.Pasta
+public import CompElliptic.Fields.Pasta
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`.
@@ -92,7 +96,7 @@ theorem windowScalar_ne_zero {w k : ℕ} (hk : k < 8) :
     windowScalar w k ≠ 0 := by
   unfold windowScalar
   by_cases h21 : w = 21
-  · rw [if_pos h21]
+  · rw [ite_eq_left h21]
     apply Ecc.MulFixed.offsetWindowScalar_ne_zero (by norm_num) hk
     · rw [offsetAcc_eq]
       exact Ecc.MulFixed.offsetSum_lt_pow 20
@@ -101,7 +105,7 @@ theorem windowScalar_ne_zero {w k : ℕ} (hk : k < 8) :
     · norm_num [PALLAS_SCALAR_CARD]
     · norm_num [PALLAS_SCALAR_CARD]
     · norm_num [PALLAS_SCALAR_CARD]
-  · rw [if_neg h21]
+  · rw [ite_eq_right h21]
     apply mul_ne_zero
     · rw [show (k : Fq) + 2 = ((k + 2 : ℕ) : Fq) by push_cast; ring,
         Ne, ZMod.natCast_eq_zero_iff]
@@ -118,7 +122,7 @@ theorem windowScalar_val {w k : ℕ} (hw : w < 21) (hk : k < 8) :
           Nat.mul_le_mul (by omega) (Nat.pow_le_pow_right (by norm_num) (by omega))
       _ < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
   unfold windowScalar
-  rw [if_neg (by omega),
+  rw [ite_eq_right (by omega),
     show ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) by push_cast; ring,
     ZMod.val_natCast_of_lt hbound]
 
@@ -135,7 +139,7 @@ theorem windowScalar_partialSum (ks : ℕ → ℕ) :
       = (∑ j ∈ Finset.range 21, ks j * 8 ^ j) + ks 21 * 8 ^ 21 from
     Finset.sum_range_succ _ _]
   unfold windowScalar
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
   push_cast
   ring
 
@@ -572,7 +576,7 @@ private theorem env_get_rowTail {env : ProverEnvironment Fp} {n : ℕ} {r : RowT
 /-- The evaluated row program is the honest `rowTailValue`, stated at symbolic `w` and
 an opaque magnitude `m`, where every reduction is cheap. The LHS is the `circuit_norm`
 normal form of the witness-IR completeness hypothesis: `FiniteField.fromNat`/
-`FiniteField.val` from `NExpr.toField`/`Expression.val`, and one range-guarded
+`FiniteField.val` from `U64Expr.toField`/`Expression.val`, and one range-guarded
 window-table read per column from the `.listGet` evaluation (see `rowProgram_value` in
 `FullWidth.lean`). -/
 private theorem rowProgram_value (B : FixedBase) (m : Fp) (w : ℕ) :
@@ -585,7 +589,7 @@ private theorem rowProgram_value (B : FixedBase) (m : Fp) (w : ℕ) :
         B.u w (FiniteField.val m / 8 ^ w % 8) else 0)
     = rowTailValue B m w := by
   have h8 : FiniteField.val m / 8 ^ w % 8 < 8 := Nat.mod_lt _ (by norm_num)
-  simp only [dif_pos h8]
+  simp only [dite_eq_left h8]
   rfl
 
 /-- The running sum step relation on honest values. -/

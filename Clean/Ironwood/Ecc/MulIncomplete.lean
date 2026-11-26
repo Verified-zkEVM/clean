@@ -1,5 +1,9 @@
-import Clean.Halo2.Tactics.ContractBridges
-import Clean.Ironwood.Ecc.MulIncompleteRound
+module
+
+public import Clean.Halo2.Tactics.ContractBridges
+public import Clean.Ironwood.Ecc.MulIncompleteRound
+
+@[expose] public section
 
 /-! The double-and-add loop and bundle over the round gadget (`MulIncompleteRound.lean`). -/
 
@@ -241,10 +245,10 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
       rw [show offset + ↑j + 1 = offset + 1 + ↑j from by omega,
         h_output_zs ↑j j.isLt] at hz
       rcases Nat.eq_zero_or_pos j.val with h0 | hpos
-      · rw [dif_pos h0]
+      · rw [dite_eq_left h0]
         rw [show offset + ↑j = offset from by omega] at hz
         exact hz
-      · rw [dif_neg (by omega)]
+      · rw [dite_eq_right (by omega)]
         rw [show offset + ↑j = offset + 1 + (↑j - 1) from by omega,
           h_output_zs (↑j - 1) (by omega)] at hz
         exact hz
@@ -265,13 +269,11 @@ def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field
         (fun j => if h : j < n then k ⟨j, h⟩ else false)
         (fun i => by
           have hbp := (hk i).2.1
-          beta_reduce
           rw [show offset + (↑i + 1) + 1 = offset + ↑i + 2 from by omega,
             show offset + (↑i + 1) = offset + ↑i + 1 from by omega]
           exact congrArg₂ Point.mk hbp.1 hbp.2 ▸ rfl)
         (fun i => by
-          beta_reduce
-          rw [dif_pos i.isLt]
+          rw [dite_eq_left i.isLt]
           have ha := (hk i).2.2
           rw [show offset + (↑i + 1) + 1 = offset + ↑i + 2 from by omega,
             show offset + (↑i + 1) = offset + ↑i + 1 from by omega]
@@ -570,11 +572,11 @@ def double_and_add (n : ℕ) (w : ℕ) :
         simp only [show (fun t => if t < n then bits t else kl) (j.val : ℕ) = bits j.val from by
           simp [hjn]]
         rcases Nat.eq_zero_or_pos j.val with h0 | hpos
-        · rw [dif_pos h0]
-          rw [dif_pos h0, region_0] at hcj
+        · rw [dite_eq_left h0]
+          rw [dite_eq_left h0, region_0] at hcj
           exact hcj
-        · rw [dif_neg (by omega)]
-          rw [dif_neg (by omega), h_output_zs (j.val - 1) (by omega)] at hcj
+        · rw [dite_eq_right (by omega)]
+          rw [dite_eq_right (by omega), h_output_zs (j.val - 1) (by omega)] at hcj
           exact hcj
       · -- the last round
         have hjeq : j.val = n := by omega
@@ -582,14 +584,14 @@ def double_and_add (n : ℕ) (w : ℕ) :
         rw [show offset + n + 1 = offset + 1 + n from by omega,
           h_output_zs n (by omega)] at hz'
         simp only [hjeq]
-        rw [if_neg (show ¬ n < n by omega)]
+        rw [ite_eq_right (show ¬ n < n by omega)]
         rcases Nat.eq_zero_or_pos n with hn0 | hnpos
         · subst hn0
-          rw [dif_pos rfl]
+          rw [dite_eq_left rfl]
           simp only [Nat.add_zero] at hz'
           rw [region_0] at hz'
           exact hz'
-        · rw [dif_neg (by omega)]
+        · rw [dite_eq_right (by omega)]
           rw [show offset + n = offset + 1 + (n - 1) from by omega,
             h_output_zs (n - 1) (by omega)] at hz'
           exact hz'
@@ -642,7 +644,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
       show accScalar m (fun j => if j < n then bits j else kl) (n + 1) = _
       show 2 * accScalar m (fun j => if j < n then bits j else kl) n
           + (if (if n < n then bits n else kl) then 1 else 0) * 2 - 1 = _
-      rw [hext, if_neg (show ¬ n < n by omega)]
+      rw [hext, ite_eq_right (show ¬ n < n by omega)]
 
   completeness := by
     circuit_proof_start2 [qMul1Gate, qMul3Gate, forLoopPolys, yA, xRExpr, reads, RoundInvariant,
@@ -708,7 +710,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
           (env.advice cfg.yP ((place self + (offset + 1) : ℕ) : ℤ)))).iter
         (bitsFrom input_alpha w) r)
       (bitsFrom input_alpha w) (fun i => rfl) m
-      (by simpa [bitsFrom] using hH0) hbudget
+      (by simpa [bitsFrom, State.iter] using hH0) hbudget
     have hHn := hHiter n le_rfl
     beta_reduce at hHn
     rw [← hPS1] at hHn
@@ -725,9 +727,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
       intro j
       rw [hPS2 j, hiterz]
       rcases Nat.eq_zero_or_pos j.val with h0 | hpos
-      · rw [dif_pos h0, h0]
+      · rw [dite_eq_left h0, h0]
         rfl
-      · rw [dif_neg (by omega)]
+      · rw [dite_eq_right (by omega)]
         have hprev := hPS2 ⟨j.val - 1, by omega⟩
         rw [show j.val - 1 + 1 = j.val from by omega] at hprev
         rw [hprev]
@@ -739,11 +741,11 @@ def double_and_add (n : ℕ) (w : ℕ) :
       · have hc := hcell ⟨j.val, hjn⟩
         rw [h_output_zs j.val (by omega)] at hc
         rcases Nat.eq_zero_or_pos j.val with h0 | hpos
-        · rw [dif_pos h0]
-          rw [dif_pos h0, region_0] at hc
+        · rw [dite_eq_left h0]
+          rw [dite_eq_left h0, region_0] at hc
           exact hc
-        · rw [dif_neg (show ¬ j.val = 0 by omega)]
-          rw [dif_neg (show ¬ j.val = 0 by omega), h_output_zs (j.val - 1) (by omega)] at hc
+        · rw [dite_eq_right (show ¬ j.val = 0 by omega)]
+          rw [dite_eq_right (show ¬ j.val = 0 by omega), h_output_zs (j.val - 1) (by omega)] at hc
           exact hc
       · have hjeq : j.val = n := by omega
         have hz' := region_7
@@ -752,11 +754,11 @@ def double_and_add (n : ℕ) (w : ℕ) :
         simp only [hjeq]
         rcases Nat.eq_zero_or_pos n with hn0 | hnpos
         · subst hn0
-          rw [dif_pos rfl]
+          rw [dite_eq_left rfl]
           simp only [Nat.add_zero] at hz'
           rw [region_0] at hz'
           exact hz'
-        · rw [dif_neg (show ¬ n = 0 by omega)]
+        · rw [dite_eq_right (show ¬ n = 0 by omega)]
           rw [show offset + n = offset + 1 + (n - 1) from by omega,
             h_output_zs (n - 1) (by omega)] at hz'
           exact hz'

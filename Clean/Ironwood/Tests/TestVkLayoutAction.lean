@@ -1,9 +1,21 @@
-import Clean.Ironwood.Fixtures.ActionSelMap
-import Clean.Ironwood.Fixtures.Json
-import Clean.Ironwood.Action.RealBases
-import Clean.Ironwood.Action.CircuitPreNU63
-import Clean.Ironwood.Fixtures.Layout
-import Clean.Ironwood.Action.Circuit
+module
+
+public import Clean.Ironwood.Fixtures.ActionSelMap
+public import Clean.Ironwood.Fixtures.Json
+public import Clean.Ironwood.Action.RealBases
+public import Clean.Ironwood.Action.CircuitPreNU63
+public import Clean.Ironwood.Fixtures.Layout
+public import Clean.Ironwood.Action.Circuit
+
+-- `#eval` below executes compiled code from these modules.
+public meta import Clean.Ironwood.Fixtures.ActionSelMap
+public meta import Clean.Ironwood.Fixtures.Json
+public meta import Clean.Ironwood.Action.RealBases
+public meta import Clean.Ironwood.Action.CircuitPreNU63
+public meta import Clean.Ironwood.Fixtures.Layout
+public meta import Clean.Ironwood.Action.Circuit
+
+@[expose] public section
 
 /-!
 # VK-layout test: the full Orchard Action circuit
@@ -42,7 +54,8 @@ def aCfg : Config := (configure aG {}).1
 def unk : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp) := pure (.const 0)
 def unkPoint : Witgen.MOver Fp (AssignedCell Fp) (Point (FExpr Fp)) :=
   pure { x := .const 0, y := .const 0 }
-def unkNat : Witgen.MOver Fp (AssignedCell Fp) (NExpr Fp) := pure (.const 0)
+def unkNat : Witgen.MOver Fp (AssignedCell Fp) (Witgen.LimbsOver Fp (AssignedCell Fp) 4) :=
+  pure (.const 0 4)
 
 /-! ## The synthesize mirror (identical region stream to `Action.Circuit.synthesize`,
 fixed-base-mul sites data-level) -/

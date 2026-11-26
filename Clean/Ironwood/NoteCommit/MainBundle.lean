@@ -1,5 +1,9 @@
-import Clean.Ironwood.NoteCommit.Main
-import Clean.Ironwood.Sinsemilla.ChainTheorems
+module
+
+public import Clean.Ironwood.NoteCommit.Main
+public import Clean.Ironwood.Sinsemilla.ChainTheorems
+
+@[expose] public section
 
 /-!
 # NoteCommit bundle proofs (soundness / completeness / the `circuit` def)
@@ -190,86 +194,125 @@ private theorem zsFacts_donor_iff :
     · rintro ⟨h1, h2⟩
       exact ⟨h1, (ih _ _).mpr h2⟩
 
-/-- The hash child's extracted running sums are the `bits`-column reads. -/
-private theorem hashExtract_zs (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (cfg : Sinsemilla.HashPiece.Config)
-    (inp : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (iH : RegionIndex)
-    (place : RegionIndex → ℕ) (env : Environment Fp) :
-    ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract cfg inp iH
-        (⟨place, env⟩ : Placed Environment Fp)).zs
-      = Sinsemilla.Chain.zsFam
-          (fun r => env.advice cfg.bits ((place iH + r : ℕ) : ℤ)) ns 0 := by
-  show (eval (⟨place, env⟩ : Placed Environment Fp)
-    (Sinsemilla.Chain.zsCellsVal cfg iH ns 0)
-    : Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) = _
-  exact Sinsemilla.Chain.eval_zsCellsVal cfg iH _ ns 0
+private theorem zs_get_zero (f : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ) :
+    Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths (n :: rest))
+      (Sinsemilla.Chain.zsFam f (n :: rest) base) ⟨0, by simp [Sinsemilla.Chain.zLengths]⟩
+      = Vector.ofFn (fun r : Fin (n + 1) => f (base + r.val)) :=
+  Sinsemilla.Chain.zsFam_head f n rest base
+
+private theorem zs_get_succ (f : ℕ → Fp) (n : ℕ) (rest : List ℕ) (base : ℕ)
+    (i : ℕ) (hi : i < rest.length) :
+    Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths (n :: rest))
+      (Sinsemilla.Chain.zsFam f (n :: rest) base)
+      ⟨i + 1, by simpa [Sinsemilla.Chain.zLengths] using Nat.succ_lt_succ hi⟩
+      = Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths rest)
+          (Sinsemilla.Chain.zsFam f rest (base + (n + 1)))
+          ⟨i, by simpa [Sinsemilla.Chain.zLengths] using hi⟩ := by
+  exact congrArg (fun value => Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths rest)
+    value ⟨i, by simpa [Sinsemilla.Chain.zLengths] using hi⟩)
+    (Sinsemilla.Chain.zsFam_tail f n rest base)
 
 /-- The six hash running-sum reads the gates copy, at the concrete `ns` layout
 (rows: piece starts `[0,25,26,51,57,58,83,108]`). -/
 private theorem zs_get_z13a (f : ℕ → Fp) :
     (Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨0, by decide⟩)[13]'(by decide) = f 13 := by
-  simp only [ns, Sinsemilla.Chain.zLengths,
-    List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Sinsemilla.HVec.get,
-        Nat.reduceAdd, Nat.zero_add]
-  exact (congrArg (fun v => v[13]'(by norm_num))
-    (Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+  unfold ns
+  rw [zs_get_zero f 24 [0, 24, 5, 0, 24, 24, 0] 0]
+  dsimp only [GetElem.getElem, Fin.instGetElemFinVal, List.instGetElemNatLtLength,
+    List.get, Fin.cast, Vector.get, Vector.instGetElemNatLt,
+    Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    List.getElem_cons_zero, List.getElem_cons_succ, Nat.reduceAdd]
+  simpa only [Nat.reduceAdd, GetElem.getElem, Vector.instGetElemNatLt,
+    Vector.get, Fin.cast] using
+    (Vector.getElem_ofFn (f := fun r : Fin 25 => f (0 + r.val)) (i := 13) (by decide))
 
 private theorem zs_get_z13c (f : ℕ → Fp) :
     (Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨2, by decide⟩)[13]'(by decide) = f 39 := by
-  simp only [ns, Sinsemilla.Chain.zLengths,
-    List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Sinsemilla.HVec.get,
-    Sinsemilla.HVec.tail_cons,
-    Nat.reduceAdd, Nat.zero_add]
-  exact (congrArg (fun v => v[13]'(by norm_num))
-    (Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+  unfold ns
+  rw [zs_get_succ f 24 [0, 24, 5, 0, 24, 24, 0] 0 1 (by decide)]
+  rw [zs_get_succ f 0 [24, 5, 0, 24, 24, 0] 25 0 (by decide)]
+  rw [zs_get_zero f 24 [5, 0, 24, 24, 0] 26]
+  dsimp only [GetElem.getElem, Fin.instGetElemFinVal, List.instGetElemNatLtLength,
+    List.get, Fin.cast, Vector.get, Vector.instGetElemNatLt,
+    Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    List.getElem_cons_zero, List.getElem_cons_succ, Nat.reduceAdd]
+  simpa only [Nat.reduceAdd, GetElem.getElem, Vector.instGetElemNatLt,
+    Vector.get, Fin.cast] using
+    (Vector.getElem_ofFn (f := fun r : Fin 25 => f (26 + r.val)) (i := 13) (by decide))
 
 private theorem zs_get_z1d (f : ℕ → Fp) :
     (Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨3, by decide⟩)[1]'(by decide) = f 52 := by
-  simp only [ns, Sinsemilla.Chain.zLengths,
-    List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Sinsemilla.HVec.get,
-    Sinsemilla.HVec.tail_cons,
-    Nat.reduceAdd, Nat.zero_add]
-  exact (congrArg (fun v => v[1]'(by norm_num))
-    (Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+  unfold ns
+  rw [zs_get_succ f 24 [0, 24, 5, 0, 24, 24, 0] 0 2 (by decide)]
+  rw [zs_get_succ f 0 [24, 5, 0, 24, 24, 0] 25 1 (by decide)]
+  rw [zs_get_succ f 24 [5, 0, 24, 24, 0] 26 0 (by decide)]
+  rw [zs_get_zero f 5 [0, 24, 24, 0] 51]
+  dsimp only [GetElem.getElem, Fin.instGetElemFinVal, List.instGetElemNatLtLength,
+    List.get, Fin.cast, Vector.get, Vector.instGetElemNatLt,
+    Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    List.getElem_cons_zero, List.getElem_cons_succ, Nat.reduceAdd]
+  simpa only [Nat.reduceAdd, GetElem.getElem, Vector.instGetElemNatLt,
+    Vector.get, Fin.cast] using
+    (Vector.getElem_ofFn (f := fun r : Fin 6 => f (51 + r.val)) (i := 1) (by decide))
 
 private theorem zs_get_z13f (f : ℕ → Fp) :
     (Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨5, by decide⟩)[13]'(by decide) = f 71 := by
-  simp only [ns, Sinsemilla.Chain.zLengths,
-    List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Sinsemilla.HVec.get,
-    Sinsemilla.HVec.tail_cons,
-    Nat.reduceAdd, Nat.zero_add]
-  exact (congrArg (fun v => v[13]'(by norm_num))
-    (Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+  unfold ns
+  rw [zs_get_succ f 24 [0, 24, 5, 0, 24, 24, 0] 0 4 (by decide)]
+  rw [zs_get_succ f 0 [24, 5, 0, 24, 24, 0] 25 3 (by decide)]
+  rw [zs_get_succ f 24 [5, 0, 24, 24, 0] 26 2 (by decide)]
+  rw [zs_get_succ f 5 [0, 24, 24, 0] 51 1 (by decide)]
+  rw [zs_get_succ f 0 [24, 24, 0] 57 0 (by decide)]
+  rw [zs_get_zero f 24 [24, 0] 58]
+  dsimp only [GetElem.getElem, Fin.instGetElemFinVal, List.instGetElemNatLtLength,
+    List.get, Fin.cast, Vector.get, Vector.instGetElemNatLt,
+    Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    List.getElem_cons_zero, List.getElem_cons_succ, Nat.reduceAdd]
+  simpa only [Nat.reduceAdd, GetElem.getElem, Vector.instGetElemNatLt,
+    Vector.get, Fin.cast] using
+    (Vector.getElem_ofFn (f := fun r : Fin 25 => f (58 + r.val)) (i := 13) (by decide))
 
 private theorem zs_get_z1g (f : ℕ → Fp) :
     (Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[1]'(by decide) = f 84 := by
-  simp only [ns, Sinsemilla.Chain.zLengths,
-    List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Sinsemilla.HVec.get,
-    Sinsemilla.HVec.tail_cons,
-    Nat.reduceAdd, Nat.zero_add]
-  exact (congrArg (fun v => v[1]'(by norm_num))
-    (Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+  unfold ns
+  rw [zs_get_succ f 24 [0, 24, 5, 0, 24, 24, 0] 0 5 (by decide)]
+  rw [zs_get_succ f 0 [24, 5, 0, 24, 24, 0] 25 4 (by decide)]
+  rw [zs_get_succ f 24 [5, 0, 24, 24, 0] 26 3 (by decide)]
+  rw [zs_get_succ f 5 [0, 24, 24, 0] 51 2 (by decide)]
+  rw [zs_get_succ f 0 [24, 24, 0] 57 1 (by decide)]
+  rw [zs_get_succ f 24 [24, 0] 58 0 (by decide)]
+  rw [zs_get_zero f 24 [0] 83]
+  dsimp only [GetElem.getElem, Fin.instGetElemFinVal, List.instGetElemNatLtLength,
+    List.get, Fin.cast, Vector.get, Vector.instGetElemNatLt,
+    Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    List.getElem_cons_zero, List.getElem_cons_succ, Nat.reduceAdd]
+  simpa only [Nat.reduceAdd, GetElem.getElem, Vector.instGetElemNatLt,
+    Vector.get, Fin.cast] using
+    (Vector.getElem_ofFn (f := fun r : Fin 25 => f (83 + r.val)) (i := 1) (by decide))
 
 private theorem zs_get_z13g (f : ℕ → Fp) :
     (Sinsemilla.HVec.get (Sinsemilla.Chain.zLengths ns)
       (Sinsemilla.Chain.zsFam f ns 0) ⟨6, by decide⟩)[13]'(by decide) = f 96 := by
-  simp only [ns, Sinsemilla.Chain.zLengths,
-    List.map_cons, List.map_nil,
-    Sinsemilla.Chain.zsFam, Sinsemilla.HVec.get,
-    Sinsemilla.HVec.tail_cons,
-    Nat.reduceAdd, Nat.zero_add]
-  exact (congrArg (fun v => v[13]'(by norm_num))
-    (Sinsemilla.HVec.head_cons _ _)).trans (by simp)
+  unfold ns
+  rw [zs_get_succ f 24 [0, 24, 5, 0, 24, 24, 0] 0 5 (by decide)]
+  rw [zs_get_succ f 0 [24, 5, 0, 24, 24, 0] 25 4 (by decide)]
+  rw [zs_get_succ f 24 [5, 0, 24, 24, 0] 26 3 (by decide)]
+  rw [zs_get_succ f 5 [0, 24, 24, 0] 51 2 (by decide)]
+  rw [zs_get_succ f 0 [24, 24, 0] 57 1 (by decide)]
+  rw [zs_get_succ f 24 [24, 0] 58 0 (by decide)]
+  rw [zs_get_zero f 24 [0] 83]
+  dsimp only [GetElem.getElem, Fin.instGetElemFinVal, List.instGetElemNatLtLength,
+    List.get, Fin.cast, Vector.get, Vector.instGetElemNatLt,
+    Sinsemilla.Chain.zLengths, List.map_cons, List.map_nil,
+    List.getElem_cons_zero, List.getElem_cons_succ, Nat.reduceAdd]
+  simpa only [Nat.reduceAdd, GetElem.getElem, Vector.instGetElemNatLt,
+    Vector.get, Fin.cast] using
+    (Vector.getElem_ofFn (f := fun r : Fin 25 => f (83 + r.val)) (i := 13) (by decide))
 
 /-- Build direction of `peelGates` (kernel-checked alone). -/
 private theorem buildGates (cfg : Config) (input : Var Inputs Fp)
@@ -596,7 +639,7 @@ private theorem bit_cast_isBool (m : ℕ) (h : m < 2) : IsBool ((m : ℕ) : Fp) 
 /-- Prover-eval of the commit input record over opaque cells (doc pattern 1: the
 transport lemma is checked once over abstract variables). -/
 private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
-    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
       (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇], r := r }).pieces
@@ -612,7 +655,7 @@ private theorem pieces_eval_eq (place : RegionIndex → ℕ) (env : ProverEnviro
 
 /-- Environment-side sibling of `pieces_eval_eq`. -/
 private theorem pieces_eval_eq_env (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (c₀ c₁ c₂ c₃ c₄ c₅ c₆ c₇ : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
       (⟨place, env⟩ : Placed Environment Fp)
       { pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇], r := r }).pieces
@@ -649,9 +692,9 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
       Sinsemilla.Chain.PieceChunks ns
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) inp).pieces chunks ∧
       Sinsemilla.Chain.ZsFacts ns chunks
-        ((Sinsemilla.HashToPoint.hashCircuit G ns Q hQ ns_ne_nil).extract c.2.1
-          { pieces := inp.pieces } (i + 2)
-          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).zs ∧
+        (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+          (Sinsemilla.Chain.zsCellsVal c.2.1 (i + 2) ns 0)
+          : Sinsemilla.HVec (Sinsemilla.Chain.zLengths ns) Fp) ∧
       ∀ B, hashToPoint G.S Q chunks = some B →
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
           ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output
@@ -848,7 +891,7 @@ theorem soundness (G : Generators) (R : FixedBase)
     ] at hGbS hGdS hGeS hGgS hGhS hY1S hY2S hCmS
   -- ── the six hash running-sum value facts ──
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
-  rw [hashExtract_zs] at hZs
+  rw [Sinsemilla.Chain.eval_zsCellsVal] at hZs
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
   have hz13a := NoteCommit.zsFacts_cell ns _ chunks _
@@ -1274,7 +1317,7 @@ theorem completeness (G : Generators) (R : FixedBase)
     (by rw [Sinsemilla.CommitDomain.commit_envAssumptions_eq]; exact ⟨hTableG, hMulE⟩)
     hPB2 hHon2
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
-  rw [hashExtract_zs] at hZs
+  rw [Sinsemilla.Chain.eval_zsCellsVal] at hZs
   rw [pieces_eval_eq_env] at hPC
   simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
     Cell.of_column, Environment.get_advice, Nat.add_zero, Nat.add_assoc,

@@ -1,5 +1,9 @@
-import Clean.Ironwood.Fixtures.FixtureTypes
-import Clean.Halo2.Operations
+module
+
+public import Clean.Ironwood.Fixtures.FixtureTypes
+public import Clean.Halo2.Operations
+
+@[expose] public section
 
 /-!
 # Phase-2 layout reconstruction (reusable, NOT mul-specific)

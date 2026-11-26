@@ -1,10 +1,14 @@
-import Clean.Circuit.Loops
-import Clean.Gadgets.Addition8.Addition8FullCarry
-import Clean.Types.U64
-import Clean.Gadgets.Addition32.Theorems
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.Addition8.Addition8FullCarry
+public import Clean.Types.U64
+public import Clean.Gadgets.Addition32.Theorems
+public import Clean.Gadgets.Xor.Xor64
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 open Clean
 
@@ -33,7 +37,11 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
 lemma thetaC_loop (state : Vector ℕ 25) :
     Specs.Keccak256.thetaC state = .mapFinRange 5 fun i =>
       state[5*i.val] ^^^ state[5*i.val + 1] ^^^ state[5*i.val + 2] ^^^ state[5*i.val + 3] ^^^ state[5*i.val + 4] := by
-  rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
+  conv_rhs =>
+    rw [← Vector.ofFn_getElem (xs := Vector.mapFinRange 5 _)]
+    simp only [Vector.getElem_mapFinRange]
+  apply Vector.toList_inj.mp
+  rw [Vector.toList_ofFn]
   rfl
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
@@ -41,11 +49,8 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [thetaC_loop, circuit_norm, eval_vector, KeccakState.value]
+  simp only [thetaC_loop, circuit_norm, KeccakState.value]
 
-  -- simplify constraints
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [circuit_norm, h_input] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), input[i].Normalized :=
     fun hi => h_assumptions ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
@@ -56,7 +61,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
+  simp only [circuit_norm] at h_input
   simp only [h_input, circuit_norm,
     main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩

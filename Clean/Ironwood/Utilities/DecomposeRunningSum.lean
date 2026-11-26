@@ -1,7 +1,11 @@
-import Clean.Halo2
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 Reference:
@@ -153,10 +157,10 @@ structure Output (n : ℕ) (F : Type) where
   zs : Vector F n
 deriving ProvableStruct
 
-/-- The honest running-sum witness at window `idx`: `z_idx = α ≫ (W·idx)`, as a witgen
-program over the `α` cell (the `LookupRangeCheck.zWitness` spelling). -/
+/-- The honest running-sum witness at window `idx`: `z_idx = α ≫ (W·idx)`, computed in the
+field from the `α` cell as halo2 does (`Witgen.FExprOver.runningSum`). -/
 def zWitness (W idx : ℕ) (alpha : AssignedCell Fp) : WitgenIR Fp 1 :=
-  .ofFExpr (.ofNat (.div (.val (.expr alpha)) (.const (2 ^ (W * idx)))))
+  .ofFExpr ((Witgen.FExprOver.expr alpha).runningSum W idx)
 
 /-- The selector-enable loop (Rust `decompose` lines 161-164): the range-check gate on
 every window row. A named def (not inline `forRange'`) so the constraints/witness chunks
@@ -393,7 +397,7 @@ theorem chain_shifts (W n : ℕ) (f : ℕ → Fp)
   -- totalize the digit choice (only indices < n are read)
   set ks' : ℕ → ℕ := fun i => if h : i < n then ks i h else 0 with hks'
   have hks'lt : ∀ i, i < n → ks' i < 2 ^ W := fun i hi => by
-    simp only [hks', dif_pos hi]; exact hks i hi
+    simp only [hks', dite_eq_left hi]; exact hks i hi
   refine ⟨tailVal W n ks' 0, by simpa using tailVal_lt W n ks' hks'lt n 0 (by omega), ?_⟩
   -- `f w = ↑(tailVal w)` by downward induction, then the shift lemma
   suffices hfw : ∀ d w, w + d = n → f w = ((tailVal W n ks' w : ℕ) : Fp) by
@@ -408,7 +412,7 @@ theorem chain_shifts (W n : ℕ) (f : ℕ → Fp)
     intro w hw
     have hwn : w < n := by omega
     rw [hchain w hwn, ih (w + 1) (by omega), tailVal_step W n ks' hwn]
-    push_cast [hks', dif_pos hwn]
+    push_cast [hks', dite_eq_left hwn]
     ring
 
 /-- The word of consecutive shift values is the base-`2^W` digit:
@@ -597,8 +601,8 @@ theorem copyDecompose_synthesisSummary_constantSiteCount
     (input : Inputs (AssignedCell Fp)) (region : RegionIndex) :
     ((copyDecompose W numWindows).elaborated.synthesisSummary
       config offset input region).constantSiteCount = 1 := by
-  simpa only [copyDecompose] using
-    copyDecomposeSynthesisSummary_constantSiteCount numWindows config offset
+  rw [copyDecompose_synthesisSummary_eq]
+  exact copyDecomposeSynthesisSummary_constantSiteCount numWindows config offset
 
 /-- Strict decomposition never writes a fixed column. -/
 @[synthesis_summary_norm]
@@ -637,7 +641,7 @@ theorem copyDecompose_configured_permutationColumns_eq
   cases outputEq
   simp only [keygen_norm, FormalRegionCircuit.Configured.permutationColumns,
     FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
-    copyDecompose, configure, permutationColumns, List.singleton_append]
+    copyDecompose, elaborated, configure, permutationColumns, List.singleton_append]
 
 /-- The strict decomposition's only input copy comes from `alpha`. -/
 @[keygen_norm]

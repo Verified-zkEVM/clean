@@ -1,8 +1,12 @@
-import Clean.Halo2
-import Clean.Circuit
-import Clean.Utils.Tactics
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.Defs
+module
+
+public import Clean.Halo2
+public import Clean.Circuit
+public import Clean.Utils.Tactics
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.Defs
+
+@[expose] public section
 
 namespace Zcash.Circuits
 

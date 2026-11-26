@@ -1,5 +1,9 @@
-import Clean.Ironwood.NoteCommit.Canonicity
-import Clean.Ironwood.Utilities.LookupRangeCheck
+module
+
+public import Clean.Ironwood.NoteCommit.Canonicity
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -304,7 +308,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
                 ((LookupRangeCheck.witnessShortCheck 10 9 configInput.2
                   (k0Wit input.y)).nextRegionIndex i))
           have hjp := LookupRangeCheck.witnessCheck_output_cells_assigned
-            10 13 false synth._proof_2 configInput.2
+            10 13 false (by simp) configInput.2
               (jPrimeWit
                 ((LookupRangeCheck.witnessCheckDecomposed configInput.2
                   (jWit wlsb input.y)).output (i + 2)).z0) (i + 3)
@@ -313,19 +317,43 @@ def circuit (wlsb : WitgenIR Fp 1) :
           · exact Or.inl (Or.inl (Or.inl (Or.inl (by simp))))
           · exact Or.inl (Or.inl (Or.inl (Or.inr hk0)))
           · exact Or.inl (Or.inl (Or.inr (by
-              simpa only [LookupRangeCheck.witnessShortCheck_nextRegionIndex]
+              simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+                LookupRangeCheck.witnessCheckDecomposed_regionCount,
+                LookupRangeCheck.witnessShortCheck_nextRegionIndex]
                 using hk2)))
           · exact Or.inl (Or.inr (by
-              simpa only [LookupRangeCheck.witnessShortCheck_nextRegionIndex,
-                Nat.add_assoc] using hj.1))
+              simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+                LookupRangeCheck.witnessCheckDecomposed_regionCount,
+                LookupRangeCheck.witnessShortCheck_nextRegionIndex,
+                Nat.add_assoc, Nat.reduceAdd] using hj.1))
           · exact Or.inl (Or.inr (by
-              simpa only [LookupRangeCheck.witnessShortCheck_nextRegionIndex,
-                Nat.add_assoc] using hj.2.1))
+              simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+                LookupRangeCheck.witnessCheckDecomposed_regionCount,
+                LookupRangeCheck.witnessShortCheck_nextRegionIndex,
+                Nat.add_assoc, Nat.reduceAdd] using hj.2.1))
           · exact Or.inl (Or.inr (by
-              simpa only [LookupRangeCheck.witnessShortCheck_nextRegionIndex,
-                Nat.add_assoc] using hj.2.2))
-          · exact Or.inr (by simpa only using hjp.1)
-          · exact Or.inr (by simpa only using hjp.2)
+              simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+                LookupRangeCheck.witnessCheckDecomposed_regionCount,
+                LookupRangeCheck.witnessShortCheck_nextRegionIndex,
+                Nat.add_assoc, Nat.reduceAdd] using hj.2.2))
+          · exact Or.inr (by simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+              LookupRangeCheck.witnessCheckDecomposed_regionCount,
+              LookupRangeCheck.witnessCheck_nextRegionIndex,
+              LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex,
+              LookupRangeCheck.witnessShortCheck_nextRegionIndex, Nat.add_assoc, Nat.reduceAdd,
+              (LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex
+                configInput.2 (jWit wlsb input.y) (i + 2)),
+              (LookupRangeCheck.witnessCheckDecomposed_regionCount
+                configInput.2 (jWit wlsb input.y) (i + 2))] using hjp.1)
+          · exact Or.inr (by simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
+              LookupRangeCheck.witnessCheckDecomposed_regionCount,
+              LookupRangeCheck.witnessCheck_nextRegionIndex,
+              LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex,
+              LookupRangeCheck.witnessShortCheck_nextRegionIndex, Nat.add_assoc, Nat.reduceAdd,
+              (LookupRangeCheck.witnessCheckDecomposed_nextRegionIndex
+                configInput.2 (jWit wlsb input.y) (i + 2)),
+              (LookupRangeCheck.witnessCheckDecomposed_regionCount
+                configInput.2 (jWit wlsb input.y) (i + 2))] using hjp.2)
       output cfg _ i := .of (i + 4) 0 (cfg.1.advices 6)
       regionCount _ := 5
       synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
@@ -352,7 +380,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
         refine ⟨LookupRangeCheck.witnessCheckDecomposed_lookupActivationsWellFormed
           cfg.2 (jWit wlsb input.y) (i + 2), ?_⟩
         refine ⟨LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
-          10 13 false synth._proof_2 cfg.2 _ (i + 3), ?_⟩
+          10 13 false (by simp) cfg.2 _ (i + 3), ?_⟩
         exact (gateChild wlsb input).call_lookupActivationsWellFormed _ _ _
       lookupSelectorAnchorRequirements cfg _ _ :=
         LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
@@ -370,7 +398,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
             cfg.2 (jWit wlsb input.y) (i + 2) anchor hanchor
         apply Operations.LookupSelectorsAnchoredBy.append
         · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
-            10 13 false synth._proof_2 cfg.2 _ (i + 3) anchor hanchor
+            10 13 false (by simp) cfg.2 _ (i + 3) anchor hanchor
         · exact (gateChild wlsb input).call_lookupSelectorsAnchoredBy
             cfg.1
             (FormalCircuit.Configured.ofOutput
@@ -512,8 +540,8 @@ def circuit (wlsb : WitgenIR Fp 1) :
         < 2 ^ 250 := by
       rw [hjval]; exact bitrange_lt _ _ _
     have hjE : (show Fp from (LookupRangeCheck.rangeCheckAtDecomposed 25
-          LookupRangeCheck.witnessCheckDecomposed._proof_1
-          LookupRangeCheck.witnessCheckDecomposed._proof_2).extract cfg.2 0 () (i₀ + 2)
+          (by norm_num)
+          (by norm_num)).extract cfg.2 0 () (i₀ + 2)
         ({ place := place, env := env } : Placed ProverEnvironment Fp).toEnvironment).val
         < 2 ^ (10 * 25) := by
       rw [decomposed_extract_cells]

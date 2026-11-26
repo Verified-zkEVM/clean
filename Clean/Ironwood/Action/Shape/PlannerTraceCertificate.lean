@@ -1,5 +1,9 @@
-import Clean.Ironwood.Action.Shape.PlannerTraceData
-import Clean.Halo2.Keygen.FloorPlanner.V1Evaluation
+module
+
+public import Clean.Ironwood.Action.Shape.PlannerTraceData
+public import Clean.Halo2.Keygen.FloorPlanner.V1Evaluation
+
+@[expose] public section
 
 namespace Zcash.Circuits.Action
 

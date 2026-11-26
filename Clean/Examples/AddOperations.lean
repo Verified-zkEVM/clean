@@ -1,6 +1,14 @@
-import Clean.Utils.Primes
-import Clean.Gadgets.Addition8.Addition8
-import Clean.Gadgets.Addition32.Addition32Full
+module
+
+public import Clean.Utils.Primes
+public import Clean.Gadgets.Addition8.Addition8
+public import Clean.Gadgets.Addition32.Addition32Full
+public meta import Clean.Gadgets.Addition8.Addition8
+
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Utils.Primes
+
+@[expose] public section
 
 open Clean
 
@@ -16,5 +24,5 @@ def circuit := do
 
 /-- info: #[246, 20, 10, 1, 247, 0, 1] -/
 #guard_msgs in
-#eval (circuit.operations 0).localWitnesses (circuit.proverEnvironment default)|>.toArray
+#eval (circuit.operations 0).localWitnesses (circuit.proverEnvironment (.empty _) default)|>.toArray
 end

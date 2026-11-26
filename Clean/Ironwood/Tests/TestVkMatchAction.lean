@@ -1,8 +1,19 @@
-import Clean.Ironwood.Fixtures.Project
-import Clean.Ironwood.Fixtures.ActionSelMap
-import Clean.Ironwood.Fixtures.Json
-import Clean.Ironwood.Specs.SinsemillaGenerators
-import Clean.Ironwood.Action.Circuit
+module
+
+public import Clean.Ironwood.Fixtures.Project
+public import Clean.Ironwood.Fixtures.ActionSelMap
+public import Clean.Ironwood.Fixtures.Json
+public import Clean.Ironwood.Specs.SinsemillaGenerators
+public import Clean.Ironwood.Action.Circuit
+
+-- `#eval` below executes compiled code from these modules.
+public meta import Clean.Ironwood.Fixtures.Project
+public meta import Clean.Ironwood.Fixtures.ActionSelMap
+public meta import Clean.Ironwood.Fixtures.Json
+public meta import Clean.Ironwood.Specs.SinsemillaGenerators
+public meta import Clean.Ironwood.Action.Circuit
+
+@[expose] public section
 
 /-!
 # VK-match test: the full Orchard Action circuit `configure`

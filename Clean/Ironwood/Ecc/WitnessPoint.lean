@@ -1,6 +1,10 @@
-import Clean.Halo2
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.Basic
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.Basic
+
+@[expose] public section
 
 namespace Zcash.Circuits.Ecc
 
@@ -61,7 +65,7 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
           · intro _ _
             rfl
         simp only [querySelector, queryAdvice, Expression.eval,
-          Expression.replaceSelectorValue, Expression.enabledGateValuation, if_pos] at hzero ⊢
+          Expression.replaceSelectorValue, Expression.enabledGateValuation, ite_eq_left] at hzero ⊢
         rw [← hcurveEval, one_mul]
         rcases mul_eq_zero.mp hzero with hscaled | hcurve
         · exact mul_eq_zero.mpr (.inl ((mul_eq_zero.mp hscaled).resolve_left hscale))

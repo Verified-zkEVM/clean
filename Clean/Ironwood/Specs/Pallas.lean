@@ -1,7 +1,11 @@
-import CompElliptic.CurveForms.ShortWeierstrass
-import CompElliptic.Curves.Pasta
-import CompElliptic.Curves.PastaOrder
-import CompElliptic.Fields.Pasta
+module
+
+public import CompElliptic.CurveForms.ShortWeierstrass
+public import CompElliptic.Curves.Pasta
+public import CompElliptic.Curves.PastaOrder
+public import CompElliptic.Fields.Pasta
+
+@[expose] public section
 
 /-!
 # Orchard-facing Pallas vocabulary
@@ -43,6 +47,7 @@ deriving BEq, DecidableEq, Inhabited, Repr
 namespace Point
 variable {F : Type}
 
+@[implicit_reducible]
 def coords (point : Point F) : F × F := (point.x, point.y)
 
 theorem ext_coords {p q : Point F} (h : p.coords = q.coords) : p = q := by
@@ -142,8 +147,10 @@ theorem add_comm {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
 
 theorem valid_neg {p : Point Fp} (hp : p.Valid) :
     (-p).Valid := by
-  exact (valid_iff (-p)).mpr
-    (ShortWeierstrass.valid_neg ((valid_iff p).mp hp))
+  apply (valid_iff (-p)).mpr
+  rw [neg_def, ofCoords_coords]
+  exact ShortWeierstrass.valid_neg (a := pallasA) (b := pallasB)
+    (p := p.coords) ((valid_iff p).mp hp)
 
 instance : Sub (Point Fp) where
   sub p q := add p (neg q)
@@ -166,13 +173,22 @@ def nondegenerateAdd {K : Type} [Sub K] [Mul K] [Inv K] (p q : Point K) : Point 
 theorem nondegenerateAdd_eq_add {p q : Point Fp}
     (hp : p ≠ 0) (hq : q ≠ 0) (hx : p.x ≠ q.x) :
     nondegenerateAdd p q = p + q := by
-  rcases p with ⟨px, py⟩
-  rcases q with ⟨qx, qy⟩
-  simp only [nondegenerateAdd, zero_def, add_def, ofCoords, coords, ShortWeierstrass.add] at *
-  have hp0 : ¬(px, py) = (0, 0) := by grind
-  have hq0 : ¬(qx, qy) = (0, 0) := by grind
-  rw [if_neg hp0, if_neg hq0]
-  rw [if_neg hx, mk.injEq]
+  have hp0 : p.coords ≠ (0, 0) := by
+    intro h
+    apply hp
+    change ofCoords p.coords = (0 : Point Fp)
+    rw [h]
+    rfl
+  have hq0 : q.coords ≠ (0, 0) := by
+    intro h
+    apply hq
+    change ofCoords q.coords = (0 : Point Fp)
+    rw [h]
+    rfl
+  have hx0 : p.coords.1 ≠ q.coords.1 := hx
+  rw [add_def, ShortWeierstrass.add, ite_eq_right hp0,
+    ite_eq_right hq0, ite_eq_right hx0]
+  simp only [nondegenerateAdd, ofCoords, coords, mk.injEq]
   constructor <;> ring
 
 theorem nondegenerateAdd_onCurve {p q : Point Fp}
@@ -270,7 +286,7 @@ theorem ext_toSW_iff {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
     rfl
   · intro h
     rw [mk.injEq]
-    simp_all [toSW]
+    exact ⟨congrArg SWPoint.x h, congrArg SWPoint.y h⟩
 
 theorem toSW_add {p q : Point Fp} (hp : p.Valid) (hq : q.Valid) :
     (p + q).toSW (valid_add hp hq) = p.toSW hp + q.toSW hq := by
@@ -326,7 +342,10 @@ theorem add_coords_eq {P Q R : Point Fp} (h : P + Q = R) :
 
 theorem nsmul_add_one {P : Point Fp} (hP : P.OnCurve) (m : ℕ) :
     m • P + P = (m + 1) • P := by
-  simpa using nsmul_add_nsmul hP m 1
+  have hone : (1 : ℕ) • P = P := by
+    apply (ext_toSW_iff (valid_nsmul (.inl hP) 1) (.inl hP)).mpr
+    rw [toSW_nsmul (.inl hP) 1, one_nsmul]
+  simpa only [hone] using nsmul_add_nsmul hP m 1
 
 theorem nsmul_add_neg_one {P : Point Fp} (hP : P.OnCurve) {m : ℕ} (h2 : 2 ≤ m) :
     m • P + -P = (m - 1) • P := by
@@ -367,7 +386,7 @@ lemma incompleteAdd_def (p q : Point Fp) :
 theorem incompleteAdd_some {p q : Point Fp}
     (hX : p ≠ 0) (hY : q ≠ 0) (hxy : p.x ≠ q.x) :
     p ⸭ q = some (p + q) := by
-  rw [incompleteAdd_def, if_neg]
+  rw [incompleteAdd_def, ite_eq_right]
   push Not
   exact ⟨hX, hY, hxy⟩
 
@@ -410,9 +429,9 @@ theorem nsmul_eq_zero_iff {P : Point Fp} (hP : P.OnCurve) (n : ℕ) :
   set p := P.toSW (.inl hP)
   have hp : p ≠ 0 := by
     intro h
-    simp only [p, ← toSW_zero, ← ext_toSW_iff] at h
-    rw [h] at hP
-    exact not_onCurve_zero hP
+    have heq : P = 0 := (ext_toSW_iff (.inl hP) valid_zero).mpr
+      (h.trans toSW_zero.symm)
+    exact not_onCurve_zero (heq ▸ hP)
   rw [← addOrderOf_eq hp, addOrderOf_dvd_iff_nsmul_eq_zero]
 
 /-- Congruent scalars produce the same multiple of an on-curve point. -/

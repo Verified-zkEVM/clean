@@ -1,5 +1,9 @@
-import Clean.Halo2.Compiler.LookupProjection
-import Clean.Halo2.Compiler.LookupSelectors
+module
+
+public import Clean.Halo2.Compiler.LookupProjection
+public import Clean.Halo2.Compiler.LookupSelectors
+
+@[expose] public section
 
 /-! # Soundness of compiled lookup row semantics
 

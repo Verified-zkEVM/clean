@@ -1,6 +1,10 @@
-import Clean.Halo2.TopLevel
-import Clean.Ironwood.Action.ConfigureCertificates
-import Clean.Ironwood.Action.Spec
+module
+
+public import Clean.Halo2.TopLevel
+public import Clean.Ironwood.Action.ConfigureCertificates
+public import Clean.Ironwood.Action.Spec
+
+@[expose] public section
 
 /-!
 # The deployed Orchard Action as a closed top-level circuit
@@ -79,7 +83,7 @@ The circuit compiler supplies the residual Action environment contract. Table
 contents are deliberately absent: the circuit proofs derive those from their
 respective operational hypotheses.
 -/
-private theorem configured_closesEnvironment
+theorem configured_closesEnvironment
     (assignment : ProofAssignment Fp) :
     let formal := circuit Specs.Sinsemilla.orchardGenerators orchardBases
     formal.EnvAssumptions
@@ -128,7 +132,7 @@ private theorem configured_closesEnvironment
 The deployed proof-carrying Orchard Action circuit: unit synthesis input/output,
 explicit public inputs, and no unfulfilled environment contract at its boundary.
 -/
-private theorem actionSelectorRequirements :
+theorem actionSelectorRequirements :
     (circuit Specs.Sinsemilla.orchardGenerators orchardBases).selectorRequirements
       () {} := by
   dsimp only [FormalCircuit.selectorRequirements, Circuit.circuit,
@@ -215,7 +219,7 @@ def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
 /-- The concrete Action implementation and its opening equation, kept behind an
 opaque reduction barrier. Runtime evaluation still computes the implementation;
 proofs cross the boundary only through the API below. -/
-private opaque actionCircuitPacked :
+opaque actionCircuitPacked :
     { top : TopLevelCircuit Fp Config PublicInputs //
       top = Internal.actionCircuitImpl } :=
   ⟨Internal.actionCircuitImpl, rfl⟩
@@ -230,6 +234,11 @@ theorem Internal.actionCircuit_eq_impl :
     actionCircuit = Internal.actionCircuitImpl :=
   actionCircuitPacked.property
 
+private theorem configure_run_numSelectors {α : Type}
+    (program : Configure Fp α) (initial : ConstraintSystem Fp) :
+    (program.run initial).2.numSelectors =
+      (program.finalCounts (ConfigureCounts.ofConstraintSystem initial)).numSelectors := rfl
+
 /-- Action's configured primary column witnesses that its permutation family is
 nonempty. -/
 theorem actionCircuit_permutationColumns_nonempty :
@@ -242,7 +251,7 @@ theorem actionCircuit_permutationColumns_nonempty :
   have hprimary : primary ∈ (program.run {}).2.permutationColumns :=
     (Configure.mem_permutationColumns_run_iff program {} primary).mpr
       (Or.inr (by
-        simpa only [program, primary] using
+        simpa only [program, primary, ConfigureCounts.ofConstraintSystem] using
           Circuit.configure_output_primary_mem_permutationRequests
             Specs.Sinsemilla.orchardGenerators {}))
   exact List.ne_nil_of_mem hprimary
@@ -252,7 +261,8 @@ theorem actionCircuit_numAdviceColumns_eq :
     actionCircuit.constraintSystem.numAdviceColumns = 10 := by
   rw [Internal.actionCircuit_eq_impl]
   simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
-    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+    TopLevelCompilation.constraintSystem, Circuit.circuit, Configure.run_numAdviceColumns,
+    ConfigureCounts.ofConstraintSystem] using
       Circuit.configure_finalCounts_numAdviceColumns
         Specs.Sinsemilla.orchardGenerators
 
@@ -261,7 +271,8 @@ theorem actionCircuit_numFixedColumns_eq :
     actionCircuit.constraintSystem.numFixedColumns = 14 := by
   rw [Internal.actionCircuit_eq_impl]
   simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
-    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+    TopLevelCompilation.constraintSystem, Circuit.circuit, Configure.run_numFixedColumns,
+    ConfigureCounts.ofConstraintSystem] using
       Circuit.configure_finalCounts_numFixedColumns
         Specs.Sinsemilla.orchardGenerators
 
@@ -271,7 +282,8 @@ theorem actionCircuit_selectorCount_eq :
   rw [Internal.actionCircuit_eq_impl]
   simpa only [Internal.actionCircuitImpl, TopLevelCircuit.selectorCount,
     TopLevelCircuit.constraintSystem, TopLevelCompilation.constraintSystem,
-    Circuit.circuit] using
+    Circuit.circuit, configure_run_numSelectors,
+    ConfigureCounts.ofConstraintSystem] using
       Circuit.configure_finalCounts_numSelectors
         Specs.Sinsemilla.orchardGenerators
 
@@ -280,7 +292,8 @@ theorem actionCircuit_numInstanceColumns_eq :
     actionCircuit.constraintSystem.numInstanceColumns = 1 := by
   rw [Internal.actionCircuit_eq_impl]
   simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
-    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+    TopLevelCompilation.constraintSystem, Circuit.circuit, Configure.run_numInstanceColumns,
+    ConfigureCounts.ofConstraintSystem] using
       Circuit.configure_finalCounts_numInstanceColumns
         Specs.Sinsemilla.orchardGenerators
 
@@ -304,12 +317,11 @@ theorem actionCircuit_lookupActivationCount_eq :
   calc
     _ = (Circuit.mainPostSynthesisSummary
           Internal.actionCircuitImpl.config).lookupActivationCount := by
-      simpa only [TopLevelCircuit.synthesisSummary,
-        Internal.actionCircuitImpl] using
-          congrArg (fun summary => summary.lookupActivationCount)
-            (Circuit.circuit_synthesisSummary_eq
-              Specs.Sinsemilla.orchardGenerators orchardBases
-              Internal.actionCircuitImpl.config () 0)
+      rw [TopLevelCircuit.synthesisSummary]
+      exact congrArg (fun summary => summary.lookupActivationCount)
+        (Circuit.circuit_synthesisSummary_eq
+          Specs.Sinsemilla.orchardGenerators orchardBases
+          Internal.actionCircuitImpl.config () 0)
     _ = 2424 :=
       Circuit.mainPostSynthesisSummary_lookupActivationCount _
 

@@ -1,5 +1,9 @@
-import Clean.Ironwood.Action.CircuitPreNU63
-import Clean.Ironwood.Action.ConfigureCertificates
+module
+
+public import Clean.Ironwood.Action.CircuitPreNU63
+public import Clean.Ironwood.Action.ConfigureCertificates
+
+@[expose] public section
 
 /-!
 # The Orchard Action circuit: bundle contract (spec / extract / elaborated)
@@ -234,7 +238,7 @@ structure ActionData where
 deriving Inhabited
 
 /-- One advice cell read. -/
-private def cellRead (env : Placed Environment Fp) (i : RegionIndex) (row : ℕ)
+def cellRead (env : Placed Environment Fp) (i : RegionIndex) (row : ℕ)
     (col : Column .advice) : Fp :=
   eval env (AssignedCell.of i row col : Var field Fp)
 
@@ -519,7 +523,7 @@ private theorem wpointNonId_output (c : Ecc.WitnessPoint.Config)
         : Var Point Fp) := rfl
 
 private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
         psi := c7, rcm := r })
@@ -534,7 +538,7 @@ private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem vcInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (c1 c2 : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var ValueCommit.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { rcv := r, magnitude := c1, sign := c2 })
     = { rcv := (), magnitude := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
@@ -553,14 +557,14 @@ private theorem dnInputs_eval_eq (place : RegionIndex → ℕ) (env : Environmen
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem saInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (p : Point (AssignedCell Fp)) (a : Var UnconstrainedNat Fp) :
+    (p : Point (AssignedCell Fp)) (a : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var SpendAuthority.Input Fp) (⟨place, env⟩ : Placed Environment Fp)
       { alpha := a, akP := p })
     = { alpha := (), akP := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem civkInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
-    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (c1 c2 : AssignedCell Fp) (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var CommitIvk.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
       { ak := c1, nk := c2, rivk := r })
     = { ak := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
@@ -588,11 +592,11 @@ private theorem layerInput_eval_eq (place : RegionIndex → ℕ) (env : Environm
 
 private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
-    (r : Var UnconstrainedNat Fp) :
+    (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var ValueCommit.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { rcv := r, magnitude := c1, sign := c2 })
     = { rcv := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedNat Fp),
+          (r : Var (UnconstrainedLimbs 4) Fp),
         magnitude := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c1 : Var field Fp),
         sign := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
@@ -601,14 +605,14 @@ private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
 
 private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
-    (r : Var UnconstrainedNat Fp) :
+    (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var CommitIvk.Main.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { ak := c1, nk := c2, rivk := r })
     = { ak := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
         nk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c2 : Var field Fp),
         rivk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedNat Fp) } := by
+          (r : Var (UnconstrainedLimbs 4) Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
@@ -625,7 +629,7 @@ private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
 
 private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp)
-    (r : Var UnconstrainedNat Fp) :
+    (r : Var (UnconstrainedLimbs 4) Fp) :
     (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
       { gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
         psi := c7, rcm := r })
@@ -638,7 +642,7 @@ private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
         psi := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
           (c7 : Var field Fp),
         rcm := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
-          (r : Var UnconstrainedNat Fp) } := by
+          (r : Var (UnconstrainedLimbs 4) Fp) } := by
   simp only [circuit_norm, explicit_provable_type]
 
 /-! ## Stage outputs and offsets -/
@@ -787,7 +791,7 @@ private theorem synthWitness_keygenRegistered (G : Generators)
   have hwitnessY := configure_output_witnessPoint_y_mem_permutationRequests G counts
   dsimp only [synthWitness, loadPrivate, Sinsemilla.load]
   simp_all only [keygen_spine]
-  repeat' constructor
+  repeat' constructor!
   all_goals
     first
     | apply Ecc.WitnessPoint.pointFormal.call_keygenRegistered_ofCertificate
@@ -918,7 +922,7 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
   repeat' first
     | (guard_target =~ (_ ∧ _); constructor)
   all_goals
-    first
+    try first
     | apply
         (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
           B.merkleQ_onCurve 0 16 (by norm_num)
@@ -946,11 +950,9 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
         (commitIvkCertificate G B counts)
     | apply AddressIntegrity.circuit.call_keygenRegistered_ofCertificate
         (addressIntegrityCertificate G counts)
-    | exact configure_output_orchardGate_mem_gates G counts
-    | skip
   all_goals simp_all only [keygen_norm, keygen_output_norm,
     synthWitness_output, actionConfigureContext_permutationColumns,
-    Nat.reduceEqDiff, if_false]
+    Nat.reduceEqDiff, ite_false]
   all_goals
     intro column hcolumn
     rcases hcolumn with ⟨cell, hcell, rfl⟩
@@ -959,7 +961,6 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
     rcases hcell with rfl | rfl | rfl | rfl
     all_goals first
       | exact hadvice 0
-      | exact hwitnessX
       | exact hwitnessY
 
 private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
@@ -986,7 +987,7 @@ private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
   repeat' first
     | (guard_target =~ (_ ∧ _); constructor)
   all_goals
-    first
+    try first
     | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
         B.noteQ_onCurve).call_keygenRegistered_ofCertificate
         (noteCommitOldCertificate G B counts)
@@ -996,11 +997,10 @@ private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
     | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
         (eccConfigureCertificate G counts).witnessPointNonIdFormal
     | exact configure_output_orchardGate_mem_gates G counts
-    | skip
   all_goals simp_all only [keygen_norm, keygen_output_norm,
     synthWitness_output, synthChecks_output,
     actionConfigureContext_permutationColumns,
-    Nat.reduceEqDiff, if_false]
+    Nat.reduceEqDiff, ite_false]
 
 private theorem synthChecks_regionFixedColumns_forall
     (G : Generators) (B : Bases) (counts : ConfigureCounts)
@@ -2314,8 +2314,6 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   simp only [Point.eval_eq, circuit_norm,
     Nat.add_zero] at hGdNS hPkNS
   -- the "constrain equal" region: derived cm_old = witnessed cm_old
-  try simp only [circuit_norm] at hEqR
-  try simp only [circuit_norm] at hOrch
   -- ── assemble the statement ──
   simp only [Spec, SpecBase, extractBase, extract, cellRead, circuit_norm,
     Nat.add_zero, Nat.add_assoc]
@@ -2425,7 +2423,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
     have hstep := hs j hj
     by_cases h16 : j < 16
     · simp only [merkleLeftEncoding, merkleRightEncoding, merkleSide,
-        dif_pos hj, h16, if_true] at ⊢
+        dite_eq_left hj, h16, ite_true] at ⊢
       simpa [Sinsemilla.Merkle.CalculateRoot.circuit,
         Sinsemilla.Merkle.CalculateRoot.extractWitness,
         Sinsemilla.Merkle.HashLayer.circuit,
@@ -2433,7 +2431,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
         Sinsemilla.Merkle.HashLayer.rightEncoding, circuit_norm,
         Nat.add_assoc, h16] using hstep
     · simp only [merkleLeftEncoding, merkleRightEncoding, merkleSide,
-        dif_pos hj, h16, if_false] at ⊢
+        dite_eq_left hj, h16, ite_false] at ⊢
       simpa [Sinsemilla.Merkle.CalculateRoot.circuit,
         Sinsemilla.Merkle.CalculateRoot.extractWitness,
         Sinsemilla.Merkle.HashLayer.circuit,
@@ -2655,7 +2653,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
               (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
             (h := by
               intro j hj
-              simp only [extract, cellRead, if_pos hj]
+              simp only [extract, cellRead, ite_eq_left hj]
               with_unfolding_all rfl)]
           rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
               (fun j => (extract cfg input_var i₀
@@ -2691,8 +2689,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
         (h := by
           intro j hj
-          simp only [extract, cellRead, if_pos hj]
-          try simp only [circuit_norm, explicit_provable_type])]
+          simp only [extract, cellRead, ite_eq_left hj])]
       rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
           (fun j => (extract cfg input_var i₀
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j) _ 16))
@@ -2721,7 +2718,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
             (hw := by
               intro j hj
               simp only [extract, cellRead,
-                show ¬(16 + j < 16) from by omega, if_false,
+                show ¬(16 + j < 16) from by omega, ite_false,
                 show 16 + j - 16 = j from by omega]
               try with_unfolding_all rfl)
             (hn := by with_unfolding_all exact hM1mid)]
@@ -2758,9 +2755,8 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
         (hw := by
           intro j hj
           simp only [extract, cellRead,
-            show ¬(16 + j < 16) from by omega, if_false,
-            show 16 + j - 16 = j from by omega]
-          try with_unfolding_all rfl)
+            show ¬(16 + j < 16) from by omega, ite_false,
+            show 16 + j - 16 = j from by omega])
         (hn := by with_unfolding_all exact hM1mid)]
       exact hRootP
     -- ── the remaining child contracts (for the instance rows and the gate) ──
@@ -3049,7 +3045,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                    (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
                  (h := by
                    intro j hj
-                   simp only [extract, cellRead, if_pos hj]
+                   simp only [extract, cellRead, ite_eq_left hj]
                    try with_unfolding_all rfl)]
                rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
                    (fun j => (extract cfg input_var i₀
@@ -3078,7 +3074,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
                  (hw := by
                    intro j hj
                    simp only [extract, cellRead,
-                     show ¬(16 + j < 16) from by omega, if_false,
+                     show ¬(16 + j < 16) from by omega, ite_false,
                      show 16 + j - 16 = j from by omega]
                    try with_unfolding_all rfl)
                  (hn := by with_unfolding_all exact hM1mid)]
@@ -3408,9 +3404,10 @@ private theorem mainPost_keygenRegistered
   · rw [(baseCircuit G B).call_operations]
     simpa only [FormalCircuit.keygenRequirements, baseCircuit,
       ElaboratedCircuit.keygenRequirements, KeygenRequirements.inputPermutationColumns,
-      List.map_nil, List.append_nil] using
+      List.map_nil, List.append_nil, List.nil_append] using
         (elaborated G B).registered () counts () () i
-  · simpa only [FormalCircuit.output_call'] using
+  · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
+    simpa only [FormalCircuit.output_call'] using
       synthCrossAddressChecks_baseOutput_keygenRegistered G B counts i (i + 394)
 
 private theorem mainPost_copyCellsAssigned
@@ -3424,7 +3421,7 @@ private theorem mainPost_copyCellsAssigned
   apply Operations.CopyCellsAssignedFrom.append
   · rw [(baseCircuit G B).call_operations]
     simpa only [FormalCircuit.keygenRequirements, baseCircuit,
-      ElaboratedCircuit.keygenRequirements] using
+      ElaboratedCircuit.keygenRequirements, Operations.CopyCellsAssigned] using
         (elaborated G B).copyCellsAssigned () counts () () i
   · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
     rw [FormalCircuit.output_call']
@@ -3532,7 +3529,7 @@ instance elaboratedPost (G : Generators) (B : Bases) :
     cases configInput
     cases hconfig
     cases input
-    simpa only [KeygenRequirements.inputCells] using
+    simpa only [KeygenRequirements.inputCells, Operations.CopyCellsAssigned] using
       mainPost_copyCellsAssigned G B counts i
   lookupSelectorAssignmentsAgree_of_registered := by
     intro configInput counts hconfig input i program operations _hregistered
@@ -3650,7 +3647,6 @@ theorem soundnessPost
   -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
   -- `base_output` bridge rewrites below fire.
   subst x_gen_out_0
-  try simp only [mainPost, circuit_norm] at hc
   have hPre := hc.1
   have hX := hc.2
   clear hc
@@ -3667,7 +3663,7 @@ theorem soundnessPost
   have h2 := hX 2
   have h3 := hX 3
   clear hX
-  simp only [circuit_norm, List.get!Internal, Fin.isValue,
+  simp only [circuit_norm, Fin.isValue,
     Fin.val_zero, Fin.val_one, Nat.reduceMod, Nat.mul_one,
     Nat.add_zero] at h0 h1 h2 h3
   obtain ⟨ha00, -, -, -, ha04, ha05, -, -, -, -, hG0⟩ := h0
@@ -3730,7 +3726,6 @@ theorem completenessPost
   -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
   -- `base_output` bridge rewrites below fire.
   subst x_gen_out_0
-  try simp only [mainPost, circuit_norm] at hwit ⊢
   obtain ⟨-, hWx⟩ := hwit
   -- the base chunk was consumed by circuit_proof_start (completeness mode), so the goal opens
   -- with the base child's preconditions rather than its witness constraints.
@@ -3747,7 +3742,7 @@ theorem completenessPost
     have hw2 := hWx 2
     have hw3 := hWx 3
     clear hWx
-    simp only [circuit_norm, List.get!Internal, Fin.isValue,
+    simp only [circuit_norm, Fin.isValue,
       Fin.val_zero, Nat.mul_one, Nat.add_zero] at hw0 hw1 hw2 hw3
     -- the four honest `dca · (old − new) = 0` products
     have hdx : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
@@ -3804,7 +3799,7 @@ theorem completenessPost
         ring
     intro i
     fin_cases i
-    all_goals simp only [circuit_norm, List.get!Internal, Fin.isValue,
+    all_goals simp only [circuit_norm, Fin.isValue,
       Nat.mul_one, Nat.add_zero]
     · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw0
       refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
@@ -3813,6 +3808,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!,
+          List.get!Internal, circuit_norm]
         linear_combination hdx
       · rw [w6, w0]
         ring
@@ -3825,6 +3822,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!,
+          List.get!Internal, circuit_norm]
         linear_combination hdy
       · rw [w6, w0]
         ring
@@ -3837,6 +3836,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!,
+          List.get!Internal, circuit_norm]
         linear_combination hpx
       · rw [w6, w0]
         ring
@@ -3849,6 +3850,8 @@ theorem completenessPost
       · rw [w2, w3, w1, w0]
         ring
       · rw [w4, w5, w0]
+        simp only [GetElem?.getElem!,
+          List.get!Internal, circuit_norm]
         linear_combination hpy
       · rw [w6, w0]
         ring

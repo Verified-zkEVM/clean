@@ -1,4 +1,8 @@
-import Clean.Ironwood.Utilities.LookupRangeCheck
+module
+
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+
+@[expose] public section
 
 /-!
 Regression pin for `LookupRangeCheck.mem_usableRows_val_lt` (C2a #5): the membership-consumption

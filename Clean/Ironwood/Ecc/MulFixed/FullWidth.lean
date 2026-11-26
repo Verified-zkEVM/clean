@@ -1,5 +1,9 @@
-import Clean.Ironwood.Ecc.MulFixed
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+module
+
+public import Clean.Ironwood.Ecc.MulFixed
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+
+@[expose] public section
 
 /-!
 Fixed-base scalar multiplication by a full-width scalar: the windows are witnessed
@@ -486,19 +490,19 @@ theorem innerRegion_copyCellsAssignedFrom_and_outputAssigned
     simpa only [RegionOperations.assignedCellsAfter_append,
       witnessOps, fixedOps] using hchain.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.2.1
   · simpa only [innerRegion, RegionCircuit.operations_bind,
-      RegionCircuit.operations_pure, List.append_nil,
+      RegionCircuit.operations_pure, RegionCircuit.output_bind, RegionCircuit.output_pure, List.append_nil,
       RegionOperations.assignedCellsAfter_append, witnessOps, fixedOps]
       using hchain.2.2.2.2
 
@@ -848,12 +852,11 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
       obtain ⟨hx, hy, -⟩ := hPW ⟨w, by omega⟩
       rw [MulFixed.windowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
       exact ⟨hx, hy⟩)
-    ⟨if_pos rfl, if_pos rfl⟩
+    ⟨ite_eq_left rfl, ite_eq_left rfl⟩
     (by
       intro j hj1 hj83 hAssumptions
       obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-      dsimp only at hOnP hOnQ hne ⊢
-      rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+      rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)]
       rcases Nat.lt_or_ge j 2 with hj2 | hj2
       · have hj : j = 1 := by omega
         subst hj
@@ -861,11 +864,11 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
         exact hOut
       · have h := hLoopD ⟨j - 2, by omega⟩
         rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
-        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
-        rw [if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega] at hne
-        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+        rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
           show offset + (j - 1) + 1 = offset + j from by omega]
         obtain ⟨⟨-, hOut⟩, -⟩ := h ⟨hOnP, hOnQ, hne⟩
         exact hOut)
@@ -880,8 +883,7 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
             • B.point).y := by
     intro j hj1 hj83
     have h := hLadder j hj83
-    dsimp only at h
-    rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
+    rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)] at h
     exact h
   have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
         ((env.place self + (offset + 84) : ℕ) : ℤ)
@@ -1163,7 +1165,7 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
     intro w
     rw [hks_def]
     dsimp only
-    rw [dif_pos w.isLt]
+    rw [dite_eq_left w.isLt]
     exact hkf_eq w
   -- ── the per-row window points (the coords rows) ──
   have hWP : ∀ w : Fin 85,
@@ -1248,12 +1250,11 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
         obtain ⟨hx, hy⟩ := hWP ⟨w, by omega⟩
         rw [MulFixed.windowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
         exact ⟨hx, hy⟩)
-      ⟨if_pos rfl, if_pos rfl⟩
+      ⟨ite_eq_left rfl, ite_eq_left rfl⟩
       (by
         intro j hj1 hj83 hAssumptions
         obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
-        dsimp only at hOnP hOnQ hne ⊢
-        rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+        rw [ite_eq_right (by omega : ¬j = 0), ite_eq_right (by omega : ¬j = 0)]
         rcases Nat.lt_or_ge j 2 with hj2 | hj2
         · -- j = 1: the explicit first chunk (window 1 + window 0)
           have hj : j = 1 := by omega
@@ -1263,17 +1264,16 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
         · -- j ≥ 2: loop chunk j − 2
           have h := hLoopS ⟨j - 2, by omega⟩
           rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
-          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
-          rw [if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega] at hne
-          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          rw [ite_eq_right (by omega : ¬j - 1 = 0), ite_eq_right (by omega : ¬j - 1 = 0),
             show offset + (j - 1) + 1 = offset + j from by omega]
           obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
           exact hOut)
     have hI83 := hLadder 83 (by norm_num)
-    dsimp only at hI83
-    rw [if_neg (by norm_num : ¬(83 : ℕ) = 0), if_neg (by norm_num : ¬(83 : ℕ) = 0),
+    rw [ite_eq_right (by norm_num : ¬(83 : ℕ) = 0), ite_eq_right (by norm_num : ¬(83 : ℕ) = 0),
       show offset + 83 + 1 = offset + 84 from by omega] at hI83
     rw [← hOax, ← hOay]
     rcases hP : Ecc.MulFixed.partialSum ks 83 • B.point with ⟨px, py⟩
@@ -1376,32 +1376,30 @@ private theorem fw_inner_completeness (B : FixedBase) (windows : Vector (Witgen.
 /-! ## The gadget bundle (`FixedPoint::mul`)
 
 Extractor form: `Witness` carries the window cells and the scalar they encode; `Spec` is
-literally `output = s • B`. The scalar hint enters as a nat-valued witness-IR program, and
+literally `output = s • B`. The scalar hint enters as a limb-valued witness-IR program, and
 the 85 three-bit window programs are derived from it. -/
 
-/-- The 85 three-bit window programs derived from the scalar's Nat-hint program:
-window `w` reads `(scalar >>> 3w) &&& 7` as a field-valued witness program. The concrete
-85-entry vector stays irreducible so callers can share it without materializing every
-bind-program. -/
-irreducible_def scalarWindows (scalar : Var UnconstrainedNat Fp) :
+/-- The 85 three-bit window programs derived from the scalar's limb-valued program:
+window `w` reads bits `3w .. 3w+2` of the scalar's limbs as a field-valued witness program.
+The concrete 85-entry vector stays irreducible so callers can share it without materializing
+every bind-program. -/
+irreducible_def scalarWindows (scalar : Var (UnconstrainedLimbs 4) Fp) :
     Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85 :=
   Vector.ofFn fun w =>
     (do let n ← scalar
-        pure (.ofNat (.land (.shiftR n (.const (3 * w.val))) (.const 7))) :
+        pure (.ofU64 (n.window (3 * w.val) 3)) :
       Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
 
 /-- The derived window programs are 3-bit by construction. -/
-theorem scalarWindows_eval_lt (scalar : Var UnconstrainedNat Fp)
+theorem scalarWindows_eval_lt (scalar : Var (UnconstrainedLimbs 4) Fp)
     (env : Placed ProverEnvironment Fp) (w : Fin 85) :
     (Witgen.MOver.eval (value := field) env (scalarWindows scalar)[w.val]!).val < 8 := by
   rw [getElem!_pos _ w.val w.isLt]
   simp only [scalarWindows, Vector.getElem_ofFn]
   simp only [Witgen.MOver.eval, circuit_norm, Witgen.eval_field, Witgen.FExprOver.eval,
-    Witgen.NExprOver.eval, FiniteField.fromNat_F]
-  rw [ZMod.val_natCast, Nat.mod_eq_of_lt]
-  · exact Nat.lt_succ_of_le Nat.and_le_right
-  · exact lt_of_lt_of_le (Nat.lt_succ_of_le Nat.and_le_right)
-      (by norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD])
+    Witgen.LimbsOver.toNat_eval_window _ _ _ (by norm_num : 3 ≤ 64), FiniteField.fromNat_F]
+  rw [ZMod.val_natCast]
+  exact lt_of_le_of_lt (Nat.mod_le _ _) (lt_of_lt_of_le (Nat.mod_lt _ (by norm_num)) (by norm_num))
 
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD) in
 /-- The scalar read off the 85 window cells (the constructive extractor). -/
@@ -1421,7 +1419,7 @@ def EnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
   cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP
 
 /-- The region count of `synthesize`: inner mul + complete addition. -/
-private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
+theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
     (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (i : RegionIndex) :
     Operations.regionCount ((synthesize B cfg windows).operations i) = 2 := by
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount]
@@ -1454,9 +1452,9 @@ theorem synthesize_synthesisSummary_eq
 seal innerRegion in
 set_option linter.constructorNameAsVariable false in
 /-- `[s]B` for the full-width scalar encoded by the witnessed windows. The input is the scalar's
-nat-valued reading program; the window programs derive from it and are 3-bit by construction. -/
+limb-valued reading program; the window programs derive from it and are 3-bit by construction. -/
 def circuit (B : FixedBase) :
-    FormalCircuit Fp MulFixed.Config Config UnconstrainedNat Point where
+    FormalCircuit Fp MulFixed.Config Config (UnconstrainedLimbs 4) Point where
   name := "fixed-base mul (full width)"
 
   configure := configure
@@ -1539,7 +1537,8 @@ def circuit (B : FixedBase) :
         constructor
         · simpa only [synthesize, Circuit.operations_bind, operations_assignRegion,
             List.forall_append, List.forall_cons, List.forall_nil, and_true,
-            windows] using And.intro hinner hadd
+            windows, cfg, Operation.FixedAssignmentsAgree, output_assignRegion,
+            nextRegionIndex_assignRegion] using And.intro hinner hadd
         · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
             Operations.loadedTableColumns]
         · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
@@ -1695,7 +1694,7 @@ def circuit (B : FixedBase) :
 
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq
-    (B : FixedBase) (cfg : Config) (input : Var UnconstrainedNat Fp)
+    (B : FixedBase) (cfg : Config) (input : Var (UnconstrainedLimbs 4) Fp)
     (self : RegionIndex) :
     (circuit B).elaborated.synthesisSummary cfg input self =
       circuitSynthesisSummary cfg := rfl
@@ -1720,7 +1719,7 @@ theorem circuitSynthesisSummary_tableRowExtent_eq (config : Config) :
 /-- Full-width fixed-base multiplication requests no deferred constant allocations. -/
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_constantSiteCount
-    (B : FixedBase) (config : Config) (input : Var UnconstrainedNat Fp)
+    (B : FixedBase) (config : Config) (input : Var (UnconstrainedLimbs 4) Fp)
     (region : RegionIndex) :
     ((circuit B).elaborated.synthesisSummary
       config input region).constantSiteCount = 0 := by
@@ -1729,7 +1728,7 @@ theorem circuit_synthesisSummary_constantSiteCount
 
 @[keygen_output_norm]
 theorem circuit_output_cells
-    (B : FixedBase) (config : Config) (input : Var UnconstrainedNat Fp)
+    (B : FixedBase) (config : Config) (input : Var (UnconstrainedLimbs 4) Fp)
     (self : RegionIndex) :
     (circuit B).output config input self =
       { x := .of (self + 1) 1 config.superConfig.addConfig.xQR,
@@ -1737,7 +1736,7 @@ theorem circuit_output_cells
   rfl
 
 @[circuit_norm]
-theorem circuit_regionCount (B : FixedBase) (input : Var UnconstrainedNat Fp) :
+theorem circuit_regionCount (B : FixedBase) (input : Var (UnconstrainedLimbs 4) Fp) :
     (circuit B).regionCount input = 2 := by
   rfl
 
@@ -1745,7 +1744,7 @@ theorem circuit_regionCount (B : FixedBase) (input : Var UnconstrainedNat Fp) :
 theorem circuit_inputCells_eq
     (B : FixedBase) {config : Config}
     (configured : (circuit B).Configured config)
-    (input : Var UnconstrainedNat Fp) :
+    (input : Var (UnconstrainedLimbs 4) Fp) :
     configured.inputCells input = [] := by
   rfl
 
@@ -1763,7 +1762,7 @@ theorem Configured.lookups_eq_nil
     Add.Configured.lookups_eq_nil hconfig.2.1]
 
 theorem circuit_call_output_cells_assigned
-    (B : FixedBase) (config : Config) (input : Var UnconstrainedNat Fp)
+    (B : FixedBase) (config : Config) (input : Var (UnconstrainedLimbs 4) Fp)
     (self : RegionIndex) :
     let output := (circuit B).output config input self
     output.x.cell ∈ Operations.assignedCellsFrom

@@ -1,9 +1,14 @@
-import Clean.Halo2
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Sinsemilla.Basic
+module
+
+public import Clean.Halo2
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Utilities.RunningSum
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Sinsemilla.Basic
+
+@[expose] public section
 
 /-!
 Sinsemilla hash: one word round of `hash_piece`, as a formal circuit. The per-word row assigns
@@ -199,7 +204,7 @@ theorem generatorLookup_auxiliarySelectorIndices (G : Generators) (cfg : Config)
     (generatorLookup G cfg).auxiliarySelectorIndices = [] := by
   simp [keygen_norm, generatorLookup,
     LookupArgument.auxiliarySelectorIndices,
-    yPExpr, yAExpr, xRExpr, qS3Expr]
+    yPExpr, yAExpr, xRExpr, qS3Expr, Expression.sub_def, Expression.selectorIndices]
 
 /-! ## Configure
 
@@ -474,7 +479,7 @@ set_option synthInstance.maxSize 2048 in
   unfold configure
   infer_instance
 
-private theorem configure_constraintDegree
+theorem configure_constraintDegree
     (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
     (genTable : GeneratorTableConfig) (counts) :
@@ -632,10 +637,10 @@ def readsValue (w : State (AssignedCell Fp)) (env : Placed ProverEnvironment Fp)
   row := { xA := readCell env w.row.xA, xP := readCell env w.row.xP,
            lambda1 := readCell env w.row.lambda1, lambda2 := readCell env w.row.lambda2 }
 
-/-- Honest running sum `z_r = ↑(piece.val ≫ (K·r))` at word `r` (`pieceZ` as a witgen program):
-cast to ℕ, shift right by `K·r` bits, cast back. -/
+/-- Honest running sum `z_r = ↑(piece.val ≫ (K·r))` at word `r` (`pieceZ` as a witgen program),
+computed in the field from the piece cell (`Witgen.FExprOver.runningSum`). -/
 def zWit (piece : AssignedCell Fp) (r : ℕ) : WitgenIR Fp 1 :=
-  .ofFExpr (.ofNat (.div (.val (.expr piece)) (.const (2 ^ (K * r)))))
+  .ofFExpr ((Witgen.FExprOver.expr piece).runningSum K r)
 
 /-- The running-sum witness evaluates to the honest `pieceZ` of the piece cell's value —
 spelled over the folded `AssignedCell.eval` cell read, the form `h_input` lands on (the
@@ -647,7 +652,7 @@ theorem zWit_eval (piece : AssignedCell Fp) (r : ℕ) (env : Placed ProverEnviro
       = pieceZ (AssignedCell.eval env.place env.env.toEnvironment piece) r := by
   have hj0 : j = 0 := by omega
   subst hj0
-  simp only [zWit, Witgen.WitgenIROver.getElem_eval_ofFExpr]
+  simp only [zWit, Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval_runningSum]
   rfl
 
 /-- Honest witness for one output cell of round `i`: the corresponding field of

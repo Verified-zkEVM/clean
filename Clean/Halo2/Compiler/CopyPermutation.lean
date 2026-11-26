@@ -1,7 +1,11 @@
-import Clean.Halo2.Compiler.CompiledCopies
-import Clean.Halo2.Compiler.PermutationAssembly
-import Clean.Halo2.Compiler.PermutationRows
-import Clean.Halo2.Compiler.FieldSupport
+module
+
+public import Clean.Halo2.Compiler.CompiledCopies
+public import Clean.Halo2.Compiler.PermutationAssembly
+public import Clean.Halo2.Compiler.PermutationRows
+public import Clean.Halo2.Compiler.FieldSupport
+
+@[expose] public section
 
 /-! # The compiled copy permutation
 
@@ -57,7 +61,7 @@ theorem copyPairs_columns_lt : ∀ t ∈ top.copyPairs,
     top.operations top.keygenCoherent
     top.regionStarts (top.constantCopyEntries)
     (const_column_mem_permutationColumns top) tuple
-  simpa only [copyPairs, permutationLayout] using htuple
+  simpa only [copyPairs, permutationLayout, constantCopyEntries] using htuple
 
 omit [TopLevelShape top] in
 /-- Every V1 circuit constant allocation lies below the compiler-derived operation
@@ -82,8 +86,8 @@ theorem copyPairs_rows_lt_usedRows
   apply V1_copyList_rows_lt_usedRows top.operations
     (top.permutationLayout) (top.constantCopyEntries)
     (const_row_lt_usedRows top) tuple
-  simpa only [copyPairs, regionStarts,
-    TopLevelCompilation.regionStarts] using htuple
+  simpa only [copyPairs, regionStarts, permutationLayout, constantCopyEntries,
+    TopLevelCompilation.regionStarts, operations] using htuple
 
 /-- Registration and the compiler footprint bound both coordinates of each copy. -/
 theorem copyPairs_bounds : ∀ t ∈ top.copyPairs, t.1 < top.permutationColumnCount ∧
@@ -196,7 +200,7 @@ theorem permutationRows_getD [FieldDomainParams F]
     simpa only [permutationLayout] using top.permutationLayout_length.symm
   have h := Layout.Asm.permutationRows_getD_eq top.constraintSystem top.operations
     hcount top.n_eq_two_pow_domainExponent top.boundedCopyPairs
-    (by simpa only [copyPairs, regionStarts] using hcopies) cell.1 cell.2
+    (by simpa only [copyPairs, regionStarts, TopLevelCompilation.regionStarts, operations] using hcopies) cell.1 cell.2
   simpa only [permutationRows, copyPermutation, omega] using h
 
 end Halo2.TopLevelCircuit

@@ -1,9 +1,13 @@
-import Clean.Halo2.Compiler.ConstraintFamilies
-import Clean.Halo2.Compiler.CopyLayout
-import Clean.Halo2.Keygen.Domain
-import Mathlib.Data.List.Forall2
-import Clean.Utils.ListZip
-import Clean.Halo2.Compiler.Fixed
+module
+
+public import Clean.Halo2.Compiler.ConstraintFamilies
+public import Clean.Halo2.Compiler.CopyLayout
+public import Clean.Halo2.Keygen.Domain
+public import Mathlib.Data.List.Forall2
+public import Clean.Utils.ListZip
+public import Clean.Halo2.Compiler.Fixed
+
+@[expose] public section
 
 /-!
 # Copy compilation and its semantics
@@ -85,7 +89,7 @@ theorem region_copy_constraints_iff
   | cons op rest ih =>
       cases op <;>
         simp_all [RegionConstraints, RegionConstraint, RegionOperation.Constraints,
-          regionDeclaredCopies, regionOperationDeclaredCopy?,
+          regionDeclaredCopies, List.filterMap_cons, regionOperationDeclaredCopy?,
           DeclaredCopy.Satisfied, CopyEndpoint.eval]
 
 /-- The complete copy-family projection is exactly satisfaction of the copies extracted from the
@@ -222,7 +226,7 @@ theorem regionDeclaredCopies_permutationColumns
   cases op <;> simp only [regionOperationDeclaredCopy?, reduceCtorEq] at hCopy
   all_goals obtain rfl := Option.some.inj hCopy
   all_goals simpa [CopyEndpoint.PermutationColumnRegistered,
-    RegionOperation.KeygenCoherent] using hRegistered
+    RegionOperation.KeygenCoherent, RegionOperation.KeygenRegistered] using hRegistered
 
 /-- Both endpoints of every coherent layouter copy use registered permutation
 columns. -/
@@ -841,6 +845,6 @@ theorem copy_constraints_of_compiled (assignment : ProofAssignment F)
       apply Or.inl
       apply Or.inr
       exact List.mem_map.mpr ⟨(value, column, row), hentry, rfl⟩
-    simpa only [FiniteField.fromNat_val] using top.environment_fixed_of_mem_raw assignment hraw
+    simpa only [FiniteField.fromNat_val, Environment.fixed, Column.toAny] using top.environment_fixed_of_mem_raw assignment hraw
 
 end Halo2.TopLevelCircuit

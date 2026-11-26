@@ -1,11 +1,15 @@
-import Clean.Halo2
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.MulOverflowTheorems
-import Clean.Ironwood.Ecc.Basic
-import Clean.Ironwood.Utilities.LookupRangeCheck
+module
+
+public import Clean.Halo2
+public import Clean.Halo2.Subcircuit
+public import Clean.Halo2.Tactics.SubcircuitRw
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.MulOverflowTheorems
+public import Clean.Ironwood.Ecc.Basic
+public import Clean.Ironwood.Utilities.LookupRangeCheck
+
+@[expose] public section
 
 /-!
 The overflow check of variable-base scalar multiplication: given the scalar `alpha` and the
@@ -379,8 +383,9 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
                   ((configure K configInput.1 configInput.2.1
                     configInput.2.2.1 configInput.2.2.2).output counts).adv0 }
               (i + 1) anchor (by
-                simpa only [LookupRangeCheck.lookupSelectorAnchorRequirements,
-                  SelectorAnchorRequirementsSatisfied] using hanchor)
+                change SelectorAnchorRequirementsSatisfied
+                  (LookupRangeCheck.lookupSelectorAnchorRequirements _) anchor
+                exact hanchor)
         · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
           simp only [gateRegion, circuit_norm, RegionOperation.IsNotLookup]
       lookupSelectorAssignmentsAgree_of_registered := by

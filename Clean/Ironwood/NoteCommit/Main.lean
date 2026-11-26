@@ -1,12 +1,16 @@
-import Clean.Ironwood.NoteCommit.Gates
-import Clean.Ironwood.NoteCommit.Decompose
-import Clean.Ironwood.NoteCommit.Canonicity
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Ironwood.NoteCommit.Composites
-import Clean.Ironwood.NoteCommit.YComposite
-import Clean.Ironwood.Sinsemilla.CommitDomain
-import Clean.Ironwood.NoteCommit.MainTheorems
-import Clean.Halo2.CircuitTypeDeriving
+module
+
+public import Clean.Ironwood.NoteCommit.Gates
+public import Clean.Ironwood.NoteCommit.Decompose
+public import Clean.Ironwood.NoteCommit.Canonicity
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Ironwood.NoteCommit.Composites
+public import Clean.Ironwood.NoteCommit.YComposite
+public import Clean.Ironwood.Sinsemilla.CommitDomain
+public import Clean.Ironwood.NoteCommit.MainTheorems
+public import Clean.Halo2.CircuitTypeDeriving
+
+@[expose] public section
 
 /-!
 # Orchard-protocol NoteCommit main circuit
@@ -38,13 +42,16 @@ open Specs.Sinsemilla (Generators)
 
 /-- The NoteCommit message piece lengths in `K = 10`-bit words:
 `a(250) ‖ b(10) ‖ c(250) ‖ d(60) ‖ e(10) ‖ f(250) ‖ g(250) ‖ h(10)` — the chain
-convention counts words − 1 per piece. -/
+convention counts words − 1 per piece.
+Implicit-reducible: `ns.length` indexes the hash input's piece vector while the piece literal
+`#v[…]` has its literal length, so Lean must unfold it while checking implicit arguments. -/
+@[implicit_reducible]
 def ns : List ℕ := [24, 0, 24, 5, 0, 24, 24, 0]
 
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
 
 /-- The circuit inputs: the note's field-element cells (`x/y(g_d)`, `x/y(pk_d)`, the
-64-bit value, `rho`, `psi`) and the blinding scalar's nat-valued reading program `rcm`
+64-bit value, `rho`, `psi`) and the blinding scalar's limb-valued reading program `rcm`
 (a prover hint — Rust `Value<pallas::Scalar>`; the fixed-base mul child derives its 85
 window witnesses from it and the scalar it encodes is extraction data). -/
 structure Inputs (F : Type) where
@@ -55,7 +62,7 @@ structure Inputs (F : Type) where
   value : F
   rho : F
   psi : F
-  rcm : UnconstrainedNat F
+  rcm : UnconstrainedLimbs 4 F
 deriving CircuitType
 
 /-! ## Witness programs
@@ -415,7 +422,7 @@ def synthGates (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
   synthCanonicity cfg input pcs ccs gcs iHash
 
 /-- Rust `NoteCommitChip::commit` (`note_commit.rs:1596-1798`), in exact region order.
-The `rcm` blinding scalar enters as the input's nat-valued reading program. -/
+The `rcm` blinding scalar enters as the input's limb-valued reading program. -/
 def synth (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
     (input : Var Inputs Fp) : Circuit Fp (Var Point Fp) := do
@@ -1180,7 +1187,9 @@ theorem zCell_column_mem_permutationColumns (cfg : Config)
       permutationColumns cfg childColumns := by
   simp [zCell, AssignedCell.of_cell, Cell.of_column, permutationColumns]
 
-@[keygen_norm]
+/-- Implicit-reducible: its provenance `configLawful` is the commit handle, and handles are
+checked against that type at implicit transparency. -/
+@[keygen_norm, implicit_reducible]
 def keygenRequirements (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) :
     KeygenRequirements Fp Config (Var Inputs Fp) where
@@ -1383,16 +1392,16 @@ private theorem pureRegionCall_keygenRegistered
   let configured := FormalCircuit.Configured.ofPure
     lifted cfg hconfigured hliftedConfigure
   apply lifted.call_keygenRegistered cfg configured input self
-  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_gates,
+  · simpa only [configured, lifted, FormalCircuit.Configured.reduceGates,
       FormalRegionCircuit.toFormal_keygenRequirements] using hgates
-  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_lookups,
+  · simpa only [configured, lifted, FormalCircuit.Configured.reduceLookups,
       FormalRegionCircuit.toFormal_keygenRequirements] using hlookups
-  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_fixedColumns,
+  · simpa only [configured, lifted, FormalCircuit.Configured.reduceFixedColumns,
       FormalRegionCircuit.toFormal_keygenRequirements] using hfixedColumns
   · simpa only [configured, lifted,
-      FormalCircuit.Configured.ofPure_permutationColumns,
+      FormalCircuit.Configured.reducePermutationColumns,
       FormalRegionCircuit.toFormal_keygenRequirements] using hpermutationColumns
-  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_inputCells,
+  · simpa only [configured, lifted, FormalCircuit.Configured.reduceInputCells,
       FormalRegionCircuit.toFormal_keygenRequirements] using hinputCells
 
 private theorem pureRegionCall_lookupSelectorAssignmentsAgree
@@ -1429,7 +1438,7 @@ private theorem pureRegionCall_lookupSelectorsAnchoredBy
   exact lifted.call_lookupSelectorsAnchoredBy cfg
     (FormalCircuit.Configured.ofPure lifted cfg hconfigured hliftedConfigure)
     input self anchor (by
-      simpa only [lifted, FormalRegionCircuit.toFormal] using hanchor)
+      exact hanchor)
 
 theorem synthDecompositions_keygenRegistered
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -2161,7 +2170,7 @@ private theorem pureRegionCall_copyCellsAssignedFrom
   let configured := FormalCircuit.Configured.ofPure
     lifted cfg hconfigured hliftedConfigure
   apply lifted.call_copyCellsAssignedFrom cfg configured input self
-  simpa only [configured, lifted, FormalCircuit.Configured.ofPure_inputCells,
+  simpa only [configured, lifted, FormalCircuit.Configured.reduceInputCells,
     FormalRegionCircuit.toFormal_keygenRequirements,
     List.forall_iff_forall_mem] using
       List.forall_iff_forall_mem.mp hinputCells
@@ -2373,7 +2382,7 @@ private theorem synthCanonicity_copyCellsAssignedFrom
     intro cell hcell
     exact List.mem_append_left _ hcell
 
-private theorem synth_copyCellsAssigned
+theorem synth_copyCellsAssigned
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
     (configured : (keygenRequirements G R Q hQ).configLawful cfg) :

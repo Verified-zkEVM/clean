@@ -1,5 +1,9 @@
-import Clean.Halo2.Tactics.CircuitProofStart
-import Clean.Ironwood.Ecc.WitnessPoint
+module
+
+public import Clean.Halo2.Tactics.CircuitProofStart
+public import Clean.Ironwood.Ecc.WitnessPoint
+
+@[expose] public section
 
 /-!
 # Test: `circuit_proof_start` — the halo2 bundle-proof prefix

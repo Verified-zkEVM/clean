@@ -1,4 +1,8 @@
-import Clean.Halo2.Operations
+module
+
+public import Clean.Halo2.Operations
+
+@[expose] public section
 
 namespace Halo2
 
@@ -98,8 +102,8 @@ theorem unionColumns_addColumn_right
   by_cases hcolumn : column ∈ right
   · have hunion : column ∈ unionColumns left right :=
       (mem_unionColumns_iff left right column).2 (.inr hcolumn)
-    rw [addColumn, if_pos hcolumn, addColumn, if_pos hunion]
-  · rw [addColumn, if_neg hcolumn]
+    rw [addColumn, ite_eq_left hcolumn, addColumn, ite_eq_left hunion]
+  · rw [addColumn, ite_eq_right hcolumn]
     unfold unionColumns
     rw [List.foldl_append]
     rfl
@@ -131,7 +135,7 @@ theorem unionColumns_eq_left_of_subset
   | nil => rfl
   | cons column rest inductionHypothesis =>
       change unionColumns (addColumn left column) rest = left
-      rw [addColumn, if_pos (hsubset column (by simp))]
+      rw [addColumn, ite_eq_left (hsubset column (by simp))]
       exact inductionHypothesis left fun candidate hcandidate =>
         hsubset candidate (by simp [hcandidate])
 
@@ -228,7 +232,7 @@ theorem unionColumns_empty_left
         have hcolumn : column ∉ left := hdisjoint column (by simp)
         change unionColumns (addColumn left column) rest =
           left ++ column :: rest
-        rw [addColumn, if_neg hcolumn]
+        rw [addColumn, ite_eq_right hcolumn]
         rw [inductionHypothesis (left ++ [column]) hright.2]
         · simp [List.append_assoc]
         · intro candidate hcandidate
@@ -1024,7 +1028,7 @@ private theorem foldr_ofColumns_eq_repeatColumns_combine
       · cases count with
         | zero =>
             apply RegionSynthesisSummary.ext
-            · simp only [repeatColumns, Nat.succ_ne_zero, if_false,
+            · simp only [repeatColumns, Nat.succ_ne_zero, ite_false,
                 combine_columns]
               exact unionColumns_empty_left _
                 (unionColumns_nodup _ _
@@ -1036,10 +1040,10 @@ private theorem foldr_ofColumns_eq_repeatColumns_combine
             · simp [repeatColumns, combine, ofColumns]
         | succ count =>
             apply RegionSynthesisSummary.ext
-            · simp only [repeatColumns, Nat.succ_ne_zero, if_false,
+            · simp only [repeatColumns, Nat.succ_ne_zero, ite_false,
                 combine_columns, ofColumns_columns, Nat.add_one_sub_one]
               rw [← unionColumns_assoc, unionColumns_self]
-            · simp only [repeatColumns, Nat.succ_ne_zero, if_false,
+            · simp only [repeatColumns, Nat.succ_ne_zero, ite_false,
                 combine_rowCount, ofColumns_rowCount, Fin.val_last,
                 Nat.add_one_sub_one]
               rw [Nat.max_eq_right]
@@ -1047,7 +1051,7 @@ private theorem foldr_ofColumns_eq_repeatColumns_combine
                 (Nat.add_le_add_left
                   (Nat.mul_le_mul_left stride (Nat.le_succ count)) offset) rowCount).trans
                     (Nat.le_max_left _ _)
-            · simp only [repeatColumns, Nat.succ_ne_zero, if_false,
+            · simp only [repeatColumns, Nat.succ_ne_zero, ite_false,
                 combine_constantSiteCount, ofColumns_constantSiteCount,
                 Nat.add_one_sub_one, Nat.succ_mul]
               omega
@@ -1103,7 +1107,7 @@ private theorem foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector_combine
         | zero =>
             apply RegionSynthesisSummary.ext
             · simp only [repeatColumnsWithSelectorAt, repeatColumns,
-                Nat.succ_ne_zero, if_false, combine_columns,
+                Nat.succ_ne_zero, ite_false, combine_columns,
                 withSelectorActivations_columns]
               exact unionColumns_empty_left _
                 (unionColumns_nodup _ _
@@ -1121,12 +1125,12 @@ private theorem foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector_combine
         | succ count =>
             apply RegionSynthesisSummary.ext
             · simp only [repeatColumnsWithSelectorAt, repeatColumns,
-                Nat.succ_ne_zero, if_false, combine_columns,
+                Nat.succ_ne_zero, ite_false, combine_columns,
                 withSelectorActivations_columns, ofColumns_columns,
                 Nat.add_one_sub_one]
               rw [← unionColumns_assoc, unionColumns_self]
             · simp only [repeatColumnsWithSelectorAt, repeatColumns,
-                Nat.succ_ne_zero, if_false, combine_rowCount,
+                Nat.succ_ne_zero, ite_false, combine_rowCount,
                 withSelectorActivations_rowCount, ofColumns_rowCount,
                 Fin.val_last, Nat.add_one_sub_one]
               rw [Nat.max_eq_right]
@@ -1215,7 +1219,7 @@ private theorem foldr_ofColumnsWithSelectorPattern_combine
         | zero =>
             apply RegionSynthesisSummary.ext
             · simp only [repeatColumnsWithSelectorPattern, repeatColumns,
-                Nat.succ_ne_zero, if_false, combine_columns,
+                Nat.succ_ne_zero, ite_false, combine_columns,
                 withSelectorActivations_columns]
               exact unionColumns_empty_left _
                 (unionColumns_nodup _ _
@@ -1233,12 +1237,12 @@ private theorem foldr_ofColumnsWithSelectorPattern_combine
         | succ count =>
             apply RegionSynthesisSummary.ext
             · simp only [repeatColumnsWithSelectorPattern, repeatColumns,
-                Nat.succ_ne_zero, if_false, combine_columns,
+                Nat.succ_ne_zero, ite_false, combine_columns,
                 withSelectorActivations_columns, ofColumns_columns,
                 Nat.add_one_sub_one]
               rw [← unionColumns_assoc, unionColumns_self]
             · simp only [repeatColumnsWithSelectorPattern, repeatColumns,
-                Nat.succ_ne_zero, if_false, combine_rowCount,
+                Nat.succ_ne_zero, ite_false, combine_rowCount,
                 withSelectorActivations_rowCount, ofColumns_rowCount,
                 Fin.val_last, Nat.add_one_sub_one]
               rw [Nat.max_eq_right]

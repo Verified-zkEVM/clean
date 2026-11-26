@@ -1,16 +1,20 @@
-import Clean.Circuit
-import Clean.Gadgets.Boolean
-import Clean.Ironwood.Ecc.Defs
-import Clean.Ironwood.Ecc.DoubleAndAdd
-import Clean.Ironwood.Ecc.AddTheorems
-import Clean.Ironwood.Ecc.AddIncompleteTheorems
-import Clean.Ironwood.Ecc.MulAssignTheorems
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
-import Clean.Ironwood.Specs.Bitrange
-import Clean.Utils.Tactics
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Boolean
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Ironwood.Ecc.DoubleAndAdd
+public import Clean.Ironwood.Ecc.AddTheorems
+public import Clean.Ironwood.Ecc.AddIncompleteTheorems
+public import Clean.Ironwood.Ecc.MulAssignTheorems
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+public import Clean.Ironwood.Specs.Bitrange
+public import Clean.Utils.Tactics
+public import Clean.Utils.Tactics.ProvableStructDeriving
+
+@[expose] public section
 
 /-!
 # NoteCommit canonicity theorems
@@ -131,7 +135,7 @@ theorem canonical_top_decomp {x lo top : Fp}
     (hcanon : top = 1 → lo.val < tPNat) :
     x.val = lo.val + top.val * 2 ^ 254 ∧
       lo.val = bitrange x.val 0 254 ∧ top.val = bitrange x.val 254 1 := by
-  haveI : Fact (1 < PALLAS_BASE_CARD) := ⟨by norm_num [PALLAS_BASE_CARD]⟩
+  have : Fact (1 < PALLAS_BASE_CARD) := ⟨by norm_num [PALLAS_BASE_CARD]⟩
   have hp := pallasBaseCard_eq
   have htv : top.val < 2 := by rcases htop with h | h <;> subst h <;> simp [ZMod.val_one]
   have hwrap : lo.val + top.val * 2 ^ 254 < PALLAS_BASE_CARD := by

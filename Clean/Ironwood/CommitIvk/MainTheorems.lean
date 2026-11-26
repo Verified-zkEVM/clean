@@ -1,9 +1,13 @@
-import Clean.Ironwood.CommitIvk.GateTheorems
-import Clean.Ironwood.CommitIvk.ChunkTheorems
-import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
-import Clean.Ironwood.Specs.Sinsemilla
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Ironwood.Utilities.RunningSum
+module
+
+public import Clean.Ironwood.CommitIvk.GateTheorems
+public import Clean.Ironwood.CommitIvk.ChunkTheorems
+public import Clean.Ironwood.Sinsemilla.CommitDomainTheorems
+public import Clean.Ironwood.Specs.Sinsemilla
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Ironwood.Utilities.RunningSum
+
+@[expose] public section
 
 /-!
 # Orchard incoming viewing key commitment
@@ -126,13 +130,13 @@ private theorem copyCheck_telescope {n : ℕ} (zs : Vector Fp (n + 1))
     intro i hi
     obtain ⟨word, hword, heq⟩ := hstep ⟨i, hi⟩
     refine ⟨word, hword, ?_⟩
-    simp only [dif_pos (Nat.lt_succ_of_lt hi), dif_pos (Nat.succ_lt_succ hi)]
+    simp only [dite_eq_left (Nat.lt_succ_of_lt hi), dite_eq_left (Nat.succ_lt_succ hi)]
     push_cast
     rw [heq]; ring
   obtain ⟨lo, hlo, hz0⟩ := running_sum_telescope K
     (fun j => if hj : j < n + 1 then zs[j]'hj else 0) n hz
   refine ⟨lo, hlo, ?_⟩
-  simp only [dif_pos (Nat.succ_pos n), dif_pos (Nat.lt_succ_self n)] at hz0
+  simp only [dite_eq_left (Nat.succ_pos n), dite_eq_left (Nat.lt_succ_self n)] at hz0
   push_cast at hz0 ⊢
   convert hz0 using 2
 

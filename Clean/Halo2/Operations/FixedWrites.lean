@@ -1,4 +1,8 @@
-import Clean.Halo2.Operations.Keygen
+module
+
+public import Clean.Halo2.Operations.Keygen
+
+@[expose] public section
 
 namespace Halo2
 

@@ -1,6 +1,10 @@
-import Clean.Ironwood.Specs.Pallas
-import CompElliptic.Curves.Pasta
-import Clean.Ironwood.Specs.Bitrange
+module
+
+public import Clean.Ironwood.Specs.Pallas
+public import CompElliptic.Curves.Pasta
+public import Clean.Ironwood.Specs.Bitrange
+
+@[expose] public section
 
 /-!
 # Sinsemilla value-level specification
@@ -121,15 +125,15 @@ theorem step_ne_zero {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
     {m : ℕ} (hm : m < 2 ^ K) (h : step G.S m A = some B) : B ≠ 0 := by
   simp only [step, Point.doubleAndAdd, Option.bind_eq_bind] at h
   by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₁] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₁] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₁] at h
   rw [show ((some (A + G.S m)).bind fun t => Point.incompleteAdd t A)
     = Point.incompleteAdd (A + G.S m) A from rfl] at h
   by_cases hc₂ : A + G.S m = 0 ∨ A = 0 ∨ (A + G.S m).x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₂] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₂] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₂] at h
   push Not at hc₂
   obtain rfl : A + G.S m + A = B := Option.some.inj h
   intro h0
@@ -146,15 +150,15 @@ theorem step_valid {G : Generators} {A B : Point Fp} (a_valid : A.Valid)
     {m : ℕ} (hm : m < 2 ^ K) (h : step G.S m A = some B) : B.Valid := by
   simp only [step, Point.doubleAndAdd, Option.bind_eq_bind] at h
   by_cases hc₁ : A = 0 ∨ G.S m = 0 ∨ A.x = (G.S m).x
-  · rw [Point.incompleteAdd_def, if_pos hc₁] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₁] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₁] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₁] at h
   rw [show ((some (A + G.S m)).bind fun t => Point.incompleteAdd t A)
     = Point.incompleteAdd (A + G.S m) A from rfl] at h
   by_cases hc₂ : A + G.S m = 0 ∨ A = 0 ∨ (A + G.S m).x = A.x
-  · rw [Point.incompleteAdd_def, if_pos hc₂] at h
+  · rw [Point.incompleteAdd_def, ite_eq_left hc₂] at h
     simp at h
-  rw [Point.incompleteAdd_def, if_neg hc₂] at h
+  rw [Point.incompleteAdd_def, ite_eq_right hc₂] at h
   obtain rfl : A + G.S m + A = B := Option.some.inj h
   exact Point.valid_add (Point.valid_add a_valid (G.valid hm)) a_valid
 
@@ -509,7 +513,7 @@ theorem noteCommitChunks_inj
         = noteCommitChunks gdX' gdY' pkdX' pkdY' v' rho' psi') :
     gdX = gdX' ∧ gdY = gdY' ∧ pkdX = pkdX' ∧ pkdY = pkdY' ∧ v = v' ∧ rho = rho'
       ∧ psi = psi' := by
-  have hK : (2 : ℕ) ^ (K * 109) = 2 ^ 1090 := by norm_num [K]
+  have hK : (2 : ℕ) ^ (K * 109) = 2 ^ 1090 := by rw [show K * 109 = 1090 by rfl]
   have hbound : ∀ {a b c d e f g : ℕ}, a < 2 ^ 255 → b < 2 → c < 2 ^ 255 → d < 2 →
       e < 2 ^ 64 → f < 2 ^ 255 → g < 2 ^ 255 →
       noteCommitMessage a b c d e f g < 2 ^ (K * 109) := by
@@ -566,7 +570,7 @@ theorem commitIvkChunks_inj {ak nk ak' nk' : ℕ}
     intro x y hx hy
     unfold commitIvkMessage
     have hK : (2 : ℕ) ^ (K * 51) = 2 ^ 255 * 2 ^ 255 := by
-      rw [← pow_add]; norm_num [K]
+      rw [← pow_add, show K * 51 = 255 + 255 by rfl]
     calc x + 2 ^ 255 * y < 2 ^ 255 + 2 ^ 255 * y := by omega
       _ = 2 ^ 255 * (y + 1) := by ring
       _ ≤ 2 ^ 255 * 2 ^ 255 := Nat.mul_le_mul_left _ hy

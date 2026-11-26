@@ -1,10 +1,14 @@
-import Clean.Halo2.Expression
-import Clean.Halo2.Tactics.SelectorFree
-import Clean.Halo2.Tactics.QueryCorrect
-import Clean.Halo2.ConfigureAttr
-import Clean.Halo2.KeygenAttr
-import Mathlib.Data.List.Dedup
-import Mathlib.Data.List.MinMax
+module
+
+public import Clean.Halo2.Expression
+public import Clean.Halo2.Tactics.SelectorFree
+public import Clean.Halo2.Tactics.QueryCorrect
+public import Clean.Halo2.ConfigureAttr
+public import Clean.Halo2.KeygenAttr
+public import Mathlib.Data.List.Dedup
+public import Mathlib.Data.List.MinMax
+
+@[expose] public section
 
 /-!
 # Halo2 configure layer — DESIGN SKETCH
@@ -281,9 +285,9 @@ def Gate.withSelector
         · intro _ _
           rfl
       simp only [querySelector, Expression.eval,
-        Expression.replaceSelectorValue, if_pos] at hzero
+        Expression.replaceSelectorValue, ite_eq_left] at hzero
       simp only [querySelector, Expression.eval,
-        Expression.enabledGateValuation, if_pos, one_mul]
+        Expression.enabledGateValuation, ite_eq_left, one_mul]
       rw [← hpolyEval]
       exact (mul_eq_zero.mp hzero).resolve_left hscale
 
@@ -304,7 +308,7 @@ def Gate.withSelector
 
 open Lean Meta Simp in
 /-- Reduce only a named gate's selector projection, without unfolding its constraints. -/
-def foldGateSelectorProc : Simproc := fun expression => do
+meta def foldGateSelectorProc : Simproc := fun expression => do
   unless expression.isAppOf ``Gate.selector do
     return .continue
   try
@@ -468,7 +472,7 @@ theorem Expression.selectorIndices_neg [Field F]
 theorem Expression.selectorIndices_sub
     [Field F] (left right : Expression F Query) :
     (left - right).selectorIndices = left.selectorIndices ++ right.selectorIndices := by
-  simp [Expression.selectorIndices]
+  rfl
 
 /-- Selector indices used by a lookup input other than its distinguished master
 selector. Multiplicity is harmless and keeps this a direct structural projection. -/

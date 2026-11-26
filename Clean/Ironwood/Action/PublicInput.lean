@@ -1,5 +1,9 @@
-import Clean.Halo2.TopLevel
-import Clean.Ironwood.Action.Bundle
+module
+
+public import Clean.Halo2.TopLevel
+public import Clean.Ironwood.Action.Bundle
+
+@[expose] public section
 
 /-!
 # Orchard Action public and private inputs

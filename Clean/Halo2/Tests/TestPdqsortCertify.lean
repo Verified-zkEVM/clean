@@ -1,4 +1,8 @@
-import Clean.Halo2.Keygen.PdqsortCertify
+module
+
+public import Clean.Halo2.Keygen.PdqsortCertify
+
+@[expose] public section
 
 namespace Halo2.Tests.TestPdqsortCertify
 

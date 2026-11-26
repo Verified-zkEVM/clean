@@ -1,4 +1,8 @@
-import Lean.Meta.Tactic.Simp.RegisterCommand
+module
+
+public meta import Lean.Meta.Tactic.Simp.RegisterCommand
+
+public meta section
 
 /-- Structural reductions for configure-time selector requirements. -/
 register_simp_attr configure_selector_norm

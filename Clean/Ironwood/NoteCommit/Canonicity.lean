@@ -1,5 +1,9 @@
-import Clean.Ironwood.NoteCommit.Gates
-import Clean.Ironwood.NoteCommit.CanonicityTheorems
+module
+
+public import Clean.Ironwood.NoteCommit.Gates
+public import Clean.Ironwood.NoteCommit.CanonicityTheorems
+
+@[expose] public section
 
 /-!
 Reference (ported from Rust):
@@ -25,9 +29,9 @@ private theorem isBool_of_boolCheck' {v : Fp} (h : v * (1 - v) = 0) : IsBool v :
 
 namespace ValueCanonicity
 
-private abbrev DRow := NoteCommit.ValueCanonicity.Gate.Row
-private abbrev DSpec := NoteCommit.ValueCanonicity.Gate.Spec
-private abbrev DAssumptions := NoteCommit.ValueCanonicity.Gate.Assumptions
+abbrev DRow := NoteCommit.ValueCanonicity.Gate.Row
+abbrev DSpec := NoteCommit.ValueCanonicity.Gate.Spec
+abbrev DAssumptions := NoteCommit.ValueCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   value : F
@@ -127,9 +131,9 @@ end ValueCanonicity
 
 namespace GdCanonicity
 
-private abbrev DRow := NoteCommit.GdCanonicity.Gate.Row
-private abbrev DSpec := NoteCommit.GdCanonicity.Gate.Spec
-private abbrev DAssumptions := NoteCommit.GdCanonicity.Gate.Assumptions
+abbrev DRow := NoteCommit.GdCanonicity.Gate.Row
+abbrev DSpec := NoteCommit.GdCanonicity.Gate.Spec
+abbrev DAssumptions := NoteCommit.GdCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   gdX : F
@@ -271,9 +275,9 @@ end GdCanonicity
 
 namespace PkdCanonicity
 
-private abbrev DRow := NoteCommit.PkdCanonicity.Gate.Row
-private abbrev DSpec := NoteCommit.PkdCanonicity.Gate.Spec
-private abbrev DAssumptions := NoteCommit.PkdCanonicity.Gate.Assumptions
+abbrev DRow := NoteCommit.PkdCanonicity.Gate.Row
+abbrev DSpec := NoteCommit.PkdCanonicity.Gate.Spec
+abbrev DAssumptions := NoteCommit.PkdCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   pkdX : F
@@ -415,9 +419,9 @@ end PkdCanonicity
 
 namespace RhoCanonicity
 
-private abbrev DRow := NoteCommit.RhoCanonicity.Gate.Row
-private abbrev DSpec := NoteCommit.RhoCanonicity.Gate.Spec
-private abbrev DAssumptions := NoteCommit.RhoCanonicity.Gate.Assumptions
+abbrev DRow := NoteCommit.RhoCanonicity.Gate.Row
+abbrev DSpec := NoteCommit.RhoCanonicity.Gate.Spec
+abbrev DAssumptions := NoteCommit.RhoCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   rho : F
@@ -560,9 +564,9 @@ end RhoCanonicity
 
 namespace PsiCanonicity
 
-private abbrev DRow := NoteCommit.PsiCanonicity.Gate.Row
-private abbrev DSpec := NoteCommit.PsiCanonicity.Gate.Spec
-private abbrev DAssumptions := NoteCommit.PsiCanonicity.Gate.Assumptions
+abbrev DRow := NoteCommit.PsiCanonicity.Gate.Row
+abbrev DSpec := NoteCommit.PsiCanonicity.Gate.Spec
+abbrev DAssumptions := NoteCommit.PsiCanonicity.Gate.Assumptions
 
 structure Row (F : Type) where
   psi : F
@@ -712,9 +716,9 @@ end PsiCanonicity
 
 namespace YCanonicity
 
-private abbrev DRow := NoteCommit.YCanonicity.Gate.Row
-private abbrev DSpec := NoteCommit.YCanonicity.Gate.Spec
-private abbrev DAssumptions := NoteCommit.YCanonicity.Gate.Assumptions
+abbrev DRow := NoteCommit.YCanonicity.Gate.Row
+abbrev DSpec := NoteCommit.YCanonicity.Gate.Spec
+abbrev DAssumptions := NoteCommit.YCanonicity.Gate.Assumptions
 
 /-- The copied-in cells (the `lsb`/`k_3` sign bits are witnessed in-region). -/
 structure Row (F : Type) where

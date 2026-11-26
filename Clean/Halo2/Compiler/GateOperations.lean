@@ -1,5 +1,9 @@
-import Clean.Halo2.Compiler.ConstraintFamilies
-import Clean.Halo2.TopLevel
+module
+
+public import Clean.Halo2.Compiler.ConstraintFamilies
+public import Clean.Halo2.TopLevel
+
+@[expose] public section
 
 /-! # Gate activations and their operation semantics -/
 
@@ -215,8 +219,9 @@ theorem mem_activations_of_mem_operationEnabledGate
                         selectors.map fun selector =>
                           (selector.index, starts.getD i 0 + row)
                     | _ => [] := by
-              simpa only [activations, List.flatMap_cons,
-                List.flatMap_nil, List.append_nil] using hregion
+              simp only [activations, List.flatMap_cons,
+                List.flatMap_nil, List.append_nil] at hregion
+              exact hregion
             exact List.mem_append_left _ hregion'
           · have hrest := ih (i := i + 1) henabled
             exact List.mem_append_right _ hrest

@@ -1,4 +1,8 @@
-import Clean.Ironwood.Specs.Pallas
+module
+
+public import Clean.Ironwood.Specs.Pallas
+
+@[expose] public section
 
 /-!
 # Orchard protocol types

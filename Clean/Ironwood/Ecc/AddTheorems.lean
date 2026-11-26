@@ -1,11 +1,15 @@
-import Clean.Ironwood.Specs.Pallas
-import Clean.Ironwood.Ecc.Defs
-import Clean.Utils.Tactics
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
+module
+
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Ecc.Defs
+public import Clean.Utils.Tactics
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.LinearCombination
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+
+@[expose] public section
 
 namespace Zcash.Circuits.Ecc
 
@@ -107,7 +111,7 @@ theorem rowValue_spec {input : Input Fp}
   · intro hxdiff
     unfold rowValue lambdaValue
     simp at hxdiff ⊢
-    rw [if_neg]
+    rw [ite_eq_right]
     · have hden : input.q.x - input.p.x ≠ 0 := hxdiff
       field_simp [hden]
     · intro hx

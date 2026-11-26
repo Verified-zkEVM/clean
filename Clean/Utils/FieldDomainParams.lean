@@ -1,5 +1,9 @@
-import CompElliptic.Fields.Sqrt
-import Mathlib.RingTheory.RootsOfUnity.PrimitiveRoots
+module
+
+public import CompElliptic.Fields.Sqrt
+public import Mathlib.RingTheory.RootsOfUnity.PrimitiveRoots
+
+@[expose] public section
 
 /-! # Certified field parameters for evaluation domains and permutation columns
 
@@ -82,7 +86,6 @@ theorem eq_of_delta_pow_eq_omega_pow_mul {k n : ℕ}
     rw [← pow_mul, Nat.mul_comm, pow_mul, delta_isPrimitiveRoot.pow_eq_one,
       one_pow]
   have hPowers := congrArg (fun x : F => x ^ params.oddPart) h
-  dsimp only at hPowers
   rw [hColumn, mul_pow, hColumn, mul_one, ← pow_mul] at hPowers
   have hRoot := omega_isPrimitiveRoot (F := F) hSupported
   have hCoprime : Nat.Coprime (2 ^ k) params.oddPart :=

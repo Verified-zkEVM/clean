@@ -1,4 +1,8 @@
-import Clean.Ironwood.Action.Circuit
+module
+
+public import Clean.Ironwood.Action.Circuit
+
+@[expose] public section
 
 /-!
 # The pre-NU6.3 Orchard Action circuit (fixed post-NU6.2)

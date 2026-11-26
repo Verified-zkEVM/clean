@@ -1,8 +1,19 @@
-import Clean.Ironwood.Fixtures.Layout
-import Clean.Ironwood.Fixtures.MulLayout
-import Clean.Ironwood.Fixtures.MulSelMap
-import Clean.Ironwood.Fixtures.MulPost
-import Clean.Ironwood.Ecc.Mul
+module
+
+public import Clean.Ironwood.Fixtures.Layout
+public import Clean.Ironwood.Fixtures.MulLayout
+public import Clean.Ironwood.Fixtures.MulSelMap
+public import Clean.Ironwood.Fixtures.MulPost
+public import Clean.Ironwood.Ecc.Mul
+
+-- `#guard` below executes compiled code from these modules.
+public meta import Clean.Ironwood.Fixtures.Layout
+public meta import Clean.Ironwood.Fixtures.MulLayout
+public meta import Clean.Ironwood.Fixtures.MulSelMap
+public meta import Clean.Ironwood.Fixtures.MulPost
+public meta import Clean.Ironwood.Ecc.Mul
+
+@[expose] public section
 
 /-!
 # VK-match test (Phase 2): variable-base scalar mul — LAYOUT (permutation σ + fixed values)

@@ -1,6 +1,10 @@
-import Clean.Halo2.Compiler.ConstraintFamilies
-import Clean.Halo2.Keygen.Layout
-import Clean.Halo2.TopLevel
+module
+
+public import Clean.Halo2.Compiler.ConstraintFamilies
+public import Clean.Halo2.Keygen.Layout
+public import Clean.Halo2.TopLevel
+
+@[expose] public section
 
 /-!
 # Fixed-data compilation and its semantics
@@ -432,7 +436,9 @@ theorem selectorAssignment_mem_raw {entry : Layout.FixedAssignment F}
     (hentry : entry ∈ Layout.selectorAssignments top.selectorMap top.selectorActivations) :
     entry ∈ Layout.rawAssignments (top.usableRowsAt top.domainExponent)
       top.selectorMap top.constraintSystem top.operations := by
-  simpa only [Layout.rawAssignments, List.mem_append] using Or.inl (Or.inr hentry)
+  simpa only [Layout.rawAssignments, List.mem_append, selectorActivations,
+    TopLevelCompilation.selectorActivations, TopLevelCompilation.regionStarts,
+    operations] using Or.inl (Or.inr hentry)
 
 end Halo2.TopLevelCircuit
 

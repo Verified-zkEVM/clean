@@ -1,4 +1,8 @@
-import Clean.Ironwood.Action.Circuit
+module
+
+public import Clean.Ironwood.Action.Circuit
+
+@[expose] public section
 
 /-!
 # Action configure certificates
@@ -15,7 +19,7 @@ open Ecc.MulFixed (FixedBase)
 open Specs.Sinsemilla (Generators)
 
 /-- The complete keygen context of one Action configure run. -/
-private def actionConfigureContext (G : Generators) (counts : ConfigureCounts) :
+def actionConfigureContext (G : Generators) (counts : ConfigureCounts) :
     KeygenContext Fp :=
   { gates := ((configure G).delta counts).gates
     lookups := ((configure G).delta counts).lookups
@@ -29,7 +33,7 @@ theorem actionConfigureContext_fixedColumns (G : Generators)
       ((configure G).output counts).regionFixedColumns := by
   rfl
 
-private def actionFullConfigureContext (G : Generators)
+def actionFullConfigureContext (G : Generators)
     (counts : ConfigureCounts) : KeygenContext Fp :=
   { gates := ((configure G).delta counts).gates
     lookups := ((configure G).delta counts).lookups
@@ -192,7 +196,7 @@ private theorem coordsGate_fixedZ_fixedQuery_mem_actionConfigure
   simp [Ecc.MulFixed.coordsGate, Gate.withSelector]
 
 /-- The Poseidon hash capability transported through Action's direct Poseidon bind. -/
-private def poseidonHashCertificate (G : Generators) (counts : ConfigureCounts) :
+def poseidonHashCertificate (G : Generators) (counts : ConfigureCounts) :
     (Poseidon.hash (Poseidon.Hash.ConstantLength.capacity 2)).ConfigurationCertificate
       ((configure G).output counts).poseidonConfig
       (actionConfigureContext G counts) := by
@@ -250,7 +254,7 @@ private def poseidonHashCertificate (G : Generators) (counts : ConfigureCounts) 
     exact hcolumn
 
 /-- The first HashPiece configure, transported through Action's direct bind. -/
-private def sinsemilla1HashCertificate (G : Generators) (ns : List ℕ)
+def sinsemilla1HashCertificate (G : Generators) (ns : List ℕ)
     (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
     (counts : ConfigureCounts) :
     (Sinsemilla.HashToPoint.hashCircuit G ns Q hQ hns).ConfigurationCertificate
@@ -310,8 +314,7 @@ private def sinsemilla1HashCertificate (G : Generators) (ns : List ℕ)
       rw [Sinsemilla.HashPiece.configure_fixedColumns,
         List.mem_singleton] at hhash
       rw [hhash]
-      simpa [base, chipsCounts, eccCounts, poseidonCounts] using
-        configure_output_sinsemilla1_qS2_mem_regionFixedColumns G counts
+      exact configure_output_sinsemilla1_qS2_mem_regionFixedColumns G counts
   · intro column hcolumn
     simp only [actionConfigureContext]
     unfold configure
@@ -332,7 +335,7 @@ private theorem sinsemilla1Gate_mem_actionConfigure (G : Generators)
   rw [List.mem_append]
   apply Or.inl
   have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla1 := by
-    simpa using certificate.output_eq
+    exact certificate.output_eq
   simp [hconfig, Sinsemilla.HashToPoint.hashCircuit,
     Sinsemilla.HashToPoint.hashRegion, FormalRegionCircuit.keygenRequirements,
     ElaboratedRegionCircuit.keygenRequirements]
@@ -347,7 +350,7 @@ private theorem sinsemilla1Lookup_mem_actionConfigure (G : Generators)
   rw [List.mem_append]
   apply Or.inl
   have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla1 := by
-    simpa using certificate.output_eq
+    exact certificate.output_eq
   simp [hconfig, Sinsemilla.HashToPoint.hashCircuit,
     Sinsemilla.HashToPoint.hashRegion, FormalRegionCircuit.keygenRequirements,
     ElaboratedRegionCircuit.keygenRequirements]
@@ -379,7 +382,7 @@ private theorem sinsemilla1_generatorTable_fixedQuery_mem_actionConfigure
   exact hregistered
 
 /-- Action-facing view of the two capabilities produced by a Merkle configure. -/
-private structure MerkleCapabilities (config : Sinsemilla.Merkle.Config)
+structure MerkleCapabilities (config : Sinsemilla.Merkle.Config)
     (context : KeygenContext Fp) where
   condSwap : ∀ (wb : WitgenIR Fp 1)
     (wswap : Placed ProverEnvironment Fp → Bool),
@@ -388,7 +391,7 @@ private structure MerkleCapabilities (config : Sinsemilla.Merkle.Config)
     (Sinsemilla.Merkle.Gate.circuit l).ConfigurationCertificate config.gate context
 
 /-- The first Merkle configure, transported through Action's direct bind. -/
-private def merkle1Capabilities (G : Generators) (counts : ConfigureCounts) :
+def merkle1Capabilities (G : Generators) (counts : ConfigureCounts) :
     MerkleCapabilities ((configure G).output counts).merkle1
       (actionConfigureContext G counts) := by
   let base := configureBase.output counts
@@ -481,7 +484,7 @@ private def merkle1Capabilities (G : Generators) (counts : ConfigureCounts) :
       poseidonCounts, hashProgram, hashConfig, hashCounts] using certificate.gate l
 
 /-- The second HashPiece configure, transported through Action's direct bind. -/
-private def sinsemilla2HashCertificate (G : Generators) (ns : List ℕ)
+def sinsemilla2HashCertificate (G : Generators) (ns : List ℕ)
     (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
     (counts : ConfigureCounts) :
     (Sinsemilla.HashToPoint.hashCircuit G ns Q hQ hns).ConfigurationCertificate
@@ -559,9 +562,7 @@ private def sinsemilla2HashCertificate (G : Generators) (ns : List ℕ)
       rw [Sinsemilla.HashPiece.configure_fixedColumns,
         List.mem_singleton] at hhash
       rw [hhash]
-      simpa [base, chipsCounts, eccCounts, poseidonCounts, hash1, merkle1,
-        hash2Counts] using
-        configure_output_sinsemilla2_qS2_mem_regionFixedColumns G counts
+      exact configure_output_sinsemilla2_qS2_mem_regionFixedColumns G counts
   · intro column hcolumn
     simp only [actionConfigureContext]
     unfold configure
@@ -585,7 +586,7 @@ private theorem sinsemilla2Gate_mem_actionConfigure (G : Generators)
   rw [List.mem_append]
   apply Or.inl
   have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla2 := by
-    simpa using certificate.output_eq
+    exact certificate.output_eq
   simp [hconfig, Sinsemilla.HashToPoint.hashCircuit,
     Sinsemilla.HashToPoint.hashRegion, FormalRegionCircuit.keygenRequirements,
     ElaboratedRegionCircuit.keygenRequirements]
@@ -715,7 +716,7 @@ theorem configure_fixedQueries_length (G : Generators) :
     List.length_range]
 
 /-- The second Merkle configure, transported through Action's direct bind. -/
-private def merkle2Capabilities (G : Generators) (counts : ConfigureCounts) :
+def merkle2Capabilities (G : Generators) (counts : ConfigureCounts) :
     MerkleCapabilities ((configure G).output counts).merkle2
       (actionConfigureContext G counts) := by
   let base := configureBase.output counts
@@ -872,7 +873,7 @@ opaque baseConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
       exact hcolumn)
 
 /-- The single AddChip gate configured directly in Action's shared prefix. -/
-private def addChipCertificate (G : Generators) (counts : ConfigureCounts) :
+def addChipCertificate (G : Generators) (counts : ConfigureCounts) :
     AddChip.addFormal.ConfigurationCertificate
       ((configure G).output counts).addChipConfig
       (actionConfigureContext G counts) := by
@@ -894,7 +895,7 @@ private def addChipCertificate (G : Generators) (counts : ConfigureCounts) :
       simpa only [actionFullConfigureContext, actionConfigureContext] using hcolumn)
   simpa [source, configure, configureChips] using certificate
 
-private def shortRangeCertificate (G : Generators) (counts : ConfigureCounts)
+def shortRangeCertificate (G : Generators) (counts : ConfigureCounts)
     (numBits : ℕ) :
     (LookupRangeCheck.shortRangeCheck 10 numBits).ConfigurationCertificate
       ((configure G).output counts).lookupConfig
@@ -937,9 +938,7 @@ opaque merkle1Certificate (G : Generators) (B : Bases)
     G B.merkleQ B.merkleQ_onCurve 0 (by norm_num)
     range hash ((merkle1Capabilities G counts).gate 0)
     (by
-      simpa [configure, configureChips, actionFullConfigureContext,
-        actionConfigureContext] using
-        (baseConfigureCertificate G counts).advicePermutationColumn 6)
+      exact (baseConfigureCertificate G counts).advicePermutationColumn 6)
   let layer := Sinsemilla.Merkle.Layer.configurationCertificate
     G B.merkleQ B.merkleQ_onCurve 0 (by norm_num)
     (hintWitnesses.merkleSib 0) (hintWitnesses.merkleSwap 0)
@@ -967,9 +966,7 @@ opaque merkle2Certificate (G : Generators) (B : Bases)
     G B.merkleQ B.merkleQ_onCurve 16 (by norm_num)
     range hash ((merkle2Capabilities G counts).gate 16)
     (by
-      simpa [configure, configureChips, actionFullConfigureContext,
-        actionConfigureContext] using
-        (baseConfigureCertificate G counts).advicePermutationColumn 7)
+      exact (baseConfigureCertificate G counts).advicePermutationColumn 7)
   let layer := Sinsemilla.Merkle.Layer.configurationCertificate
     G B.merkleQ B.merkleQ_onCurve 16 (by norm_num)
     (hintWitnesses.merkleSib 16) (hintWitnesses.merkleSwap 16)
@@ -1010,13 +1007,11 @@ opaque commitIvkCertificate (G : Generators) (B : Bases)
         rcases hcolumn with (hshared | hgate) | hcommit
         · simp only [List.mem_cons, List.not_mem_nil, or_false] at hshared
           rcases hshared with rfl | rfl | rfl
-          all_goals simpa [configure, configureChips] using
-            (base.advicePermutationColumn _)
+          all_goals exact base.advicePermutationColumn _
         · simp only [CommitIvk.permutationColumns, List.mem_cons,
             List.not_mem_nil, or_false] at hgate
           rcases hgate with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-          all_goals simpa [configure, configureChips] using
-            (base.advicePermutationColumn _)
+          all_goals exact base.advicePermutationColumn _
         · exact commit.permutationColumns_of_configured column hcommit)
 
 private theorem noteCommitOldDirectGates (G : Generators)
@@ -1119,8 +1114,7 @@ opaque noteCommitOldCertificate (G : Generators) (B : Bases)
         rcases hcolumn with (hshared | hgates) | hcommit
         · simp only [List.mem_cons, List.not_mem_nil, or_false] at hshared
           rcases hshared with rfl | rfl | rfl
-          all_goals simpa [configure, configureChips] using
-            (base.advicePermutationColumn _)
+          all_goals exact base.advicePermutationColumn _
         · have hadvices :=
             NoteCommit.mem_adviceColumns_of_mem_configure_output_permutationColumns
               (configureBase.output counts).advices _ column
@@ -1157,8 +1151,7 @@ opaque noteCommitNewCertificate (G : Generators) (B : Bases)
         rcases hcolumn with (hshared | hgates) | hcommit
         · simp only [List.mem_cons, List.not_mem_nil, or_false] at hshared
           rcases hshared with rfl | rfl | rfl
-          all_goals simpa [configure, configureChips] using
-            (base.advicePermutationColumn _)
+          all_goals exact base.advicePermutationColumn _
         · have hadvices :=
             NoteCommit.mem_adviceColumns_of_mem_configure_output_permutationColumns
               (configureBase.output counts).advices _ column
@@ -1488,7 +1481,8 @@ theorem configure_output_orchardGate_mem_gates
     orchardGate ((configure G).output counts).qOrchard
         ((configure G).output counts).advices ∈
       ((configure G).delta counts).gates := by
-  simpa only [actionConfigureContext] using
+  simpa only [actionFullConfigureContext, configure_output_qOrchard,
+    configure_output_advices] using
     (baseConfigureCertificate G counts).orchardGate
 
 end Zcash.Circuits.Action.Circuit

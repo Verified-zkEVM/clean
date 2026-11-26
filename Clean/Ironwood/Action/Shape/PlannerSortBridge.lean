@@ -1,5 +1,9 @@
-import Clean.Ironwood.Action.Shape.Planner
-import Clean.Ironwood.Action.Shape.PlannerSort
+module
+
+public import Clean.Ironwood.Action.Shape.Planner
+public import Clean.Ironwood.Action.Shape.PlannerSort
+
+@[expose] public section
 
 namespace Zcash.Circuits.Action
 

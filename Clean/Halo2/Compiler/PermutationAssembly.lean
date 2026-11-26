@@ -1,8 +1,12 @@
-import Clean.Utils.PermutationConstruction
-import Clean.Halo2.Compiler.CopyLayout
-import Clean.Halo2.Compiler.PermutationRows
-import Clean.Halo2.Keygen.Layout
-import Mathlib.Tactic.IntervalCases
+module
+
+public import Clean.Utils.PermutationConstruction
+public import Clean.Halo2.Compiler.CopyLayout
+public import Clean.Halo2.Compiler.PermutationRows
+public import Clean.Halo2.Keygen.Layout
+public import Mathlib.Tactic.IntervalCases
+
+@[expose] public section
 
 /-! # Correctness of executable permutation assembly
 
@@ -136,12 +140,12 @@ theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell num
         have hstop : π start = stop := by
           simpa [pow_one] using hs
         simp only [repoint, hnext, hstop]
-        rw [if_pos (by simp)]
+        rw [ite_eq_left (by simp)]
         by_cases hd : d = start
         · subst hd
-          rw [if_pos ⟨0, by simp, rfl⟩]
+          rw [ite_eq_left ⟨0, by simp, rfl⟩]
           exact getPair_setPair_self hshape d.1.isLt d.2.isLt tgt
-        · rw [if_neg ?_, getPair_setPair_ne hshape ?_ tgt]
+        · rw [ite_eq_right ?_, getPair_setPair_ne hshape ?_ tgt]
           · exact fun h => hd (FlatCell.pair_injective h)
           · rintro ⟨t, ht, hteq⟩
             interval_cases t
@@ -154,7 +158,7 @@ theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell num
           simp only [beq_eq_false_iff_ne]
           exact fun h => hne (FlatCell.pair_injective h)
         simp only [repoint, hnext, hnepair]
-        rw [if_neg (by simp)]
+        rw [ite_eq_right (by simp)]
         have hs'' : (π ^ s') (π start) = stop := by
           rw [← Equiv.Perm.mul_apply, ← pow_succ]
           exact hs
@@ -169,7 +173,7 @@ theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell num
         by_cases hd : d = start
         · subst hd
           have hrhs : ∃ t, t < s' + 1 ∧ (π ^ t) d = d := ⟨0, by simp⟩
-          rw [if_pos hrhs]
+          rw [ite_eq_left hrhs]
           split
           · rfl
           · exact getPair_setPair_self hshape d.1.isLt d.2.isLt tgt
@@ -191,8 +195,8 @@ theorem getPair_repoint_aux {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell num
                   exact hteq
           rw [getPair_setPair_ne hshape hpairne tgt]
           by_cases hc : ∃ t, t < s' + 1 ∧ (π ^ t) start = d
-          · rw [if_pos hc, if_pos (hcond.mpr hc)]
-          · rw [if_neg hc, if_neg (fun h => hc (hcond.mp h))]
+          · rw [ite_eq_left hc, ite_eq_left (hcond.mpr hc)]
+          · rw [ite_eq_right hc, ite_eq_right (fun h => hc (hcond.mp h))]
 
 /-- The walk reads only `mapping` and writes only `aux`, so a `sizes` update commutes
 away. -/
@@ -245,13 +249,13 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
   by_cases hsame : π.SameCycle l r
   · have heq : getPair a.aux l.pair = getPair a.aux r.pair :=
       (sim.aux_eq_iff l r).mpr hsame
-    rw [if_pos hsame, if_pos (by simpa [hpl, hpr] using heq)]
+    rw [ite_eq_left hsame, ite_eq_left (by simpa [hpl, hpr] using heq)]
     exact sim
   · have hbeq : ¬ (getPair a.aux (l.pair.1, l.pair.2) ==
         getPair a.aux (r.pair.1, r.pair.2)) = true := by
       simp only [hpl, hpr, beq_iff_eq]
       exact fun h => hsame ((sim.aux_eq_iff l r).mp h)
-    rw [if_neg hsame, if_neg hbeq]
+    rw [ite_eq_right hsame, ite_eq_right hbeq]
     -- representative cells and their source cells, by the size comparison
     set RC : FlatCell numCols n :=
       if getNat a.sizes (getPair a.aux (l.pair.1, l.pair.2)) <
@@ -304,9 +308,9 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
         hsret hs1 hsmin (n * numCols)
         (le_trans hsle (le_of_eq (Nat.mul_comm _ _))) d]
       by_cases hcyc : π.SameCycle RC d
-      · rw [if_pos ((Equiv.Perm.sameCycle_iff_exists_pow_lt hs1 hsret d).mp hcyc), if_pos hcyc]
-      · rw [if_neg (fun h => hcyc ((Equiv.Perm.sameCycle_iff_exists_pow_lt hs1 hsret d).mpr h)),
-          if_neg hcyc]
+      · rw [ite_eq_left ((Equiv.Perm.sameCycle_iff_exists_pow_lt hs1 hsret d).mp hcyc), ite_eq_left hcyc]
+      · rw [ite_eq_right (fun h => hcyc ((Equiv.Perm.sameCycle_iff_exists_pow_lt hs1 hsret d).mpr h)),
+          ite_eq_right hcyc]
     have hlr : l ≠ r := fun h => hsame (h ▸ Equiv.Perm.SameCycle.refl π l)
     have hlrpair : l.pair ≠ r.pair := fun h => hlr (FlatCell.pair_injective h)
     have hmerge : ∀ c d : FlatCell numCols n,
@@ -370,23 +374,23 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
     · -- every cell keeps an in-cycle, self-rooted representative
       intro c
       by_cases hc : π.SameCycle RC c
-      · refine ⟨LC, by rw [haux2 c, if_pos hc], ?_, ?_⟩
+      · refine ⟨LC, by rw [haux2 c, ite_eq_left hc], ?_, ?_⟩
         · exact (hmerge c LC).mpr (hMergeOfRC hc hLCcyc)
-        · rw [haux2 LC, if_neg hRCLC]
+        · rw [haux2 LC, ite_eq_right hRCLC]
           exact hLCroot
       · obtain ⟨rep, hrep, hrepcyc, hreproot⟩ := sim.aux_rep c
-        refine ⟨rep, by rw [haux2 c, if_neg hc]; exact hrep,
+        refine ⟨rep, by rw [haux2 c, ite_eq_right hc]; exact hrep,
           (hmerge c rep).mpr (Or.inl hrepcyc), ?_⟩
         have hrc : ¬ π.SameCycle RC rep := fun h => hc (h.trans hrepcyc.symm)
-        rw [haux2 rep, if_neg hrc]
+        rw [haux2 rep, ite_eq_right hrc]
         exact hreproot
     · -- aux entries agree exactly on merged cycles
       intro c d
       rw [haux2 c, haux2 d, hmerge c d]
       by_cases hc : π.SameCycle RC c <;> by_cases hd : π.SameCycle RC d
-      · rw [if_pos hc, if_pos hd]
+      · rw [ite_eq_left hc, ite_eq_left hd]
         exact ⟨fun _ => Or.inl (hc.symm.trans hd), fun _ => rfl⟩
-      · rw [if_pos hc, if_neg hd]
+      · rw [ite_eq_left hc, ite_eq_right hd]
         constructor
         · intro h
           have hdv : π.SameCycle d v :=
@@ -397,7 +401,7 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
           have : getPair a.aux d.pair = getPair a.aux v.pair :=
             (sim.aux_eq_iff d v).mpr hdv.symm
           rw [this, hvrep]
-      · rw [if_neg hc, if_pos hd]
+      · rw [ite_eq_right hc, ite_eq_left hd]
         constructor
         · intro h
           have hcv : π.SameCycle c v :=
@@ -409,7 +413,7 @@ theorem Sim.copy {numCols n : ℕ} {a : Asm} {π : Perm (FlatCell numCols n)}
           have : getPair a.aux c.pair = getPair a.aux v.pair :=
             (sim.aux_eq_iff c v).mpr hcv.symm
           rw [this, hvrep]
-      · rw [if_neg hc, if_neg hd, sim.aux_eq_iff c d]
+      · rw [ite_eq_right hc, ite_eq_right hd, sim.aux_eq_iff c d]
         constructor
         · exact fun h => Or.inl h
         · intro hm

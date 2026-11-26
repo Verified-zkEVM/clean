@@ -1,4 +1,8 @@
-import Clean.Halo2.Configure.Delta
+module
+
+public import Clean.Halo2.Configure.Delta
+
+@[expose] public section
 
 namespace Halo2
 

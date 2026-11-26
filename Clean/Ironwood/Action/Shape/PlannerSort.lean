@@ -1,5 +1,10 @@
-import Clean.Halo2.Keygen.FloorPlanner.RegionShape
-import Clean.Halo2.Keygen.PdqsortCertify
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.RegionShape
+public meta import Clean.Halo2.Keygen.FloorPlanner.RegionShape
+public import Clean.Halo2.Keygen.PdqsortCertify
+
+@[expose] public section
 
 /-!
 # Exact Action planner sort order
@@ -46,9 +51,11 @@ def actionSortedRegionIndices : List Nat :=
 
 namespace PlannerSort
 
+meta section
 deriving instance Lean.ToExpr for Halo2.ColumnKind
 deriving instance Lean.ToExpr for RegionColumn
 deriving instance Lean.ToExpr for RegionShape
+end
 deriving instance DecidableEq for RegionShape
 
 /-- Reduced planner input, independent of the Action circuit's implementation. -/

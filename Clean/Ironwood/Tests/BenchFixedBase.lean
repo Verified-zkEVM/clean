@@ -1,5 +1,9 @@
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Tactic.NormNum.Basic
+module
+
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Tactic.NormNum.Basic
+
+@[expose] public section
 -- Benchmark: kernel-decide cost of the FixedBase checker primitives (Pallas-size).
 
 def P : ℕ := 28948022309329048855892746252171976963363056481941560715954676764349967630337

@@ -1,9 +1,13 @@
-import Clean.Ironwood.CommitIvk.Composite
-import Clean.Ironwood.NoteCommit.Main
-import Clean.Ironwood.Sinsemilla.CommitDomain
-import Clean.Ironwood.CommitIvk.MainTheorems
-import Clean.Ironwood.Specs.SinsemillaBreak
-import Clean.Halo2.CircuitTypeDeriving
+module
+
+public import Clean.Ironwood.CommitIvk.Composite
+public import Clean.Ironwood.NoteCommit.Main
+public import Clean.Ironwood.Sinsemilla.CommitDomain
+public import Clean.Ironwood.CommitIvk.MainTheorems
+public import Clean.Ironwood.Specs.SinsemillaBreak
+public import Clean.Halo2.CircuitTypeDeriving
+
+@[expose] public section
 
 /-!
 Reference (ported from actual Rust, not memory):
@@ -38,17 +42,20 @@ open Specs.Sinsemilla (Generators)
 open NoteCommit.Main (brWit currentRegion)
 
 /-- Piece word counts minus one, per the chain convention: `a` = 25 words, `b` = 1,
-`c` = 24, `d` = 1 (`I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)` split at `250/10/240/10` bits). -/
+`c` = 24, `d` = 1 (`I2LEBSP₂₅₅(ak) || I2LEBSP₂₅₅(nk)` split at `250/10/240/10` bits).
+Implicit-reducible: `ns.length` indexes the hash input's piece vector while the piece literal
+`#v[…]` has its literal length, so Lean must unfold it while checking implicit arguments. -/
+@[implicit_reducible]
 def ns : List ℕ := [24, 0, 23, 0]
 
 theorem ns_ne_nil : ns ≠ [] := by simp [ns]
 
 /-- The main circuit's inputs: the `ak`/`nk` field-element cells and the blinding
-scalar's nat-valued reading program `rivk` (a prover hint). -/
+scalar's limb-valued reading program `rivk` (a prover hint). -/
 structure Inputs (F : Type) where
   ak : F
   nk : F
-  rivk : UnconstrainedNat F
+  rivk : UnconstrainedLimbs 4 F
 deriving CircuitType
 
 /-! ## Witness programs (the canonical bit-slice values; Rust computes the same from
@@ -322,7 +329,9 @@ theorem zCell_column_mem_permutationColumns (cfg : Config)
       permutationColumns cfg childColumns := by
   simp [zCell, AssignedCell.of_cell, Cell.of_column, permutationColumns]
 
-@[keygen_norm]
+/-- Implicit-reducible: its provenance `configLawful` is the commit handle, and handles are
+checked against that type at implicit transparency. -/
+@[keygen_norm, implicit_reducible]
 def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=
@@ -416,8 +425,12 @@ theorem synth_keygenRegistered
   · apply (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
       |>.call_keygenRegistered
         (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) configured _ (self + 7)
-    case hgates => keygen_registration
-    case hlookups => keygen_registration
+    case hgates =>
+      intro gate hgate
+      exact List.mem_append_right _ hgate
+    case hlookups =>
+      intro argument hargument
+      exact List.mem_append_right _ hargument
     case hfixedColumns =>
       intro column hcolumn
       exact hcolumn
@@ -440,17 +453,25 @@ theorem synth_keygenRegistered
       (cfg.gate, cfg.lookupConfig) () (by rfl)
     apply child.call_keygenRegistered
       (cfg.gate, cfg.lookupConfig) childConfigured _ (self + 11)
-    case hgates => keygen_registration
-    case hlookups => keygen_registration
+    case hgates =>
+      intro gate hgate
+      change gate ∈ [CommitIvk.gate cfg.gate] at hgate
+      simp only [List.mem_singleton] at hgate
+      subst gate
+      exact List.mem_append_left _ (by simp)
+    case hlookups =>
+      intro argument hargument
+      change argument ∈ [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] at hargument
+      exact List.mem_append_left _ hargument
     case hfixedColumns =>
       intro column hcolumn
       simp only [childConfigured, child,
-        FormalCircuit.Configured.ofPure_fixedColumns] at hcolumn
+        FormalCircuit.Configured.reduceFixedColumns] at hcolumn
       contradiction
     case hpermutationColumns =>
       intro column hcolumn
       simpa only [childConfigured, child,
-        FormalCircuit.Configured.ofPure_permutationColumns] using
+        FormalCircuit.Configured.reducePermutationColumns] using
           hCanonicity column hcolumn
     case hinputCells => keygen_registration
 
@@ -548,7 +569,7 @@ private theorem synthPieces_lookupSelectorsAnchoredBy
   · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
       cfg.hashConfig _ _ anchor
 
-private theorem synth_copyCellsAssigned
+theorem synth_copyCellsAssigned
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
     (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
@@ -612,7 +633,7 @@ private theorem synth_copyCellsAssigned
           (List.mem_append_right _ hpieces.2.2.2.2.1)
       · exact List.mem_append_left _
           (List.mem_append_right _ hpieces.2.2.2.2.2.1)
-      · simpa only [zCell, commitInput, pcs, Nat.add_assoc] using
+      · simpa only [zCell, commitInput, pcs, AssignedCell.of_cell, Nat.add_assoc, Nat.reduceAdd] using
           List.mem_append_right
             ([input.ak.cell, input.nk.cell] ++
               Operations.assignedCellsFrom
@@ -623,7 +644,7 @@ private theorem synth_copyCellsAssigned
           (List.mem_append_right _ hpieces.2.2.2.1)
       · exact List.mem_append_left _
           (List.mem_append_right _ hpieces.2.2.2.2.2.2)
-      · simpa only [zCell, commitInput, pcs, Nat.add_assoc] using
+      · simpa only [zCell, commitInput, pcs, AssignedCell.of_cell, Nat.add_assoc, Nat.reduceAdd] using
           List.mem_append_right
             ([input.ak.cell, input.nk.cell] ++
               Operations.assignedCellsFrom

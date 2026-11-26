@@ -1,6 +1,10 @@
-import Clean.Ironwood.Specs.PallasCert
-import Clean.Ironwood.Ecc.MulFixed.Theorems
-import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+module
+
+public import Clean.Ironwood.Specs.PallasCert
+public import Clean.Ironwood.Ecc.MulFixed.Theorems
+public import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+
+@[expose] public section
 
 /-!
 # Nat-level certification checker for concrete fixed-base window tables
@@ -507,7 +511,7 @@ open CompElliptic.Fields.Pasta (Fq PALLAS_SCALAR_CARD)
 
 theorem windowScalar_val_lower {w k : ℕ} (hw : w < 84) (hk : k < 8) :
     (Ecc.MulFixed.windowScalar w k).val = (k + 2) * 8 ^ w := by
-  rw [Ecc.MulFixed.windowScalar, if_neg (by omega)]
+  rw [Ecc.MulFixed.windowScalar, ite_eq_right (by omega)]
   have hcast : ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) := by
     push_cast
     ring
@@ -539,12 +543,12 @@ theorem cert_windowPoint_eq {c : BaseCert}
   rw [Ecc.MulFixed.windowPoint]
   by_cases hw84 : w < 84
   · obtain ⟨hw', hk', hval⟩ := hlow w hw84 k hk
-    rw [certEntry, if_pos (show w < 84 from hw84), getElem!_pos c.rows w hw', getElem!_pos _ k hk', hval,
+    rw [certEntry, ite_eq_left (show w < 84 from hw84), getElem!_pos c.rows w hw', getElem!_pos _ k hk', hval,
       windowScalar_val_lower hw84 hk]
   · have hw' : w = 84 := by omega
     subst hw'
     obtain ⟨hk', hval⟩ := hmsb k hk
-    rw [certEntry, if_neg (by omega : ¬ 84 < 84), getElem!_pos c.msb k hk', hval]
+    rw [certEntry, ite_eq_right (by omega : ¬ 84 < 84), getElem!_pos c.msb k hk', hval]
     apply Point.nsmul_congr hB
     rw [← ZMod.natCast_eq_natCast_iff]
     set S : ℕ := ∑ j ∈ Finset.range 84, 2 * 8 ^ j with hSdef
@@ -559,7 +563,7 @@ theorem cert_windowPoint_eq {c : BaseCert}
     rw [hcast]
     have hws : Ecc.MulFixed.windowScalar 84 k
         = (k : Fq) * 8 ^ 84 - (S : Fq) := by
-      rw [Ecc.MulFixed.windowScalar, if_pos rfl, offsetAcc_eq_sum, hSdef]
+      rw [Ecc.MulFixed.windowScalar, ite_eq_left rfl, offsetAcc_eq_sum, hSdef]
     rw [← hws]
     exact (ZMod.natCast_rightInverse _).symm
 
@@ -620,7 +624,7 @@ theorem powModAux_cast (a : ℕ) :
       rw [powModAux]
       by_cases he0 : e = 0
       · simp [he0]
-      · rw [if_neg he0]
+      · rw [ite_eq_right he0]
         have hdiv : e / 2 < 2 ^ fuel := by
           have := Nat.div_lt_of_lt_mul (by
             rw [← pow_succ']
@@ -628,13 +632,13 @@ theorem powModAux_cast (a : ℕ) :
           omega
         have hh := ih (e / 2) hdiv
         by_cases hodd : e % 2 = 1
-        · rw [if_pos hodd]
+        · rw [ite_eq_left hodd]
           rw [cast_mod]
           push_cast [cast_mod]
           rw [hh, ← pow_add, ← pow_succ]
           congr 1
           omega
-        · rw [if_neg hodd]
+        · rw [ite_eq_right hodd]
           rw [cast_mod]
           push_cast
           rw [hh, ← pow_add]
@@ -875,7 +879,7 @@ def ofCert (c : FullCert) (h : checkFull 84 c = true) :
 
 theorem short_windowScalar_val_lower {w k : ℕ} (hw : w < 21) (hk : k < 8) :
     (Ecc.MulFixed.Short.windowScalar w k).val = (k + 2) * 8 ^ w := by
-  rw [Ecc.MulFixed.Short.windowScalar, if_neg (by omega)]
+  rw [Ecc.MulFixed.Short.windowScalar, ite_eq_right (by omega)]
   have hcast : ((k : Fq) + 2) * 8 ^ w = (((k + 2) * 8 ^ w : ℕ) : Fq) := by
     push_cast
     ring
@@ -899,12 +903,12 @@ theorem cert_windowPoint_eq_short {c : BaseCert}
   rw [Ecc.MulFixed.Short.windowPoint]
   by_cases hw21 : w < 21
   · obtain ⟨hw', hk', hval⟩ := hlow w hw21 k hk
-    rw [certEntry, if_pos (show w < 21 from hw21), getElem!_pos c.rows w hw',
+    rw [certEntry, ite_eq_left (show w < 21 from hw21), getElem!_pos c.rows w hw',
       getElem!_pos _ k hk', hval, short_windowScalar_val_lower hw21 hk]
   · have hw' : w = 21 := by omega
     subst hw'
     obtain ⟨hk', hval⟩ := hmsb k hk
-    rw [certEntry, if_neg (by omega : ¬ 21 < 21), getElem!_pos c.msb k hk', hval]
+    rw [certEntry, ite_eq_right (by omega : ¬ 21 < 21), getElem!_pos c.msb k hk', hval]
     apply Point.nsmul_congr hB
     rw [← ZMod.natCast_eq_natCast_iff]
     set S : ℕ := ∑ j ∈ Finset.range 21, 2 * 8 ^ j with hSdef
@@ -920,7 +924,7 @@ theorem cert_windowPoint_eq_short {c : BaseCert}
     rw [hcast]
     have hws : Ecc.MulFixed.Short.windowScalar 21 k
         = (k : Fq) * 8 ^ 21 - (S : Fq) := by
-      rw [Ecc.MulFixed.Short.windowScalar, if_pos rfl,
+      rw [Ecc.MulFixed.Short.windowScalar, ite_eq_left rfl,
         Ecc.MulFixed.Short.offsetAcc_eq, hSdef]
     rw [← hws]
     exact (ZMod.natCast_rightInverse _).symm

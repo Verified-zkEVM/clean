@@ -1,5 +1,9 @@
-import Clean.Halo2.Keygen.Pdqsort
-import Mathlib.Tactic.NormNum
+module
+
+public import Clean.Halo2.Keygen.Pdqsort
+public import Mathlib.Tactic.NormNum
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 namespace Pdqsort
@@ -106,11 +110,10 @@ theorem overwrite_get!
         array[index]! := by
   have heq := congrArg (fun values : List T => values[index]!)
     (overwrite_toList array start sub hfit)
-  dsimp only at heq
   rw [arrayToList_getElem!] at heq
   rw [heq]
   by_cases hinside : start ≤ index ∧ index < start + sub.size
-  · rw [if_pos hinside]
+  · rw [ite_eq_left hinside]
     simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
     have htake : (array.toList.take start).length = start := by
       simp only [List.length_take, Array.length_toList]
@@ -118,12 +121,12 @@ theorem overwrite_get!
     have hprefix :
         (array.toList.take start ++ sub.toList).length =
           start + sub.size := by simp [htake]
-    rw [if_pos (by rw [hprefix]; omega), htake,
-      if_neg (by omega)]
-    rw [List.getElem?_eq_getElem (by simp; omega), Option.getD_some]
+    rw [ite_eq_left (by rw [hprefix]; omega), htake,
+      ite_eq_right (by omega)]
+    rw [List.getElem?_eq_getElem (by simp only [Array.length_toList]; omega), Option.getD_some]
     rw [getElem!_pos sub (index - start) (by omega)]
-    exact Array.getElem_toList (xs := sub) (by omega)
-  · rw [if_neg hinside]
+    exact Array.getElem_toList (xs := sub) (by simpa only [Array.length_toList] using (show index - start < sub.size by omega))
+  · rw [ite_eq_right hinside]
     by_cases hbefore : index < start
     · simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
       have htake : (array.toList.take start).length = start := by
@@ -132,13 +135,13 @@ theorem overwrite_get!
       have hprefix :
           (array.toList.take start ++ sub.toList).length =
             start + sub.size := by simp [htake]
-      rw [if_pos (by rw [hprefix]; omega),
-        if_pos (by rw [htake]; omega)]
+      rw [ite_eq_left (by rw [hprefix]; omega),
+        ite_eq_left (by rw [htake]; omega)]
       rw [List.getElem?_eq_getElem (by
-        simp only [List.length_take, Array.length_toList]
+        simp only [htake]
         omega), Option.getD_some, List.getElem_take]
       rw [getElem!_pos array index (by omega)]
-      exact Array.getElem_toList (xs := array) (by omega)
+      exact Array.getElem_toList (xs := array) (by simp only [Array.length_toList]; omega)
     · have hafter : start + sub.size ≤ index := by omega
       simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
       have htake : (array.toList.take start).length = start := by
@@ -147,7 +150,7 @@ theorem overwrite_get!
       have hprefix :
           (array.toList.take start ++ sub.toList).length =
             start + sub.size := by simp [htake]
-      rw [if_neg (by rw [hprefix]; omega), hprefix]
+      rw [ite_eq_right (by rw [hprefix]; omega), hprefix]
       by_cases horiginal : index < array.size
       · rw [List.getElem?_eq_getElem (by
             simp only [List.length_drop, Array.length_toList]
@@ -1342,21 +1345,23 @@ theorem breakPatterns_perm (v : Array T) :
           (by rw [hrsize]; omega)
           (by
             rw [hrsize]
-            simpa only [breakWord, xorshift32, if_pos hother] using
-              (adjusted_mod_lt (breakWord r.fst) v.size
-                (by omega)))).trans hr
+            have hb := nextPow2_bounds v.size (by omega)
+            have hm := Nat.mod_lt (breakWord r.fst) hb.1
+            simp only [breakWord, xorshift32] at hm
+            omega)).trans hr
       ·
         exact (swp_perm r.snd (v.size / 4 * 2 - 1 + i) _
           (by rw [hrsize]; omega)
           (by
             rw [hrsize]
-            simpa only [breakWord, xorshift32, if_neg hother] using
-              (adjusted_mod_lt (breakWord r.fst) v.size
-                (by omega)))).trans hr
+            have hb := nextPow2_bounds v.size (by omega)
+            have hm := Nat.mod_lt (breakWord r.fst) hb.1
+            simp only [breakWord, xorshift32] at hm
+            omega)).trans hr
     have hmain := state_forIn_body_result_perm
       (List.range' 0 3) body ⟨v.size.toUInt32, v⟩ v
       hbody (List.Perm.refl _)
-    simpa only [body] using hmain
+    exact hmain
   · simp
 
 private theorem partialInsertionMutation_perm
@@ -1426,14 +1431,14 @@ private theorem list_forIn_invariant
       cases b with
       | done s =>
           exact hbody i (by simp) initial s hinit
-            (Or.inl (by simpa using congrArg Id.run hb))
+            (Or.inl (by simpa only [Id.run] using congrArg Id.run hb))
       | yield s =>
           apply ih
           · intro j hj t t' ht hstep
             exact hbody j (by simp [hj]) t t' ht hstep
           ·
             exact hbody i (by simp) initial s hinit
-              (Or.inr (by simpa using congrArg Id.run hb))
+              (Or.inr (by simpa only [Id.run] using congrArg Id.run hb))
 
 private theorem bounded_scan
     (indices : List ℕ) (len i0 : ℕ)
@@ -1622,7 +1627,7 @@ theorem partialInsertionSort_perm (v : Array T)
       · rw [hstep] at h
         exact h)
     hinit
-  simpa only [body, Inv] using hloop.1
+  simpa only [body, Inv, Id.run, pure, bind] using hloop.1
 
 private theorem KeySorted.take_succ
     (array : Array T) (key : T → ℕ) (index : ℕ)
@@ -1641,13 +1646,13 @@ private theorem KeySorted.take_succ
     simp only [List.length_take, Array.length_toList]
     omega
   have hprefixBound := KeySorted.keysLE_last key
-    (array.toList.take index) hsorted (by omega)
+    (array.toList.take index) hsorted (by rw [hlength]; exact hpositive)
   have hleftLast := hprefixBound left hleft
   have hlast : (array.toList.take index)[index - 1]! =
       array[index - 1]! := by
     rw [getElem!_pos _ _ (by rw [hlength]; omega),
       List.getElem_take]
-    rw [Array.getElem_toList (by omega)]
+    rw [Array.getElem_toList (by simpa only [Array.length_toList] using (show index - 1 < array.size by omega))]
     rw [getElem!_pos array (index - 1) (by omega)]
   rw [hlength, hlast] at hleftLast
   exact hleftLast.trans hnext
@@ -1700,14 +1705,14 @@ private theorem swp_toList_take_before
       have := hindexRight
       simp only [List.length_take, Array.length_toList] at this
       omega
-    rw [Array.getElem_toList (by simpa only [swp_size] using hindex),
+    rw [Array.getElem_toList (by simpa only [Array.length_toList, swp_size] using hindex),
       Array.getElem_toList hindex,
       ← getElem!_pos (swp array left right) index
         (by simpa only [swp_size] using hindex),
       ← getElem!_pos array index hindex,
       swp_get! array left right index hleft hright,
       getElem!_pos array index hindex,
-      if_neg (by omega), if_neg (by omega)]
+      ite_eq_right (by omega), ite_eq_right (by omega)]
 
 private theorem partialInsertionMutation_prefix_sorted
     (array : Array T) (key : T → ℕ) (index : ℕ)
@@ -2318,13 +2323,13 @@ private theorem scanLeft_stops_on_greater
       by_cases hstep :
           (decide (left < right) &&
             !isLess pivot array[1 + left]!) = true
-      · rw [scanLeft, if_pos hstep] at hresult ⊢
+      · rw [scanLeft, ite_eq_left hstep] at hresult ⊢
         apply inductionHypothesis
         · simp only [List.length_cons] at hcapacity
           simp only [Bool.and_eq_true, decide_eq_true_eq] at hstep
           omega
         · exact hresult
-      · rw [scanLeft, if_neg hstep] at hresult ⊢
+      · rw [scanLeft, ite_eq_right hstep] at hresult ⊢
         have hleftRight : left < right := hresult
         simp only [Bool.and_eq_true, decide_eq_true_eq,
           Bool.not_eq_true'] at hstep
@@ -2349,13 +2354,13 @@ private theorem scanRight_stops_on_not_greater
       by_cases hstep :
           (decide (left < right) &&
             isLess pivot array[1 + (right - 1)]!) = true
-      · rw [scanRight, if_pos hstep] at hresult ⊢
+      · rw [scanRight, ite_eq_left hstep] at hresult ⊢
         apply inductionHypothesis
         · simp only [List.length_cons] at hcapacity
           simp only [Bool.and_eq_true, decide_eq_true_eq] at hstep
           omega
         · exact hresult
-      · rw [scanRight, if_neg hstep] at hresult ⊢
+      · rw [scanRight, ite_eq_right hstep] at hresult ⊢
         have hleftRight : left < right := hresult
         simp only [Bool.and_eq_true, decide_eq_true_eq] at hstep
         cases hless : isLess pivot array[1 + (right - 1)]! with
@@ -2434,8 +2439,7 @@ private theorem partitionScanRight_forIn
       else
         pure (.done current)) =
       scanRight indices left right pivot array (dualLess isLess) := by
-  simpa only [dualLess] using
-    scanRight_forIn indices left right pivot array (dualLess isLess)
+  exact scanRight_forIn indices left right pivot array (dualLess isLess)
 
 private theorem partitionScanLeft_rangeAll
     (indices : List ℕ) (left right : ℕ)
@@ -2573,9 +2577,9 @@ theorem partitionP_order
     simp only [middle] at hindexStop
     rw [overwrite_get! swapped block.2 (1 + left) index hfit]
     by_cases hbefore : index < 1 + left
-    · rw [if_neg (by omega)]
+    · rw [ite_eq_right (by omega)]
       exact hleftOrder index hindexStart hbefore
-    · rw [if_pos (by
+    · rw [ite_eq_left (by
           constructor
           · omega
           · rw [hblockSize, hsourceSize]
@@ -2588,7 +2592,7 @@ theorem partitionP_order
     intro index hindexStart hindexStop
     rw [overwrite_get! swapped block.2 (1 + left) index hfit]
     by_cases hbeforeRight : index < 1 + right
-    · rw [if_pos (by
+    · rw [ite_eq_left (by
           constructor
           · simp only [middle] at hindexStart
             omega
@@ -2599,7 +2603,7 @@ theorem partitionP_order
         omega
       · rw [hblockSize, hsourceSize]
         omega
-    · rw [if_neg (by
+    · rw [ite_eq_right (by
           rw [hblockSize, hsourceSize]
           omega)]
       apply hrightOrder index
@@ -2614,7 +2618,7 @@ theorem partitionP_order
     have hzero : rewritten[0]! = swapped[0]! := by
       simp only [rewritten]
       rw [overwrite_get! swapped block.2 (1 + left) 0 hfit,
-        if_neg (by omega)]
+        ite_eq_right (by omega)]
     by_cases hmiddleZero : middle = 0
     · simp [hmiddleZero, hzero]
     · simp [hmiddleZero, hzero]
@@ -2630,15 +2634,15 @@ theorem partitionP_order
       swp_get! rewritten 0 middle index (by
         simpa only [rewritten, overwrite_size] using hpositive) hmiddle]
     by_cases hindexZero : index = 0
-    · rw [if_pos hindexZero]
+    · rw [ite_eq_left hindexZero]
       exact hprefix middle (by omega) (by omega)
-    · rw [if_neg hindexZero, if_neg (by omega)]
+    · rw [ite_eq_right hindexZero, ite_eq_right (by omega)]
       exact hprefix index (by omega) (by omega)
   · intro index hindexStart hindexStop
     rw [hpivotValue,
       swp_get! rewritten 0 middle index (by
         simpa only [rewritten, overwrite_size] using hpositive) hmiddle,
-      if_neg (by omega), if_neg (by omega)]
+      ite_eq_right (by omega), ite_eq_right (by omega)]
     apply hsuffix index
     · omega
     · simpa only [swp_size] using hindexStop
@@ -2734,7 +2738,7 @@ private theorem partitionEqualLoop_cons
     ⟨next, hnext⟩
   rw [partitionEqualLoop]
   simp only [List.forIn_cons]
-  simp only [Id.run_bind, Id.run_pure, LawfulMonad.pure_bind]
+  simp only [Id.run_bind, Id.run_pure]
   have hbody := hnext
   simp [partitionEqualStep] at hbody
   simp only [Bool.not_eq_true', Bool.and_eq_true,
@@ -2742,7 +2746,7 @@ private theorem partitionEqualLoop_cons
   rw [hbody, hnext]
   simp only [ForInStep.run]
   rw [partitionEqualLoop]
-  simp only [Id.run_bind, Id.run_pure, LawfulMonad.pure_bind,
+  simp only [Id.run_bind, Id.run_pure, 
     Bool.not_eq_true', Bool.and_eq_true, decide_eq_true_eq,
     ge_iff_le]
 
@@ -2819,7 +2823,7 @@ private theorem partitionEqualLoop_perm
                   (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
                     swp array (1 + scannedLeft)
                       (1 + (scannedRight - 1))⟩)) = _
-            rw [if_pos hfinished]
+            rw [ite_eq_left hfinished]
             rfl
           rw [partitionEqualLoop_cons, hstate]
           exact ih true scannedLeft scannedRight array original
@@ -2858,7 +2862,7 @@ private theorem partitionEqualLoop_perm
                   (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
                     swp array (1 + scannedLeft)
                       (1 + (scannedRight - 1))⟩)) = _
-            rw [if_neg hfinished]
+            rw [ite_eq_right hfinished]
             rfl
           rw [partitionEqualLoop_cons, hstate]
           exact hnext
@@ -3007,7 +3011,7 @@ private theorem equalPartitionScanStep
       have hposition : position = 1 + scannedLeft := by omega
       subst position
       rw [swp_get! array (1 + scannedLeft) scannedRight
-        (1 + scannedLeft) hleftIndex hrightIndex, if_pos rfl]
+        (1 + scannedLeft) hleftIndex hrightIndex, ite_eq_left rfl]
       exact hrightEqual
     have hnextPrefix := hnextPrefixBase.append hnextPrefixPoint
     have hnextSuffixBase : RangeAll next (1 + scannedRight) next.size
@@ -3024,7 +3028,7 @@ private theorem equalPartitionScanStep
       have hposition : position = scannedRight := by omega
       subst position
       rw [swp_get! array (1 + scannedLeft) scannedRight scannedRight
-        hleftIndex hrightIndex, if_neg (by omega), if_pos rfl]
+        hleftIndex hrightIndex, ite_eq_right (by omega), ite_eq_left rfl]
       simpa only [Nat.add_comm] using hleftGreater
     have hnextSuffix : RangeAll next (1 + (scannedRight - 1)) next.size
         (fun item => key pivot < key item) := by
@@ -3054,7 +3058,7 @@ private theorem partitionEqualStep_stateInvariant
   rcases hinvariant with ⟨hinvariant, hdoneEqual⟩
   cases done with
   | true =>
-      simpa [partitionEqualStep, EqualPartitionStateInvariant] using
+      simpa [partitionEqualStep, EqualPartitionStateInvariant, ForInStep.run] using
         And.intro hinvariant hdoneEqual
   | false =>
       have harrayCapacity : array.size ≤ scanIndices.length := by
@@ -3102,13 +3106,13 @@ private theorem partitionEqualStep_stateInvariant
                 (MProd Bool (MProd ℕ (MProd ℕ (Array T)))))
           else pure (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
             swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩)) = _
-          rw [if_pos hfinished]
+          rw [ite_eq_left hfinished]
           rfl
         rw [hstep]
         simp only [ForInStep.run]
         have hnextInvariant : EqualPartitionInvariant key pivot original
             scannedLeft scannedRight array := by
-          simpa only [hfinished, if_true, Prod.fst, Prod.snd] using hsemantic
+          simpa only [hfinished, ite_true, Prod.fst, Prod.snd] using hsemantic
         refine ⟨hnextInvariant, ?_⟩
         · intro _
           show scannedLeft = scannedRight
@@ -3127,14 +3131,14 @@ private theorem partitionEqualStep_stateInvariant
                 (MProd Bool (MProd ℕ (MProd ℕ (Array T)))))
           else pure (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
             swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩)) = _
-          rw [if_neg hfinished]
+          rw [ite_eq_right hfinished]
           simp only [Id.run_pure]
           rw [show 1 + (scannedRight - 1) = scannedRight by omega]
         rw [hstep]
         simp only [ForInStep.run]
         refine ⟨?_, by simp⟩
         simpa only [scannedLeft, scannedRight, hfinished,
-          if_false, Prod.fst, Prod.snd] using hsemantic
+          ite_false, Prod.fst, Prod.snd] using hsemantic
 
 private theorem partitionEqualLoop_stateInvariant
     (indices scanIndices : List ℕ) (key : T → ℕ) (pivot : T)
@@ -3164,7 +3168,7 @@ private theorem partitionEqualStep_progress
       next.2.2.1 - next.2.1 < state.2.2.1 - state.2.1 := by
   rcases state with ⟨done, left, right, array⟩
   cases done with
-  | true => simp [partitionEqualStep]
+  | true => simp [partitionEqualStep, ForInStep.run]
   | false =>
       let scannedLeft := Id.run <| forIn scanIndices left fun _ current =>
         if current < right && !isLess pivot array[1 + current]! then do
@@ -3202,7 +3206,7 @@ private theorem partitionEqualStep_progress
               (MProd Bool (MProd ℕ (MProd ℕ (Array T)))))
         else pure (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
           swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩))).run.1 = true
-        rw [if_pos hfinished]
+        rw [ite_eq_left hfinished]
         rfl
       · right
         have hstrict : scannedLeft < scannedRight := by omega
@@ -3221,8 +3225,8 @@ private theorem partitionEqualStep_progress
         else pure (.yield ⟨false, scannedLeft + 1, scannedRight - 1,
           swp array (1 + scannedLeft) (1 + (scannedRight - 1))⟩)) |>.run).2.1 <
             right - left
-        rw [if_neg hfinished]
-        simp only [ForInStep.run]
+        rw [ite_eq_right hfinished]
+        simp only [ForInStep.run, Id.run, pure]
         omega
 
 private theorem partitionEqualLoop_done_of_done
@@ -3237,7 +3241,7 @@ private theorem partitionEqualLoop_done_of_done
       rw [partitionEqualLoop_cons]
       apply inductionHypothesis
       rcases state with ⟨done, left, right, array⟩
-      cases done <;> simp_all [partitionEqualStep]
+      cases done <;> simp_all [partitionEqualStep, ForInStep.run]
 
 private theorem partitionEqualLoop_eventually_done
     (indices scanIndices : List ℕ) (pivot : T)
@@ -3335,7 +3339,7 @@ theorem partitionEqual_ordered
     simp [swapped, swp_size]
   have hpivotValue : swapped[0]! = array[pivotIndex]! := by
     simp only [swapped]
-    rw [swp_get! array 0 pivotIndex 0 hnonempty hpivot, if_pos rfl]
+    rw [swp_get! array 0 pivotIndex 0 hnonempty hpivot, ite_eq_left rfl]
   let initial : MProd Bool (MProd ℕ (MProd ℕ (Array T))) :=
     ⟨false, 0, swapped.size - 1, swapped⟩
   have hinitial : EqualPartitionStateInvariant key swapped[0]! array initial := by
@@ -3870,12 +3874,9 @@ private theorem recurseAfterPivot_perm
   cases wasBalanced <;> cases wasPartitioned <;> cases likelySorted
   all_goals
     simp only [recurseAfterPivot, Bool.false_and, Bool.true_and,
-      if_true]
+      ite_true]
   all_goals
-    first
-    | exact recursePred_perm contracts rec hrec
-        v isLess pred limit len _ _ pivot hpivot
-    | skip
+    try (exact recursePred_perm contracts rec hrec v isLess pred limit len _ _ pivot hpivot)
   generalize hpartial :
     partialInsertionSort v isLess = partialResult
   rcases partialResult with ⟨sorted, v2⟩
@@ -4016,7 +4017,7 @@ private theorem blocks_count_contract
   intro array pivot isLess
   exact (hblocks array pivot isLess).1
 
-def driverContractsOfBlocksContract
+theorem driverContractsOfBlocksContract
     (hblocks : PartitionInBlocksPermContract (T := T)) :
     DriverContracts T where
   insertionSort_perm := insertionSort_perm
@@ -4081,7 +4082,7 @@ structure OrderingContracts (T : Type) [Inhabited T] (key : T → ℕ) where
 
 variable {key : T → ℕ}
 
-private def legacyDriverContracts : DriverContracts T :=
+private theorem legacyDriverContracts : DriverContracts T :=
   driverContractsOfBlocksContract partitionInBlocks_perm_contract
 
 theorem recurse_perm
@@ -4289,12 +4290,9 @@ private theorem recurseAfterPivot_sorted
   cases wasBalanced <;> cases wasPartitioned <;> cases likelySorted
   all_goals
     simp only [recurseAfterPivot, Bool.false_and, Bool.true_and,
-      if_true]
+      ite_true]
   all_goals
-    first
-    | exact recursePred_sorted rec hrecSorted hrecPerm
-        array pred limit len _ _ pivot hpivot hlower
-    | skip
+    try (exact recursePred_sorted rec hrecSorted hrecPerm array pred limit len _ _ pivot hpivot hlower)
   generalize hpartial :
     partialInsertionSort array (lessBy key) = partialResult
   rcases partialResult with ⟨sorted, partiallySorted⟩

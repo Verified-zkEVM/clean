@@ -1,5 +1,9 @@
-import Clean.Utils.Tactics.ProvableStructDeriving
-import Clean.Halo2.Provable
+module
+
+public import Clean.Utils.Tactics.ProvableStructDeriving
+public import Clean.Halo2.Provable
+
+@[expose] public section
 
 /-!
 # `deriving CircuitType` for Halo2 circuit inputs
@@ -49,6 +53,8 @@ end Halo2
 
 namespace ProvableStructDeriving
 
+meta section
+
 open Lean Elab Command
 
 /-- Halo2's profile (`Placed Environment`/`Placed ProverEnvironment`). -/
@@ -64,5 +70,7 @@ def halo2CircuitTypeDerivingHandler (declNames : Array Name) : CommandElabM Bool
   circuitTypeDerivingHandlerWith halo2CircuitTypeProfile declNames
 
 initialize registerDerivingHandler ``Halo2.CircuitType halo2CircuitTypeDerivingHandler
+
+end
 
 end ProvableStructDeriving

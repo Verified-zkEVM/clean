@@ -1,8 +1,19 @@
-import Clean.Ironwood.Fixtures.Layout
-import Clean.Ironwood.Fixtures.AddLayout
-import Clean.Ironwood.Fixtures.AddSelMap
-import Clean.Ironwood.Fixtures.AddPost
-import Clean.Ironwood.Tests.TestVkMatchAdd
+module
+
+public import Clean.Ironwood.Fixtures.Layout
+public import Clean.Ironwood.Fixtures.AddLayout
+public import Clean.Ironwood.Fixtures.AddSelMap
+public import Clean.Ironwood.Fixtures.AddPost
+public import Clean.Ironwood.Tests.TestVkMatchAdd
+
+-- `#guard` below executes compiled code from these modules.
+public meta import Clean.Ironwood.Fixtures.Layout
+public meta import Clean.Ironwood.Fixtures.AddLayout
+public meta import Clean.Ironwood.Fixtures.AddSelMap
+public meta import Clean.Ironwood.Fixtures.AddPost
+public meta import Clean.Ironwood.Tests.TestVkMatchAdd
+
+@[expose] public section
 
 /-!
 # VK-layout test: the complete-addition gadget — σ + fixed values

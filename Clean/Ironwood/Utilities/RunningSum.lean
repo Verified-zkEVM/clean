@@ -1,6 +1,11 @@
-import Clean.Circuit
-import Clean.Ironwood.Specs.Pallas
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Circuit
+public import Clean.Ironwood.Specs.Pallas
+public import Clean.Ironwood.Specs.Bitrange
+public import Clean.Utils.Tactics.ProvableStructDeriving
+
+@[expose] public section
 
 /-!
 # Running-sum range-check theory
@@ -95,3 +100,39 @@ end RunningSum
 
 end Utilities
 end Zcash.Circuits
+
+/-! ## The honest running sum as a witness program -/
+
+namespace Witgen
+
+open CompElliptic.Fields.Pasta (Fp)
+
+variable {V Env : Type}
+
+/-- The running sum `z_j = x ≫ (K·j)`, computed in the field as halo2 does:
+`z_{j+1} = (z_j − k_j) · 2^{−K}`, where the word `k_j` is bits `K·j .. K·j+K-1` of `x`. -/
+def FExprOver.runningSum (K : ℕ) (x : FExprOver Fp V) : ℕ → FExprOver Fp V
+  | 0 => x
+  | j + 1 => .mul (.sub (x.runningSum K j) (x.bitrange (K * j) K)) (.const ((2 : Fp) ^ K)⁻¹)
+
+@[simp, circuit_norm]
+theorem FExprOver.eval_runningSum [WitgenEnv Fp Env V] (ctx : CtxOver Fp Env) (K : ℕ)
+    (x : FExprOver Fp V) (j : ℕ) :
+    (x.runningSum K j).eval ctx = (((x.eval ctx).val / 2 ^ (K * j) : ℕ) : Fp) := by
+  induction j with
+  | zero => simp [FExprOver.runningSum]
+  | succ j ih =>
+    set a := (x.eval ctx).val / 2 ^ (K * j)
+    have hdiv : (x.eval ctx).val / 2 ^ (K * (j + 1)) = a / 2 ^ K := by
+      rw [Nat.div_div_eq_div_mul, ← pow_add, Nat.mul_succ]
+    have hcast : (a : Fp) - ((a % 2 ^ K : ℕ) : Fp) = (2 : Fp) ^ K * ((a / 2 ^ K : ℕ) : Fp) := by
+      have h := congrArg (Nat.cast (R := Fp)) (Nat.div_add_mod a (2 ^ K))
+      push_cast at h
+      linear_combination -h
+    have h2K : (2 : Fp) ^ K ≠ 0 := pow_ne_zero _ Zcash.Circuits.two_ne_zero
+    simp only [FExprOver.runningSum, FExprOver.sub, FExprOver.eval, ih, FExprOver.eval_bitrange,
+      Zcash.Circuits.Specs.bitrange, hdiv]
+    rw [show (a : Fp) + -1 * ((a % 2 ^ K : ℕ) : Fp) = (a : Fp) - ((a % 2 ^ K : ℕ) : Fp) by ring,
+      hcast, mul_comm, ← mul_assoc, inv_mul_cancel₀ h2K, one_mul]
+
+end Witgen

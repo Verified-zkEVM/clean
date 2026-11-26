@@ -1,4 +1,8 @@
-import Clean.Halo2.Configure.Lemmas
+module
+
+public import Clean.Halo2.Configure.Lemmas
+
+@[expose] public section
 
 namespace Halo2
 
@@ -534,7 +538,7 @@ instance lookup
     intro counts hselectors
     constructor
     · simp [Configure.delta_lookup_gates]
-    · simpa [Configure.delta, Halo2.lookup,
+    · simpa [Configure.delta, Configure.finalCounts, Configure.countDelta, ConfigureCountDelta.apply, Halo2.lookup,
         ConfigureDelta.fixedQueriesOfColumns, foldlTableDelta_lookups] using
         hselectors.1
     · simpa using hselectors.2
@@ -605,10 +609,17 @@ instance lookup
             (F := F) (List.mem_map.mpr
               ⟨(input, table), hentry, rfl⟩)).append_right.append_left
       · simp
-    · simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
-        ConfigureDelta.RegistersPermutationColumn,
-        ConfigureDelta.append] using
-          hcombined.permutationRequests_registered
+    · rw [List.forall_iff_forall_mem]
+      intro column hcolumn
+      have hmember : column ∈ (queryDelta.append tableDelta).permutationRequests := by
+        simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
+          ConfigureDelta.append] using hcolumn
+      have hregistered := List.forall_iff_forall_mem.mp
+        hcombined.permutationRequests_registered column hmember
+      rcases column with ⟨kind, index⟩
+      cases kind <;>
+        simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
+          ConfigureDelta.RegistersPermutationColumn, ConfigureDelta.append] using hregistered
     · simpa [Configure.delta, Halo2.lookup, queryDelta, tableDelta,
         ConfigureDelta.append] using
           hcombined.constants_permutationRequests
@@ -626,7 +637,7 @@ attribute [configure_selector_norm] List.nil_append List.append_nil List.filter_
 
 open Lean Meta Simp in
 /-- Fold the reduced selector summary stored in an inferred configure elaboration. -/
-def foldElaboratedConfigureSelectorSummaryProc : Simproc := fun expression => do
+meta def foldElaboratedConfigureSelectorSummaryProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.selectorSummary ||
       expression.getAppFn.isConstOf
         ``ElaboratedConfigure.externalSelectorSummary do
@@ -654,7 +665,7 @@ attribute [configure_selector_norm]
 
 open Lean Meta Simp in
 /-- Fold the selector requirements stored in an inferred configure elaboration. -/
-def foldElaboratedConfigureSelectorRequirementsProc : Simproc := fun expression => do
+meta def foldElaboratedConfigureSelectorRequirementsProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.selectorRequirements do
     return .continue
   try
@@ -674,7 +685,7 @@ attribute [configure_selector_norm] foldElaboratedConfigureSelectorRequirements
 
 open Lean Meta Simp in
 /-- Fold the query requirements stored in an inferred configure elaboration. -/
-def foldElaboratedConfigureQueryRequirementsProc : Simproc := fun expression => do
+meta def foldElaboratedConfigureQueryRequirementsProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.queryRequirements do
     return .continue
   try
@@ -702,7 +713,7 @@ program. Reducing the class projection unfolds only the instance and the circuit
 structure far enough to select `elaborated.configureInfo`; it does not inspect
 synthesis or proof fields.
 -/
-def foldElaboratedConfigureInstanceQueriesProc : Simproc := fun expression => do
+meta def foldElaboratedConfigureInstanceQueriesProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.instanceQueries do
     return .continue
   try

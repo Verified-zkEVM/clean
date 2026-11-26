@@ -1,5 +1,9 @@
-import Clean.Ironwood.Action.Shape.Planner
-import Clean.Halo2.Keygen.PlannerTrace
+module
+
+public import Clean.Ironwood.Action.Shape.Planner
+public import Clean.Halo2.Keygen.PlannerTrace
+
+@[expose] public section
 
 namespace Zcash.Circuits.Action
 

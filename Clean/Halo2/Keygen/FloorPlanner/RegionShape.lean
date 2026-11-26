@@ -1,10 +1,14 @@
-import Clean.Halo2.SynthesisSummary.Operations
-import Clean.Halo2.Operations.LookupSelectors
-import Mathlib.Data.List.GetD
-import Mathlib.Data.List.Nodup
-import Mathlib.Data.List.Perm.Basic
-import Mathlib.Data.List.Sort
-import Mathlib.Data.List.TakeDrop
+module
+
+public import Clean.Halo2.SynthesisSummary.Operations
+public import Clean.Halo2.Operations.LookupSelectors
+public import Mathlib.Data.List.GetD
+public import Mathlib.Data.List.Nodup
+public import Mathlib.Data.List.Perm.Basic
+public import Mathlib.Data.List.Sort
+public import Mathlib.Data.List.TakeDrop
+
+@[expose] public section
 
 /-!
 # Floor-planner region shapes
@@ -151,10 +155,12 @@ theorem activations_eq_placeSelectorActivations
           rw [regionActivationsAt_eq_map_selectorActivations,
             inductionHypothesis]
       | constrainInstance cell column row =>
-          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
+            FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
             inductionHypothesis initial
       | loadTable column values =>
-          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary, FloorPlanner.SynthesisSummary.combine,
+            FloorPlanner.SynthesisSummary.ofInstanceRow, FloorPlanner.SynthesisSummary.ofTableValues, List.nil_append] using
             inductionHypothesis initial
 
 /-- Membership in the selector-activation stream retains its source region,
@@ -253,10 +259,10 @@ private theorem orderedInsert_append_of_rel_right
   induction left with
   | nil =>
       cases right with
-      | nil => rfl
+      | nil => simp
       | cons head tail =>
           simp only [List.nil_append, List.orderedInsert_cons]
-          rw [if_pos (hrel head (by simp))]
+          rw [ite_eq_left (hrel head (by simp))]
           simp only [List.orderedInsert_nil, List.singleton_append]
   | cons head tail inductionHypothesis =>
       simp only [List.cons_append, List.orderedInsert_cons]
@@ -275,7 +281,7 @@ private theorem orderedInsert_append_of_not_rel_left
   | nil => rfl
   | cons head tail inductionHypothesis =>
       simp only [List.cons_append, List.orderedInsert_cons]
-      rw [if_neg (hrel head (by simp)), inductionHypothesis]
+      rw [ite_eq_right (hrel head (by simp)), inductionHypothesis]
       intro candidate hcandidate
       exact hrel candidate (by simp [hcandidate])
 
@@ -297,7 +303,7 @@ private theorem sortRegionColumns_cons
       List.orderedInsert (fun left right =>
         RegionColumn.lt left right = true) head
         (sortRegionColumns tail) := by
-  rfl
+  simp [sortRegionColumns]
 
 private theorem physicalColumns_column_cons
     (kind : ColumnKind) (index : ℕ) (tail : List RegionColumn) :
@@ -329,7 +335,7 @@ theorem sortRegionColumns_eq_physical_append_selectors
       sortRegionColumns (physicalColumns columns) ++
         sortRegionColumns (selectorColumns columns) := by
   induction columns with
-  | nil => rfl
+  | nil => simp [sortRegionColumns, physicalColumns, selectorColumns]
   | cons head tail inductionHypothesis =>
       cases head with
       | column kind index =>
@@ -554,10 +560,12 @@ theorem measureRegions_eq_synthesisSummary_regionShapes
             simpa only [measureRegion_eq_measureRegionSummary] using
               inductionHypothesis (initial + 1)
         | constrainInstance cell column row =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, SynthesisSummary.ofTableValues, List.nil_append] using
               inductionHypothesis initial
         | loadTable column values =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, SynthesisSummary.ofTableValues, List.nil_append] using
               inductionHypothesis initial
   exact general ops 0
 

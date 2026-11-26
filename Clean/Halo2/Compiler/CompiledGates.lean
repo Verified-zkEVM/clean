@@ -1,7 +1,11 @@
-import Clean.Halo2.Compiler.FieldSupport
-import Clean.Halo2.Compiler.Fixed
-import Clean.Halo2.Compiler.Queries
-import Clean.Halo2.Compiler.SelectorCompression
+module
+
+public import Clean.Halo2.Compiler.FieldSupport
+public import Clean.Halo2.Compiler.Fixed
+public import Clean.Halo2.Compiler.Queries
+public import Clean.Halo2.Compiler.SelectorCompression
+
+@[expose] public section
 
 /-! # Soundness of compiled gate row semantics -/
 
@@ -30,7 +34,8 @@ theorem selectorsCovered_of_mem_flatGates :
       expression.selectorsCovered
         (fun selector =>
           (top.selectorMap.lookup selector).isSome) = true := by
-  simpa only [selectorMap] using
+  simpa only [selectorMap, TopLevelCompilation.selectorMapAt,
+    constraintSystem, selectorActivations] using
     selectorsCovered_of_mem_flatGates_deriveSelCompressMap
       top.constraintSystem
       top.n
@@ -79,7 +84,8 @@ theorem gate_constraints_of_compiled [FieldDomainParams F] [CircuitFieldSupport 
     top.keygenCoherent henabled
   have hselector := List.forall_iff_forall_mem.mp top.gateSelectorsAllocated enabled.gate hgate
   have hsome : (top.selectorMap.lookup enabled.gate.selector.index).isSome := by
-    simpa only [selectorMap] using
+    simpa only [selectorMap, TopLevelCompilation.selectorMapAt,
+    constraintSystem, selectorActivations] using
       deriveSelCompressMap_lookup_isSome_of_lt top.constraintSystem top.n
         top.selectorActivations hselector
   obtain ⟨compressed, hcompressed⟩ := Option.isSome_iff_exists.mp hsome
@@ -108,7 +114,7 @@ theorem gate_constraints_of_compiled [FieldDomainParams F] [CircuitFieldSupport 
     (top.environment assignment) constraint.poly enabled.gate.selector compressed
     (top.placement enabled.region + enabled.row : ℕ)
     (enabled.gate.wellFormed.compressionSound constraint hconstraint) hcompressed
-  · simpa only [placement_apply] using
+  · simpa only [placement_apply, Nat.cast_add] using
       selectorScale_ne_zero_of_enabledGate top.selectorMap top.regionStarts top.operations 0
         (top.environment assignment) (fun _ => 0) top.selectorRootsWellFormed_selectorMap
         (top.realizesSelectorActivations_environment assignment) henabled hcompressed

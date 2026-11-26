@@ -1,4 +1,8 @@
-import Clean.Halo2.Configure
+module
+
+public import Clean.Halo2.Configure
+
+@[expose] public section
 
 /-!
 # `compress_selectors`, ported: the selector-compression map and its algebra
@@ -211,7 +215,7 @@ theorem selReplacement_noSimpleSelectors (description : SelCompress) :
     obtain ⟨index, _, hresult⟩ := hfactor
     by_cases hroot : index + 1 = description.assignedRoot
     · simp [hroot] at hresult
-    · rw [if_neg hroot, Option.some_inj] at hresult
+    · rw [ite_eq_right hroot, Option.some_inj] at hresult
       subst factor
       trivial
 
@@ -990,9 +994,9 @@ theorem process_entry_selector_eq_of_singleton_column
         hleftCombination hrightCombination hcombinationColumn
     subst rightItems
     have hleftPosition : leftPosition < leftItems.length := by
-      simpa only using List.snd_lt_of_mem_zipIdx hleftIndexed
+      simpa only [Nat.add_zero] using List.snd_lt_of_mem_zipIdx hleftIndexed
     have hrightPosition : rightPosition < leftItems.length := by
-      simpa only using List.snd_lt_of_mem_zipIdx hrightIndexed
+      simpa only [Nat.add_zero] using List.snd_lt_of_mem_zipIdx hrightIndexed
     have hposition : leftPosition = rightPosition := by omega
     exact congrArg SelectorDescription.selector <|
       fst_eq_of_mem_zipIdx_of_snd_eq leftItems
@@ -1604,7 +1608,7 @@ private theorem activationTable_cell_true_of_mem_foldl
           exact hrow
         · change updated[selector]![row]! = true
           rw [getElem!_pos updated selector hselectorUpdated,
-            Array.getElem_modify, if_pos rfl]
+            Array.getElem_modify, ite_eq_left rfl]
           have hsourceRow : row < table[selector].size := by
             rw [hsized selector hselector]
             exact hrow
@@ -1962,7 +1966,7 @@ theorem deriveSelCompressMap_lookup_packedColumn
   have hcolumn := process_entry_packedCol_lt_newFixedCols
     descriptions (csDegree cs) hsource
   refine ⟨source.packedCol, ?_, ?_⟩
-  · simpa [packing] using hcolumn
+  · simpa [deriveSelCompressMap, packing, descriptions, table, degrees] using hcolumn
   · change source.packedCol + cs.numFixedColumns =
       cs.numFixedColumns + source.packedCol
     omega

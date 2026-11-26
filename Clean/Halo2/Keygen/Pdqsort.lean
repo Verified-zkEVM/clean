@@ -1,9 +1,15 @@
-import Mathlib.Data.List.Infix
-import Mathlib.Data.List.Nodup
-import Mathlib.Data.List.Pairwise
-import Mathlib.Data.List.Perm.Basic
-import Mathlib.Data.List.Sort
-import Mathlib.Data.List.TakeDrop
+module
+
+public import Mathlib.Data.List.Infix
+public import Mathlib.Data.List.Nodup
+public import Mathlib.Data.List.Pairwise
+public import Mathlib.Data.List.Perm.Basic
+public import Mathlib.Data.List.Sort
+public import Mathlib.Data.List.TakeDrop
+
+@[expose] public section
+
+set_option backward.do.legacy true
 
 namespace Halo2.FloorPlanner
 
@@ -375,7 +381,7 @@ theorem insertByKey_eq_append
   | cons head rest inductionHypothesis =>
       have hhead := hbound head (by simp)
       have hnotBefore : ¬key item < key head := by omega
-      rw [Pdqsort.insertByKey, if_neg hnotBefore,
+      rw [Pdqsort.insertByKey, ite_eq_right hnotBefore,
         inductionHypothesis (by
           intro candidate hcandidate
           exact hbound candidate (by simp [hcandidate])),
@@ -395,7 +401,7 @@ theorem KeySorted.insertByKey
         (key head :: rest.map key) at hitems
       rw [List.pairwise_cons] at hitems
       by_cases hbefore : key item < key head
-      · rw [Pdqsort.insertByKey, if_pos hbefore, List.map_cons, List.map_cons,
+      · rw [Pdqsort.insertByKey, ite_eq_left hbefore, List.map_cons, List.map_cons,
           List.pairwise_cons]
         exact ⟨by
           intro value hvalue
@@ -404,7 +410,7 @@ theorem KeySorted.insertByKey
           · exact hbefore.le
           · exact hbefore.le.trans (hitems.1 value hvalue),
           List.Pairwise.cons hitems.1 hitems.2⟩
-      · rw [Pdqsort.insertByKey, if_neg hbefore, List.map_cons, List.pairwise_cons]
+      · rw [Pdqsort.insertByKey, ite_eq_right hbefore, List.map_cons, List.pairwise_cons]
         have hrestSorted := inductionHypothesis hitems.2
         refine ⟨?_, hrestSorted⟩
         intro value hvalue
@@ -482,18 +488,18 @@ theorem swp_get!
     rw [Array.getElem_setIfInBounds (xs :=
       array.setIfInBounds left array[right]!) (by simpa using hindex)]
     by_cases hindexRight : right = index
-    · rw [if_pos hindexRight]
+    · rw [ite_eq_left hindexRight]
       subst index
       by_cases heq : right = left
       · subst left
         simp
       · simp [heq]
-    · rw [if_neg hindexRight, Array.getElem_setIfInBounds hindex]
+    · rw [ite_eq_right hindexRight, Array.getElem_setIfInBounds hindex]
       by_cases hindexLeft : left = index
-      · rw [if_pos hindexLeft]
+      · rw [ite_eq_left hindexLeft]
         subst index
         simp
-      · rw [if_neg hindexLeft]
+      · rw [ite_eq_right hindexLeft]
         simp [Ne.symm hindexLeft, Ne.symm hindexRight,
           getElem!_pos array index hindex]
   · have hindexLeft : index ≠ left := by
@@ -518,10 +524,10 @@ theorem set!_get!
     simp only [Array.set!]
     rw [Array.getElem_setIfInBounds (by simpa using hindex)]
     by_cases heq : target = index
-    · rw [if_pos heq]
+    · rw [ite_eq_left heq]
       subst index
       simp
-    · rw [if_neg heq]
+    · rw [ite_eq_right heq]
       simp [Ne.symm heq, getElem!_pos array index hindex]
   · have hne : index ≠ target := by
       intro heq
@@ -541,14 +547,14 @@ theorem RangeAll.swp
   intro index hindexStart hindexStop
   rw [swp_get! array left right index hleft hright]
   by_cases hindexLeft : index = left
-  · rw [if_pos hindexLeft]
+  · rw [ite_eq_left hindexLeft]
     exact hleftValue (hindexLeft ▸ hindexStart) (hindexLeft ▸ hindexStop)
-  · rw [if_neg hindexLeft]
+  · rw [ite_eq_right hindexLeft]
     by_cases hindexRight : index = right
-    · rw [if_pos hindexRight]
+    · rw [ite_eq_left hindexRight]
       exact hrightValue (hindexRight ▸ hindexStart)
         (hindexRight ▸ hindexStop)
-    · rw [if_neg hindexRight]
+    · rw [ite_eq_right hindexRight]
       exact h index hindexStart hindexStop
 
 /-- Write `sub` back into `a` starting at `start` (reflecting a mutated sub-slice). -/
@@ -745,7 +751,7 @@ theorem shiftTail_sorted
         rw [getElem!_pos _ _ (by simp; omega),
           getElem!_pos array _ (by omega)]
         simp only [Array.set!]
-        rw [Array.getElem_setIfInBounds (by omega), if_neg hne.symm,
+        rw [Array.getElem_setIfInBounds (by omega), ite_eq_right hne.symm,
           ← getElem!_pos array _ (by omega)]
       rw [hshiftedAt] at htail
       have hless : key array[array.size - 1]! <
@@ -1108,7 +1114,7 @@ theorem cleanupLeft_contract
   | cons index indices ih =>
       rw [cleanupLeft_cons]
       by_cases hactive : startLeft < endLeft
-      · rw [if_pos hactive]
+      · rw [ite_eq_left hactive]
         have hend : startLeft ≤ endLeft - 1 := by omega
         have hrightPositive : 0 < right := by omega
         have hleftIndex :
@@ -1132,7 +1138,7 @@ theorem cleanupLeft_contract
           rw [hnextSize]
           exact hoffsets offsetIndex (by omega)
         · exact hnextPerm
-      · rw [if_neg hactive]
+      · rw [ite_eq_right hactive]
         change right ≤ original.size ∧
           List.Perm array.toList original.toList
         have hsize : array.size = original.size := by
@@ -1171,7 +1177,7 @@ theorem cleanupRight_contract
   | cons index indices ih =>
       rw [cleanupRight_cons]
       by_cases hactive : startRight < endRight
-      · rw [if_pos hactive]
+      · rw [ite_eq_left hactive]
         have hend : startRight ≤ endRight - 1 := by omega
         have hltr : left < right := by omega
         have hoffset :
@@ -1199,7 +1205,7 @@ theorem cleanupRight_contract
         · intro offsetIndex hoffsetIndex
           exact hoffsets offsetIndex (by omega)
         · exact hnextPerm
-      · rw [if_neg hactive]
+      · rw [ite_eq_right hactive]
         change left ≤ original.size ∧
           List.Perm array.toList original.toList
         have hsize : array.size = original.size := by
@@ -1283,7 +1289,7 @@ private theorem cycle_set_perm
   apply cycle_set_loop_perm nexts a hole a[hole]! a hhole hnexts
   rw [show a.set! hole a[hole]! = a by
     apply Array.toList_inj.mp
-    simpa [Array.set!, hhole] using
+    simpa only [Array.set!, Array.toList_setIfInBounds, getElem!_pos a hole hhole, ← Array.getElem_toList hhole] using
       (List.set_getElem_self (as := a.toList) (i := hole)
         (by simpa using hhole))]
 
@@ -1400,13 +1406,13 @@ private theorem cycleStateInvariant_initial
     subst index
     simp only [Nat.add_zero]
     rw [set!_get! array (left sl) (left sl) array[right sr]!
-      hleftZero, if_pos rfl]
+      hleftZero, ite_eq_left rfl]
     simpa using hrightGood 0 hcount
   · intro index hindex
     omega
   · intro index hindexPositive hindexCount
     rw [set!_get! array (left sl) (left (sl + index))
-      array[right sr]! hleftZero, if_neg]
+      array[right sr]! hleftZero, ite_eq_right]
     · exact hleftGood index hindexCount
     · intro heq
       have := hleftInjective 0 hcount index hindexCount
@@ -1414,7 +1420,7 @@ private theorem cycleStateInvariant_initial
       omega
   · intro index hindexZero hindexCount
     rw [set!_get! array (left sl) (right (sr + index))
-      array[right sr]! hleftZero, if_neg]
+      array[right sr]! hleftZero, ite_eq_right]
     · exact hrightGood index hindexCount
     · exact Ne.symm (hcross 0 hcount index hindexCount)
 
@@ -1467,7 +1473,7 @@ private theorem cycleStateInvariant_step
   have hsourceRightValue : afterLeft[sourceRight]! = current[sourceRight]! := by
     simp only [afterLeft]
     rw [set!_get! current targetRight sourceRight
-      current[sourceLeft]! htargetRight, if_neg hsourceRightNeTargetRight]
+      current[sourceLeft]! htargetRight, ite_eq_right hsourceRightNeTargetRight]
   unfold CycleStateInvariant
   refine ⟨rfl, rfl, by simp [hsize], ?_, ?_, ?_, ?_⟩
   · intro index hindexDone hindexCount
@@ -1475,30 +1481,30 @@ private theorem cycleStateInvariant_step
       (left (sl + index)) afterLeft[sourceRight]! htargetLeft]
     by_cases hnew : index = nextStep
     · subst index
-      rw [if_pos rfl, hsourceRightValue]
+      rw [ite_eq_left rfl, hsourceRightValue]
       exact hrightFuture nextStep (by omega) hnext
-    · rw [if_neg (by
+    · rw [ite_eq_right (by
           intro heq
           exact hnew (hleftInjective index hindexCount nextStep hnext
             (by simpa [targetLeft] using heq)))]
       simp only [afterLeft]
       rw [set!_get! current targetRight
         (left (sl + index)) current[sourceLeft]! htargetRight,
-        if_neg (hcross index hindexCount step (by omega))]
+        ite_eq_right (hcross index hindexCount step (by omega))]
       exact hleftDone index (by omega) hindexCount
   · intro index hindexDone
     have hindexCount : index < count := hindexDone.trans_le (by omega)
     rw [set!_get! afterLeft targetLeft
       (right (sr + index)) afterLeft[sourceRight]! htargetLeft,
-      if_neg (Ne.symm (hcross nextStep hnext index hindexCount))]
+      ite_eq_right (Ne.symm (hcross nextStep hnext index hindexCount))]
     simp only [afterLeft]
     rw [set!_get! current targetRight
       (right (sr + index)) current[sourceLeft]! htargetRight]
     by_cases hnew : index = step
     · subst index
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
       exact hleftFuture nextStep (by omega) hnext
-    · rw [if_neg (by
+    · rw [ite_eq_right (by
           intro heq
           exact hnew (hrightInjective index hindexCount step (by omega)
             (by simpa [targetRight] using heq)))]
@@ -1506,7 +1512,7 @@ private theorem cycleStateInvariant_step
   · intro index hindexFuture hindexCount
     rw [set!_get! afterLeft targetLeft
       (left (sl + index)) afterLeft[sourceRight]! htargetLeft,
-      if_neg (by
+      ite_eq_right (by
         intro heq
         have := hleftInjective index hindexCount nextStep hnext
           (by simpa [targetLeft] using heq)
@@ -1514,16 +1520,16 @@ private theorem cycleStateInvariant_step
     simp only [afterLeft]
     rw [set!_get! current targetRight
       (left (sl + index)) current[sourceLeft]! htargetRight,
-      if_neg (hcross index hindexCount step (by omega))]
+      ite_eq_right (hcross index hindexCount step (by omega))]
     exact hleftFuture index (by omega) hindexCount
   · intro index hindexFuture hindexCount
     rw [set!_get! afterLeft targetLeft
       (right (sr + index)) afterLeft[sourceRight]! htargetLeft,
-      if_neg (Ne.symm (hcross nextStep hnext index hindexCount))]
+      ite_eq_right (Ne.symm (hcross nextStep hnext index hindexCount))]
     simp only [afterLeft]
     rw [set!_get! current targetRight
       (right (sr + index)) current[sourceLeft]! htargetRight,
-      if_neg (by
+      ite_eq_right (by
         intro heq
         have := hrightInjective index hindexCount step (by omega)
           (by simpa [targetRight] using heq)
@@ -1644,7 +1650,7 @@ private theorem block_cycle_classifies
     (by simp) (by simpa [afterFirst] using hinitial)
   have hloopResult : CycleStateInvariant array.size left right sl sr count
       (count - 1) leftGood rightGood result := by
-    simpa only [result, Nat.zero_add, List.length_range'] using hloop
+    simpa only [result, Nat.zero_add, Nat.add_zero, List.length_range'] using hloop
   rcases hloopResult with
     ⟨hresultLeft, hresultRight, hresultSize,
       hleftDone, hrightDone, hleftFuture, hrightFuture⟩
@@ -1656,7 +1662,7 @@ private theorem block_cycle_classifies
   refine ⟨?_, ?_⟩
   · intro index hindex
     rw [set!_get! result.2.2 (right result.2.1)
-      (left (sl + index)) tmp htarget, if_neg]
+      (left (sl + index)) tmp htarget, ite_eq_right]
     · exact hleftDone index (by omega) hindex
     · rw [hresultRight]
       exact hcross index hindex (count - 1) hlast
@@ -1665,9 +1671,9 @@ private theorem block_cycle_classifies
       (right (sr + index)) tmp htarget]
     by_cases hlastIndex : index = count - 1
     · subst index
-      rw [hresultRight, if_pos rfl]
+      rw [hresultRight, ite_eq_left rfl]
       simpa [tmp] using hleftGood 0 hcount
-    · rw [hresultRight, if_neg (by
+    · rw [hresultRight, ite_eq_right (by
           intro heq
           exact hlastIndex (hrightInjective index hindex
             (count - 1) hlast heq))]
@@ -1722,12 +1728,12 @@ private theorem cycle_loop_outside
         simp only [afterLeft]
         rw [set!_get! current (right (sr + step)) position
           current[left (sl + (step + 1))]! htargetRight,
-          if_neg (houtRight step (by omega)), hvalue]
+          ite_eq_right (houtRight step (by omega)), hvalue]
       have hafterRight : afterRight[position]! = array[position]! := by
         simp only [afterRight]
         rw [set!_get! afterLeft (left (sl + (step + 1))) position
           afterLeft[right (sr + (step + 1))]! htargetLeft,
-          if_neg (houtLeft (step + 1) hnext), hafterLeft]
+          ite_eq_right (houtLeft (step + 1) hnext), hafterLeft]
       simp only [List.forIn_cons, pure_bind]
       have hrest := inductionHypothesis (step + 1) afterRight
         (by
@@ -1807,17 +1813,17 @@ private theorem block_cycle_outside
   have hafterFirst : afterFirst[position]! = array[position]! := by
     simp only [afterFirst]
     rw [set!_get! array (left sl) position array[right sr]!
-      hleftZero, if_neg (by simpa using houtLeft 0 hcount)]
+      hleftZero, ite_eq_right (by simpa using houtLeft 0 hcount)]
   have hloop := cycle_loop_outside array left right sl sr count position
     hleftBound hrightBound houtLeft houtRight
     (List.range' 0 (count - 1)) 0 afterFirst
     (by simp) (by simp [afterFirst]) hafterFirst
   have hresultValue : result.2.2[position]! = array[position]! := by
-    simpa only [result, Nat.zero_add] using hloop
+    simpa only [result, Nat.zero_add, Nat.add_zero] using hloop
   have hshape := cycle_loop_shape (T := T) left right sl sr
     (List.range' 0 (count - 1)) 0 afterFirst
   have hresultRight : result.2.1 = sr + (count - 1) := by
-    simpa only [result, Nat.zero_add, List.length_range'] using hshape.2.1
+    simpa only [result, Nat.zero_add, Nat.add_zero, List.length_range'] using hshape.2.1
   have hresultSize : result.2.2.size = array.size := by
     simpa [result, afterFirst] using hshape.2.2
   have htarget : right result.2.1 < result.2.2.size := by
@@ -1825,7 +1831,7 @@ private theorem block_cycle_outside
     exact hrightBound (count - 1) (by omega)
   show (result.2.2.set! (right result.2.1) tmp)[position]! = array[position]!
   rw [set!_get! result.2.2 (right result.2.1) position tmp htarget,
-    if_neg]
+    ite_eq_right]
   · exact hresultValue
   · rw [hresultRight]
     exact houtRight (count - 1) (by omega)
@@ -1865,7 +1871,7 @@ private theorem block_cycle_perm
       hleftStart hrightStart]
     have hself : a.set! (left sl) tmp = a := by
       apply Array.toList_inj.mp
-      simpa [tmp, Array.set!, hleftStart] using
+      simpa only [tmp, Array.set!, Array.toList_setIfInBounds, getElem!_pos a (left sl) hleftStart, ← Array.getElem_toList hleftStart] using
         (List.set_getElem_self (as := a.toList) (i := left sl)
           (by simpa using hleftStart))
     rw [hself]
@@ -1903,8 +1909,8 @@ private theorem scan_offsets_aux
       simp only [List.forIn_cons]
       have hend : endIdx < offsets.size := by
         have : endIdx + 1 ≤ endIdx + (indices.length + 1) := by omega
-        simpa only [List.length_cons] using
-          this.trans hcapacity
+        have := this.trans hcapacity
+        omega
       let offsets' := offsets.set! endIdx i
       let endIdx' :=
         if keep i = true then endIdx + 1 else endIdx
@@ -2017,8 +2023,8 @@ private theorem scan_offsets_prefix
         have hkeepBool : decide (keep index = true) = true := by
           simp [hkeep]
         rw [List.filter_cons]
-        simp only [hkeepBool, if_true]
-        simp only [hkeep, if_true]
+        simp only [hkeepBool, ite_true]
+        simp only [hkeep, ite_true]
         constructor
         · simp only [List.length_cons]
           omega
@@ -2035,7 +2041,7 @@ private theorem scan_offsets_prefix
           simp [hkeep]
         rw [List.filter_cons]
         simp only [hkeepBool]
-        simp only [hkeep, Bool.false_eq_true, if_false]
+        simp only [hkeep, Bool.false_eq_true, ite_false]
         constructor
         · exact hrest.1
         · rw [hrest.2]
@@ -2111,7 +2117,7 @@ private theorem scanned_block_cycle_perm
     simp only [right]
     omega
 
-private def refreshOffsets
+def refreshOffsets
     (block startIdx endIdx : ℕ) (offsets : Array ℕ)
     (keep : ℕ → Bool) : ℕ × ℕ × Array ℕ :=
   if startIdx = endIdx then
@@ -2631,7 +2637,7 @@ private theorem exhausted_right_block_rangeAll
     offset hoffset
   simpa only [haddress] using hgood
 
-private def blockCycleOutput
+def blockCycleOutput
     (array : Array T) (l r : ℕ)
     (offsetsL offsetsR : Array ℕ)
     (startL startR count : ℕ) : Array T :=
@@ -2674,7 +2680,7 @@ private theorem blockCycleOutput_size
     (List.range' 0 (count - 1)) 0 afterFirst
   have hresultSize : result.2.2.size = array.size := by
     simpa [result, afterFirst] using hshape.2.2
-  simpa [blockCycleOutput, left, right, result, Array.set!]
+  simpa [blockCycleOutput, left, right, result, afterFirst, Array.set!]
     using hresultSize
 
 private theorem scanned_block_cycle_classifies
@@ -2858,13 +2864,13 @@ private theorem refreshOffsets_bounds
       result.2.2.size = offsets.size ∧
       ∀ j, j < result.2.1 → result.2.2[j]! < block := by
   by_cases heq : startIdx = endIdx
-  · simp only [refreshOffsets, if_pos heq]
+  · simp only [refreshOffsets, ite_eq_left heq]
     have hout := scan_offsets_bounds block offsets keep hblock
     exact ⟨Nat.zero_le _, hout.1, hout.2.1, hout.2.2⟩
-  · simp only [refreshOffsets, if_neg heq]
+  · simp only [refreshOffsets, ite_eq_right heq]
     exact ⟨hstart, hend heq, trivial, hactive heq⟩
 
-private def blockMutateArray
+def blockMutateArray
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
     (l r blockL blockR : ℕ)
     (offsetsL offsetsR : Array ℕ)
@@ -2911,7 +2917,7 @@ private theorem blockMutateArray_eq_blockCycleOutput_of_pos
           leftData.1 rightData.1 count := by
   simp only
   intro hcount
-  rw [blockMutateArray, if_pos hcount]
+  rw [blockMutateArray, ite_eq_left hcount]
 
 private theorem blockMutateArray_eq_self_of_no_count
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
@@ -2929,7 +2935,7 @@ private theorem blockMutateArray_eq_self_of_no_count
         offsetsL offsetsR startL endL startR endR = a := by
   simp only
   intro hcount
-  rw [blockMutateArray, if_neg hcount]
+  rw [blockMutateArray, ite_eq_right hcount]
 
 private theorem blockMutateArray_perm
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
@@ -3260,10 +3266,10 @@ private theorem cleanupLeftStep_order
   have hnextEdge : isLess next[edge]! pivot = false := by
     show isLess (swp array hole edge)[edge]! pivot = false
     by_cases heq : edge = hole
-    · rw [swp_get! array hole edge edge hhole hedge, if_pos heq]
+    · rw [swp_get! array hole edge edge hhole hedge, ite_eq_left heq]
       simpa only [heq] using hholeBad
     · rw [swp_get! array hole edge edge hhole hedge,
-        if_neg heq, if_pos rfl]
+        ite_eq_right heq, ite_eq_left rfl]
       exact hholeBad
   have hnextSuffixBase : RangeAll next right next.size
       (fun item => isLess item pivot = false) := by
@@ -3304,7 +3310,7 @@ private theorem cleanupLeftStep_order
           (!isLess array[left + (block - 1)]! pivot) = false := by
         simpa only using hedgeGood
       rw [swp_get! array hole edge (left + last) hhole hedge,
-        if_pos rfl]
+        ite_eq_left rfl]
       rw [haddress] at hedgeGood'
       exact hedgeGood'
     · intro offset hoffset hne
@@ -3316,7 +3322,7 @@ private theorem cleanupLeftStep_order
         simp only [block, edge] at hoffset ⊢
         omega
       rw [swp_get! array hole edge (left + offset) hhole hedge,
-        if_neg hpositionNeHole, if_neg hpositionNeEdge]
+        ite_eq_right hpositionNeHole, ite_eq_right hpositionNeEdge]
   have hblockEq : block - 1 = right - 1 - left := by
     simp only [block] at *
     omega
@@ -3349,7 +3355,7 @@ private theorem cleanupLeft_order
         hprefix hsuffix hexact
       rw [cleanupLeft_cons]
       by_cases hactive : start < endIdx
-      · rw [if_pos hactive]
+      · rw [ite_eq_left hactive]
         have hstep := cleanupLeftStep_order array pivot isLess
           start endIdx left right offsets hactive hlr hright hend
           hprefix hsuffix hexact
@@ -3370,7 +3376,7 @@ private theorem cleanupLeft_order
         · simpa only [next] using hstep.1
         · simpa only [next] using hstep.2.1
         · simpa only [next] using hstep.2.2
-      · rw [if_neg hactive]
+      · rw [ite_eq_right hactive]
         have hdone : start = endIdx := by omega
         have hmiddle : RangeAll array left right
             (fun item => isLess item pivot = true) := by
@@ -3420,7 +3426,7 @@ private theorem cleanupRightStep_order
     simpa only [last] using hlast.2
   have hnextEdge : isLess next[edge]! pivot = true := by
     show isLess (swp array edge hole)[edge]! pivot = true
-    rw [swp_get! array edge hole edge hedge hhole, if_pos rfl]
+    rw [swp_get! array edge hole edge hedge hhole, ite_eq_left rfl]
     exact hholeGood
   have hnextPrefixBase : RangeAll next 0 left
       (fun item => isLess item pivot = true) := by
@@ -3469,7 +3475,7 @@ private theorem cleanupRightStep_order
         simpa only using hedgeGood
       rw [swp_get! array edge hole (right - 1 - last) hedge hhole]
       have htarget : right - 1 - last = hole := by simp [hole]; omega
-      rw [if_neg (by omega), if_pos htarget]
+      rw [ite_eq_right (by omega), ite_eq_left htarget]
       rw [haddress] at hedgeGood'
       exact hedgeGood'
     · intro offset hoffset hne
@@ -3483,7 +3489,7 @@ private theorem cleanupRightStep_order
         simp only [block, edge] at hoffset ⊢
         omega
       rw [swp_get! array edge hole (right - 1 - offset) hedge hhole,
-        if_neg hpositionNeEdge, if_neg hpositionNeHole]
+        ite_eq_right hpositionNeEdge, ite_eq_right hpositionNeHole]
   have hblockEq : block - 1 = right - (left + 1) := by
     simp only [block] at *
     omega
@@ -3516,7 +3522,7 @@ private theorem cleanupRight_order
         hprefix hsuffix hexact
       rw [cleanupRight_cons]
       by_cases hactive : start < endIdx
-      · rw [if_pos hactive]
+      · rw [ite_eq_left hactive]
         have hstep := cleanupRightStep_order array pivot isLess
           start endIdx left right offsets hactive hlr hright hend
           hprefix hsuffix hexact
@@ -3537,7 +3543,7 @@ private theorem cleanupRight_order
         · simpa only [next] using hstep.1
         · simpa only [next] using hstep.2.1
         · simpa only [next] using hstep.2.2
-      · rw [if_neg hactive]
+      · rw [ite_eq_right hactive]
         have hdone : start = endIdx := by omega
         have hmiddle : RangeAll array left right
             (fun item => isLess item pivot = false) := by
@@ -3573,14 +3579,14 @@ private theorem advance_block_bounds
     l' ≤ r' ∧ r' ≤ n := by
   by_cases hL : advanceL = true
   · by_cases hR : advanceR = true
-    · simp only [if_pos hL, if_pos hR]
+    · simp only [ite_eq_left hL, ite_eq_left hR]
       omega
-    · simp only [if_pos hL, if_neg hR]
+    · simp only [ite_eq_left hL, ite_eq_right hR]
       omega
   · by_cases hR : advanceR = true
-    · simp only [if_neg hL, if_pos hR]
+    · simp only [ite_eq_right hL, ite_eq_left hR]
       omega
-    · simp only [if_neg hL, if_neg hR]
+    · simp only [ite_eq_right hL, ite_eq_right hR]
       omega
 
 omit [Inhabited T] in
@@ -3667,7 +3673,7 @@ private theorem forIn_step_decreasing_post
             simp only [List.length_cons] at hfuel
             omega)
 
-private structure BlockCoreResult (T : Type) where
+structure BlockCoreResult (T : Type) where
   v : Array T
   l : ℕ
   r : ℕ
@@ -3678,7 +3684,7 @@ private structure BlockCoreResult (T : Type) where
   endR : ℕ
   offsetsR : Array ℕ
 
-private def blockCore
+def blockCore
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
     (l r blockL blockR : ℕ)
     (offsetsL offsetsR : Array ℕ)
@@ -4059,29 +4065,29 @@ private theorem blockCore_orderInv
   simp only [blockCoreState]
   constructor
   · by_cases hdone : core.startL = core.endL
-    · rw [hcursor.1, if_pos hdone]
+    · rw [hcursor.1, ite_eq_left hdone]
       apply RangeAll.append hprefixTransfer
       exact exhausted_left_block_rangeAll core.v pivot isLess
         l blockL core.endL core.offsetsL (by simpa [hdone] using hcoreExact.1)
-    · rw [hcursor.1, if_neg hdone]
+    · rw [hcursor.1, ite_eq_right hdone]
       exact hprefixTransfer
   constructor
   · by_cases hdone : core.startR = core.endR
-    · rw [hcursor.2, if_pos hdone]
+    · rw [hcursor.2, ite_eq_left hdone]
       apply RangeAll.append
       · exact exhausted_right_block_rangeAll core.v pivot isLess
           r blockR core.endR core.offsetsR
           (right_block_le l r blockL blockR hblocks)
           (by simpa [hdone] using hcoreExact.2.1)
       · exact hsuffixTransfer
-    · rw [hcursor.2, if_neg hdone]
+    · rw [hcursor.2, ite_eq_right hdone]
       exact hsuffixTransfer
   constructor
   · intro hpending
-    rw [hcursor.1, if_neg hpending]
+    rw [hcursor.1, ite_eq_right hpending]
     exact hcoreExact.1
   · intro hpending
-    rw [hcursor.2, if_neg hpending]
+    rw [hcursor.2, ite_eq_right hpending]
     exact hcoreExact.2.1
 
 omit [Inhabited T] in
@@ -4138,9 +4144,9 @@ private theorem core_pending_left_cleanup
     · omega
     · exact hdoneR
   have hlEq : core.l = l := by
-    rw [hcursorL, if_neg (ne_of_lt hpending)]
+    rw [hcursorL, ite_eq_right (ne_of_lt hpending)]
   have hrEq : core.r = r - blockR := by
-    rw [hcursorR, if_pos hdoneR]
+    rw [hcursorR, ite_eq_left hdoneR]
   constructor
   · rw [hrEq]
     omega
@@ -4176,9 +4182,9 @@ private theorem core_pending_right_cleanup
     · exact hdoneL
     · omega
   have hlEq : core.l = l + blockL := by
-    rw [hcursorL, if_pos hdoneL]
+    rw [hcursorL, ite_eq_left hdoneL]
   have hrEq : core.r = r := by
-    rw [hcursorR, if_neg (ne_of_lt hpending)]
+    rw [hcursorR, ite_eq_right (ne_of_lt hpending)]
   constructor
   · rw [hlEq, hrEq]
     omega
@@ -4241,16 +4247,16 @@ private theorem yielded_core_pending_gap
       rcases hexhaust with hdoneL | hdoneR
       · omega
       · exact hdoneR
-    rw [hcursorL, if_neg (ne_of_lt hpendingL),
-      hcursorR, if_pos hdoneR]
+    rw [hcursorL, ite_eq_right (ne_of_lt hpendingL),
+      hcursorR, ite_eq_left hdoneR]
     omega
   · intro hpendingR
     have hdoneL : core.startL = core.endL := by
       rcases hexhaust with hdoneL | hdoneR
       · exact hdoneL
       · omega
-    rw [hcursorL, if_pos hdoneL,
-      hcursorR, if_neg (ne_of_lt hpendingR)]
+    rw [hcursorL, ite_eq_left hdoneL,
+      hcursorR, ite_eq_right (ne_of_lt hpendingR)]
     omega
 
 private theorem blockCoreState_cleanup
@@ -4581,8 +4587,8 @@ private theorem blockLoopStep_order
           rcases hexhaust with hdoneL | hdoneR
           · omega
           · exact hdoneR
-        rw [hcursor.1, if_neg (ne_of_lt hpending),
-          hcursor.2, if_pos hdoneR]
+        rw [hcursor.1, ite_eq_right (ne_of_lt hpending),
+          hcursor.2, ite_eq_left hdoneR]
         simp only [gap] at hadjustDone
         omega
       · intro hpending
@@ -4590,12 +4596,12 @@ private theorem blockLoopStep_order
           rcases hexhaust with hdoneL | hdoneR
           · exact hdoneL
           · omega
-        rw [hcursor.1, if_pos hdoneL,
-          hcursor.2, if_neg (ne_of_lt hpending)]
+        rw [hcursor.1, ite_eq_left hdoneL,
+          hcursor.2, ite_eq_right (ne_of_lt hpending)]
         simp only [gap] at hadjustDone
         omega
       · intro hdoneL hdoneR
-        rw [hcursor.1, if_pos hdoneL, hcursor.2, if_pos hdoneR]
+        rw [hcursor.1, ite_eq_left hdoneL, hcursor.2, ite_eq_left hdoneR]
         simp only [gap] at hadjustDone
         omega
     simpa [blockLoopStep, gap, pendingL, pendingR, adjusted,
@@ -4676,17 +4682,17 @@ private theorem blockLoopStep_yield_pre
     hgap hcExhaust hcursorEqRaw.1 hcursorEqRaw.2
   have hgapDecrease : core.r - core.l < r - l := by
     rcases hcExhaust with hdoneL | hdoneR
-    · rw [hcursorEqRaw.1, if_pos hdoneL]
+    · rw [hcursorEqRaw.1, ite_eq_left hdoneL]
       by_cases hdoneRight : core.startR = core.endR
-      · rw [hcursorEqRaw.2, if_pos hdoneRight]
+      · rw [hcursorEqRaw.2, ite_eq_left hdoneRight]
         omega
-      · rw [hcursorEqRaw.2, if_neg hdoneRight]
+      · rw [hcursorEqRaw.2, ite_eq_right hdoneRight]
         omega
-    · rw [hcursorEqRaw.2, if_pos hdoneR]
+    · rw [hcursorEqRaw.2, ite_eq_left hdoneR]
       by_cases hdoneLeft : core.startL = core.endL
-      · rw [hcursorEqRaw.1, if_pos hdoneLeft]
+      · rw [hcursorEqRaw.1, ite_eq_left hdoneLeft]
         omega
-      · rw [hcursorEqRaw.1, if_neg hdoneLeft]
+      · rw [hcursorEqRaw.1, ite_eq_right hdoneLeft]
         omega
   have hcoreSize : core.v.size = original.size := by
     simpa using hcorePerm.length_eq
@@ -4929,23 +4935,23 @@ theorem partitionInBlocksFactored_contract
         (state.l, state.v)).2.toList
       v.toList
   by_cases hpendingL : state.startL < state.endL
-  · simp only [if_pos hpendingL]
+  · simp only [ite_eq_left hpendingL]
     have hfacts := hleft hpendingL
     exact cleanupLeft_contract (T := T)
       (List.range' 0 (128 + 1))
       state.startL state.l state.offsetsL
       state.endL state.r state.v v
       hstartL hfacts.1 hrsize hfacts.2 hperm
-  · simp only [if_neg hpendingL]
+  · simp only [ite_eq_right hpendingL]
     by_cases hpendingR : state.startR < state.endR
-    · simp only [if_pos hpendingR]
+    · simp only [ite_eq_left hpendingR]
       have hfacts := hright hpendingR
       exact cleanupRight_contract (T := T)
         (List.range' 0 (128 + 1))
         state.startR state.r state.offsetsR
         state.endR state.l state.v v
         hstartR hlr hfacts.1 hrsize hfacts.2 hperm
-    · simp only [if_neg hpendingR]
+    · simp only [ite_eq_right hpendingR]
       exact ⟨by omega, hperm⟩
 
 theorem partitionInBlocksFactored_order
@@ -5002,7 +5008,7 @@ theorem partitionInBlocksFactored_order
       partitionInBlocksFactored_eq v pivot isLess
   rw [hpartition]
   by_cases hpendingL : state.startL < state.endL
-  · simp only [if_pos hpendingL]
+  · simp only [ite_eq_left hpendingL]
     have hblock : state.blockL = state.r - state.l := by
       have := hleftShape hpendingL
       omega
@@ -5015,9 +5021,9 @@ theorem partitionInBlocksFactored_order
           simpa only [hblock] using
             hexactL (ne_of_lt hpendingL))
     simpa only [initial, state] using hresult
-  · simp only [if_neg hpendingL]
+  · simp only [ite_eq_right hpendingL]
     by_cases hpendingR : state.startR < state.endR
-    · simp only [if_pos hpendingR]
+    · simp only [ite_eq_left hpendingR]
       have hblock : state.blockR = state.r - state.l := by
         have := hrightShape hpendingR
         omega
@@ -5030,7 +5036,7 @@ theorem partitionInBlocksFactored_order
             simpa only [hblock] using
               hexactR (ne_of_lt hpendingR))
       simpa only [initial, state] using hresult
-    · simp only [if_neg hpendingR]
+    · simp only [ite_eq_right hpendingR]
       have hdoneL : state.startL = state.endL := by omega
       have hdoneR : state.startR = state.endR := by omega
       have hlrEq : state.l = state.r := hclosed hdoneL hdoneR

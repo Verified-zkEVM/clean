@@ -1,9 +1,13 @@
-import Clean.Halo2.Keygen.CompressSelectors
-import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
-import Clean.Halo2.Operations.FixedWrites
-import Batteries.Data.Array.Lemmas
-import Mathlib.Data.List.GetD
-import Std.Data.HashSet.Lemmas
+module
+
+public import Clean.Halo2.Keygen.CompressSelectors
+public import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
+public import Clean.Halo2.Operations.FixedWrites
+public import Batteries.Data.Array.Lemmas
+public import Mathlib.Data.List.GetD
+public import Std.Data.HashSet.Lemmas
+
+@[expose] public section
 
 /-!
 # Phase-2 layout reconstruction (reusable, NOT mul-specific)
@@ -574,7 +578,7 @@ theorem tableAssignments_agree
             apply inductionHypothesis
             simpa using hnodup
           · rw [Operations.loadedTableColumns_loadTable_cons,
-              if_neg hvalues, List.singleton_append,
+              ite_eq_right hvalues, List.singleton_append,
               List.nodup_cons] at hnodup
             intro left right hleft hright hcell
             simp only [tableAssignments, List.mem_append] at hleft hright
@@ -708,14 +712,16 @@ theorem regionAssignments_agree
         leftRow < (FloorPlanner.measureRegion leftIndex leftBody).rowCount := by
       have := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
         leftBody (.assignFixed leftColumn leftRow left.2.2) hleftOperation
-      simpa only [FloorPlanner.measureRegion_rowCount,
-        FloorPlanner.regionOperationRowExtent] using this
+      simp only [FloorPlanner.measureRegion_rowCount,
+        FloorPlanner.regionOperationRowExtent] at this ⊢
+      omega
     have hrightRowBound :
         rightRow < (FloorPlanner.measureRegion rightIndex rightBody).rowCount := by
       have := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
         rightBody (.assignFixed leftColumn rightRow right.2.2) hrightOperation
-      simpa only [FloorPlanner.measureRegion_rowCount,
-        FloorPlanner.regionOperationRowExtent] using this
+      simp only [FloorPlanner.measureRegion_rowCount,
+        FloorPlanner.regionOperationRowExtent] at this ⊢
+      omega
     have hdisjoint := FloorPlanner.V1.starts_sharedColumnIntervalsDisjoint operations
       hleftShape hrightShape hindex hleftColumnMeasured hrightColumnMeasured
     simp only [FixedAssignment.cell] at hcell
@@ -764,7 +770,7 @@ theorem constantAssignments_agree
       exact fixedColumn_eq_of_index_eq hindex
     · exact hcolumns
   simpa only [constantAssignments, List.map_map,
-    FixedAssignment.cell, Function.comp_apply] using
+    FixedAssignment.cell, Function.comp_def, Function.comp_apply] using
       FloorPlanner.V1.constantAssignments_cells_nodup operations
         (constantColumns.map (·.index)) hindices
 
@@ -832,8 +838,9 @@ private theorem rowOccupied_eq_true_of_mem_regionAssignment
       (FloorPlanner.measureRegion index body).rowCount := by
     have hbound := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
       body (.assignFixed column localRow assignment.2.2) hoperation
-    simpa only [FloorPlanner.measureRegion_rowCount,
-      FloorPlanner.regionOperationRowExtent] using hbound
+    simp only [FloorPlanner.measureRegion_rowCount,
+      FloorPlanner.regionOperationRowExtent] at hbound ⊢
+    omega
   rw [FloorPlanner.V1.rowOccupied,
     FloorPlanner.V1.rowOccupiedIn_eq_true_iff_mem_occupiedRowsIn,
     FloorPlanner.V1.mem_occupiedRowsIn_iff]
@@ -1213,8 +1220,9 @@ private theorem regionAssignment_row_lt_placementEnd
       (FloorPlanner.measureRegion index body).rowCount := by
     have hbound := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
       body (.assignFixed column localRow assignment.2.2) hoperation
-    simpa only [FloorPlanner.measureRegion_rowCount,
-      FloorPlanner.regionOperationRowExtent] using hbound
+    simp only [FloorPlanner.measureRegion_rowCount,
+      FloorPlanner.regionOperationRowExtent] at hbound ⊢
+    omega
   rw [hrow]
   unfold place FloorPlanner.V1.placementEnd
   exact (Nat.add_lt_add_left hlocal _).trans_le hend
@@ -1455,11 +1463,11 @@ private theorem getElem?_foldl_insert_eq_of_agree
         · have hassignedValue :=
             hagrees assignment (by simp) hcell
           simp only [FixedAssignment.cell] at hcell
-          rw [if_pos (beq_iff_eq.mpr hcell)]
+          rw [ite_eq_left (beq_iff_eq.mpr hcell)]
           exact congrArg some hassignedValue
         · have hcell' : (assignment.1, assignment.2.1) ≠ cell := by
             simpa only [FixedAssignment.cell] using hcell
-          rw [if_neg (fun hequal => hcell' (beq_iff_eq.mp hequal))]
+          rw [ite_eq_right (fun hequal => hcell' (beq_iff_eq.mp hequal))]
           exact hvalue
       · intro later hlater hcell
         exact hagrees later (by simp [hlater]) hcell
@@ -1604,7 +1612,7 @@ private theorem getElem?_foldl_insert_eq_none_of_not_mem
           exact habsent (by simp [heq])
         have hne' : (assignment.1, assignment.2.1) ≠ cell := by
           simpa only [FixedAssignment.cell] using hne
-        rw [if_neg (fun heq => hne' (beq_iff_eq.mp heq))]
+        rw [ite_eq_right (fun heq => hne' (beq_iff_eq.mp heq))]
         exact hinitial
       · intro hmem
         apply habsent
@@ -1740,7 +1748,7 @@ private theorem fixedCell?_scatterFixed [Zero F]
       · subst assignedRow
         simp only [fixedCell?, Array.getElem?_modify]
         rw [Array.getElem?_eq_getElem hcolumnCurrent]
-        simp only [Option.map_some, Option.bind_some, Array.set!, if_true]
+        simp only [Option.map_some, Option.bind_some, Array.set!, ite_true]
         rw [Array.getElem?_eq_getElem (by simpa using hrowCurrent)]
         rw [Array.getElem_setIfInBounds hrowCurrent]
         simp
@@ -1748,7 +1756,7 @@ private theorem fixedCell?_scatterFixed [Zero F]
           simp [hsameRow]
         simp only [fixedCell?, Array.getElem?_modify]
         rw [Array.getElem?_eq_getElem hcolumnCurrent]
-        simp only [Option.map_some, Option.bind_some, Array.set!, if_true]
+        simp only [Option.map_some, Option.bind_some, Array.set!, ite_true]
         rw [Array.getElem?_eq_getElem (by simpa using hrowCurrent)]
         rw [Array.getElem_setIfInBounds (by simpa using hrowCurrent)]
         simp [hsameRow, hpair]
@@ -1840,7 +1848,7 @@ private theorem fixedCell?_scatterFixed_fold_eq_of_forall_cell_ne [Zero F]
       have hnext := scatterFixed_sized hcolumns hrows assignment
       rw [inductionHypothesis hnext.1 hnext.2]
       · rw [fixedCell?_scatterFixed hcolumns hrows assignment column row hcolumn hrow]
-        simp only [if_neg (havoids assignment List.mem_cons_self)]
+        simp only [ite_eq_right (havoids assignment List.mem_cons_self)]
       · intro remaining hremaining
         exact havoids remaining (List.mem_cons_of_mem assignment hremaining)
 

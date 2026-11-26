@@ -1,4 +1,8 @@
-import Clean.Ironwood.Poseidon.SpongeTheorems
+module
+
+public import Clean.Ironwood.Poseidon.SpongeTheorems
+
+@[expose] public section
 
 /-!
 # Orchard Poseidon hash APIs
