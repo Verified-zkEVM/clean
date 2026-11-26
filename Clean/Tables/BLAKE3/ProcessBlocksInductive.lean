@@ -4,13 +4,17 @@ This table has exactly 17 rows:
 - Rows 0-15: Process up to 16 blocks (64 bytes each)
 - Row 16: Final output containing the result of processBlocks
 -/
-import Clean.Table.Inductive
-import Clean.Circuit.Loops
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Specs.BLAKE3
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Conditional
-import Clean.Gadgets.IsZero
+module
+
+public import Clean.Table.Inductive
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Specs.BLAKE3
+public import Clean.Gadgets.Addition32.Addition32
+public import Clean.Gadgets.Conditional
+public import Clean.Gadgets.IsZero
+
+@[expose] public section
 
 open Clean
 
@@ -76,17 +80,10 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
-    simp_all [← h_input, eval_vector]
+    simp_all
 
   completeness := by
-    circuit_proof_start [U32.AssertNormalized.circuit, getElem_eval_vector] -- provable_vector_simp wanted
-    simp only [ProcessBlocksState.Normalized] at h_spec
-    constructor
-    · rintro ⟨i, h_i⟩
-      rcases h_spec with ⟨h_spec, _⟩
-      specialize h_spec ⟨ i, h_i ⟩
-      convert h_spec
-    simp_all
+    circuit_proof_all [U32.AssertNormalized.circuit, ProcessBlocksState.Normalized]
 
 end BLAKE3ProcessBlocksStateNormalized
 
@@ -116,131 +113,16 @@ def circuit : FormalAssertion (F p) BlockInput where
 
   soundness := by
     circuit_proof_start [BlockInput.Normalized, U32.AssertNormalized.circuit]
-    constructor
-    · simp_all
-    simp only [←h_input, eval_vector] -- provable_vector_simp wanted
     simp_all
 
   completeness := by
     circuit_proof_start [U32.AssertNormalized.circuit]
     simp only [BlockInput.Normalized] at h_spec
-    constructor
-    · simp_all
-    simp only [←h_input, eval_vector] at h_spec -- provable_vector_simp wanted
     simp_all
 
 end BLAKE3BlockInputNormalized
 
 attribute [local circuit_norm] eval_vector_takeShort Vector.map_takeShort
-
-omit p_large in
-private theorem state_eval (env : Environment (F p))
-    (state : Var ProcessBlocksState (F p)) :
-    eval env state =
-      { chaining_value := eval env state.chaining_value
-        chunk_counter := eval env state.chunk_counter
-        blocks_compressed := eval env state.blocks_compressed } := by
-  cases state
-  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval,
-    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
-    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
-
-omit p_large in
-private theorem block_eval (env : Environment (F p))
-    (input : Var BlockInput (F p)) :
-    eval env input =
-      { block_exists := eval env input.block_exists
-        block_data := eval env input.block_data } := by
-  cases input
-  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval,
-    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
-    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
-
-omit p_large in
-private theorem conditional_eval {M : TypeMap} [ProvableType M]
-    (env : Environment (F p)) (input : Var (Conditional.Inputs M) (F p)) :
-    eval env input =
-      { selector := eval env input.selector
-        ifTrue := eval env input.ifTrue
-        ifFalse := eval env input.ifFalse } := by
-  cases input
-  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval,
-    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
-    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
-
-omit p_large in
-private theorem state_eval_prover (env : ProverEnvironment (F p))
-    (state : Var ProcessBlocksState (F p)) :
-    eval env state =
-      { chaining_value := eval env.toEnvironment state.chaining_value
-        chunk_counter := eval env.toEnvironment state.chunk_counter
-        blocks_compressed := eval env.toEnvironment state.blocks_compressed } := by
-  cases state
-  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval_prover,
-    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
-    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
-
-omit p_large in
-private theorem block_eval_prover (env : ProverEnvironment (F p))
-    (input : Var BlockInput (F p)) :
-    eval env input =
-      { block_exists := eval env.toEnvironment input.block_exists
-        block_data := eval env.toEnvironment input.block_data } := by
-  cases input
-  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval_prover,
-    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
-    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
-
-omit p_large in
-private theorem conditional_eval_prover {M : TypeMap} [ProvableType M]
-    (env : ProverEnvironment (F p)) (input : Var (Conditional.Inputs M) (F p)) :
-    eval env input =
-      { selector := eval env.toEnvironment input.selector
-        ifTrue := eval env.toEnvironment input.ifTrue
-        ifFalse := eval env.toEnvironment input.ifFalse } := by
-  cases input
-  simp +instances only [ProvableStruct.Clean.eval_var_eq_eval_prover,
-    ProvableStruct.Clean.eval, ProvableStruct.Clean.eval.go,
-    ProvableStruct.components, ProvableStruct.toComponents, ProvableStruct.fromComponents]
-
-attribute [local circuit_norm ↓ 100000] state_eval block_eval conditional_eval
-  state_eval_prover block_eval_prover conditional_eval_prover
-
-private theorem compress_length (input : Var BLAKE3.ApplyRounds.Inputs (F p)) :
-    BLAKE3.Compress.circuit.localLength input = 5440 := rfl
-
-/-- The compression output references ignore the round inputs; normalize their
-addresses without expanding the seven-round computation in the table proofs. -/
-private theorem compress_output (input : Var BLAKE3.ApplyRounds.Inputs (F p))
-    (offset : Nat) :
-    BLAKE3.Compress.circuit.output input offset =
-      varFromOffset BLAKE3.BLAKE3State (offset + 5376) := by
-  dsimp +instances only [FormalCircuitBase.output, BLAKE3.Compress.circuit,
-    BLAKE3.Compress.elaborated, ElaboratedCircuit.output]
-  apply Vector.ext
-  intro i hi
-  have cases_i : i = 0 ∨ i = 1 ∨ i = 2 ∨ i = 3 ∨ i = 4 ∨ i = 5 ∨ i = 6 ∨ i = 7 ∨
-      i = 8 ∨ i = 9 ∨ i = 10 ∨ i = 11 ∨ i = 12 ∨ i = 13 ∨ i = 14 ∨ i = 15 := by omega
-  rcases cases_i with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-  all_goals simp only [circuit_norm, BLAKE3.BLAKE3State,
-    varFromOffset_vector, ProvableType.size, Nat.add_assoc, Nat.reduceAdd, Nat.reduceMul]
-
-private theorem compress_elaborated_output
-    (input : Var BLAKE3.ApplyRounds.Inputs (F p)) (offset : Nat) :
-    ElaboratedCircuit.output BLAKE3.Compress.main
-      (self := BLAKE3.Compress.elaborated) input offset =
-      varFromOffset BLAKE3.BLAKE3State (offset + 5376) := by
-  simpa only [FormalCircuitBase.output, BLAKE3.Compress.circuit] using
-    compress_output input offset
-
-private theorem compress_elaborated_length
-    (input : Var BLAKE3.ApplyRounds.Inputs (F p)) :
-    ElaboratedCircuit.localLength BLAKE3.Compress.main
-      (self := BLAKE3.Compress.elaborated) input = 5440 := rfl
-
-attribute [local circuit_norm] compress_output compress_length
-  compress_elaborated_output compress_elaborated_length
 
 /--
 The step function that processes one block or passes through the state.
@@ -323,15 +205,13 @@ private lemma takeShort8_normalized {v : BLAKE3.BLAKE3State (F p)} (h8 : 8 < 16)
 
 lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput Spec step := by
   intro _ _ env acc_var x_var acc x _ _ h_input h_holds spec_previous inputs_short
-  simp only [circuit_norm, step] at inputs_short spec_previous h_holds ⊢
-  simp only [circuit_norm] at h_input
-  specialize spec_previous (by omega)
-  have input_normalized : x.Normalized := by
-    simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at h_holds
-    provable_struct_simp
-    simp_all
   provable_struct_simp
+  simp only [circuit_norm, step] at inputs_short spec_previous h_holds h_input ⊢
+  have input_normalized : BlockInput.Normalized (⟨x_block_exists, x_block_data⟩ : BlockInput (F p)) := by
+    simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit] at h_holds
+    simp_all
   simp only [h_input] at h_holds spec_previous ⊢
+  specialize spec_previous (by omega)
   simp only [circuit_norm, BLAKE3BlockInputNormalized.circuit, IsZero.circuit,
     BLAKE3ProcessBlocksStateNormalized.circuit, BLAKE3.Compress.circuit, Addition32.circuit,
     seval] at inputs_short spec_previous h_holds ⊢
@@ -422,7 +302,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
         simp only [Vector.getElem_takeShort]
         rfl
     constructor
-    · exact takeShort8_normalized (by omega) h_compress_norm
+    · exact takeShort8_normalized (by norm_num) h_compress_norm
     constructor
     · exact h_state_norm.2.1
     change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
@@ -454,8 +334,8 @@ lemma completeness : InductiveTable.Completeness (F p) ProcessBlocksState BlockI
     rcases h_assumptions with ⟨ h_init, ⟨ h_assumptions, ⟨ h_input, h_small ⟩ ⟩ ⟩
     specialize h_assumptions (by omega)
     have h_assumptions : (_ ∧ _ ∧ _ ∧ _) := ⟨ h_init, ⟨ h_assumptions, h_input ⟩⟩
-    simp only [circuit_norm, step] at ⊢ h_witnesses h_eval
     provable_struct_simp
+    simp only [circuit_norm, step] at ⊢ h_witnesses h_eval
     simp only [circuit_norm, h_eval] at ⊢ h_witnesses
     dsimp only [ProcessBlocksState.Normalized] at h_assumptions
     dsimp only [IsZero.circuit, IsZero.Assumptions, BLAKE3.Compress.circuit, BLAKE3.Compress.Assumptions, BLAKE3.ApplyRounds.Assumptions]
@@ -530,6 +410,5 @@ def table : InductiveTable (F p) ProcessBlocksState BlockInput where
   completeness
   subcircuitsConsistent := by
     simp only [step, circuit_norm]
-    omega
 end
 end Tables.BLAKE3.ProcessBlocksInductive

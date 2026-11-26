@@ -1,6 +1,10 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.Subcircuit
-import Clean.Halo2.Tactics.SubcircuitRw
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Clean.Halo2.Subcircuit
+public meta import Clean.Halo2.Tactics.SubcircuitRw
+
+public meta section
 
 /-!
 # `abstract_outputs` — make subcircuit-call outputs opaque in the proof state

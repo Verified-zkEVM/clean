@@ -24,7 +24,7 @@ attribute [local cbv_eval] LinearNormalization.blockFromBytes_eq LinearNormaliza
 theorem expand60Returns (offset : Nat) :
     Returns (expand60Action offset) (expand59After offset) (expand60Output offset) (expand60After offset) := by
   sha256_witness_unfold expand60
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem expand60Checked (offset : Nat) :
     Checked id (expand60Action offset) (expand59After offset) (expand60Output offset) (expand60After offset)
       (expand60Operations offset) := checked _ _ _ _ (expand60Returns offset)
@@ -32,7 +32,7 @@ theorem expand60Checked (offset : Nat) :
 theorem expand61Returns (offset : Nat) :
     Returns (expand61Action offset) (expand60After offset) (expand61Output offset) (expand61After offset) := by
   sha256_witness_unfold expand61
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem expand61Checked (offset : Nat) :
     Checked id (expand61Action offset) (expand60After offset) (expand61Output offset) (expand61After offset)
       (expand61Operations offset) := checked _ _ _ _ (expand61Returns offset)
@@ -40,7 +40,7 @@ theorem expand61Checked (offset : Nat) :
 theorem expand62Returns (offset : Nat) :
     Returns (expand62Action offset) (expand61After offset) (expand62Output offset) (expand62After offset) := by
   sha256_witness_unfold expand62
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem expand62Checked (offset : Nat) :
     Checked id (expand62Action offset) (expand61After offset) (expand62Output offset) (expand62After offset)
       (expand62Operations offset) := checked _ _ _ _ (expand62Returns offset)
@@ -48,7 +48,7 @@ theorem expand62Checked (offset : Nat) :
 theorem expand63Returns (offset : Nat) :
     Returns (expand63Action offset) (expand62After offset) (expand63Output offset) (expand63After offset) := by
   sha256_witness_unfold expand63
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem expand63Checked (offset : Nat) :
     Checked id (expand63Action offset) (expand62After offset) (expand63Output offset) (expand63After offset)
       (expand63Operations offset) := checked _ _ _ _ (expand63Returns offset)
@@ -56,7 +56,7 @@ theorem expand63Checked (offset : Nat) :
 theorem round0Returns (offset : Nat) :
     Returns (round0Action offset) (expand63After offset) (round0Output offset) (round0After offset) := by
   sha256_witness_unfold round0
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem round0Checked (offset : Nat) :
     Checked id (round0Action offset) (expand63After offset) (round0Output offset) (round0After offset)
       (round0Operations offset) := checked _ _ _ _ (round0Returns offset)
@@ -64,7 +64,7 @@ theorem round0Checked (offset : Nat) :
 theorem round1Returns (offset : Nat) :
     Returns (round1Action offset) (round0After offset) (round1Output offset) (round1After offset) := by
   sha256_witness_unfold round1
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem round1Checked (offset : Nat) :
     Checked id (round1Action offset) (round0After offset) (round1Output offset) (round1After offset)
       (round1Operations offset) := checked _ _ _ _ (round1Returns offset)
@@ -72,7 +72,7 @@ theorem round1Checked (offset : Nat) :
 theorem round2Returns (offset : Nat) :
     Returns (round2Action offset) (round1After offset) (round2Output offset) (round2After offset) := by
   sha256_witness_unfold round2
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem round2Checked (offset : Nat) :
     Checked id (round2Action offset) (round1After offset) (round2Output offset) (round2After offset)
       (round2Operations offset) := checked _ _ _ _ (round2Returns offset)
@@ -80,7 +80,7 @@ theorem round2Checked (offset : Nat) :
 theorem round3Returns (offset : Nat) :
     Returns (round3Action offset) (round2After offset) (round3Output offset) (round3After offset) := by
   sha256_witness_unfold round3
-  cbv <;> exact ⟨rfl,rfl⟩
+  cbv; exact ⟨rfl,rfl⟩
 theorem round3Checked (offset : Nat) :
     Checked id (round3Action offset) (round2After offset) (round3Output offset) (round3After offset)
       (round3Operations offset) := checked _ _ _ _ (round3Returns offset)

@@ -54,8 +54,7 @@ def source (words : Array (AssignedCell F)) (initial : Compression) : Build Comp
 theorem source_loop (words : Array (AssignedCell F)) (initial : Compression) :
     source words initial = loop words (List.range 64) initial := by
   unfold source loop
-  simp only [WitnessBuild.pure_bind, WitnessBuild.bind_pure,
-    Std.Legacy.Range.forIn_eq_forIn_range']
+  simp only [WitnessBuild.bind_pure, Std.Legacy.Range.forIn_eq_forIn_range']
   rfl
 
 theorem loop_lawful (words : Array (AssignedCell F)) (items : List Nat) (initial : Compression) :

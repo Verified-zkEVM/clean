@@ -1,6 +1,10 @@
-import Clean.Circuit.Basic
-import Clean.Circuit.Subcircuit
-import Clean.Circuit.Theorems
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Subcircuit
+public import Clean.Circuit.Theorems
+
+@[expose] public section
 
 namespace Clean
 
@@ -30,9 +34,15 @@ def concat
       FormalCircuit F Input Output where
   main := (circuit1 · >>= circuit2)
   elaborated := .fromExplicit (by infer_explicit_circuits) <| by
-    constructor <;> simp +instances [explicit_circuit_norm, circuit_norm]
+    constructor
     · intro a n m
-      apply h_localLength_stable
+      change circuit1.localLength a + circuit2.localLength (circuit1.output a n) =
+        circuit1.localLength a + circuit2.localLength (circuit1.output a m)
+      rw [h_localLength_stable]
+    · intro a a' n m
+      change circuit1.channelsWithGuarantees ++ circuit2.channelsWithGuarantees =
+        circuit1.channelsWithGuarantees ++ circuit2.channelsWithGuarantees
+      rfl
   channelsWithRequirements := circuit1.channelsWithRequirements ++ circuit2.channelsWithRequirements
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
@@ -42,7 +52,6 @@ def concat
   completeness := by
     simp only [circuit_norm]
     aesop
-
 @[circuit_norm]
 lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     (c1.concat c2 p0 p1).Assumptions = c1.Assumptions := by
@@ -52,7 +61,28 @@ lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F 
 lemma concat_localLength (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 inp :
   (c1.concat c2 p0 p1).localLength inp =
     c1.localLength inp + c2.localLength (c1.output inp 0) := by
-  simp +instances only [concat, circuit_norm, explicit_circuit_norm]
+  change c1.localLength inp + c2.localLength (c1.output inp 0) = _
+  rfl
+
+@[circuit_norm]
+lemma concat_localLength' (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 inp :
+  ElaboratedCircuit.localLength (c1.concat c2 p0 p1).main inp =
+    c1.localLength inp + c2.localLength (c1.output inp 0) := by
+  change c1.localLength inp + c2.localLength (c1.output inp 0) = _
+  rfl
+
+@[circuit_norm]
+lemma concat_channelsWithGuarantees (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
+    (c1.concat c2 p0 p1).channelsWithGuarantees = c1.channelsWithGuarantees ++ c2.channelsWithGuarantees := by
+  change c1.channelsWithGuarantees ++ c2.channelsWithGuarantees = _
+  rfl
+
+@[circuit_norm]
+lemma concat_channelsWithGuarantees' (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
+    ElaboratedCircuit.channelsWithGuarantees (c1.concat c2 p0 p1).main =
+      c1.channelsWithGuarantees ++ c2.channelsWithGuarantees := by
+  change c1.channelsWithGuarantees ++ c2.channelsWithGuarantees = _
+  rfl
 
 /--
 Weaken the specification of a FormalCircuit.
@@ -80,6 +110,7 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
   requirementsChannelsLawful := circuit.requirementsChannelsLawful
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
+  computableWitnesses := circuit.computableWitnesses
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
     -- Use the original circuit's soundness
@@ -91,24 +122,47 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
     -- and the same assumptions
     exact circuit.completeness
 
-@[circuit_norm]
-lemma weakenSpec_assumptions
+@[circuit_norm] lemma weakenSpec_assumptions
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [weakenSpec]
 
-@[circuit_norm]
-lemma weakenSpec_channelsWithRequirements
-    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
-    (c.weakenSpec WeakerSpec h_spec_implication).channelsWithRequirements = c.channelsWithRequirements := by
-  simp only [weakenSpec]
-
-@[circuit_norm]
-lemma weakenSpec_localLength
+@[circuit_norm] lemma weakenSpec_localLength
     (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication
     (input : Var Input F) :
     (c.weakenSpec WeakerSpec h_spec_implication).localLength input = c.localLength input := by
   rfl
+
+@[circuit_norm] lemma weakenSpec_localLength'
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication
+    (input : Var Input F) :
+    ElaboratedCircuit.localLength (c.weakenSpec WeakerSpec h_spec_implication).main input = c.localLength input := by
+  rfl
+
+@[circuit_norm] lemma weakenSpec_output
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication
+    (input : Var Input F) (offset : Nat) :
+    (c.weakenSpec WeakerSpec h_spec_implication).output input offset = c.output input offset := by
+  rfl
+
+@[circuit_norm] lemma weakenSpec_output'
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication
+    (input : Var Input F) (offset : Nat) :
+    ElaboratedCircuit.output (c.weakenSpec WeakerSpec h_spec_implication).main input offset = c.output input offset := by
+  rfl
+
+@[circuit_norm] lemma weakenSpec_channelsWithGuarantees
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).channelsWithGuarantees = c.channelsWithGuarantees := rfl
+
+@[circuit_norm] lemma weakenSpec_channelsWithGuarantees'
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    ElaboratedCircuit.channelsWithGuarantees (c.weakenSpec WeakerSpec h_spec_implication).main = c.channelsWithGuarantees := rfl
+
+@[circuit_norm] lemma weakenSpec_channelsWithRequirements
+    (c : FormalCircuit F Input Output) (WeakerSpec : Input F → Output F → Prop) h_spec_implication :
+    (c.weakenSpec WeakerSpec h_spec_implication).channelsWithRequirements = c.channelsWithRequirements := by
+  simp only [weakenSpec]
 end FormalCircuit
 
 namespace GeneralFormalCircuit
@@ -128,6 +182,7 @@ def weakenSpec (circuit : GeneralFormalCircuit F Input Output)
   Spec := WeakerSpec
   ProverAssumptions := circuit.ProverAssumptions
   ProverSpec := circuit.ProverSpec
+  computableWitnesses := circuit.computableWitnesses
   soundness := by
     intro offset env input_var input h_eval h_assumptions h_holds
     have h_strong_spec := circuit.soundness offset env input_var input h_eval h_assumptions h_holds

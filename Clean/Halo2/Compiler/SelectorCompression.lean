@@ -1,6 +1,10 @@
-import Clean.Halo2.Compiler.SelectorEvaluation
-import Clean.Halo2.Keygen.Layout
-import Std.Data.HashSet.Lemmas
+module
+
+public import Clean.Halo2.Compiler.SelectorEvaluation
+public import Clean.Halo2.Keygen.Layout
+public import Std.Data.HashSet.Lemmas
+
+@[expose] public section
 
 /-!
 # Selector compiler coherence

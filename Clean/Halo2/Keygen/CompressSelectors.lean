@@ -1,4 +1,8 @@
-import Clean.Halo2.Configure
+module
+
+public import Clean.Halo2.Configure
+
+@[expose] public section
 
 /-!
 # `compress_selectors`, ported: the selector-compression map and its algebra
@@ -211,7 +215,7 @@ theorem selReplacement_noSimpleSelectors (description : SelCompress) :
     obtain ⟨index, _, hresult⟩ := hfactor
     by_cases hroot : index + 1 = description.assignedRoot
     · simp [hroot] at hresult
-    · rw [if_neg hroot, Option.some_inj] at hresult
+    · rw [ite_eq_right hroot, Option.some_inj] at hresult
       subst factor
       trivial
 
@@ -1604,7 +1608,7 @@ private theorem activationTable_cell_true_of_mem_foldl
           exact hrow
         · change updated[selector]![row]! = true
           rw [getElem!_pos updated selector hselectorUpdated,
-            Array.getElem_modify, if_pos rfl]
+            Array.getElem_modify, ite_eq_left rfl]
           have hsourceRow : row < table[selector].size := by
             rw [hsized selector hselector]
             exact hrow

@@ -14,7 +14,5 @@ theorem expand55Checked : Checked StructuralCheckpoints.expand55Action
     sha256_structural_unfold expand55
     sha256_witness_unfold expand55
     cbv
-    repeat' apply And.intro
-    all_goals trivial
 
 end Midnight.SHA256.Semantics.WitnessErasureCheckpoints

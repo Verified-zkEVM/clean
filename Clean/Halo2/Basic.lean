@@ -1,4 +1,8 @@
-import Clean.Halo2.Operations
+module
+
+public import Clean.Halo2.Operations
+
+@[expose] public section
 
 /-!
 # Halo2 circuit monads — DESIGN SKETCH
@@ -138,12 +142,11 @@ theorem output_cellAt (col : Column .advice) (row : ℕ) (self : RegionIndex) :
 /-- Read an input cell's value in a placed prover environment — the standard accessor for
 witness programs that derive values from earlier cells. (Promoted from the per-gadget
 copies in `MulIncompleteRound`/`HashPieceRound` — the friction-twice rule.) -/
-def readCell [Field F] (env : Placed ProverEnvironment F) (c : AssignedCell F) : F :=
+def readCell (env : Placed ProverEnvironment F) (c : AssignedCell F) : F :=
   c.eval env.place env.env.toEnvironment
 
-omit [FiniteField F] in
 @[circuit_norm]
-theorem readCell_of [Field F] (env : Placed ProverEnvironment F) (self : RegionIndex)
+theorem readCell_of (env : Placed ProverEnvironment F) (self : RegionIndex)
     (row : ℕ) (col : Column .advice) :
     readCell env (AssignedCell.of self row col)
       = env.env.advice col ((env.place self + row : ℕ) : ℤ) := rfl
@@ -174,13 +177,10 @@ def Gate.enable (gate : Gate F) (row : ℕ) : RegionCircuit F Unit :=
 /-- Enable a lookup argument at a local row. The caller supplies only the auxiliary
 selectors selecting this row's lookup mode; the lookup's master selector is enabled by
 construction. Thus `arg.enable [qRunning] row` is a running-sum row and
-`arg.enable [] row` is a short row. -/
+`arg.enable [] row` is a short row. That the auxiliary selectors belong to the lookup
+expression is the circuit's `lookupActivationsWellFormed` obligation. -/
 def LookupArgument.enable (arg : LookupArgument F) (auxiliarySelectors : List Selector)
-    (row : ℕ)
-    (_hauxiliary : auxiliarySelectors.Forall fun selector =>
-      selector.index ∈ arg.selectorIndices := by
-        simp only [keygen_norm]) :
-    RegionCircuit F Unit :=
+    (row : ℕ) : RegionCircuit F Unit :=
   fun _ => ((), [.enableLookup arg (arg.masterSelector :: auxiliarySelectors) row])
 
 /-! ## Layouter-level circuits -/

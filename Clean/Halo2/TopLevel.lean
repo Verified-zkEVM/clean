@@ -1,8 +1,12 @@
-import Clean.Halo2.Keygen.PinnedCs
-import Clean.Halo2.Keygen.Domain
-import Clean.Halo2.Keygen.Semantics
-import Clean.Halo2.Keygen.Layout
-import Clean.Halo2.CircuitShape
+module
+
+public import Clean.Halo2.Keygen.PinnedCs
+public import Clean.Halo2.Keygen.Domain
+public import Clean.Halo2.Keygen.Semantics
+public import Clean.Halo2.Keygen.Layout
+public import Clean.Halo2.CircuitShape
+
+@[expose] public section
 
 /-!
 # Closed top-level formal circuits
@@ -347,9 +351,6 @@ theorem exists_rotation_mem_configuredInstanceQueries_of_mem_publicInputColumns
   refine ⟨rotation, ?_⟩
   rw [configureInstanceQueries] at hquery
   rw [← (circuit.elaborated.configureInfo ()).instanceQueries_eq] at hquery
-  change
-    (column, rotation) ∈
-      ((circuit.configure ()).run {}).2.instanceQueries
   rw [Configure.mem_instanceQueries_run_iff]
   exact Or.inr hquery
 
@@ -877,7 +878,8 @@ private theorem flattenColumn_injective_of_allocated
   cases leftKind <;> cases rightKind <;>
     simp only [AnyColumn.Allocated, flattenColumn] at hleft hright heq ⊢ <;>
     try omega
-  all_goals congr 1 <;> omega
+  all_goals congr 1
+  all_goals omega
 
 /-- The published number of sets in the circuit's permutation argument. -/
 def permutationSetCount (self : TopLevelCircuit F Config PublicInput)

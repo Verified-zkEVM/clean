@@ -12,7 +12,5 @@ theorem prepare2Checked : Checked StructuralCheckpoints.prepare2Action
   cases priorTrace with
   | mk data =>
     cbv
-    repeat' apply And.intro
-    all_goals trivial
 
 end Midnight.SHA256.Semantics.WitnessErasureCheckpoints

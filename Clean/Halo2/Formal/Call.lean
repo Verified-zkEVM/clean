@@ -1,4 +1,8 @@
-import Clean.Halo2.Formal
+module
+
+public import Clean.Halo2.Formal
+
+@[expose] public section
 
 namespace Halo2
 
@@ -26,7 +30,7 @@ variable [CircuitType Input] [CircuitType Output] {ConfigInput Config : Type}
   elaborator across all three components; the packaged `property` re-exposes the defining
   equation as a *recorded* rewrite (`call_eq`/`call_operations` below). -/
 @[keygen_call_expression]
-private opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
+opaque callPacked (F : Type) [FiniteField F] (CI Cfg : Type)
     (Input Output : TypeMap) [CircuitType Input] [CircuitType Output] :
     { f : FormalCircuit F CI Cfg Input Output → Cfg → Var Input F → RegionIndex →
         Var Output F × Operations F × RegionIndex //

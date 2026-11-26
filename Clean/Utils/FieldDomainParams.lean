@@ -1,5 +1,9 @@
-import CompElliptic.Fields.Sqrt
-import Mathlib.RingTheory.RootsOfUnity.PrimitiveRoots
+module
+
+public import CompElliptic.Fields.Sqrt
+public import Mathlib.RingTheory.RootsOfUnity.PrimitiveRoots
+
+@[expose] public section
 
 /-! # Certified field parameters for evaluation domains and permutation columns
 

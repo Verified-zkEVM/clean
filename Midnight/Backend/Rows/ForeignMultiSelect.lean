@@ -113,13 +113,13 @@ theorem soundness (n : ℕ) (place : RegionIndex → ℕ) (env : Environment F)
     wrap_of_lt (ht.trans_le hn)] at heq
   obtain ⟨h4, h0, h1, h2, h3, htg⟩ := heq
   refine ⟨t, ht, fun hs => ?_, ?_⟩
-  · rw [if_pos hs, sub_self, zero_mul, htag] at htg
+  · rw [ite_eq_left hs, sub_self, zero_mul, htag] at htg
     exact seven_ne_zero htg
   · have hs : (0, t) ∉ operations.enabledSelectors place 0 := by
       intro hs
-      rw [if_pos hs, sub_self, zero_mul, htag] at htg
+      rw [ite_eq_left hs, sub_self, zero_mul, htag] at htg
       exact seven_ne_zero htg
-    rw [if_neg hs, sub_zero, one_mul] at h4 h0 h1 h2 h3
+    rw [ite_eq_right hs, sub_zero, one_mul] at h4 h0 h1 h2 h3
     intro c hc
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
     rcases hc with rfl | rfl | rfl | rfl | rfl

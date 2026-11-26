@@ -64,7 +64,7 @@ theorem interleave_testBit_even (a b i : Nat) :
     change (2 ^ 2 * interleave (a / 2) (b / 2) + (a % 2 + 2 * (b % 2))).testBit
       (2 * (i + 1)) = _
     rw [Nat.testBit_two_pow_mul_add _ (by omega : a % 2 + 2 * (b % 2) < 2 ^ 2)]
-    simp only [show ¬ 2 * (i + 1) < 2 by omega, if_false,
+    simp only [show ¬ 2 * (i + 1) < 2 by omega, ite_false,
       show 2 * (i + 1) - 2 = 2 * i by omega, ih, Nat.testBit_div_two]
 
 theorem interleave_testBit_odd (a b i : Nat) :
@@ -81,7 +81,7 @@ theorem interleave_testBit_odd (a b i : Nat) :
     change (2 ^ 2 * interleave (a / 2) (b / 2) + (a % 2 + 2 * (b % 2))).testBit
       (2 * (i + 1) + 1) = _
     rw [Nat.testBit_two_pow_mul_add _ (by omega : a % 2 + 2 * (b % 2) < 2 ^ 2)]
-    simp only [show ¬ 2 * (i + 1) + 1 < 2 by omega, if_false,
+    simp only [show ¬ 2 * (i + 1) + 1 < 2 by omega, ite_false,
       show 2 * (i + 1) + 1 - 2 = 2 * i + 1 by omega, ih, Nat.testBit_div_two]
 
 /-- A parity equation cannot swap or hide either output bit plane. -/

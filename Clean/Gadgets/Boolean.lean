@@ -1,7 +1,12 @@
-import Clean.Circuit.Basic
-import Clean.Utils.Field
-import Clean.Utils.Tactics.CircuitProofStart
-import Mathlib.Data.Nat.Bitwise
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics.CircuitProofStart
+public import Mathlib.Data.Nat.Bitwise
+public import Clean.Circuit.Formal
+
+@[expose] public section
 
 open Clean
 
@@ -53,11 +58,7 @@ theorem land_inherit_left (l r : ℕ) (h : IsBool l) : IsBool (l &&& r) := by
   · -- Case: l = 0
     left
     rw [h_l0]
-    simp only [HAnd.hAnd, AndOp.and]
-    have : (0 : ℕ).land r = 0 := by
-      unfold Nat.land
-      simp
-    exact this
+    exact Nat.zero_and r
   · -- Case: l = 1
     subst h_l1
     simp only [Nat.one_and_eq_mod_two]
@@ -197,7 +198,11 @@ inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
-def witness (e : FExpr (F p)) := do
+
+/- `mk` is private on purpose: a `Boolean` may only be produced by `witness`, which emits the
+booleanity constraint. Its body therefore stays unexposed, or it would leak the private
+constructor into the public scope. -/
+@[no_expose] def witness (e : FExpr (F p)) := do
   let x ← witnessVar (.ofFExpr e)
   assertZero (var x * (var x - 1))
   return Boolean.mk x

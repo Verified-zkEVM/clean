@@ -16,7 +16,11 @@ elab "sha256_relocation_reduction" " in " declaration:command : command => do
     elabCommand (← `(command| attribute [local cbv_opaque] WitnessCircuit.blockFromBytes WitnessCircuit.constant
         BLS12_381.instFieldScalarField ZMod.instField ZMod.commRing
         Midnight.SHA256.activation Midnight.SHA256.byteRangeRows Midnight.SHA256.spreadRows
-        List.map List.append Nat.add WitnessErasure.regionOperation Chips.Relocation.regionOperation))
+        List.map List.append Nat.add WitnessErasure.regionOperation Chips.Relocation.regionOperation
+        Witgen.WitgenIROver.ofFExpr WitnessIR.program WitnessIR.readNat WitnessIR.spread32
+        WitnessIR.compactEven WitnessIR.evenBits WitnessIR.oddBits WitnessIR.negateSpread
+        WitnessIR.limb WitnessIR.limbs WitnessIR.weighted WitnessIR.sum WitnessIR.sum32
+        WitnessIR.carry32 UInt64.ofNat))
     elabCommand (← `(command| attribute [local cbv_eval] LinearNormalization.blockFromBytes_eq LinearNormalization.constant_eq
         List.map_cons List.map_nil WitnessErasure.activation
         SourceRelocation.Rules.nat_add_assoc SourceRelocation.Rules.nat_add_zero

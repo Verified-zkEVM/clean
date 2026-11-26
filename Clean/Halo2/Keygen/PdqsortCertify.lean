@@ -1,8 +1,13 @@
-import Clean.Halo2.Keygen.PdqsortEvaluation
-import Mathlib.Tactic.ToExpr
-import Lean.Elab.Command
-import Lean.Meta.Tactic.Simp.Main
-import Lean.Meta.Transform
+module
+
+public import Clean.Halo2.Keygen.PdqsortEvaluation
+public meta import Clean.Halo2.Keygen.PdqsortEvaluation
+public meta import Mathlib.Tactic.ToExpr
+public meta import Lean.Elab.Command
+public meta import Lean.Meta.Tactic.Simp.Main
+public meta import Lean.Meta.Transform
+
+@[expose] public section
 
 /-!
 # Kernel-checked concrete pdqsort evaluation
@@ -19,12 +24,14 @@ keep the kernel from retaining or recomputing an entire recursive sort in one re
 
 open Lean Meta Halo2.FloorPlanner
 
+meta section
 deriving instance ToExpr for Pdqsort.Plan
 deriving instance ToExpr for Pdqsort.Request
 deriving instance ToExpr for Pdqsort.Layer
 deriving instance ToExpr for Pdqsort.PartitionSetup
 deriving instance ToExpr for Pdqsort.BlockLoopState
 deriving instance ToExpr for ForInStep
+end
 
 namespace Halo2.FloorPlanner.Pdqsort.Certify
 
@@ -64,26 +71,7 @@ theorem partitionP_of_steps {T : Type} [Inhabited T]
   simp only [hSetup]
   rw [hInput, hBlocks, hFinish]
 
-/-- One candidate equation. Composite equations refer to previously checked equations
-by their left-hand sides; primitive equations are checked by kernel reduction. -/
-structure Event where
-  lhs : Expr
-  rhs : Expr
-  unfoldNames : List Name := []
-  assemble : Option (Name × Array (Sum Expr Expr)) := none
-
-structure Quotation where
-  type : Expr
-  inhabited : Expr
-  less : Expr
-
-def Quotation.call (q : Quotation) (name : Name) (args : Array Expr) : Expr :=
-  mkAppN (mkConst name) (#[q.type, q.inhabited] ++ args)
-
-def event {α : Type} [ToExpr α] (lhs : Expr) (rhs : α)
-    (unfoldNames : List Name := []) : Event :=
-  { lhs, rhs := toExpr rhs, unfoldNames }
-
+section
 variable {T : Type} [Inhabited T]
 
 theorem recursePlanned_done (fuel : Nat) (input : Array T) (less : T → T → Bool)
@@ -120,8 +108,31 @@ theorem recursePlanned_binary (fuel : Nat) (input : Array T) (less : T → T →
   rw [Pdqsort.recursePlanned.eq_2, Pdqsort.recurseStepPlanned_eq_interpretLayer, hLayer]
   simp only [Pdqsort.interpretLayer, hLeft, hRight]
   rfl
+end
 
-variable [ToExpr T]
+meta section
+
+/-- One candidate equation. Composite equations refer to previously checked equations
+by their left-hand sides; primitive equations are checked by kernel reduction. -/
+structure Event where
+  lhs : Expr
+  rhs : Expr
+  unfoldNames : List Name := []
+  assemble : Option (Name × Array (Sum Expr Expr)) := none
+
+structure Quotation where
+  type : Expr
+  inhabited : Expr
+  less : Expr
+
+def Quotation.call (q : Quotation) (name : Name) (args : Array Expr) : Expr :=
+  mkAppN (mkConst name) (#[q.type, q.inhabited] ++ args)
+
+def event {α : Type} [ToExpr α] (lhs : Expr) (rhs : α)
+    (unfoldNames : List Name := []) : Event :=
+  { lhs, rhs := toExpr rhs, unfoldNames }
+
+variable {T : Type} [Inhabited T] [ToExpr T]
 
 /-- Split a partition into bounded block-loop steps and their generic composition. -/
 def partitionEvents (q : Quotation) (values : Array T)
@@ -306,7 +317,7 @@ def certificates (q : Quotation) (values : Array T) (less : T → T → Bool) :
     (some output) [``Pdqsort.quicksortPlanned]])
 
 /-- Store each literal array once across checkpoint statements and proof arguments. -/
-private def shareArrays (e : Expr) : StateT (Std.HashMap Expr Expr) MetaM Expr :=
+def shareArrays (e : Expr) : StateT (Std.HashMap Expr Expr) MetaM Expr :=
   Meta.transform e (pre := fun e => do
     if e.isAppOfArity ``List.toArray 2 then
       if let some shared := (← get)[e]? then
@@ -316,7 +327,7 @@ private def shareArrays (e : Expr) : StateT (Std.HashMap Expr Expr) MetaM Expr :
       return .done shared
     return .continue)
 
-private def shareEvent (item : Event) : StateT (Std.HashMap Expr Expr) MetaM Event := do
+def shareEvent (item : Event) : StateT (Std.HashMap Expr Expr) MetaM Event := do
   let lhs ← shareArrays item.lhs
   let rhs ← shareArrays item.rhs
   let assemble ← item.assemble.mapM fun (name, args) => do
@@ -326,7 +337,7 @@ private def shareEvent (item : Event) : StateT (Std.HashMap Expr Expr) MetaM Eve
     return (name, args)
   return {item with lhs, rhs, assemble}
 
-private def checkEvent (item : Event)
+def checkEvent (item : Event)
     (cache : Std.HashMap Expr Name) : MetaM Name := do
   if let some (name, args) := item.assemble then
     let args ← args.mapM fun arg => match arg with
@@ -371,6 +382,30 @@ private def checkEvent (item : Event)
     proof ← match result.proof? with
       | none => pure (mkConst tail)
       | some h => pure (trans lhs result.expr item.rhs h (mkConst tail))
+  else if let some (evalName, eqName) := match item.lhs.getAppFn.constName? with
+      | some ``Pdqsort.insertionSort =>
+          some (``Pdqsort.insertionSortEval, ``Pdqsort.insertionSort_eq_eval)
+      | some ``Pdqsort.heapsort =>
+          some (``Pdqsort.heapsortEval, ``Pdqsort.heapsort_eq_eval)
+      | some ``Pdqsort.preparePartition =>
+          some (``Pdqsort.preparePartitionEval, ``Pdqsort.preparePartition_eq_eval)
+      | some ``Pdqsort.finishPartition =>
+          some (``Pdqsort.finishPartitionEval, ``Pdqsort.finishPartition_eq_eval)
+      | some ``Pdqsort.partitionEqual =>
+          some (``Pdqsort.partitionEqualEval, ``Pdqsort.partitionEqual_eq_eval)
+      | some ``Pdqsort.breakPatterns =>
+          some (``Pdqsort.breakPatternsEval, ``Pdqsort.breakPatterns_eq_eval)
+      | some ``Pdqsort.partialInsertionSort =>
+          some (``Pdqsort.partialInsertionSortEval, ``Pdqsort.partialInsertionSort_eq_eval)
+      | _ => none then
+    let args := item.lhs.getAppArgs
+    let evalLhs := mkAppN (mkConst evalName) args
+    let eqProof := mkAppN (mkConst eqName) args
+    let resultType ← inferType item.rhs
+    let level ← getLevel resultType
+    let tail ← mkAuxLemma [] (← mkEq evalLhs item.rhs) proof
+    proof := mkAppN (mkConst ``Eq.trans [level])
+      #[resultType, item.lhs, evalLhs, item.rhs, eqProof, mkConst tail]
   mkAuxLemma [] (← mkEq item.lhs item.rhs) (← instantiateMVars proof)
 
 /-- Prove the exact pdqsort result of a closed array by kernel-checking generated steps. -/
@@ -410,5 +445,7 @@ unsafe def elabPdqsortCertify : Elab.Command.CommandElab := fun stx => do
       #[plan, inputExpr, compExpr, output, mkConst last]
     let type ← inferType proof
     addDecl (.thmDecl {name := (← getCurrNamespace) ++ name.getId, levelParams := [], type, value := proof})
+
+end
 
 end Halo2.FloorPlanner.Pdqsort.Certify

@@ -1,11 +1,15 @@
-import Clean.Circuit
-import Clean.Circuit.Expression
-import Clean.Utils.Bits
-import Clean.Utils.Fin
-import Clean.Utils.Vector
-import Clean.Gadgets.Bits
-import Clean.Gadgets.Boolean
-import Clean.Circomlib.Bitify
+module
+
+public import Clean.Circuit
+public import Clean.Circuit.Expression
+public import Clean.Utils.Bits
+public import Clean.Utils.Fin
+public import Clean.Utils.Vector
+public import Clean.Gadgets.Bits
+public import Clean.Gadgets.Boolean
+public import Clean.Circomlib.Bitify
+
+@[expose] public section
 
 open Clean
 
@@ -75,6 +79,8 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ}
   apply Nat.lt_of_le_of_lt h_sum_bound (h_log_bound n)
 namespace BinSum
 
+attribute [local implicit_reducible] Expression.eval
+
 -- Compute the linear sum of input bits weighted by powers of 2
 def inputLinearSum (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Expression (F p) :=
   -- Calculate input linear sum
@@ -97,7 +103,7 @@ lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [NeZero n]
   simp only [inputLinearSum, circuit_norm, eval_foldl, Fin.foldl_factor_const]
 
   -- Step 2: Replace Expression.eval env input[j][k] with input_val[j][k]
-  simp only [ProvableType.Clean.getElem_eval_fields, getElem_eval_vector, h_eval]
+  simp only [h_eval]
 
   rw [Fin.sum_interchange]
   simp only [fieldFromBits_as_sum]
@@ -174,6 +180,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
         Fin.foldl ops (fun sum (j : Fin ops) =>
           sum + fieldFromBits input[j]) (0 : F p)
 
+  computableWitnesses := by computable_witnesses [inputLinearSum]
   soundness := by
     intros offset env input_var input h_input_eval h_assumptions h_constraints_hold
 

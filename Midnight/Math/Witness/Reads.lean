@@ -15,10 +15,10 @@ mutual
   | .const _ => true
   | .add a b | .mul a b => field allowed a && field allowed b
   | .inv a => field allowed a
-  | .ofNat a => nat allowed a
+  | .ofU64 a => nat allowed a
   | .hintGet _ _ row _ => nat allowed row
   | _ => false
- def nat (allowed : V → Bool) : Witgen.NExprOver F V → Bool
+ def nat (allowed : V → Bool) : Witgen.U64ExprOver F V → Bool
   | .const _ => true
   | .val a => field allowed a
   | .add a b | .mul a b | .div a b | .mod a b | .land a b | .lor a b | .lxor a b
@@ -49,12 +49,14 @@ mutual
     exact congrArg₂ (· * ·) (field_congr allowed a both.1 left right cells hints)
       (field_congr allowed b both.2 left right cells hints)
   | inv a => exact congrArg Inv.inv (field_congr allowed a accepted left right cells hints)
-  | ofNat a => exact congrArg FiniteField.fromNat (nat_congr allowed a accepted left right cells hints)
+  | ofU64 a =>
+    exact congrArg (fun x : UInt64 => FiniteField.fromNat (F := F) x.toNat)
+      (nat_congr allowed a accepted left right cells hints)
   | hintGet key n row col =>
     have same := nat_congr allowed row accepted left right cells hints
     simp only [Witgen.FExprOver.eval, same, hints]
   | _ => contradiction
- theorem nat_congr (allowed : V → Bool) (expression : Witgen.NExprOver F V)
+ theorem nat_congr (allowed : V → Bool) (expression : Witgen.U64ExprOver F V)
     (accepted : nat allowed expression = true)
     (left right : Witgen.CtxOver F Env)
     (cells : ∀ cell, allowed cell = true →
@@ -63,12 +65,13 @@ mutual
     expression.eval left = expression.eval right := by
   cases expression with
   | const _ => rfl
-  | val a => exact congrArg FiniteField.val (field_congr allowed a accepted left right cells hints)
+  | val a =>
+    exact congrArg (fun x => UInt64.ofNat (FiniteField.val x)) (field_congr allowed a accepted left right cells hints)
   | add a b | mul a b | div a b | mod a b | land a b | lor a b | lxor a b | shiftL a b | shiftR a b =>
     have both := Bool.and_eq_true_iff.mp accepted
     have ha := nat_congr allowed a both.1 left right cells hints
     have hb := nat_congr allowed b both.2 left right cells hints
-    simp only [Witgen.NExprOver.eval, ha, hb]
+    simp only [Witgen.U64ExprOver.eval, ha, hb]
   | _ => contradiction
 end
 
@@ -99,8 +102,7 @@ theorem program_congr {n : Nat} (allowed : V → Bool) (compute : Witgen.WitgenI
         simpa only [Witgen.WitgenIROver.eval, Witgen.VExprOver.eval, Witgen.evalSteps,
           Vector.getElem_map] using
           field_congr allowed expressions[i] accept {env := left} {env := right} cells hints
-      | mapRange _ _ => contradiction
-      | append _ _ => contradiction
+      | mapRange _ _ | envRange _ | bitsOf _ | append _ _ => contradiction
 
 end Semantics
 end Midnight.Math.Witness.Reads

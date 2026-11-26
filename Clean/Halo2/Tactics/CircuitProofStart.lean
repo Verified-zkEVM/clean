@@ -1,11 +1,15 @@
-import Lean.Elab.Tactic
-import Clean.Halo2.Formal.Tactics
-import Clean.Halo2.Loops
-import Clean.Halo2.Tactics.ProvableTypeSimp
-import Clean.Halo2.Tactics.AbstractOutputs
-import Clean.Halo2.Tactics.SubcircuitRw
-import Clean.Halo2.Tactics.ContractBridges
-import Clean.Utils.Tactics.CircuitProofStart
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Clean.Halo2.Formal.Tactics
+public meta import Clean.Halo2.Loops
+public meta import Clean.Halo2.Tactics.ProvableTypeSimp
+public meta import Clean.Halo2.Tactics.AbstractOutputs
+public meta import Clean.Halo2.Tactics.SubcircuitRw
+public meta import Clean.Halo2.Tactics.ContractBridges
+public meta import Clean.Utils.Tactics.CircuitProofStart
+
+public meta section
 
 /-!
 # `circuit_proof_start` — the composite prefix for halo2 bundle proofs
@@ -257,8 +261,24 @@ def introBundleBindersAndDetect : TacticM Direction := do
     i := i + 1
   throwError "circuit_proof_start: could not locate a bundle Soundness/Completeness head after introducing leading binders"
 
-/-- Step (a) part 2: `rw` the direction's `_iff` and intro the post-iff binders with the house
-names. Immediately after introducing the placed environment binder `env`
+/-- Replace the goal, the left-hand side of the theorem `iffName`, by its right-hand side.
+This is the rewrite `rw [iffName]` performs, without abstracting a motive over the goal. -/
+def applyIffMpr (iffName : Name) : TacticM Unit := withMainContext do
+  let goal ← getMainGoal
+  let iff ← mkConstWithFreshMVarLevels iffName
+  let (args, _, statement) ← forallMetaTelescopeReducing (← inferType iff)
+  let some (lhs, rhs) := statement.iff?
+    | throwError "{iffName} is not an equivalence"
+  unless ← isDefEq lhs (← goal.getType) do
+    throwError "the goal is not the left-hand side of {iffName}"
+  let rhsGoal ← mkFreshExprSyntheticOpaqueMVar (← instantiateMVars rhs) (← goal.getTag)
+  goal.assign (← mkAppM ``Iff.mpr #[mkAppN iff args, rhsGoal])
+  replaceMainGoal [rhsGoal.mvarId!]
+
+/-- Step (a) part 2: enter the direction's `_iff` form and intro the post-iff binders with the
+house names. The goal is the `_iff`'s left-hand side, so it is entered by `Iff.mpr` rather
+than by rewriting: the goal mentions the circuit's elaborated record, whose proof fields need
+not be type-correct at the implicit transparency a rewrite motive is checked at. Immediately after introducing the placed environment binder `env`
 (`env : Placed (Prover)Environment F`), destructure it into its two fields — the placement
 `place : RegionIndex → ℕ` and the underlying environment `env : (Prover)Environment F` — so that
 every `env.place`/`env.env` projection in the introduced hypotheses and goal reduces to bare
@@ -269,8 +289,7 @@ variables. Both directions, both region and layouter paths (all four go through 
 `⟨place, env⟩` literal from the bare pair when the common-`penv` projection shape is absent, so
 the engine's `*_placed` leaves instantiate directly against the split context. -/
 def rwIffAndIntro (d : Direction) : TacticM Unit := do
-  let iff := mkIdent d.iffLemma
-  evalTactic (← `(tactic| rw [$iff:ident]))
+  applyIffMpr d.iffLemma
   for nm in d.introNames do
     evalTactic (← `(tactic| intro $(mkIdent nm):ident))
     if nm == `env then

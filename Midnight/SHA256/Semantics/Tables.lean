@@ -47,9 +47,9 @@ theorem ColumnLoaded.projected_row {α : Type} {env : Environment F}
     env.fixed column row = project (rows[if row < rows.length then row else 0]'(by
       split <;> simp_all [List.length_pos_iff])) := by
   by_cases h : row < rows.length
-  · simp only [if_pos h]
+  · simp only [ite_eq_left h]
     simpa [getElem!_pos, h] using loaded.entries row (by simpa using h)
-  · simp only [if_neg h]
+  · simp only [ite_eq_right h]
     have hzero : 0 < rows.length := List.length_pos_iff.mpr hne
     have hmap : rows.map project ≠ [] := by simpa using hne
     simpa [getElem!_pos, hzero] using

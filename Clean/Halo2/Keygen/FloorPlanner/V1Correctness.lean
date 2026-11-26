@@ -1,6 +1,10 @@
-import Clean.Halo2.Keygen.FloorPlanner.SelectorPlacement
-import Clean.Halo2.Keygen.FloorPlanner.V1
-import Clean.Halo2.Keygen.PdqsortCorrectness
+module
+
+public import Clean.Halo2.Keygen.FloorPlanner.SelectorPlacement
+public import Clean.Halo2.Keygen.FloorPlanner.V1
+public import Clean.Halo2.Keygen.PdqsortCorrectness
+
+@[expose] public section
 
 namespace Halo2.FloorPlanner
 
@@ -191,7 +195,6 @@ theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
       (fun left right => left.key < right.key)).toList).trans
     (Pdqsort.quicksort_perm (measureRegions operations).toArray
       (fun left right => left.key < right.key))
-
 def placementEndFrom (shapes : List RegionShape) (regionStarts : List ℕ) : ℕ :=
   shapes.map (fun shape =>
     regionStarts.getD shape.index 0 + shape.rowCount)
@@ -1569,6 +1572,15 @@ theorem slotSummaryStateFromWith_bubble
                 rw [List.forall_append]
                 exact ⟨hwellBefore.2, hwellSuffix⟩))
 
+theorem perm_bubble (pivot : RegionShapeSummary)
+    (before suffix : List RegionShapeSummary) :
+    (before ++ pivot :: suffix).Perm (pivot :: before ++ suffix) := by
+  induction before with
+  | nil => rfl
+  | cons head rest inductionHypothesis =>
+      exact (inductionHypothesis.cons head).trans
+        (List.Perm.swap pivot head (rest ++ suffix))
+
 /-- For two key-sorted permutations, V1's endpoint is insensitive to the order
 within tied-key runs whenever tied summaries are placement-equivalent or
 column-disjoint. -/
@@ -1665,7 +1677,7 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable
         initial allocations hvalid hwellRight.2.2 hwellTail
       have htailPerm : rest.Perm (before ++ suffix) := by
         apply List.Perm.cons_inv
-        exact hperm.trans List.perm_middle
+        exact hperm.trans (perm_bubble pivot before suffix)
       have htailSorted : ((before ++ suffix).map key).SortedLE := by
         rw [List.sortedLE_iff_pairwise, List.map_append,
           List.pairwise_append]
@@ -1792,7 +1804,7 @@ theorem slotSummaryStateFromWith_eq_of_sorted_perm_interchangeable
         initial allocations hvalid hwellRight.2.2
       have htailPerm : rest.Perm (before ++ suffix) := by
         apply List.Perm.cons_inv
-        exact hperm.trans List.perm_middle
+        exact hperm.trans (perm_bubble pivot before suffix)
       have htailSorted : ((before ++ suffix).map key).SortedLE := by
         rw [List.sortedLE_iff_pairwise, List.map_append,
           List.pairwise_append]

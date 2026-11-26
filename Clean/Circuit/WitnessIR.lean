@@ -1,10 +1,13 @@
-import Clean.Circuit.Expression
-import Clean.Utils.Field
-import Clean.Utils.FiniteField
-import Clean.Utils.Vector
-import Clean.Circuit.Provable
+module
 
-open Clean
+public import Clean.Circuit.Expression
+public import Clean.Utils.Field
+public import Clean.Utils.FiniteField
+public import Clean.Utils.Vector
+public import Clean.Circuit.Provable
+
+-- The simprocs below call `omega` from meta code.
+public meta import Lean.Elab.Tactic.Omega.Frontend
 
 /-!
 # Witness-generation IR
@@ -15,33 +18,37 @@ A deep-embedded IR for witness-generation callbacks
 
 A witness program (`WitgenIR F m`) is either
 - `native f` — an arbitrary Lean closure, the migration escape hatch. Not serializable.
-  `eval (native f) = f` holds definitionally, which is what lets phase 2 wrap all
-  existing callbacks without touching any gadget or proof.
+  `eval (native f) = f` holds definitionally, which lets existing callbacks be wrapped
+  without touching any gadget or proof.
 - `ir steps out` — structured IR: a list of scalar `let`-steps, followed by a
   vector-shaped output expression.
 
 Scalar expressions come in 3 sorts, reflecting the codebase's pervasive
-`field → ZMod.val → Nat ops → cast → field` pattern:
+`field → ZMod.val → integer ops → cast → field` pattern:
 - `FExpr` — field-sorted: embedded circuit `Expression`s (which is how callbacks read
-  inputs and earlier witnesses), env reads at computed indices, arithmetic, inverse
-  (IsZeroField), conditionals, constant-table reads, prover-data/hint reads.
-- `NExpr` — Nat-sorted: arithmetic, div/mod, bitwise ops, shifts; bridges are
-  `NExpr.val : FExpr → NExpr` and `FExpr.ofNat : NExpr → FExpr`.
-- `BExpr` — conditions: field equality and Nat comparison (requirement B.7).
+  inputs and earlier witnesses), arithmetic, inverse (IsZeroField), conditionals,
+  bit extraction, constant-table reads, prover-data/hint reads.
+- `U64Expr` — u64-sorted: arithmetic, div/mod, bitwise ops, shifts, all wrapping modulo
+  `2^64` like Rust's `u64`. The bridges are `U64Expr.val : FExpr → U64Expr` (`ZMod.val`
+  truncated to 64 bits) and `FExpr.ofU64 : U64Expr → FExpr` (back via `UInt64.toNat`).
+- `BExpr` — conditions: field and u64 equality, field and u64 comparison (requirement B.7).
 
 The output is a `VExpr`: a literal list, a `mapRange n body` (body may reference the
-running index via `NExpr.idx`) — kept as a *loop* rather than unrolled — or an append.
+running index via `U64Expr.idx`) — kept as a *loop* rather than unrolled — an environment
+range, a field-element bit decomposition, or an append.
 
 ## TOOD Potential open issues
 
-1. **One index binder.** `NExpr.idx` refers to the innermost enclosing `VExpr.mapRange`;
+1. **One index binder.** `U64Expr.idx` refers to the innermost enclosing `VExpr.mapRange`;
    nesting shadows. No surveyed gadget nests mapRanges inside a single callback. If that
    changes, `idx` generalizes to de Bruijn levels.
-2. **Untyped locals.** `localVar i` is resolved in an `F ⊕ ℕ` array with a 0 default on
-   sort mismatch / out of range, keeping `eval` total without intrinsically-typed
+2. **Untyped locals.** `localVar i` is resolved in an `F ⊕ UInt64` array with a 0 default
+   on sort mismatch / out of range, keeping `eval` total without intrinsically-typed
    syntax. A decidable well-sortedness check can be layered on top later (it will be
    needed for serialization anyway).
 -/
+
+@[expose] public section
 
 variable {F V Env : Type}
 
@@ -56,9 +63,6 @@ inductive FExprOver (F : Type) (V : Type) where
   /-- Embedded circuit variable; this is how callbacks read input vars and earlier
   witnesses (`env x`). -/
   | expr (e : V)
-  /-- Read the environment at a computed index (e.g. consecutive vars in a mapRange).
-  Main-Clean-specific (tape indices); inert in environments without indexed reads. -/
-  | envGet (i : NExprOver F V)
   | const (c : F)
   /-- Reference to an earlier `Step` result (must be a `letF` step). -/
   | localVar (i : ℕ)
@@ -66,40 +70,40 @@ inductive FExprOver (F : Type) (V : Type) where
   | mul (x y : FExprOver F V)
   /-- Field inverse, with `0⁻¹ = 0` (the `IsZeroField` witness). -/
   | inv (x : FExprOver F V)
-  /-- Cast from the Nat sort via `FiniteField.fromNat` (the inverse of `val`;
+  /-- Cast from the u64 sort via `FiniteField.fromNat` (the inverse of `val`;
   equals `Nat.cast` on prime fields, but interprets binary digits as coefficients
   on binary fields, where `Nat.cast` would collapse via the characteristic). -/
-  | ofNat (n : NExprOver F V)
+  | ofU64 (n : U64ExprOver F V)
   | ite (c : BExprOver F V) (t e : FExprOver F V)
   /-- Read an expression list at a computed index, 0 if out of range -/
-  | listGet (xs : List (FExprOver F V)) (i : NExprOver F V)
-  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`:
-  row `row` of table `key` with rows of width `n`, projected at column `col`.
-  Missing rows read as 0. The nondeterministic escape hatch (FemtoCairo memory).
+  | listGet (xs : List (FExprOver F V)) (i : U64ExprOver F V)
+  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`: row `row` of
+  component `key` with rows of width `n`, projected at column `col`. Missing rows read as 0.
   Main-Clean-specific; inert in environments without committed prover data. -/
-  | dataGet (key : String) (n : ℕ) (row : NExprOver F V) (col : Fin n)
+  | dataGet (key : String) (n : ℕ) (row : U64ExprOver F V) (col : Fin n)
   /-- Same as `dataGet` but reads the uncommitted `ProverEnvironment.hint`. -/
-  | hintGet (key : String) (n : ℕ) (row : NExprOver F V) (col : Fin n)
+  | hintGet (key : String) (n : ℕ) (row : U64ExprOver F V) (col : Fin n)
 
-/-- Nat-sorted witness expressions. -/
-inductive NExprOver (F : Type) (V : Type) where
-  | const (n : ℕ)
-  /-- The field→Nat bridge (`ZMod.val`). -/
+/-- u64-sorted (bounded-nat) witness expressions. All operations wrap modulo `2^64`,
+matching Rust's `u64`. -/
+inductive U64ExprOver (F : Type) (V : Type) where
+  | const (n : UInt64)
+  /-- The field→u64 bridge: `ZMod.val` truncated to 64 bits. -/
   | val (x : FExprOver F V)
   /-- The index of the innermost enclosing `VExpr.mapRange` (0 outside). -/
   | idx
-  /-- Reference to an earlier `Step` result (must be a `letN` step). -/
+  /-- Reference to an earlier `Step` result (must be a `letU` step). -/
   | localVar (i : ℕ)
-  | add (x y : NExprOver F V)
-  | mul (x y : NExprOver F V)
-  | div (x y : NExprOver F V)
-  | mod (x y : NExprOver F V)
-  | land (x y : NExprOver F V)
-  | lor (x y : NExprOver F V)
-  | lxor (x y : NExprOver F V)
-  | shiftL (x y : NExprOver F V)
-  | shiftR (x y : NExprOver F V)
-  | ite (c : BExprOver F V) (t e : NExprOver F V)
+  | add (x y : U64ExprOver F V)
+  | mul (x y : U64ExprOver F V)
+  | div (x y : U64ExprOver F V)
+  | mod (x y : U64ExprOver F V)
+  | land (x y : U64ExprOver F V)
+  | lor (x y : U64ExprOver F V)
+  | lxor (x y : U64ExprOver F V)
+  | shiftL (x y : U64ExprOver F V)
+  | shiftR (x y : U64ExprOver F V)
+  | ite (c : BExprOver F V) (t e : U64ExprOver F V)
 
 /-- Conditions. -/
 inductive BExprOver (F : Type) (V : Type) where
@@ -107,10 +111,15 @@ inductive BExprOver (F : Type) (V : Type) where
   | false
   /-- Field equality condition (decided via the injective `ℕ` embedding). -/
   | feq (x y : FExprOver F V)
-  /-- Nat equality condition. -/
-  | neq (x y : NExprOver F V)
-  /-- Nat-sorted less-than condition. -/
-  | lt (x y : NExprOver F V)
+  /-- u64 equality condition. -/
+  | neq (x y : U64ExprOver F V)
+  /-- u64-sorted less-than condition. -/
+  | lt (x y : U64ExprOver F V)
+  /-- Field-sorted less-than condition, comparing the `ℕ` values of both operands
+  (`FiniteField.val`), so it is exact on fields wider than 64 bits. -/
+  | flt (x y : FExprOver F V)
+  /-- Bit `i` of `FiniteField.val x` is set. -/
+  | bit (x : FExprOver F V) (i : ℕ)
   /-- Negation of a condition. -/
   | not (b : BExprOver F V)
   /-- Conjunction of conditions. -/
@@ -126,11 +135,11 @@ end
 @[reducible] def FExprOver.neg [Field F] (x : FExprOver F V) : FExprOver F V :=
   .mul (.const (-1)) x
 
-/-- `2^k` as a derived Nat expression. -/
-@[reducible] def NExprOver.pow2 (k : NExprOver F V) : NExprOver F V := .shiftL (.const 1) k
+/-- `2^k` as a derived u64 expression. -/
+@[reducible] def U64ExprOver.pow2 (k : U64ExprOver F V) : U64ExprOver F V := .shiftL (.const 1) k
 
-/-- `Nat.testBit x i` as a derived Nat expression, valued in {0, 1}. -/
-@[reducible] def NExprOver.testBit (x i : NExprOver F V) : NExprOver F V :=
+/-- `Nat.testBit x i` as a derived u64 expression, valued in {0, 1}. -/
+@[reducible] def U64ExprOver.testBit (x i : U64ExprOver F V) : U64ExprOver F V :=
   .mod (.shiftR x i) (.const 2)
 
 end Witgen
@@ -140,21 +149,21 @@ open Witgen
 
 /-- Main Clean's field-sorted witness expressions: variables are circuit `Expression`s. -/
 abbrev FExpr (F : Type) := FExprOver F (Expression F)
-/-- Main Clean's Nat-sorted witness expressions. -/
-abbrev NExpr (F : Type) := NExprOver F (Expression F)
+/-- Main Clean's u64-sorted witness expressions. -/
+abbrev U64Expr (F : Type) := U64ExprOver F (Expression F)
 /-- Main Clean's witness conditions. -/
 abbrev BExpr (F : Type) := BExprOver F (Expression F)
 
 namespace FExpr
-export FExprOver (expr envGet const localVar add mul inv ofNat ite listGet dataGet hintGet)
+export FExprOver (expr const localVar add mul inv ofU64 ite listGet dataGet hintGet)
 end FExpr
 
-namespace NExpr
-export NExprOver (const val idx localVar add mul div mod land lor lxor shiftL shiftR ite)
-end NExpr
+namespace U64Expr
+export U64ExprOver (const val idx localVar add mul div mod land lor lxor shiftL shiftR ite)
+end U64Expr
 
 namespace BExpr
-export BExprOver (true false feq neq lt not and)
+export BExprOver (true false feq neq lt flt bit not and)
 end BExpr
 
 end Clean
@@ -165,7 +174,7 @@ namespace Witgen
 so far, and the innermost `mapRange` index. Generic over the environment type. -/
 structure CtxOver (F : Type) (Env : Type) where
   env : Env
-  locals : Array (F ⊕ ℕ) := #[]
+  locals : Array (F ⊕ UInt64) := #[]
   idx : ℕ := 0
 
 /--
@@ -221,7 +230,6 @@ mutual
 @[circuit_norm]
 def FExprOver.eval (ctx : CtxOver F Env) : FExprOver F V → F
   | .expr e => WitgenEnv.readVar ctx.env e
-  | .envGet i => WitgenEnv.get (V := V) ctx.env (i.eval ctx)
   | .const c => c
   | .localVar i =>
     match ctx.locals[i]? with
@@ -230,13 +238,14 @@ def FExprOver.eval (ctx : CtxOver F Env) : FExprOver F V → F
   | .add x y => x.eval ctx + y.eval ctx
   | .mul x y => x.eval ctx * y.eval ctx
   | .inv x => (x.eval ctx)⁻¹
-  | .ofNat n => FiniteField.fromNat (n.eval ctx)
+  | .ofU64 n => FiniteField.fromNat (n.eval ctx).toNat
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
-  | .listGet xs i => FExprOver.evalList ctx (i.eval ctx) xs
+  | .listGet xs i => FExprOver.evalList ctx (i.eval ctx).toNat xs
   | .dataGet key n row col =>
-    ((WitgenEnv.data (V := V) ctx.env key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
+    (((WitgenEnv.data (V := V) ctx.env).tables key n)[(row.eval ctx).toNat]?.getD
+      default)[col.val]'col.isLt
   | .hintGet key n row col =>
-    ((WitgenEnv.hint (V := V) ctx.env key n)[row.eval ctx]?.getD default)[col.val]'col.isLt
+    ((WitgenEnv.hint (V := V) ctx.env key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
 
 @[circuit_norm]
 def FExprOver.evalList (ctx : CtxOver F Env) : ℕ → List (FExprOver F V) → F
@@ -245,10 +254,10 @@ def FExprOver.evalList (ctx : CtxOver F Env) : ℕ → List (FExprOver F V) → 
   | i + 1, _ :: xs => FExprOver.evalList ctx i xs
 
 @[circuit_norm]
-def NExprOver.eval (ctx : CtxOver F Env) : NExprOver F V → ℕ
+def U64ExprOver.eval (ctx : CtxOver F Env) : U64ExprOver F V → UInt64
   | .const n => n
-  | .val x => FiniteField.val (x.eval ctx)
-  | .idx => ctx.idx
+  | .val x => UInt64.ofNat (FiniteField.val (x.eval ctx))
+  | .idx => UInt64.ofNat ctx.idx
   | .localVar i =>
     match ctx.locals[i]? with
     | some (.inr n) => n
@@ -271,10 +280,80 @@ def BExprOver.eval (ctx : CtxOver F Env) : BExprOver F V → Bool
   | .feq x y => x.eval ctx = y.eval ctx
   | .neq x y => x.eval ctx = y.eval ctx
   | .lt x y => x.eval ctx < y.eval ctx
+  | .flt x y => FiniteField.val (x.eval ctx) < FiniteField.val (y.eval ctx)
+  | .bit x i => (FiniteField.val (x.eval ctx)).testBit i
   | .not b => !b.eval ctx
   | .and x y => x.eval ctx && y.eval ctx
 
 end
+
+/-! ### `u64` normalization
+
+Witness-IR proofs live in `ℕ`: every u64-sorted subterm reaches the field via
+`FExpr.ofU64`, which applies `UInt64.toNat`. Pushing `toNat` through the operations turns
+a `U64Expr` evaluation into ordinary `ℕ` arithmetic with explicit `% 2^64` wraps, which
+`omega` / `Nat.mod_eq_of_lt` discharge whenever the gadget's own bounds make the
+operation non-wrapping. -/
+attribute [circuit_norm]
+  UInt64.toNat_add UInt64.toNat_mul UInt64.toNat_div UInt64.toNat_mod
+  UInt64.toNat_and UInt64.toNat_or UInt64.toNat_xor
+  UInt64.toNat_shiftLeft UInt64.toNat_shiftRight
+  UInt64.toNat_ofNat' UInt64.toNat_ofNat UInt64.lt_iff_toNat_lt
+
+/-- `u64` equality is `ℕ` equality of the truncations — the shape the `toNat`-pushing
+`circuit_norm` lemmas above leave the rest of a condition in. -/
+@[circuit_norm]
+theorem UInt64.eq_iff_toNat_eq {a b : UInt64} : a = b ↔ a.toNat = b.toNat :=
+  UInt64.toNat_inj.symm
+
+section U64Wrap
+open Lean Meta Simp
+
+/-- Closed `ℕ` value of an expression, seeing through `b ^ k` (which `Meta.evalNat` does
+not reduce at the `Monoid.toPow` instance that `2 ^ 64` elaborates to). -/
+private meta partial def natLit? (e : Expr) : MetaM (Option ℕ) := do
+  if let some n ← evalNat e |>.run then return some n
+  if e.isAppOfArity ``HPow.hPow 6 then
+    let args := e.getAppArgs
+    let some b ← natLit? args[4]! | return none
+    let some k ← natLit? args[5]! | return none
+    if k ≤ 64 && b ≤ 64 then return some (b ^ k)
+  return none
+
+/--
+Erase a `u64` wrap that provably does not wrap.
+
+Pushing `UInt64.toNat` through a `U64Expr` evaluation leaves two kinds of truncation
+behind: `n % 2^64` (from `U64Expr.val`, `U64Expr.const` and the arithmetic operations) and
+`n % 64` (the shift-amount mask of `<<<` / `>>>`). Gadgets always work well inside those
+bounds — bytes, 32-bit limbs, bit indices — but the bound lives in the gadget's own
+assumptions (`x.val < 256`, `i < 32`, …), so no unconditional rewrite can remove the
+wrap, and a conditional simp lemma cannot discharge it either.
+
+This simproc closes exactly that gap: on `n % 2^64` / `n % 64` it asks `omega` (with the
+local hypotheses as facts) whether `n` is already below the modulus, and rewrites to `n`
+when it is. Other moduli are left alone, so ordinary `% 256`-style specification
+arithmetic is untouched.
+-/
+private meta def u64WrapSimproc (e : Expr) : SimpM Simp.Step := do
+  unless e.isAppOfArity ``HMod.hMod 6 do return .continue
+  let args := e.getAppArgs
+  let n := args[4]!
+  let m := args[5]!
+  unless (← whnfR (← inferType n)).isConstOf ``Nat do return .continue
+  let some mVal ← natLit? m | return .continue
+  unless mVal == 18446744073709551616 || mVal == 64 do return .continue
+  let g ← mkFreshExprMVar (← mkAppM ``LT.lt #[n, m])
+  try
+    let some g' ← g.mvarId!.falseOrByContra | return .continue
+    g'.withContext do Lean.Elab.Tactic.Omega.omega (← getLocalHyps).toList g'
+  catch _ =>
+    return .continue
+  return .done { expr := n, proof? := ← mkAppM ``Nat.mod_eq_of_lt #[g] }
+
+simproc u64Wrap ((_ : ℕ) % _) := u64WrapSimproc
+attribute [circuit_norm] u64Wrap
+end U64Wrap
 
 variable {M : TypeMap} [ProvableType M]
 
@@ -291,7 +370,7 @@ end Eval
 
 /-- Vector-shaped output of a witness program. The length index makes malformed
 output-length proofs unnecessary. `mapRange` is kept as a loop (not unrolled);
-its body may reference the running index via `NExpr.idx`.
+its body may reference the running index via `U64Expr.idx`.
 
 TODO WITGENIR add fold/scan loops (an accumulator-carrying `mapRange`). This is the
 one known expressiveness gap, established by porting a full production circuit code
@@ -302,7 +381,7 @@ be O(n²) term size (n = 254 rounds for EC scalar multiplication). The blocked s
 running-sum decompositions and double-and-add accumulators of variable-base scalar mul
 (each row chains EC additions with inverses, plus the packed scalar-bit hints whose
 only consumers are those accumulators), and Sinsemilla hash chains (each piece chains
-incomplete additions). A `scanRange`-style former (body sees `NExpr.idx` plus one
+incomplete additions). A `scanRange`-style former (body sees `U64Expr.idx` plus one
 `localVar`-like accumulator slot, producing all intermediate values) would cover every
 known site; evaluation and `circuit_norm` lemmas can mirror `mapRange`'s. Caveat from
 the halo2 source design: the Sinsemilla y-accumulator is *deliberately* kept off the
@@ -310,6 +389,12 @@ constraint system — porting its computation to the IR must keep it a hint. -/
 inductive VExprOver (F : Type) (V : Type) : ℕ → Type where
   | lit {n : ℕ} (es : Vector (FExprOver F V) n) : VExprOver F V n
   | mapRange (n : ℕ) (body : FExprOver F V) : VExprOver F V n
+  /-- `n` consecutive environment cells starting at `offset` — the "witness a fresh
+  variable per cell" former (`witnessAny`, table rows). Main-Clean-specific (tape indices);
+  inert in environments without indexed reads. -/
+  | envRange {n : ℕ} (offset : ℕ) : VExprOver F V n
+  /-- The `n` low bits of `FiniteField.val x`, each as the field element `0` or `1`. -/
+  | bitsOf {n : ℕ} (x : FExprOver F V) : VExprOver F V n
   | append {m n : ℕ} (a : VExprOver F V m) (b : VExprOver F V n) : VExprOver F V (m + n)
 
 instance {n} : Coe (Vector (FExprOver F V) n) (VExprOver F V n) where
@@ -319,6 +404,9 @@ def VExprOver.eval [FiniteField F] [WitgenEnv F Env V] (ctx : CtxOver F Env) :
     {n : ℕ} → VExprOver F V n → Vector F n
   | _, .lit es => es.map (FExprOver.eval ctx)
   | _, .mapRange n body => .mapRange n fun i => body.eval { ctx with idx := i }
+  | n, .envRange offset => .mapRange n fun i => WitgenEnv.get (V := V) ctx.env (offset + i)
+  | n, .bitsOf x => .mapRange n fun i =>
+      FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2)
   | _, .append a b => a.eval ctx ++ b.eval ctx
 
 end Witgen
@@ -330,16 +418,16 @@ open Witgen
 abbrev VExpr (F : Type) := VExprOver F (Expression F)
 
 namespace VExpr
-export VExprOver (lit mapRange append)
+export VExprOver (lit mapRange envRange bitsOf append)
 end Clean.VExpr
 
 namespace Witgen
 
-/-- A scalar `let`-step: computes one field or Nat value from the environment and
+/-- A scalar `let`-step: computes one field or u64 value from the environment and
 earlier steps. Referenced by position via `localVar`. -/
 inductive StepOver (F : Type) (V : Type) where
   | letF (e : FExprOver F V)
-  | letN (e : NExprOver F V)
+  | letU (e : U64ExprOver F V)
 
 end Witgen
 
@@ -350,7 +438,7 @@ open Witgen
 abbrev Step (F : Type) := StepOver F (Expression F)
 
 namespace Step
-export StepOver (letF letN)
+export StepOver (letF letU)
 end Clean.Step
 
 namespace Witgen
@@ -358,11 +446,12 @@ namespace Witgen
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
 @[circuit_norm]
 def evalSteps [FiniteField F] [WitgenEnv F Env V] (env : Env)
-    (steps : List (StepOver F V)) (locals : Array (F ⊕ ℕ) := #[]) : Array (F ⊕ ℕ) :=
+    (steps : List (StepOver F V)) (locals : Array (F ⊕ UInt64) := #[])
+    (idx : ℕ := 0) : Array (F ⊕ UInt64) :=
   match steps with
   | [] => locals
-  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals })))
-  | .letN e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals })))
+  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals, idx }))) idx
+  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals, idx }))) idx
 
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIROver (F : Type) (Env : Type) (V : Type) : ℕ → Type where
@@ -417,8 +506,9 @@ simp-normalize to exactly the same hypothesis shapes as the closures they replac
 def WitgenIROver.ofFExpr (e : FExprOver F V) : WitgenIROver F Env V 1 := .ir [] (.lit #v[e])
 
 /-- Witness program computing each output element from its own IR expression. -/
-def WitgenIROver.ofFExprs {n : ℕ} (es : Vector (FExprOver F V) n) : WitgenIROver F Env V n :=
-  .ir [] (.lit es)
+def WitgenIROver.ofCompositeFExpr {value : TypeMap} [ProvableType value]
+    (e : value (FExprOver F V)) : WitgenIROver F Env V (size value) :=
+  .ir [] (.lit (toElements e))
 
 end Witgen
 
@@ -426,7 +516,7 @@ namespace Clean
 open Witgen
 
 namespace WitgenIR
-export WitgenIROver (ofFExpr ofFExprs)
+export WitgenIROver (ofFExpr ofCompositeFExpr)
 
 /-- Witness program computing a whole provable value from a native Lean closure — the
 payload of `witnessNative`. A named definition (rather than an inline `.native` lambda)
@@ -438,6 +528,7 @@ def nativeValue {value : TypeMap} [ProvableType value]
     (compute : ProverEnvironment F → value F) : WitgenIR F (size value) :=
   .native fun env => compute env |> toElements
 
+@[computable_witnesses]
 theorem eval_nativeValue [FiniteField F] {value : TypeMap} [ProvableType value]
     (compute : ProverEnvironment F → value F) (env : ProverEnvironment F) :
     (nativeValue compute).eval env = toElements (compute env) := rfl
@@ -490,16 +581,35 @@ instance-polymorphic lemmas like `if_pos`/`if_neg`/`by_cases` handle it); togeth
 `FiniteField.val_inj` this gives `.feq` conditions the plain `x = y` shape. -/
 attribute [circuit_norm] decide_eq_true_eq
 
+section
+variable [FiniteField F] {value : TypeMap} [ProvableType value]
+
 /-- Elementwise evaluation of `mapRange` vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_mapRange [FiniteField F] (ctx : Ctx F) (n : ℕ) (body : FExpr F)
+theorem VExpr.getElem_eval_mapRange (ctx : Ctx F) (n : ℕ) (body : FExpr F)
     (i : ℕ) (hi : i < n) :
     (VExprOver.eval ctx (.mapRange n body))[i] = body.eval { ctx with idx := i } := by
   simp [VExprOver.eval, Vector.getElem_mapRange]
 
+/-- Elementwise evaluation of environment ranges, keyed on the eval term. -/
+@[circuit_norm ↓]
+theorem VExpr.getElem_eval_envRange (ctx : Ctx F) {n : ℕ} (offset : ℕ)
+    (i : ℕ) (hi : i < n) :
+    (VExprOver.eval (V := Expression F) ctx (.envRange (n := n) offset))[i]
+      = ctx.env.get (offset + i) := by
+  simp [VExprOver.eval, Vector.getElem_mapRange, WitgenEnv.get_eq]
+
+/-- Elementwise evaluation of bit decompositions, keyed on the eval term. -/
+@[circuit_norm ↓]
+theorem VExpr.getElem_eval_bitsOf (ctx : Ctx F) {n : ℕ} (x : FExpr F)
+    (i : ℕ) (hi : i < n) :
+    (VExprOver.eval ctx (.bitsOf (n := n) x))[i]
+      = FiniteField.fromNat (FiniteField.val (x.eval ctx) >>> i % 2) := by
+  simp [VExprOver.eval, Vector.getElem_mapRange]
+
 /-- Elementwise evaluation of literal vector outputs, keyed on the eval term. -/
 @[circuit_norm ↓]
-theorem VExpr.getElem_eval_lit [FiniteField F] {n : ℕ} (ctx : Ctx F)
+theorem VExpr.getElem_eval_lit {n : ℕ} (ctx : Ctx F)
     (es : Vector (FExpr F) n) (i : ℕ) (hi : i < n) :
     (VExprOver.eval ctx (.lit es))[i] = es[i].eval ctx := by
   simp [VExprOver.eval]
@@ -507,7 +617,7 @@ theorem VExpr.getElem_eval_lit [FiniteField F] {n : ℕ} (ctx : Ctx F)
 /-- Elementwise evaluation of general witness programs, keyed on `getElem`:
 reduces to the output vector expression evaluated with the `let`-steps in scope. -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F))
+theorem WitgenIR.getElem_eval_ir {n : ℕ} (steps : List (Step F))
     (out : VExpr F n) (env : ProverEnvironment F)
     (i : ℕ) (hi : i < n) :
     ((WitgenIR.ir steps out).eval env)[i]
@@ -516,7 +626,7 @@ theorem WitgenIR.getElem_eval_ir [FiniteField F] {n : ℕ} (steps : List (Step F
 
 /-- Scalar witness programs evaluate elementwise to their IR expression. -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
+theorem WitgenIR.getElem_eval_ofFExpr (e : FExpr F)
     (env : ProverEnvironment F) (i : ℕ) (hi : i < 1) :
     ((ofFExpr e).eval env)[i] = e.eval { env } := by
   rcases Nat.lt_one_iff.mp hi
@@ -524,28 +634,39 @@ theorem WitgenIR.getElem_eval_ofFExpr [FiniteField F] (e : FExpr F)
 
 /-- Elementwise evaluation of multi-element witness programs, keyed on `getElem`. -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (FExpr F) n)
-    (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
-    ((ofFExprs es).eval env)[i] = es[i].eval { env } := by
-  simp [ofFExprs, WitgenIROver.eval, VExprOver.eval, evalSteps]
+theorem WitgenIR.getElem_eval_ofCompositeFExpr (e : value (FExpr F))
+    (env : ProverEnvironment F) (i : ℕ) (hi : i < size value) :
+    ((ofCompositeFExpr e).eval env)[i] = (toElements e)[i].eval { env } := by
+  simp [ofCompositeFExpr, WitgenIROver.eval, VExprOver.eval, evalSteps]
 
 @[circuit_norm]
-theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
+theorem WitgenIR.eval_ofCompositeFExpr_singleton {F: Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
+    (WitgenIR.ofCompositeFExpr (value:=field) x).eval env = #v[x.eval { env }] := by
+  with_unfolding_all rfl
+
+/-- Same as `eval_ofCompositeFExpr_singleton`, keyed on the literal-vector spelling
+(`toElements (M := field) x` and `#v[x]` are not identified during simp matching).
+Not in `circuit_norm`: firing on transient literal-vector spellings changes downstream
+goal shapes; cite it explicitly where needed. -/
+theorem WitgenIR.eval_ofCompositeFExpr_one {F : Type} [FiniteField F]
+    (x : FExpr F) (env : ProverEnvironment F) :
+    (WitgenIR.ofCompositeFExpr (value := fields 1) #v[x]).eval env = #v[x.eval { env }] := by
   with_unfolding_all rfl
 
 /-- Field-equality conditions decide propositional equality (via the injective
-`ℕ` embedding). -/
-@[circuit_norm]
-theorem BExpr.eval_feq_iff [FiniteField F] (x y : FExpr F) (ctx : Ctx F) :
+`ℕ` embedding). Rewrites top-down, before `BExpr.eval` unfolds: the unfolded condition is
+`decide` of an equation whose sides `FExpr.eval` then rewrites definitionally, leaving the
+`Decidable` instance at the old spelling, where no lemma matches it any more. -/
+@[circuit_norm ↓]
+theorem BExpr.eval_feq_iff (x y : FExpr F) (ctx : Ctx F) :
     (BExpr.feq x y).eval ctx = Bool.true ↔ x.eval ctx = y.eval ctx := by
   simp only [BExprOver.eval, decide_eq_true_eq]
 
 /-- Shape-exact evaluation for expression-copying scalar witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
-theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
+theorem WitgenIR.eval_ofFExpr_expr (e : Expression F)
     (env : ProverEnvironment F) :
     (ofFExpr (.expr e)).eval env = #v[e.eval env.toEnvironment] := by
   ext i hi
@@ -556,7 +677,7 @@ theorem WitgenIR.eval_ofFExpr_expr [FiniteField F] (e : Expression F)
 fires regardless of how the expression vector was built (matches the codebase's
 getElem-first simp discipline). -/
 @[circuit_norm ↓]
-theorem WitgenIR.getElem_eval_ofExprs [FiniteField F] {n : ℕ}
+theorem WitgenIR.getElem_eval_ofExprs {n : ℕ}
     (es : Vector (Expression F) n) (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
     ((ofExprs es).eval env)[i] = es[i].eval env.toEnvironment := by
   rw [eval_ofExprs]
@@ -565,11 +686,12 @@ theorem WitgenIR.getElem_eval_ofExprs [FiniteField F] {n : ℕ}
 /-- Shape-exact evaluation for expression-copying struct witnesses (`<==`):
 produces the same normal form as the closure it replaced. -/
 @[circuit_norm]
-theorem WitgenIR.eval_ofExprs_toElements [FiniteField F] {M : TypeMap} [ProvableType M]
+theorem WitgenIR.eval_ofExprs_toElements {M : TypeMap} [ProvableType M]
     (x : M (Expression F)) (env : ProverEnvironment F) :
     (WitgenIR.ofExprs (toElements x)).eval env
       = toElements (Eval.eval env.toEnvironment x) := by
   rw [WitgenIR.eval_ofExprs, ProvableType.Clean.toElements_eval]
+end
 
 end Clean
 
@@ -598,7 +720,8 @@ where
 theorem eval_eq_eval {M : TypeMap} [ProvableStruct M] (ctx : CtxOver F Env) (x : M (FExprOver F V)) :
     Witgen.eval ctx x = StructEval.eval ctx x := by
   symm
-  simp only [Witgen.eval, eval, fromElements, toElements, size]
+  simp only [Witgen.eval, eval, fromElements, toElements, size,
+    ProvableStruct.structToElements_eq, ProvableStruct.structFromElements_eq]
   congr 1
   apply eval_eq_eval_aux
 where
@@ -611,7 +734,7 @@ where
   | c :: cs, .cons a as => by
     simp only [_root_.ProvableStruct.componentsToElements,
       _root_.ProvableStruct.componentsFromElements, eval.go,
-      _root_.ProvableStruct.combinedSize', List.map_cons, List.sum_cons]
+      _root_.ProvableStruct.combinedSize']
     simp only [Vector.map_append, Vector.cast_take_append_of_eq_length,
       Vector.cast_drop_append_of_eq_length]
     congr
@@ -645,7 +768,7 @@ structure projection like `.value`, `.address`, etc.  The meta code recognizes p
 applications, rebuilds the same projection on the evaluated row, then proves the rewrite by
 simplifying the generated RHS with the small struct-evaluation theorem set below.
 -/
-private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   -- The simproc is registered on `Witgen.FExprOver.eval _ _`; the last two explicit arguments are
   -- the evaluation context and the scalar expression being evaluated.
   let args := e.getAppArgs
@@ -697,18 +820,26 @@ private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   thms ← thms.addDeclToUnfold ``ProvableStruct.fromComponents
   let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
   let (rhsSimp, _) ← Meta.simp rhs simpCtx #[]
-  unless ← withDefault <| isDefEq rhsSimp.expr e do
-    -- custom-`ProvableType` route (e.g. `Point`): the internal `ProvableStruct` set cannot
-    -- reduce the candidate, but the rewrite is still definitionally sound — accept by
-    -- unrestricted defeq, the kernel re-checks (cf. `evalStructLiteral`'s custom route).
-    if ← withTransparency .all (isDefEq rhs e) then
-      return .done { expr := rhs, proof? := none }
+  if ← withDefault <| isDefEq rhsSimp.expr e then
+    -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.
+    -- Return `.done` rather than `.visit` so the outer simplifier keeps the row-level shape and can
+    -- continue from there, instead of immediately descending back into scalar projections.
+    let result ← rhsSimp.mkEqSymm rhs
+    return .done result
+
+  -- custom-`ProvableType` route (e.g. `Point`): reduce `rhs` using the public vector/array map
+  -- lemmas (cf. `evalStructLiteral`'s custom route) rather than unfolding with `.all` transparency.
+  let mut customThms : SimpTheorems := {}
+  for name in [``Witgen.eval, ``ProvableType.toElements, ``ProvableType.fromElements] do
+    customThms ← customThms.addDeclToUnfold name
+  for name in [``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil] do
+    customThms ← customThms.addConst name
+  let customSimpCtx ← Simp.mkContext (simpTheorems := #[customThms])
+  let (customSimp, _) ← Meta.simp rhs customSimpCtx #[]
+  unless ← withDefault <| isDefEq customSimp.expr e do
     return Simp.Step.continue
 
-  -- `rhsSimp` proves `rhs = e`; the simproc must return a proof of `e = rhs`.
-  -- Return `.done` rather than `.visit` so the outer simplifier keeps the row-level shape and can
-  -- continue from there, instead of immediately descending back into scalar projections.
-  let result ← rhsSimp.mkEqSymm rhs
+  let result ← customSimp.mkEqSymm rhs
   return .done result
 
 simproc evalProjection (Witgen.FExprOver.eval _ _) := evalProjectionSimproc
@@ -733,7 +864,7 @@ simproc above. Decomposing an opaque value via structure eta would produce
 confluent: a literal's components are the program's own expressions, never projections
 of an opaque base.
 -/
-private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Witgen.eval && args.size >= 2 do
     return .continue
@@ -748,8 +879,8 @@ private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
     let some (_, _, rhs) := (← inferType proof).eq? | return .continue
     return .visit { expr := rhs, proof? := proof }
   catch _ => pure ()
-  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise,
-  -- validated by definitional equality. Covers flat structs of scalars; bails if a field
+  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise
+  -- using the public vector/array map lemmas. Covers flat structs of scalars; bails if a field
   -- is not a scalar `FExpr` or the instance doesn't evaluate field-by-field in
   -- constructor order.
   try
@@ -761,13 +892,48 @@ private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
     for a in ctorArgs[info.numParams:] do
       newArgs := newArgs.push (some (← mkAppM ``Witgen.FExprOver.eval #[ctx, a]))
     let rhs ← mkAppOptM fn newArgs
-    -- custom instances typically need `.all` transparency to reduce (cf. `Point.eval_eq`
-    -- being proved by `with_unfolding_all rfl`); the kernel re-checks this unrestricted
-    unless ← withTransparency .all (isDefEq e rhs) do return .continue
-    return .visit { expr := rhs, proof? := none }
+    let mut thms : SimpTheorems := {}
+    for name in [``Witgen.eval, ``ProvableType.toElements, ``ProvableType.fromElements] do
+      thms ← thms.addDeclToUnfold name
+    for name in [``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil] do
+      thms ← thms.addConst name
+    let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
+    let (result, _) ← Meta.simp e simpCtx #[]
+    unless ← withDefault <| isDefEq result.expr rhs do return .continue
+    return .visit { expr := rhs, proof? := some (← result.getProof) }
   catch _ => return .continue
 
 simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc
 attribute [circuit_norm] evalStructLiteral
 end Eval
 end Witgen
+
+namespace Clean
+
+/-- Interpret the rows stored under a component name using their declared circuit-input type. -/
+def _root_.ProverData.getRows (data : ProverData F) (name : String)
+    (Row : TypeMap) [ProvableType Row] : Array (Row F) :=
+  data.tables name (size Row) |>.map fromElements
+
+/-- Read a typed component-input row from committed prover data. -/
+def _root_.Witgen.dataGet (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : U64Expr F) : Row (FExpr F) :=
+  fromElements <| Vector.mapFinRange (size Row) fun col =>
+    FExpr.dataGet name (size Row) row col
+
+@[circuit_norm]
+lemma _root_.Witgen.eval_dataGet [FiniteField F] (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : U64Expr F) (ctx : Ctx F) :
+    Witgen.eval ctx (Witgen.dataGet name Row row) =
+      ((ctx.env.data.getRows name Row)[(row.eval ctx).toNat]?.getD default) := by
+  simp only [Witgen.eval, Witgen.dataGet, ProverData.getRows]
+  rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements,
+    Vector.map_mapFinRange]
+  simp only [Witgen.FExprOver.eval, WitgenEnv.data_eq]
+  by_cases h : (row.eval ctx).toNat < (ctx.env.data.tables name (size Row)).size
+  · simp [h]
+    rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
+  · simp [h, Vector.mapFinRange_eq_self]
+    simp only [default, ProvableType.toElements_fromElements]
+
+end Clean

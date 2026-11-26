@@ -1,9 +1,12 @@
-import Clean.Gadgets.WitnessEvaluation
-import Clean.Gadgets.SHA256.Xor32
-import Clean.Specs.SHA256
-import Clean.Utils.Rotation
-import Clean.Utils.Bits
-import Clean.Utils.Fin
+module
+
+public import Clean.Gadgets.SHA256.Xor32
+public import Clean.Specs.SHA256
+public import Clean.Utils.Rotation
+public import Clean.Utils.Bits
+public import Clean.Utils.Fin
+
+@[expose] public section
 
 open Clean
 
@@ -187,9 +190,10 @@ lemma valueBits_rotr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x)
 /-! ## eval helpers for rotr32 / shr32 -/
 
 lemma eval_rotr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (rotr32 k input_var)[i.val] = input[(i + k).val] := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold rotr32
   rw [Vector.getElem_rotate]
   subst h_input
@@ -216,7 +220,7 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
       rw [show valueBits x = ∑ i : Fin 32, (x[i] : F p).val * 2^i.val from rfl,
           testBit_binary_sum 32 _ hbool ⟨j + k.val, hjk⟩]
       simp only [decide_eq_decide]
-      constructor <;> intro h <;> convert h using 2
+      rfl
     · simp only [hjk, dite_false, ZMod.val_zero]
       have hval_lt : valueBits x < 2^32 := valueBits_lt_two_pow x hx
       have : valueBits x < 2 ^ (j + k.val) :=
@@ -235,10 +239,11 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
           (Nat.lt_of_le_of_lt (Nat.div_le_self _ _) hval_lt) pow_le)]
 
 lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (shr32 k input_var)[i.val] =
       if h : i.val + k.val < 32 then input[i.val + k.val]'h else 0 := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold shr32; rw [Vector.getElem_ofFn]; subst h_input
   split
   · next h => rw [Vector.getElem_map]
@@ -380,11 +385,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       ring_nf; ring_nf at h; exact h
     exact sub_eq_zero.mp key
   -- Set z to the output vector
-  set z : fields 32 (F p) :=
-    Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
-      (var {index := i₀ + (32 + 32 * 0) + i} : Expression (F p))) with hz_def
+  set z : fields 32 (F p) := Vector.mapRange 32 fun i => env.get (i₀ + (32 + 32 * 0) + i)
+    with hz_def
   have h_z_get : ∀ i : Fin 32, z[i] = env.get (i₀ + (32 + 32 * 0) + i.val) := by
-    intro i; simp [z, Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+    intro i; simp [z, Vector.getElem_mapRange]
   have h_z : ∀ i : Fin 32, z[i] =
       (input[(i + 7).val] + input[(i + 18).val] -
         2 * input[(i + 7).val] * input[(i + 18).val])
@@ -398,15 +402,18 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [lowerSigma0, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
+  obtain ⟨h_env1, h_env2⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr7 := eval_rotr32 env.toEnvironment input_var input h_input 7 i
     have hr18 := eval_rotr32 env.toEnvironment input_var input h_input 18 i
     have h1 := h_env1 i
-    simp only [Witgen.eval_xor, circuit_norm] at h1
     rw [h1, hr7, hr18]
     have b7 : input[(i + 7).val] = (0 : F p) ∨ input[(i + 7).val] = 1 := h_assumptions (i + 7)
     have b18 : input[(i + 18).val] = (0 : F p) ∨ input[(i + 18).val] = 1 := h_assumptions (i + 18)
+    -- the witness IR computes the xor on `u64`s; the operands are bits, so nothing wraps
+    have b7v : ZMod.val input[(i + 7).val] < 2 := IsBool.val_lt_two b7
+    have b18v : ZMod.val input[(i + 18).val] < 2 := IsBool.val_lt_two b18
+    simp only [circuit_norm]
     have hc : ((input[(i + 7).val].val ^^^ input[(i + 18).val].val : ℕ) : F p) =
         input[(i + 7).val] + input[(i + 18).val] -
           2 * input[(i + 7).val] * input[(i + 18).val] := by
@@ -417,9 +424,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hr18 := eval_rotr32 env.toEnvironment input_var input h_input 18 i
     have hs3 := eval_shr32 env.toEnvironment input_var input h_input 3 i
     have h1 := h_env1 i
-    simp only [Witgen.eval_xor, circuit_norm] at h1
     have h2 := h_env2 i
-    simp only [Witgen.eval_xor, circuit_norm, mul_zero, zero_add] at h2
+    simp only [circuit_norm, mul_zero] at h2
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr7, hr18, hs3]
     have b7 : input[(i + 7).val] = (0 : F p) ∨ input[(i + 7).val] = 1 := h_assumptions (i + 7)
     have b18 : input[(i + 18).val] = (0 : F p) ∨ input[(i + 18).val] = 1 := h_assumptions (i + 18)
@@ -444,10 +450,17 @@ theorem completeness : Completeness (F p) main Assumptions := by
           2 * ((r7.val ^^^ r18.val : ℕ) : F p) * s3 := by
       rw [← IsBool.xor_eq_val_xor hxor1_bool bs3, ZMod.natCast_val]
       exact ZMod.cast_id p _
+    -- the witness IR computes the xors on `u64`s; all operands are bits, so nothing wraps
+    have b7v : ZMod.val r7 < 2 := IsBool.val_lt_two b7
+    have b18v : ZMod.val r18 < 2 := IsBool.val_lt_two b18
+    have bs3v : ZMod.val s3 < 2 := IsBool.val_lt_two bs3
+    have hxor1v : ZMod.val (((r7.val ^^^ r18.val : ℕ) : F p)) < 2 := IsBool.val_lt_two hxor1_bool
+    simp only [circuit_norm]
     rw [hxor3, hxor1]; ring
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  computableWitnesses := by computable_witnesses [rotr32, shr32, Vector.getElem_rotate]
 
 end LowerSigma0
 end Gadgets.SHA256

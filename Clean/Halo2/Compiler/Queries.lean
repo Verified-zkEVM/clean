@@ -1,5 +1,9 @@
-import Clean.Halo2.TopLevel
-import Clean.Halo2.Keygen.Semantics
+module
+
+public import Clean.Halo2.TopLevel
+public import Clean.Halo2.Keygen.Semantics
+
+@[expose] public section
 
 /-! # Compiled query layouts and their interpretation -/
 

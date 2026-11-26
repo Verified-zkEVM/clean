@@ -1,7 +1,11 @@
-import Clean.Halo2.Compiler.CompiledCopies
-import Clean.Halo2.Compiler.PermutationAssembly
-import Clean.Halo2.Compiler.PermutationRows
-import Clean.Halo2.Compiler.FieldSupport
+module
+
+public import Clean.Halo2.Compiler.CompiledCopies
+public import Clean.Halo2.Compiler.PermutationAssembly
+public import Clean.Halo2.Compiler.PermutationRows
+public import Clean.Halo2.Compiler.FieldSupport
+
+@[expose] public section
 
 /-! # The compiled copy permutation
 

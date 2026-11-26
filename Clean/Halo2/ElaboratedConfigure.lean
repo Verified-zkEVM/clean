@@ -1,4 +1,8 @@
-import Clean.Halo2.Configure.Lemmas
+module
+
+public import Clean.Halo2.Configure.Lemmas
+
+@[expose] public section
 
 namespace Halo2
 
@@ -633,7 +637,7 @@ attribute [configure_selector_norm] List.nil_append List.append_nil List.filter_
 
 open Lean Meta Simp in
 /-- Fold the reduced selector summary stored in an inferred configure elaboration. -/
-def foldElaboratedConfigureSelectorSummaryProc : Simproc := fun expression => do
+meta def foldElaboratedConfigureSelectorSummaryProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.selectorSummary ||
       expression.getAppFn.isConstOf
         ``ElaboratedConfigure.externalSelectorSummary do
@@ -661,7 +665,7 @@ attribute [configure_selector_norm]
 
 open Lean Meta Simp in
 /-- Fold the selector requirements stored in an inferred configure elaboration. -/
-def foldElaboratedConfigureSelectorRequirementsProc : Simproc := fun expression => do
+meta def foldElaboratedConfigureSelectorRequirementsProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.selectorRequirements do
     return .continue
   try
@@ -681,7 +685,7 @@ attribute [configure_selector_norm] foldElaboratedConfigureSelectorRequirements
 
 open Lean Meta Simp in
 /-- Fold the query requirements stored in an inferred configure elaboration. -/
-def foldElaboratedConfigureQueryRequirementsProc : Simproc := fun expression => do
+meta def foldElaboratedConfigureQueryRequirementsProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.queryRequirements do
     return .continue
   try
@@ -709,7 +713,7 @@ program. Reducing the class projection unfolds only the instance and the circuit
 structure far enough to select `elaborated.configureInfo`; it does not inspect
 synthesis or proof fields.
 -/
-def foldElaboratedConfigureInstanceQueriesProc : Simproc := fun expression => do
+meta def foldElaboratedConfigureInstanceQueriesProc : Simproc := fun expression => do
   unless expression.getAppFn.isConstOf ``ElaboratedConfigure.instanceQueries do
     return .continue
   try

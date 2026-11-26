@@ -27,7 +27,7 @@ omit [FiniteField F] in
 omit [FiniteField F] in
 theorem read_write_other (env : ProverEnvironment F) (location other : Address) (value : F)
     (different : other ≠ location) : read (write env location value) other = read env other := by
-  simp only [read, write, Prod.mk.eta, if_neg different]
+  simp only [read, write, Prod.mk.eta, ite_eq_right different]
 
 structure Assignment (F : Type) where
   destination : Address

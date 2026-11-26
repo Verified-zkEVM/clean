@@ -54,26 +54,26 @@ theorem parity_equation_complete {place : RegionIndex → Nat} {self : RegionInd
 /-- Honest evaluation of the actual plain/spread helper, with its own fixed tag.
 The spread program reads the newly assigned plain cell, as in the source. -/
 theorem plainAndSpread_honest {place : RegionIndex → Nat} {self : RegionIndex}
-    {env : ProverEnvironment F} (width offset index : Nat) (value : NExpr F)
+    {env : ProverEnvironment F} (width offset index : Nat) (value : U64Expr F)
     (hw : width ∈ spreadWidths)
-    (bound : value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) } < 2^width)
+    (bound : (value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }).toNat < 2^width)
     (witnesses : RegionOperations.ExtendsWitnesses place self env
       ((plainAndSpread width offset index value).operations self)) :
     let output := (plainAndSpread width offset index value).output self
     env.fixed ⟨index⟩ (place self+offset:Nat) = (width:F) ∧
       output.plain.eval place env.toEnvironment =
-        (value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }:F) ∧
+        ((value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }).toNat:F) ∧
       output.spread.eval place env.toEnvironment =
-        (Witness.spread32 (value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }):F) := by
+        (Witness.spread32 ((value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }).toNat):F) := by
   simp only [plainAndSpread, circuit_norm, activation_spread, and_true, true_and] at witnesses
   obtain ⟨tag, plain, expanded⟩ := witnesses
   simp only [plainAndSpread_output, circuit_norm]
-  have small : value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) } <
+  have small : (value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }).toNat <
       BLS12_381.scalarFieldSize := bound.trans_le
         ((Nat.pow_le_pow_right (by decide) (spreadWidth_le_twelve hw)).trans (by decide +kernel))
   have p : (AssignedCell.of self offset (⟨Synthesis.shaAdvice[2*index]!⟩ : Column .advice)).eval
       place env.toEnvironment = FiniteField.fromNat
-        (value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }) := by
+        ((value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }).toNat) := by
     simpa only [WitnessIR.eval_program, circuit_norm] using plain
   have e := WitnessIR.eval_spread_readNat_of_assigned value
     (AssignedCell.of self offset (⟨Synthesis.shaAdvice[2*index]!⟩ : Column .advice))
@@ -85,10 +85,10 @@ theorem plainAndSpread_honest {place : RegionIndex → Nat} {self : RegionIndex}
 assigned honestly. A helper alone never assumes the other tuple is valid. -/
 theorem lookup_row_complete {place : RegionIndex → Nat} {self : RegionIndex}
     {env : ProverEnvironment F} (table : SpreadTable env.toEnvironment)
-    (offset width₀ width₁ : Nat) (value₀ value₁ : NExpr F)
+    (offset width₀ width₁ : Nat) (value₀ value₁ : U64Expr F)
     (hw₀ : width₀ ∈ spreadWidths) (hw₁ : width₁ ∈ spreadWidths)
-    (bound₀ : value₀.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) } < 2^width₀)
-    (bound₁ : value₁.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) } < 2^width₁)
+    (bound₀ : (value₀.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }).toNat < 2^width₀)
+    (bound₁ : (value₁.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }).toNat < 2^width₁)
     (witness₀ : RegionOperations.ExtendsWitnesses place self env
       ((plainAndSpread width₀ offset 0 value₀).operations self))
     (witness₁ : RegionOperations.ExtendsWitnesses place self env
@@ -100,32 +100,31 @@ theorem lookup_row_complete {place : RegionIndex → Nat} {self : RegionIndex}
     width₁ offset 1 value₁ hw₁ bound₁ witness₁
   norm_num [plainAndSpread_output, Synthesis.shaAdvice, circuit_norm] at h₀ h₁
   apply activation_spread_complete (place := place) (self := self) (env := env.toEnvironment) table
-  · change SpreadLookup (env.fixed ⟨0⟩ _) (env.advice ⟨6⟩ _) (env.advice ⟨0⟩ _)
-    simp only [Nat.cast_add]
+  · simp only [Nat.cast_add]
     rw [h₀.1, h₀.2.1, h₀.2.2]
     exact Prepare.honest_spread_lookup _ _ hw₀ bound₀
-  · change SpreadLookup (env.fixed ⟨1⟩ _) (env.advice ⟨7⟩ _) (env.advice ⟨1⟩ _)
-    simp only [Nat.cast_add]
+  · simp only [Nat.cast_add]
     rw [h₁.1, h₁.2.1, h₁.2.2]
     exact Prepare.honest_spread_lookup _ _ hw₁ bound₁
 
 /-- The limb expression used at each of the six source calls always fits its
 width, for arbitrary (possibly much larger) input witness expressions. -/
-theorem limb_bound (value : NExpr F) (slice : Witness.Slice)
-    (env : Placed ProverEnvironment F) :
-    (WitnessIR.limb value slice).eval { env } < 2^slice.2 := by
-  rw [WitnessIR.eval_limb]
+theorem limb_bound (value : U64Expr F) (slice : Witness.Slice)
+    (env : Placed ProverEnvironment F)
+    (h1 : slice.1 < 64 := by decide) (h2 : slice.2 < 64 := by decide) :
+    ((WitnessIR.limb value slice).eval { env }).toNat < 2^slice.2 := by
+  rw [WitnessIR.eval_limb _ _ _ h1 h2]
   exact Witness.limb_lt _ _
 
 /-- Honest evaluation of the source's returned advice cell, before imposing
 any gate or lookup semantics. -/
 theorem spread111110_honest {place : RegionIndex → Nat} {self : RegionIndex}
-    {env : ProverEnvironment F} (odd : Bool) (offset : Nat) (value : NExpr F)
+    {env : ProverEnvironment F} (odd : Bool) (offset : Nat) (value : U64Expr F)
     (witnesses : RegionOperations.ExtendsWitnesses place self env
       ((spread111110 odd offset value).operations self)) :
     (((spread111110 odd offset value).output self).eval place env.toEnvironment) =
       ((if odd then Witness.oddBits else Witness.evenBits)
-        (value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }) : F) := by
+        ((value.eval { env := (⟨place, env⟩ : Placed ProverEnvironment F) }).toNat) : F) := by
   rw [spread111110_expanded] at witnesses
   cases odd
   all_goals
@@ -160,7 +159,7 @@ No bound on the original integer expression is needed: the source parity
 extractors select its low 64 bits. -/
 theorem spread111110_complete {place : RegionIndex → Nat} {self : RegionIndex}
     {env : ProverEnvironment F} (table : SpreadTable env.toEnvironment)
-    (odd : Bool) (offset : Nat) (value : NExpr F)
+    (odd : Bool) (offset : Nat) (value : U64Expr F)
     (witnesses : RegionOperations.ExtendsWitnesses place self env
       ((spread111110 odd offset value).operations self)) :
     RegionOperations.Constraints place self env.toEnvironment
@@ -201,8 +200,8 @@ theorem spread111110_complete {place : RegionIndex → Nat} {self : RegionIndex}
     have l2 := lookup_row_complete (place := place) (self := self) (env := env)
       table (offset+2) 10 10 _ _ (by decide +kernel) (by decide +kernel) b₂ b₅ w₂ w₅
     have gate : RegionOperations.Constraints place self env.toEnvironment (activation 11 (offset+1)) := by
-      norm_num [plainAndSpread_output, spread111110_output, Synthesis.shaAdvice, circuit_norm,
-        WitnessIR.eval_limb, WitnessIR.eval_evenBits, WitnessIR.eval_oddBits] at h₀ h₁ h₂ returned
+      rw [WitnessIR.eval_limb _ _ _ (by decide) (by decide), WitnessIR.eval_evenBits] at h₀ h₁ h₂
+      norm_num [plainAndSpread_output, spread111110_output, Synthesis.shaAdvice, circuit_norm] at h₀ h₁ h₂ returned
       exact parity_reconstruction offset _ (Witness.evenBits_lt _)
         h₀.2.1 h₁.2.1 h₂.2.1 returned
     exact ⟨gate, ⟨l0, h₀.1⟩, ⟨l1, h₁.1⟩, ⟨l2, h₂.1⟩,
@@ -214,8 +213,8 @@ theorem spread111110_complete {place : RegionIndex → Nat} {self : RegionIndex}
     have l2 := lookup_row_complete (place := place) (self := self) (env := env)
       table (offset+2) 10 10 _ _ (by decide +kernel) (by decide +kernel) b₅ b₂ w₅ w₂
     have gate : RegionOperations.Constraints place self env.toEnvironment (activation 11 (offset+1)) := by
-      norm_num [plainAndSpread_output, spread111110_output, Synthesis.shaAdvice, circuit_norm,
-        WitnessIR.eval_limb, WitnessIR.eval_evenBits, WitnessIR.eval_oddBits] at h₃ h₄ h₅ returned
+      rw [WitnessIR.eval_limb _ _ _ (by decide) (by decide), WitnessIR.eval_oddBits] at h₃ h₄ h₅
+      norm_num [plainAndSpread_output, spread111110_output, Synthesis.shaAdvice, circuit_norm] at h₃ h₄ h₅ returned
       exact parity_reconstruction offset _ (Witness.oddBits_lt _)
         h₃.2.1 h₄.2.1 h₅.2.1 returned
     exact ⟨gate, ⟨l0, h₀.1⟩, ⟨l1, h₁.1⟩, ⟨l2, h₂.1⟩,
@@ -245,13 +244,13 @@ theorem plane_of_honest_limbs (env : Environment F) (absolute : Int) (column : F
 /-- Both actual output planes reflect the source's integer parity extractors.
 This is a witness theorem, separate from the adversarial constraint soundness. -/
 theorem spread111110_planes {place : RegionIndex → Nat} {self : RegionIndex}
-    {env : ProverEnvironment F} (odd : Bool) (offset : Nat) (value : NExpr F)
+    {env : ProverEnvironment F} (odd : Bool) (offset : Nat) (value : U64Expr F)
     (witnesses : RegionOperations.ExtendsWitnesses place self env
       ((spread111110 odd offset value).operations self)) :
     parityPlane env.toEnvironment (place self+(offset+1):Nat) (if odd then 3 else 1) =
-      (spread (Witness.evenBits (value.eval {env := (⟨place,env⟩:Placed ProverEnvironment F)})):F) ∧
+      (spread (Witness.evenBits ((value.eval {env := (⟨place,env⟩:Placed ProverEnvironment F)}).toNat)):F) ∧
     parityPlane env.toEnvironment (place self+(offset+1):Nat) (if odd then 1 else 3) =
-      (spread (Witness.oddBits (value.eval {env := (⟨place,env⟩:Placed ProverEnvironment F)})):F) := by
+      (spread (Witness.oddBits ((value.eval {env := (⟨place,env⟩:Placed ProverEnvironment F)}).toNat)):F) := by
   rw [spread111110_expanded] at witnesses
   cases odd
   all_goals
@@ -271,8 +270,9 @@ theorem spread111110_planes {place : RegionIndex → Nat} {self : RegionIndex}
       11 (offset+1) _ _ (by decide +kernel) (limb_bound _ (10,11) ⟨place,env⟩) w₄
     have h₅ := plainAndSpread_honest (place := place) (self := self) (env := env)
       10 (offset+2) _ _ (by decide +kernel) (limb_bound _ (0,10) ⟨place,env⟩) w₅
-    norm_num [plainAndSpread_output, Synthesis.shaAdvice, circuit_norm,
-      WitnessIR.eval_limb, WitnessIR.eval_evenBits, WitnessIR.eval_oddBits] at h₀ h₁ h₂ h₃ h₄ h₅
+    rw [WitnessIR.eval_limb _ _ _ (by decide) (by decide), WitnessIR.eval_evenBits] at h₀ h₁ h₂
+    rw [WitnessIR.eval_limb _ _ _ (by decide) (by decide), WitnessIR.eval_oddBits] at h₃ h₄ h₅
+    norm_num [plainAndSpread_output, Synthesis.shaAdvice, circuit_norm] at h₀ h₁ h₂ h₃ h₄ h₅
     constructor
     · apply plane_of_honest_limbs _ _ _ _ (Witness.evenBits_lt _)
       all_goals norm_num [Gates.read, Synthesis.shaAdvice, Nat.cast_add, Int.add_assoc]
@@ -288,17 +288,18 @@ theorem spread111110_planes {place : RegionIndex → Nat} {self : RegionIndex}
 /-- On a 64-bit input sum, the actual parity witness planes reconstruct that
 sum exactly in the field; this discharges Maj/Sigma/half-Ch gate completeness. -/
 theorem spread111110_sum {place : RegionIndex → Nat} {self : RegionIndex}
-    {env : ProverEnvironment F} (odd : Bool) (offset : Nat) (value : NExpr F)
-    (bound : value.eval {env := (⟨place,env⟩:Placed ProverEnvironment F)} < 2^64)
+    {env : ProverEnvironment F} (odd : Bool) (offset : Nat) (value : U64Expr F)
     (witnesses : RegionOperations.ExtendsWitnesses place self env
       ((spread111110 odd offset value).operations self)) :
     parityPlane env.toEnvironment (place self+(offset+1):Nat) (if odd then 3 else 1) +
       2 * parityPlane env.toEnvironment (place self+(offset+1):Nat) (if odd then 1 else 3) =
-      (value.eval {env := (⟨place,env⟩:Placed ProverEnvironment F)}:F) := by
+      ((value.eval {env := (⟨place,env⟩:Placed ProverEnvironment F)}).toNat:F) := by
   obtain ⟨he, ho⟩ := spread111110_planes (place := place) (self := self) (env := env)
     odd offset value witnesses
   rw [he, ho]
-  have exactSum := congrArg (fun n:Nat => (n:F)) (Witness.interleave_even_odd _ bound)
+  have exactSum := congrArg (fun n:Nat => (n:F))
+    (Witness.interleave_even_odd _
+      (UInt64.toNat_lt (value.eval {env := (⟨place,env⟩:Placed ProverEnvironment F)})))
   simpa only [interleave, Nat.cast_add, Nat.cast_mul, Nat.cast_ofNat] using exactSum
 
 end Midnight.SHA256.Semantics.ParityWitness

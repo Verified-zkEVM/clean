@@ -268,7 +268,7 @@ def summandValues (env : Environment F) (absolute : Int) : List Nat :=
 
 private theorem sum_bound (values : List Nat) (count : values.length ≤ 7)
     (bounded : ∀ value ∈ values, value < 2 ^ 32) : values.sum < 7 * 2 ^ 32 := by
-  have h := List.sum_le_card_nsmul values (2 ^ 32 - 1) (by
+  have h := List.sum_le_length_nsmul values (2 ^ 32 - 1) (by
     intro value member
     have hv := bounded value member
     omega)

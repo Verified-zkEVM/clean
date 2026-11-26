@@ -34,7 +34,7 @@ theorem round16Checked : Checkpoint round16Action round15After round16Output rou
       Synthesis.prepareA, Synthesis.prepareE, Synthesis.prepare, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def round17Action : Synthesis.Build (Synthesis.Compression) :=
   Synthesis.compressionRound round16Output Synthesis.roundConstants[17]! scheduleOutput[17]!
@@ -58,7 +58,7 @@ theorem round17Checked : Checkpoint round17Action round16After round17Output rou
       Synthesis.prepareA, Synthesis.prepareE, Synthesis.prepare, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def round18Action : Synthesis.Build (Synthesis.Compression) :=
   Synthesis.compressionRound round17Output Synthesis.roundConstants[18]! scheduleOutput[18]!
@@ -82,7 +82,7 @@ theorem round18Checked : Checkpoint round18Action round17After round18Output rou
       Synthesis.prepareA, Synthesis.prepareE, Synthesis.prepare, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def round19Action : Synthesis.Build (Synthesis.Compression) :=
   Synthesis.compressionRound round18Output Synthesis.roundConstants[19]! scheduleOutput[19]!
@@ -106,7 +106,7 @@ theorem round19Checked : Checkpoint round19Action round18After round19Output rou
       Synthesis.prepareA, Synthesis.prepareE, Synthesis.prepare, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def round20Action : Synthesis.Build (Synthesis.Compression) :=
   Synthesis.compressionRound round19Output Synthesis.roundConstants[20]! scheduleOutput[20]!
@@ -130,7 +130,7 @@ theorem round20Checked : Checkpoint round20Action round19After round20Output rou
       Synthesis.prepareA, Synthesis.prepareE, Synthesis.prepare, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def round21Action : Synthesis.Build (Synthesis.Compression) :=
   Synthesis.compressionRound round20Output Synthesis.roundConstants[21]! scheduleOutput[21]!
@@ -154,7 +154,7 @@ theorem round21Checked : Checkpoint round21Action round20After round21Output rou
       Synthesis.prepareA, Synthesis.prepareE, Synthesis.prepare, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def round22Action : Synthesis.Build (Synthesis.Compression) :=
   Synthesis.compressionRound round21Output Synthesis.roundConstants[22]! scheduleOutput[22]!
@@ -178,7 +178,7 @@ theorem round22Checked : Checkpoint round22Action round21After round22Output rou
       Synthesis.prepareA, Synthesis.prepareE, Synthesis.prepare, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 def round23Action : Synthesis.Build (Synthesis.Compression) :=
   Synthesis.compressionRound round22Output Synthesis.roundConstants[23]! scheduleOutput[23]!
@@ -202,6 +202,6 @@ theorem round23Checked : Checkpoint round23Action round22After round23Output rou
       Synthesis.prepareA, Synthesis.prepareE, Synthesis.prepare, Synthesis.bigSigma0,
       Synthesis.bigSigma1, Synthesis.sigma0, Synthesis.sigma1, Synthesis.sigma,
       Synthesis.spread111110, Synthesis.plainAndSpread, Synthesis.scopy, Synthesis.sa]
-    cbv <;> simp
+    cbv
 
 end Midnight.SHA256.Semantics.StructuralCheckpoints

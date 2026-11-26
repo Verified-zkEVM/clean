@@ -1,9 +1,13 @@
-import Clean.Gadgets.ByteLookup
-import Clean.Utils.Bitwise
-import Clean.Circuit.Provable
-import Clean.Utils.Primes
-import Clean.Circuit.Subcircuit
-import Clean.Gadgets.Equality
+module
+
+public import Clean.Gadgets.ByteLookup
+public import Clean.Utils.Bitwise
+public import Clean.Circuit.Provable
+public import Clean.Utils.Primes
+public import Clean.Circuit.Subcircuit
+public import Clean.Gadgets.Equality
+
+@[expose] public section
 
 open Clean
 
@@ -109,6 +113,14 @@ def valueNat (x : U64 ℕ) :=
 omit [Fact (Nat.Prime p)] p_large_enough in
 lemma vals_valueNat (x : U64 (F p)) : x.vals.valueNat = x.value := rfl
 
+omit p_large_enough in
+@[circuit_norm]
+lemma eval_of_literal (env : Environment (F p)) (a0 a1 a2 a3 a4 a5 a6 a7 : Expression (F p)) :
+    eval env (U64.mk a0 a1 a2 a3 a4 a5 a6 a7) =
+    U64.mk (a0.eval env) (a1.eval env) (a2.eval env) (a3.eval env) (a4.eval env) (a5.eval env)
+      (a6.eval env) (a7.eval env) := by
+  simp only [explicit_provable_type, circuit_norm]
+
 /--
   Return a 64-bit unsigned integer from a natural number, by decomposing
   it into four limbs of 8 bits each.
@@ -188,15 +200,14 @@ open Gadgets (ByteTable)
   This means that all its limbs are less than 256.
 -/
 def main (inputs : Var U64 (F p)) : Circuit (F p) Unit := do
-  let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
-  lookup ByteTable x0
-  lookup ByteTable x1
-  lookup ByteTable x2
-  lookup ByteTable x3
-  lookup ByteTable x4
-  lookup ByteTable x5
-  lookup ByteTable x6
-  lookup ByteTable x7
+  lookup ByteTable inputs.x0
+  lookup ByteTable inputs.x1
+  lookup ByteTable inputs.x2
+  lookup ByteTable inputs.x3
+  lookup ByteTable inputs.x4
+  lookup ByteTable inputs.x5
+  lookup ByteTable inputs.x6
+  lookup ByteTable inputs.x7
 
 def circuit : FormalAssertion (F p) U64 where
   main
@@ -205,15 +216,15 @@ def circuit : FormalAssertion (F p) U64 where
   Spec inputs := inputs.Normalized
 
   soundness := by
-    rintro i0 env x_var
+    -- destructure `x_var` up front: `simp` does not iota-reduce the `match` coming from
+    -- `main`'s destructuring `let` against an opaque variable
+    rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩
     rintro ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    cases x_var
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
   completeness := by
-    rintro i0 env x_var _hint
+    rintro i0 env ⟨x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var⟩ _hint
     rintro _ ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ h_eval _as
-    cases x_var
     simp_all [circuit_norm, main, ByteTable, Normalized, explicit_provable_type]
 
 end U64.AssertNormalized

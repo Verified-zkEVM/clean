@@ -1,6 +1,10 @@
-import Lean.Elab.Command
-import Clean.Halo2.Formal.Tactics
-import Clean.Halo2.Subcircuit
+module
+
+public meta import Lean.Elab.Command
+public meta import Clean.Halo2.Formal.Tactics
+public meta import Clean.Halo2.Subcircuit
+
+public meta section
 
 /-!
 # `derive_contract_bridges`

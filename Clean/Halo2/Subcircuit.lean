@@ -1,5 +1,10 @@
-import Clean.Halo2.Formal.Tactics
-import Clean.Halo2.Lemmas
+module
+
+public import Clean.Halo2.FormalRegion.ToFormal
+public import Clean.Halo2.Formal.Tactics
+public import Clean.Halo2.Lemmas
+
+@[expose] public section
 
 /-!
 # Subcircuit composition: the call-boundary opacity contract
@@ -192,6 +197,8 @@ the kernel closing the metadata-to-literal gap definitionally — the same oblig
 the historical hand-written `rw [FormalCircuit.call_regionCount]; rfl` wrappers
 discharged. -/
 
+meta section
+
 /-- Per-bundle region-count bridge registry: bundle head constant ↦ proven
 `<base>_call_regionCount` lemma. Populated by `derive_contract_bridges` (and the
 `ElaboratedCircuit` autogenerator); consumed by `foldCallRegionCount`, which
@@ -292,6 +299,8 @@ def foldRegionCountMetaProc : Simproc := fun e => do
 
 simproc foldRegionCountMeta (Halo2.FormalCircuit.regionCount _ _) := foldRegionCountMetaProc
 attribute [circuit_norm] foldRegionCountMeta
+
+end
 
 /-- The closed-form fold state: the accumulator input var and the base region index
 *entering* round `m`. -/

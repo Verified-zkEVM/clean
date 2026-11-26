@@ -1,7 +1,11 @@
-import Clean.Specs.Keccak256
-import Clean.Gadgets.Keccak.ThetaC
-import Clean.Gadgets.Keccak.ThetaD
-import Clean.Gadgets.Keccak.ThetaXor
+module
+
+public import Clean.Specs.Keccak256
+public import Clean.Gadgets.Keccak.ThetaC
+public import Clean.Gadgets.Keccak.ThetaD
+public import Clean.Gadgets.Keccak.ThetaXor
+
+@[expose] public section
 
 open Clean
 
@@ -25,10 +29,9 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) : Prop :=
   ∧ out_state.value = Specs.Keccak256.theta state.value
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start [ThetaC.circuit, ThetaC.Assumptions, ThetaC.Spec,
+  circuit_proof_all [ThetaC.circuit, ThetaC.Assumptions, ThetaC.Spec,
     ThetaD.circuit, ThetaD.Assumptions, ThetaD.Spec,
     ThetaXor.circuit, ThetaXor.Assumptions, ThetaXor.Spec, Specs.Keccak256.theta]
-  simp_all [FormalCircuitBase.output, FormalCircuitBase.localLength, Xor64.circuit]
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_all [ThetaC.circuit, ThetaC.Assumptions, ThetaC.Spec,
