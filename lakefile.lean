@@ -56,10 +56,10 @@ lean_exe export_witness_ir_reference_rust where
 lean_exe export_differential_rust where
   root := `Clean.Backends.Plonky3.Test.Differential
 
--- The shared elliptic-curve/finite-field theory used by Clean/Ironwood: daira/CompElliptic at
--- 2c0444035a84db957f27f06433715058d1e890ad, ported to Lean 4.35. Brings CompPoly transitively.
+-- The shared elliptic-curve/finite-field theory used by Clean/Ironwood: the Lean 4.35 port of
+-- daira/CompElliptic, on the bot fork. Brings CompPoly transitively.
 require CompElliptic from git
-  "https://github.com/zksecurity/compelliptic-lean4-35.git" @ "4effa0a3fc650ec0073cc97b32f421062a49386f"
+  "https://github.com/mitschabaude-bot/CompElliptic.git" @ "ac857d29b60b8201671e6d7435eacda5e03b55ee"
 
 require "leanprover-community" / "mathlib" @ git "v4.35.0"
 require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git" @ "v4.35.0"
