@@ -15,6 +15,8 @@ public import Clean.Halo2.Formal.Tactics
 public import Clean.Halo2.Keygen
 public import Clean.Halo2.TopLevel
 public import Clean.Halo2.TopLevelUnextended
+public import Clean.Halo2.WitnessExecution
+public import Clean.Halo2.WitnessExecution.TopLevel
 public import Clean.Halo2.ConfigurationHolds
 public import Clean.Halo2.Compiler.ConstraintsCompiled
 public import Clean.Halo2.Compiler.CopyPermutation
