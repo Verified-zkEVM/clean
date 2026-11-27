@@ -41,15 +41,20 @@ variable {F : Type}
 /-- A physical cell address `(column, absolute row)` in a Halo2 environment. -/
 abbrev Address := AnyColumn × ℤ
 
-/-- Resolve a region-relative `AssignedCell` to its physical `Address` under `place`. -/
+/-- Resolve an `AssignedCell` to its physical `Address` under `place` (using `Cell.row`, so
+instance cells resolve to their absolute `rowOffset` independent of `place`). -/
 def AssignedCell.address (place : RegionIndex → ℕ) (cell : AssignedCell F) : Address :=
-  (cell.cell.column, (place cell.cell.regionIndex + cell.cell.rowOffset : ℕ))
+  (cell.cell.column, (cell.cell.row place : ℤ))
 
 /-- Read a physical cell address from a prover environment. -/
 def ProverEnvironment.read (env : ProverEnvironment F) (addr : Address) : F :=
   env.get addr.1 addr.2
 
-/-- Update a single physical cell address in a prover environment. -/
+/-- Update a single physical cell address in a prover environment.
+
+Reference functional update used by `Execute.run`: chaining `n` updates builds `n`-deep nested
+closures (quadratic aggregate lookup cost). Production witness generation should use a flat
+array or hash map rather than this specification helper. -/
 def ProverEnvironment.write (env : ProverEnvironment F) (addr : Address) (value : F) :
     ProverEnvironment F :=
   { env with get := fun column row => if (column, row) = addr then value else env.get column row }
@@ -199,12 +204,18 @@ theorem RegionOperations.assignments_not_instance (place : RegionIndex → ℕ) 
   induction ops with
   | nil => simp [RegionOperations.assignments] at hmem
   | cons op rest ih =>
-    cases op <;> simp only [RegionOperations.assignments] at hmem
-    all_goals first
-      | exact ih hmem
-      | rcases List.mem_cons.mp hmem with rfl | htail
-        · intro h; cases h
-        · exact ih htail
+    cases op with
+    | assignAdvice _ _ _ =>
+      rcases List.mem_cons.mp hmem with rfl | htail
+      · intro h; cases h
+      · exact ih htail
+    | assignFixed _ _ _ =>
+      rcases List.mem_cons.mp hmem with rfl | htail
+      · intro h; cases h
+      · exact ih htail
+    | enableGate _ _ | enableLookup _ _ _ | constrainEqual _ _
+    | constrainConstant _ _ | constrainInstance _ _ _ =>
+      exact ih hmem
 
 theorem Operations.assignments_not_instance (place : RegionIndex → ℕ) (self : RegionIndex)
     (ops : Operations F) (assignment : Assignment F)
@@ -313,7 +324,7 @@ theorem RegionOperations.satisfies_assignments_iff (place : RegionIndex → ℕ)
   | cons op rest ih =>
     cases op <;> simp only [RegionOperations.assignments, RegionOperations.ExtendsWitnesses,
       RegionOperation.ExtendsWitness, Assignments.satisfies_cons, ProverEnvironment.read,
-      Halo2.eval_ofFExpr_zero, Witgen.FExprOver.eval, true_and, ih]
+      eval_ofFExpr_zero, Witgen.FExprOver.eval, true_and, ih]
 
 /-- `ExtendsWitnesses` on an `Operations` stream is equivalent to satisfying all flattened scalar
 assignments together with all `loadTable` equations. -/
@@ -449,7 +460,12 @@ def step (place : RegionIndex → ℕ) (env : ProverEnvironment F) (assignment :
     ProverEnvironment F :=
   env.write assignment.destination (assignment.program.eval ⟨place, env⟩)[0]
 
-/-- Execute a flat assignment stream left to right. -/
+/-- Reference sequential witness executor: executes a flat assignment stream left to right by
+chaining `ProverEnvironment.write` updates.
+
+Intended as a clean specification/proof runner rather than a high-throughput prover: nested closure
+updates give `O(n²)` aggregate lookup cost over `n` assignments, so production witness generation
+should evaluate into a flat array or map. -/
 def run (place : RegionIndex → ℕ) :
     List (Assignment F) → ProverEnvironment F → ProverEnvironment F
   | [], env => env

@@ -165,7 +165,7 @@ private theorem selfRef_not_computable :
   have hagree : AgreesOn Determined.empty env0 env1 :=
     ⟨rfl, rfl, fun _ h => False.elim h⟩
   have heq := hstep env0 env1 hagree
-  simp [Halo2.eval_ofFExpr_zero, Witgen.FExprOver.eval, WitgenEnv.readVar_halo2,
+  simp [eval_ofFExpr_zero, Witgen.FExprOver.eval, WitgenEnv.readVar_halo2,
     AssignedCell.eval, AssignedCell.of, Cell.of, env0, env1] at heq
 
 /-! ## 3. Negative test 2: forward read -/
@@ -191,7 +191,7 @@ private theorem forwardRead_not_computable :
   have hagree : AgreesOn Determined.empty env0 env1 :=
     ⟨rfl, rfl, fun _ h => False.elim h⟩
   have heq := hstep env0 env1 hagree
-  simp [Halo2.eval_ofFExpr_zero, Witgen.FExprOver.eval, WitgenEnv.readVar_halo2,
+  simp [eval_ofFExpr_zero, Witgen.FExprOver.eval, WitgenEnv.readVar_halo2,
     AssignedCell.eval, AssignedCell.of, Cell.of, env0, env1] at heq
 
 /-! ## 4. Negative test 3: advice clobber / double write -/

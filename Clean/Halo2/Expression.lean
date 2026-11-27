@@ -478,12 +478,19 @@ lemma Cell.of_column (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col :
 lemma AssignedCell.of_cell (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) :
     (AssignedCell.of self row col : AssignedCell F).cell = Cell.of self row col := rfl
 
+/-- Resolve a cell's absolute row under region placement `place`. Instance columns are
+never region-placed in Halo2, so their `rowOffset` is already an absolute row. -/
+def Cell.row (place : RegionIndex → ℕ) (c : Cell) : ℕ :=
+  match c.column.kind with
+  | .instance => c.rowOffset
+  | _ => place c.regionIndex + c.rowOffset
+
 -- TODO HALO2 this seems extremely questionable. eval-normal form of an arbitrary cell doesn't match
 -- the one of a concrete cell. see Mul.lean, `incomplete_call_output` necessity
-/-- Evaluate an assigned cell: read its column at the region's placement plus the
-cell's offset. `place` is the region-placement parameter of the semantics (the analogue
-of main Clean's `offset`) — proofs are generic over it; the top level instantiates the
-floor planner's output.
+/-- Evaluate an assigned cell: read its column at `c.cell.row place` (for advice/fixed columns,
+the region's placement plus the cell's offset; for instance columns, the absolute `rowOffset`).
+`place` is the region-placement parameter of the semantics (the analogue of main Clean's
+`offset`) — proofs are generic over it; the top level instantiates the floor planner's output.
 
 NOT `@[circuit_norm]` (normal-form unification, maintainer ruling): an ABSTRACT cell's
 read stays folded as the `AssignedCell.eval place env c` atom — unfolding it produced
@@ -493,9 +500,9 @@ via the `eval_of_*` rules below; `env.get` never appears in the user-facing norm
 form. -/
 def AssignedCell.eval [Field F] (place : RegionIndex → ℕ) (env : Environment F)
     (c : AssignedCell F) : F :=
-  -- cast the ℕ row sum as a whole (not `↑a + ↑b`), so cell reads share the row form
+  -- cast the ℕ row as a whole (not `↑a + ↑b`), so cell reads share the row form
   -- `↑(place self + rowOffset)` with the query/witness paths (avoids cast-shape mismatch).
-  env.get c.cell.column ((place c.cell.regionIndex + c.cell.rowOffset : ℕ) : ℤ)
+  env.get c.cell.column (c.cell.row place : ℤ)
 
 /-- A concrete advice cell's read is the typed advice accessor — the single
 user-facing spelling for known-kind cell reads. -/
@@ -515,7 +522,7 @@ lemma AssignedCell.eval_of_fixed [Field F] (place : RegionIndex → ℕ)
 lemma AssignedCell.eval_of_inst [Field F] (place : RegionIndex → ℕ)
     (env : Environment F) (self : RegionIndex) (row : ℕ) (col : Column .instance) :
     AssignedCell.eval place env (.of self row col)
-      = env.inst col ((place self + row : ℕ) : ℤ) := rfl
+      = env.inst col (row : ℤ) := rfl
 
 /-! ## Lemmas about Expression evaluation -/
 

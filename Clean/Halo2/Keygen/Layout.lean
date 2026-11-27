@@ -100,9 +100,10 @@ def regionSlots : Operations F → List (Bool × String)
 def place (starts : List ℕ) (i : RegionIndex) : ℕ := starts.getD i 0
 
 /-- Absolute `(permColIdx, row)` of a cell: translate its column into permutation-column
-order and add the region start to the region-local offset. -/
+order and resolve its row (`rowOffset` directly for instance columns, region start plus
+local offset otherwise). -/
 def resolveCell (permCols : List ColRef) (starts : List ℕ) (c : Cell) : ℕ × ℕ :=
-  (permIndex permCols c.column, place starts c.regionIndex + c.rowOffset)
+  (permIndex permCols c.column, c.row (place starts))
 
 /-! ## Ordered copy extraction — the two halo2 floor planners
 

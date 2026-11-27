@@ -1,5 +1,6 @@
 module
 
+public import Clean.Halo2.Compiler.Fixed
 public import Clean.Halo2.TopLevel
 public import Clean.Halo2.WitnessExecution
 
@@ -15,8 +16,8 @@ Connects `Clean.Halo2.WitnessExecution` to `TopLevelCircuit`:
   agrees with `self.fixedValue` at the circuit's V1 placement.
 - `TopLevelCircuit.proverAssignment` runs `Execute.run` from the circuit's fixed columns and public
   instances, returning a `ProofAssignment F`.
-- `TopLevelCircuit.exists_witness` and `TopLevelCircuit.exists_completeness` eliminate the vacuity
-  gap: given `ComputableWitnesses` and `WritesConsistent`, a satisfying `ProofAssignment F`
+- `TopLevelCircuit.exists_witness_of` and `TopLevelCircuit.exists_completeness_of` eliminate the
+  vacuity gap: given `ComputableWitnesses` and `WritesConsistent`, a satisfying `ProofAssignment F`
   actually exists.
 -/
 
@@ -27,93 +28,78 @@ variable
     {Config : Type} {PublicInput : TypeMap}
     [ProvableType PublicInput]
 
-omit [FiniteField F] in
-private theorem mem_tableAssignments_of_mem_loadTable
-    (usable : ℕ) (ops : Operations F)
-    {table : TableColumn} {values : List F}
-    (hload : .loadTable table values ∈ ops)
-    {entry : Layout.FixedAssignment F}
-    (hentry : entry ∈ Layout.tableColumnAssignments usable table.inner.index values) :
-    entry ∈ Layout.tableAssignments usable ops := by
-  induction ops with
-  | nil => simp at hload
+private theorem tablesLoaded_of_fixedRequirements
+    (place : RegionIndex → ℕ) (env : Environment F)
+    (ops : Operations F) (i : RegionIndex)
+    (hreqs : (operationFixedRequirements ops i).Forall (FixedRequirement.Satisfied place env)) :
+    ops.TablesLoaded env := by
+  induction ops generalizing i with
+  | nil => trivial
   | cons op rest ih =>
-    rcases List.mem_cons.mp hload with rfl | htail
-    · simp only [Layout.tableAssignments, List.mem_append]
-      exact Or.inl hentry
-    · cases op with
-      | loadTable _ _ =>
-        simp only [Layout.tableAssignments, List.mem_append]
-        exact Or.inr (ih htail)
-      | region _ _ | constrainInstance _ _ _ =>
-        exact ih htail
+    cases op with
+    | region _ body =>
+      simp only [operationFixedRequirements, List.forall_append] at hreqs
+      exact ih (i + 1) hreqs.2
+    | constrainInstance _ _ _ =>
+      exact ih i hreqs
+    | loadTable table values =>
+      simp only [operationFixedRequirements, List.forall_cons, FixedRequirement.Satisfied] at hreqs
+      exact ⟨hreqs.1, ih i hreqs.2⟩
 
-private theorem mem_regionAssignments_of_mem_assignments_fixed
-    (starts : List ℕ) (ops : Operations F) (self : RegionIndex)
+private theorem mem_regionFixedRequirements_of_mem_assignments_fixed
+    (place : RegionIndex → ℕ) (self : RegionIndex) (body : RegionOperations F)
     {a : Assignment F}
-    (ha : a ∈ ops.assignments (fun r => starts.getD r 0) self)
+    (ha : a ∈ body.assignments place self)
     (hfixed : a.destination.1.kind = .fixed) :
-    ∃ v : F, ∃ row : ℕ,
-      a.destination.2 = (row : ℤ) ∧
-      (∀ env : ProverEnvironment F, (a.program.eval ⟨fun r => starts.getD r 0, env⟩)[0] = v) ∧
-      (a.destination.1.index, row, v) ∈
-        Layout.regionAssignments starts (indexedRegions ops self).1 := by
-  induction ops generalizing self with
+    ∃ (col : Column .fixed) (localRow : ℕ) (v : F),
+      a.destination = (col.toAny, ((place self + localRow : ℕ) : ℤ)) ∧
+      (∀ env : ProverEnvironment F, (a.program.eval ⟨place, env⟩)[0] = v) ∧
+      FixedRequirement.assignment self col localRow v ∈ regionFixedRequirements self body := by
+  induction body with
+  | nil => simp [RegionOperations.assignments] at ha
+  | cons op rest ih =>
+    cases op with
+    | assignAdvice _ _ _ =>
+      rcases List.mem_cons.mp ha with rfl | htail
+      · cases hfixed
+      · exact ih htail
+    | assignFixed col localRow v =>
+      rcases List.mem_cons.mp ha with rfl | htail
+      · refine ⟨col, localRow, v, rfl, ?_, List.mem_cons_self⟩
+        intro env
+        simp [eval_ofFExpr_zero, Witgen.FExprOver.eval]
+      · obtain ⟨c, lr, val, hdest, hval, hmem⟩ := ih htail
+        exact ⟨c, lr, val, hdest, hval, List.mem_cons_of_mem _ hmem⟩
+    | enableGate _ _ | enableLookup _ _ _ | constrainEqual _ _
+    | constrainConstant _ _ | constrainInstance _ _ _ =>
+      exact ih ha
+
+private theorem mem_operationFixedRequirements_of_mem_assignments_fixed
+    (place : RegionIndex → ℕ) (ops : Operations F) (i : RegionIndex)
+    {a : Assignment F}
+    (ha : a ∈ ops.assignments place i)
+    (hfixed : a.destination.1.kind = .fixed) :
+    ∃ (region : RegionIndex) (col : Column .fixed) (localRow : ℕ) (v : F),
+      a.destination = (col.toAny, ((place region + localRow : ℕ) : ℤ)) ∧
+      (∀ env : ProverEnvironment F, (a.program.eval ⟨place, env⟩)[0] = v) ∧
+      FixedRequirement.assignment region col localRow v ∈ operationFixedRequirements ops i := by
+  induction ops generalizing i with
   | nil => simp [Operations.assignments] at ha
   | cons op rest ih =>
     cases op with
-    | region name body =>
+    | region _ body =>
       simp only [Operations.assignments, List.mem_append] at ha
       rcases ha with hbody | htail
-      · have hreg : ∃ v : F, ∃ row : ℕ,
-            a.destination.2 = (row : ℤ) ∧
-            (∀ env : ProverEnvironment F,
-              (a.program.eval ⟨fun r => starts.getD r 0, env⟩)[0] = v) ∧
-            ∃ col : Column .fixed, ∃ localRow : ℕ,
-              a.destination.1 = col.toAny ∧
-              row = starts.getD self 0 + localRow ∧
-              .assignFixed col localRow v ∈ body := by
-          clear ih
-          induction body with
-          | nil => simp [RegionOperations.assignments] at hbody
-          | cons rop rrest rih =>
-            cases rop with
-            | assignAdvice col localRow prog =>
-              rcases List.mem_cons.mp hbody with rfl | hr
-              · cases hfixed
-              · obtain ⟨v, row, hrow, hval, c, lr, hc, hlr, hmem⟩ := rih hr
-                exact ⟨v, row, hrow, hval, c, lr, hc, hlr, List.mem_cons_of_mem _ hmem⟩
-            | assignFixed col localRow v =>
-              rcases List.mem_cons.mp hbody with rfl | hr
-              · refine ⟨v, starts.getD self 0 + localRow, rfl, ?_, col, localRow, rfl, rfl,
-                  List.mem_cons_self⟩
-                intro env
-                simp [Halo2.eval_ofFExpr_zero, Witgen.FExprOver.eval]
-              · obtain ⟨v', row, hrow, hval, c, lr, hc, hlr, hmem⟩ := rih hr
-                exact ⟨v', row, hrow, hval, c, lr, hc, hlr, List.mem_cons_of_mem _ hmem⟩
-            | enableGate _ _ | enableLookup _ _ _ | constrainEqual _ _
-            | constrainConstant _ _ | constrainInstance _ _ _ =>
-              obtain ⟨v, row, hrow, hval, c, lr, hc, hlr, hmem⟩ := rih hbody
-              exact ⟨v, row, hrow, hval, c, lr, hc, hlr, List.mem_cons_of_mem _ hmem⟩
-        obtain ⟨v, row, hrow, hval, col, localRow, hcol, hlr, hmem⟩ := hreg
-        refine ⟨v, row, hrow, hval, ?_⟩
-        simp only [indexedRegions, Layout.regionAssignments, List.flatMap_cons, List.mem_append]
-        left
-        rw [List.mem_filterMap]
-        refine ⟨.assignFixed col localRow v, hmem, ?_⟩
-        simp only [Layout.place, hcol, Column.toAny, hlr]
-      · obtain ⟨v, row, hrow, hval, hmem⟩ := ih (self + 1) htail
-        refine ⟨v, row, hrow, hval, ?_⟩
-        simp only [indexedRegions, Layout.regionAssignments, List.flatMap_cons, List.mem_append]
-        exact Or.inr hmem
-    | constrainInstance _ _ _ | loadTable _ _ =>
-      exact ih self ha
-
-private theorem natMod_natCast_eq_of_lt {r n : ℕ} (hlt : r < n) :
-    (r : ℤ).natMod n = r := by
-  unfold Int.natMod
-  norm_cast
-  exact Nat.mod_eq_of_lt hlt
+      · obtain ⟨col, localRow, v, hdest, hval, hmem⟩ :=
+          mem_regionFixedRequirements_of_mem_assignments_fixed place i body hbody hfixed
+        exact ⟨i, col, localRow, v, hdest, hval, List.mem_append_left _ hmem⟩
+      · obtain ⟨region, col, localRow, v, hdest, hval, hmem⟩ := ih (i + 1) htail
+        exact ⟨region, col, localRow, v, hdest, hval, List.mem_append_right _ hmem⟩
+    | constrainInstance _ _ _ =>
+      exact ih i ha
+    | loadTable _ _ =>
+      obtain ⟨region, col, localRow, v, hdest, hval, hmem⟩ := ih i ha
+      exact ⟨region, col, localRow, v, hdest, hval, List.mem_cons_of_mem _ hmem⟩
 
 /-- Every `loadTable` in a top-level circuit is already satisfied by its compiled fixed columns. -/
 theorem tablesLoaded
@@ -122,76 +108,11 @@ theorem tablesLoaded
     self.operations.TablesLoaded (self.environment assignment) := by
   let _ : TopLevelShape self :=
     ⟨TopLevelCompilation.circuitShape self.formalCircuit self.publicInputLayout, rfl⟩
-  have husable_eq : (self.environment assignment).usableRows =
-      self.usableRowsAt self.domainExponent := by
-    simp only [environment_usableRows, usableRowsAt, blindingFactors]
-    rw [self.domainExponent_eq_compiled]
-  have husable_le_n : self.usableRowsAt self.domainExponent ≤ self.n :=
-    self.usableRowsAt_domainExponent_le_n
-  suffices h : ∀ ops : Operations F,
-      (∀ tbl values, .loadTable tbl values ∈ ops → .loadTable tbl values ∈ self.operations) →
-      ops.TablesLoaded (self.environment assignment) from
-    h self.operations (fun _ _ hmem => hmem)
-  intro ops hops
-  induction ops with
-  | nil => trivial
-  | cons op rest ih =>
-    cases op with
-    | region _ _ | constrainInstance _ _ _ =>
-      exact ih (fun tbl vals hmem => hops tbl vals (List.mem_cons_of_mem _ hmem))
-    | loadTable table values =>
-      have hload : .loadTable table values ∈ self.operations :=
-        hops table values List.mem_cons_self
-      refine ⟨⟨?_, ?_⟩, ih (fun tbl vals hmem => hops tbl vals (List.mem_cons_of_mem _ hmem))⟩
-      · intro r hr
-        have hmem_col : (table.inner.index, r, values[r]!) ∈
-            Layout.tableColumnAssignments
-              (self.usableRowsAt self.domainExponent) table.inner.index values := by
-          simp only [Layout.tableColumnAssignments, List.mem_append]
-          left
-          rw [List.mem_map]
-          refine ⟨(values[r], r), ?_, ?_⟩
-          · have hzip : (values[r], r) = values.zipIdx[r]'(by simp [hr]) := by
-              simp
-            rw [hzip]
-            exact List.getElem_mem _
-          · simp [hr]
-        have hraw : (table.inner.index, r, values[r]!) ∈
-            Layout.rawAssignments (self.usableRowsAt self.domainExponent)
-              self.selectorMap self.constraintSystem self.operations := by
-          simp only [Layout.rawAssignments, List.mem_append]
-          exact Or.inl (Or.inl (Or.inl
-            (mem_tableAssignments_of_mem_loadTable _ self.operations hload hmem_col)))
-        have hlt_n : r < self.n := (self.fixedAssignment_bounds_of_mem_raw _ hraw).2
-        rw [self.environment_fixed, self.fixedValue_eq_fixedRows_getD,
-          natMod_natCast_eq_of_lt hlt_n]
-        exact self.fixedRows_getD_getD_eq_of_mem_raw _ hraw
-      · intro hne r hge hr
-        rw [husable_eq] at hr
-        cases values with
-        | nil => exact False.elim (hne rfl)
-        | cons first tail =>
-          have hmem_col : (table.inner.index, r, first) ∈
-              Layout.tableColumnAssignments
-                (self.usableRowsAt self.domainExponent) table.inner.index (first :: tail) := by
-            simp only [Layout.tableColumnAssignments, List.mem_append]
-            right
-            rw [List.mem_map]
-            refine ⟨r - (first :: tail).length, ?_, ?_⟩
-            · rw [List.mem_range]
-              omega
-            · simp only [Prod.mk.injEq, true_and, and_true]
-              omega
-          have hraw : (table.inner.index, r, first) ∈
-              Layout.rawAssignments (self.usableRowsAt self.domainExponent)
-                self.selectorMap self.constraintSystem self.operations := by
-            simp only [Layout.rawAssignments, List.mem_append]
-            exact Or.inl (Or.inl (Or.inl
-              (mem_tableAssignments_of_mem_loadTable _ self.operations hload hmem_col)))
-          have hlt_n : r < self.n := (self.fixedAssignment_bounds_of_mem_raw _ hraw).2
-          rw [self.environment_fixed, self.fixedValue_eq_fixedRows_getD,
-            natMod_natCast_eq_of_lt hlt_n]
-          simpa using self.fixedRows_getD_getD_eq_of_mem_raw _ hraw
+  exact tablesLoaded_of_fixedRequirements self.placement (self.environment assignment)
+    self.operations 0
+    ((CircuitConstraintFamily.fixed_constraints_iff_requirements
+      self.placement (self.environment assignment) self.operations 0).mp
+      (self.fixed_constraints assignment))
 
 /-- Every `assignFixed` in a top-level circuit's flattened assignments evaluates to the circuit's
 canonical compiled `fixedValue` at that cell. -/
@@ -205,19 +126,18 @@ theorem fixedAssignment_eq_fixedValue
       self.fixedValue ⟨a.destination.1.index⟩ a.destination.2 := by
   let _ : TopLevelShape self :=
     ⟨TopLevelCompilation.circuitShape self.formalCircuit self.publicInputLayout, rfl⟩
-  have hplace : self.placement = fun r => (FloorPlanner.V1.starts self.operations).getD r 0 := rfl
-  rw [hplace] at ha ⊢
-  obtain ⟨v, row, hrow, hval, hreg⟩ :=
-    mem_regionAssignments_of_mem_assignments_fixed
-      (FloorPlanner.V1.starts self.operations) self.operations 0 ha hfixed
-  have hraw : (a.destination.1.index, row, v) ∈
-      Layout.rawAssignments (self.usableRowsAt self.domainExponent)
-        self.selectorMap self.constraintSystem self.operations := by
-    simp only [Layout.rawAssignments, List.mem_append]
-    exact Or.inr hreg
-  have hlt_n : row < self.n := (self.fixedAssignment_bounds_of_mem_raw _ hraw).2
-  rw [hval env, hrow, self.fixedValue_eq_fixedRows_getD, natMod_natCast_eq_of_lt hlt_n]
-  exact (self.fixedRows_getD_getD_eq_of_mem_raw _ hraw).symm
+  obtain ⟨region, col, localRow, v, hdest, hval, hmem⟩ :=
+    mem_operationFixedRequirements_of_mem_assignments_fixed
+      self.placement self.operations 0 ha hfixed
+  let seed : ProofAssignment F := ⟨fun _ _ => 0, fun _ _ => 0⟩
+  have hreqs := (CircuitConstraintFamily.fixed_constraints_iff_requirements
+    self.placement (self.environment seed) self.operations 0).mp
+    (self.fixed_constraints seed)
+  have hsat : (self.environment seed).fixed col ((self.placement region + localRow : ℕ) : ℤ) = v :=
+    List.forall_iff_forall_mem.mp hreqs _ hmem
+  rw [self.environment_fixed] at hsat
+  rw [hval env, hdest]
+  exact hsat.symm
 
 /-- Construct the honest prover's `ProofAssignment F` by running `Execute.run` over the circuit's
 flattened assignments, seeded with the public instances `inst` and the circuit's compiled fixed
@@ -291,7 +211,7 @@ private theorem proverEnvironment_ext {left right : ProverEnvironment F}
           subst h1 h2 h3
           rfl
 
-/-- `self.proverEnvironment (self.proverAssignment inst hint) hint` is definitionally equal to the
+/-- `self.proverEnvironment (self.proverAssignment inst hint) hint` is extensionally equal to the
 environment produced by `Execute.run`. -/
 theorem proverEnvironment_proverAssignment_eq_run
     (self : TopLevelCircuit F Config PublicInput)
@@ -362,7 +282,7 @@ theorem proverAssignment_extendsWitnesses
 
 /-- Existential witness construction for any `TopLevelCircuit` with `ComputableWitnesses` and
 `WritesConsistent`. -/
-theorem exists_witness
+theorem exists_witness_of
     (self : TopLevelCircuit F Config PublicInput)
     (S₀ : Address → Prop)
     (hcomp : self.operations.ComputableWitnesses self.placement S₀ 0)
@@ -379,7 +299,7 @@ theorem exists_witness
 `WritesConsistent`, and `ProverAssumptions` on the constructively generated proof assignment, there
 exists a `ProofAssignment F` with public instances `inst` satisfying `ExtendsWitnesses`,
 `Constraints`, and `ProverSpec`. -/
-theorem exists_completeness
+theorem exists_completeness_of
     (self : TopLevelCircuit F Config PublicInput)
     (S₀ : Address → Prop)
     (hcomp : self.operations.ComputableWitnesses self.placement S₀ 0)
@@ -413,7 +333,7 @@ theorem exists_completeness
 /-- Kernel-reducible `Fast.orderedAdvice` discharges `ComputableWitnesses` and `WritesConsistent`
 for any `TopLevelCircuit` (automatically handling repeated equal-valued `assignFixed` pins via
 `fixedAssignment_eq_fixedValue`). -/
-theorem computable_and_consistent_of_orderedAdvice
+theorem computableWitnesses_and_writesConsistent_of_orderedAdvice
     (self : TopLevelCircuit F Config PublicInput)
     (hacc : Fast.orderedAdvice self.placement ∅
       (self.operations.assignments self.placement 0) = true) :

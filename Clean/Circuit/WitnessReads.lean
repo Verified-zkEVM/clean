@@ -124,14 +124,14 @@ theorem ContextAgreement.right {first second : List V} {left right : CtxOver F E
     ContextAgreement (F := F) (Env := Env) (V := V) second left right :=
   agreement.mono (List.subset_append_right _ _)
 
-theorem ContextAgreement.withLocals {reads : List V} {left right : CtxOver F Env}
+theorem ContextAgreement.with_locals {reads : List V} {left right : CtxOver F Env}
     (agreement : ContextAgreement (F := F) (Env := Env) (V := V) reads left right)
     (locals : Array (F ⊕ UInt64)) :
     ContextAgreement (F := F) (Env := Env) (V := V) reads
       { left with locals } { right with locals } :=
   { agreement with locals := rfl }
 
-theorem ContextAgreement.withIndex {reads : List V} {left right : CtxOver F Env}
+theorem ContextAgreement.with_idx {reads : List V} {left right : CtxOver F Env}
     (agreement : ContextAgreement (F := F) (Env := Env) (V := V) reads left right)
     (idx : ℕ) :
     ContextAgreement (F := F) (Env := Env) (V := V) reads
@@ -280,7 +280,7 @@ theorem vectorReads_eval {n : ℕ} (output : VExprOver F V n) (left right : CtxO
     intro i hi
     simp only [VExprOver.eval, Vector.getElem_mapRange]
     exact fieldReads_eval body { left with idx := i } { right with idx := i }
-      (agreement.withIndex i)
+      (agreement.with_idx i)
   | envRange offset =>
     apply Vector.ext
     intro i hi
@@ -313,8 +313,8 @@ theorem stepsReads_eval (steps : List (StepOver F V)) (left right : CtxOver F En
         { right with
           locals := right.locals.push (.inl (expression.eval right))
           idx := right.idx }
-        ((agreement.right.withLocals
-          (right.locals.push (.inl (expression.eval right)))).withIndex right.idx)
+        ((agreement.right.with_locals
+          (right.locals.push (.inl (expression.eval right)))).with_idx right.idx)
     | letU expression =>
       simp only [evalSteps]
       have hval := u64Reads_eval expression left right agreement.left
@@ -326,8 +326,8 @@ theorem stepsReads_eval (steps : List (StepOver F V)) (left right : CtxOver F En
         { right with
           locals := right.locals.push (.inr (expression.eval right))
           idx := right.idx }
-        ((agreement.right.withLocals
-          (right.locals.push (.inr (expression.eval right)))).withIndex right.idx)
+        ((agreement.right.with_locals
+          (right.locals.push (.inr (expression.eval right)))).with_idx right.idx)
 
 /-- Structured witness programs depend only on their syntactically collected variable reads and
 immutable environment state (`get`, `data`, `hint`). -/
@@ -355,7 +355,7 @@ theorem programReads_eval {n : ℕ} (program : WitgenIROver F Env V n) (reads : 
     have hsteps := stepsReads_eval steps { env := left } { env := right } agreement.left
     simp only [WitgenIROver.eval]
     rw [hsteps]
-    exact vectorReads_eval out _ _ (agreement.right.withLocals (evalSteps right steps))
+    exact vectorReads_eval out _ _ (agreement.right.with_locals (evalSteps right steps))
 
 /-- If `readsAccepted allowed (programReads program) = true`, the program depends only on
 variable atoms satisfying `allowed` and immutable environment state. -/
@@ -428,7 +428,7 @@ theorem u64BuilderReads_eval (program : MOver F V (U64ExprOver F V)) (left right
   simp only [MOver.evalU64]
   rw [hsteps]
   exact u64Reads_eval (program #[]).1 _ _
-    (agreement.right.withLocals (evalSteps right (program #[]).2.toList))
+    (agreement.right.with_locals (evalSteps right (program #[]).2.toList))
 
 theorem boolBuilderReads_eval (program : MOver F V (BExprOver F V)) (left right : Env)
     (hcells : ∀ cell ∈ boolBuilderReads program,
@@ -450,7 +450,7 @@ theorem boolBuilderReads_eval (program : MOver F V (BExprOver F V)) (left right 
   simp only [MOver.evalBool]
   rw [hsteps]
   exact boolReads_eval (program #[]).1 _ _
-    (agreement.right.withLocals (evalSteps right (program #[]).2.toList))
+    (agreement.right.with_locals (evalSteps right (program #[]).2.toList))
 
 end Semantics
 
