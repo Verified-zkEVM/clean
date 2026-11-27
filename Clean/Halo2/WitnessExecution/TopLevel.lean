@@ -3,6 +3,7 @@ module
 public import Clean.Halo2.Compiler.Fixed
 public import Clean.Halo2.TopLevel
 public import Clean.Halo2.WitnessExecution
+public import Clean.Halo2.WitnessExecution.Bridge
 
 @[expose] public section
 
@@ -250,10 +251,36 @@ theorem proverEnvironment_proverAssignment_eq_run
       (self.operations.assignments self.placement 0)
       (self.proverEnvironment seed hint)).symm
 
-/-- Given `ComputableWitnesses` and `WritesConsistent` (for any initial determined set `S₀`
-consisting of non-advice cells, such as `Determined.nonAdvice`, `Determined.instances`, or
-`Determined.empty`), `self.proverAssignment inst hint` satisfies `ExtendsWitnesses`. -/
-theorem proverAssignment_extendsWitnesses
+/-- Automatic compositional `ComputableWitnesses` for any `TopLevelCircuit`, derived directly from
+its elaborated `ConsumedCellsAssigned` provenance certificate. -/
+theorem computableWitnesses
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.ComputableWitnesses self.placement Determined.nonAdvice 0 :=
+  Operations.computableWitnesses_of_consumedCellsAssigned self.placement self.operations
+    self.operationsConsumedCellsAssigned
+
+/-- Automatic compositional `WritesConsistent` for any `TopLevelCircuit`, derived from per-region
+`AdviceWritesConsistent`, V1 floor-planner `SharedColumnIntervalsDisjoint`, and compiled fixed-value
+agreement. -/
+theorem writesConsistent
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.WritesConsistent self.placement Determined.nonAdvice 0 := by
+  have hdisjoint :
+      FloorPlanner.SharedColumnIntervalsDisjoint (FloorPlanner.measureRegions self.operations)
+        (FloorPlanner.V1.starts self.operations) := by
+    rw [FloorPlanner.V1.starts, FloorPlanner.V1.planOperations_eq]
+    exact FloorPlanner.V1.planCandidate_measureRegions_sharedColumnIntervalsDisjoint self.operations
+  exact Operations.writesConsistent_of_adviceWritesConsistent
+    (FloorPlanner.V1.starts self.operations) self.operations
+    self.operationsAdviceWritesConsistent hdisjoint fun a ha b hb hdest hfixed env => by
+      change (a.program.eval ⟨self.placement, env⟩)[0] = (b.program.eval ⟨self.placement, env⟩)[0]
+      rw [self.fixedAssignment_eq_fixedValue a ha hfixed env,
+        self.fixedAssignment_eq_fixedValue b hb (hdest ▸ hfixed) env, hdest]
+
+/-- Explicit-premise variant of `proverAssignment_extendsWitnesses`: given `ComputableWitnesses`
+and `WritesConsistent` for an arbitrary initial determined set `S₀`, `self.proverAssignment`
+satisfies `ExtendsWitnesses`. -/
+theorem proverAssignment_extendsWitnesses_of
     (self : TopLevelCircuit F Config PublicInput)
     (S₀ : Address → Prop)
     (hcomp : self.operations.ComputableWitnesses self.placement S₀ 0)
@@ -280,8 +307,18 @@ theorem proverAssignment_extendsWitnesses
   · exact self.operations.assignments_separate_tables self.placement 0
       self.constraintSystem.constants self.fixedWritesLawful
 
-/-- Existential witness construction for any `TopLevelCircuit` with `ComputableWitnesses` and
-`WritesConsistent`. -/
+/-- Automatic witness extension for any `TopLevelCircuit`: `self.proverAssignment inst hint`
+satisfies `ExtendsWitnesses` with no manual ordering or consistency hypotheses. -/
+theorem proverAssignment_extendsWitnesses
+    (self : TopLevelCircuit F Config PublicInput)
+    (inst : Column .instance → ℤ → F) (hint : ProverHint F) :
+    ExtendsWitnesses self.placement
+      (self.proverEnvironment (self.proverAssignment inst hint) hint)
+      self.operations 0 :=
+  self.proverAssignment_extendsWitnesses_of Determined.nonAdvice
+    self.computableWitnesses self.writesConsistent inst hint
+
+/-- Explicit-premise existential witness construction for a `TopLevelCircuit`. -/
 theorem exists_witness_of
     (self : TopLevelCircuit F Config PublicInput)
     (S₀ : Address → Prop)
@@ -293,12 +330,20 @@ theorem exists_witness_of
       ExtendsWitnesses self.placement
         (self.proverEnvironment assignment hint) self.operations 0 :=
   ⟨self.proverAssignment inst hint, rfl,
-    self.proverAssignment_extendsWitnesses S₀ hcomp hcons inst hint⟩
+    self.proverAssignment_extendsWitnesses_of S₀ hcomp hcons inst hint⟩
 
-/-- Non-vacuous existential top-level completeness: given `ComputableWitnesses`,
-`WritesConsistent`, and `ProverAssumptions` on the constructively generated proof assignment, there
-exists a `ProofAssignment F` with public instances `inst` satisfying `ExtendsWitnesses`,
-`Constraints`, and `ProverSpec`. -/
+/-- Automatic existential witness construction for any `TopLevelCircuit`. -/
+theorem exists_witness
+    (self : TopLevelCircuit F Config PublicInput)
+    (inst : Column .instance → ℤ → F) (hint : ProverHint F) :
+    ∃ assignment : ProofAssignment F,
+      assignment.inst = inst ∧
+      ExtendsWitnesses self.placement
+        (self.proverEnvironment assignment hint) self.operations 0 :=
+  ⟨self.proverAssignment inst hint, rfl,
+    self.proverAssignment_extendsWitnesses inst hint⟩
+
+/-- Explicit-premise non-vacuous existential top-level completeness. -/
 theorem exists_completeness_of
     (self : TopLevelCircuit F Config PublicInput)
     (S₀ : Address → Prop)
@@ -326,9 +371,39 @@ theorem exists_completeness_of
           (self.placedEnvironment assignment))
         hint := by
   let assignment := self.proverAssignment inst hint
-  have hwitnesses := self.proverAssignment_extendsWitnesses S₀ hcomp hcons inst hint
+  have hwitnesses := self.proverAssignment_extendsWitnesses_of S₀ hcomp hcons inst hint
   have hcomplete := self.completeness assignment hint hwitnesses hprover
   exact ⟨assignment, rfl, hwitnesses, hcomplete.1, hcomplete.2⟩
+
+/-- Automatic non-vacuous existential top-level completeness for any `TopLevelCircuit`: given only
+`ProverAssumptions` on the constructively generated proof assignment, there exists a
+`ProofAssignment F` with public instances `inst` satisfying `ExtendsWitnesses`, `Constraints`, and
+`ProverSpec`. -/
+theorem exists_completeness
+    (self : TopLevelCircuit F Config PublicInput)
+    (inst : Column .instance → ℤ → F) (hint : ProverHint F)
+    (hprover : self.formalCircuit.ProverAssumptions
+      (eval (self.placedProverEnvironment (self.proverAssignment inst hint) hint)
+        (show Var unit F from ()))
+      (self.formalCircuit.extract self.config () 0
+        (self.placedEnvironment (self.proverAssignment inst hint)))
+      hint) :
+    ∃ assignment : ProofAssignment F,
+      assignment.inst = inst ∧
+      ExtendsWitnesses self.placement
+        (self.proverEnvironment assignment hint) self.operations 0 ∧
+      Constraints self.placement (self.environment assignment)
+        self.operations 0 ∧
+      self.formalCircuit.ProverSpec
+        (eval (self.placedProverEnvironment assignment hint)
+          (show Var unit F from ()))
+        (eval (self.placedProverEnvironment assignment hint)
+          (self.formalCircuit.output self.config () 0))
+        (self.formalCircuit.extract self.config () 0
+          (self.placedEnvironment assignment))
+        hint :=
+  self.exists_completeness_of Determined.nonAdvice
+    self.computableWitnesses self.writesConsistent inst hint hprover
 
 /-- Kernel-reducible `Fast.orderedAdvice` discharges `ComputableWitnesses` and `WritesConsistent`
 for any `TopLevelCircuit` (automatically handling repeated equal-valued `assignFixed` pins via

@@ -42,15 +42,22 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         simpa only [assignRegion, Circuit.operations, RegionCircuit.operations,
           Operations.KeygenRegistered, Operation.KeygenRegistered,
           List.Forall, and_true] using hregistered
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig input region
-        have hassigned := child.elaborated.copyCellsAssigned
+        have hassigned := child.elaborated.consumedCellsAssigned
           configInput counts hconfig 0 input region
-        simp only [assignRegion, Circuit.operations, 
-          Operations.CopyCellsAssigned]
-        rw [
-          Operations.copyCellsAssignedFrom_region_iff]
+        simp only [assignRegion, Circuit.operations,
+          Operations.ConsumedCellsAssigned]
+        rw [Operations.assignedFrom_region_iff]
         exact ⟨hassigned, .nil _ _⟩
+      adviceColumnRequirements := child.elaborated.adviceColumnRequirements
+      adviceWritesConsistent := by
+        intro configInput counts hconfig hadvice input region
+        have hconsistent := child.elaborated.adviceWritesConsistent
+          configInput counts hconfig hadvice 0 input region
+        simpa only [assignRegion, Circuit.operations, RegionCircuit.operations,
+          Operations.adviceWritesConsistentFrom_region_cons,
+          Operations.adviceWritesConsistentFrom_nil, and_true] using hconsistent
       fixedWritesLawful := by
         intro configInput counts hconfig input region
         refine ⟨?_, ?_, ?_, ?_⟩

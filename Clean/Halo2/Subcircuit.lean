@@ -623,53 +623,90 @@ theorem FormalCircuit.foldCall_keygenRegistered
     (hgates i) (hlookups i) (hfixedColumns i) (hpermutationColumns i)
     (hinputCells i)
 
-/-- Copy provenance composes across a serial circuit fold when every round's
-declared input cells are either caller inputs or cells assigned by an earlier
-round. -/
-theorem FormalCircuit.foldOps_copyCellsAssignedFrom
+/-- Provenance composes across a serial circuit fold when every round's declared input
+cells, read cells, and relative reads are either caller-supplied or cells assigned by an
+earlier round. -/
+theorem FormalCircuit.foldOps_consumedCellsAssignedFrom
     (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config)
     {available : List Cell}
-    (hinputCells : ∀ i cell,
+    (hcells : ∀ i cell,
       cell ∈ (configured i).inputCells
-          (FormalCircuit.foldState c toInput config init i₀ i).1 →
+            (FormalCircuit.foldState c toInput config init i₀ i).1 ++
+          (configured i).readCells
+            (FormalCircuit.foldState c toInput config init i₀ i).1 ++
+          (configured i).readRelativeCellsAt
+            (FormalCircuit.foldState c toInput config init i₀ i).2 0
+            (FormalCircuit.foldState c toInput config init i₀ i).1 →
         cell ∈ available ++
           (FormalCircuit.foldOps c toInput config init i₀ i).assignedCellsFrom i₀) :
-    (FormalCircuit.foldOps c toInput config init i₀ m).CopyCellsAssignedFrom
-      i₀ available := by
+    (FormalCircuit.foldOps c toInput config init i₀ m).AssignedFrom
+      RegionOperation.Consumes i₀ available := by
   induction m with
   | zero => exact .nil i₀ available
   | succ m inductionHypothesis =>
       rw [FormalCircuit.foldOps]
-      apply Operations.CopyCellsAssignedFrom.append
+      apply Operations.AssignedFrom.append
       · apply inductionHypothesis
           (fun i => configured i.castSucc)
         intro i cell hcell
-        exact hinputCells i.castSucc cell hcell
+        exact hcells i.castSucc cell hcell
       · rw [show i₀ + Operations.regionCount
               (FormalCircuit.foldOps c toInput config init i₀ m) =
             (FormalCircuit.foldState c toInput config init i₀ m).2 from
           FormalCircuit.foldOps_regionCount c toInput config init i₀ m]
-        apply (c m).call_copyCellsAssignedFrom config
+        apply (c m).call_consumedCellsAssignedFrom config
           (configured ⟨m, Nat.lt_succ_self m⟩)
           (FormalCircuit.foldState c toInput config init i₀ m).1
           (FormalCircuit.foldState c toInput config init i₀ m).2
         intro cell hcell
-        exact hinputCells ⟨m, Nat.lt_succ_self m⟩ cell hcell
+        exact hcells ⟨m, Nat.lt_succ_self m⟩ cell hcell
 
-/-- `foldCall` spelling of `foldOps_copyCellsAssignedFrom`. -/
-theorem FormalCircuit.foldCall_copyCellsAssignedFrom
+/-- `foldCall` spelling of `foldOps_consumedCellsAssignedFrom`. -/
+theorem FormalCircuit.foldCall_consumedCellsAssignedFrom
     (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config)
     {available : List Cell}
-    (hinputCells : ∀ i cell,
+    (hcells : ∀ i cell,
       cell ∈ (configured i).inputCells
-          (FormalCircuit.foldState c toInput config init i₀ i).1 →
+            (FormalCircuit.foldState c toInput config init i₀ i).1 ++
+          (configured i).readCells
+            (FormalCircuit.foldState c toInput config init i₀ i).1 ++
+          (configured i).readRelativeCellsAt
+            (FormalCircuit.foldState c toInput config init i₀ i).2 0
+            (FormalCircuit.foldState c toInput config init i₀ i).1 →
         cell ∈ available ++
           (FormalCircuit.foldOps c toInput config init i₀ i).assignedCellsFrom i₀) :
     ((FormalCircuit.foldCall c toInput config init m).operations i₀)
-      |>.CopyCellsAssignedFrom i₀ available := by
+      |>.AssignedFrom RegionOperation.Consumes i₀ available := by
   rw [FormalCircuit.foldCall_operations]
-  exact FormalCircuit.foldOps_copyCellsAssignedFrom
-    c toInput config init i₀ m configured hinputCells
+  exact FormalCircuit.foldOps_consumedCellsAssignedFrom
+    c toInput config init i₀ m configured hcells
+
+/-- Per-region advice-write consistency composes over a serial fold from each folded child. -/
+theorem FormalCircuit.foldOps_adviceWritesConsistentFrom
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config)
+    (hadvice : ∀ i : Fin m, (c i).elaborated.adviceColumnRequirements config) :
+    (FormalCircuit.foldOps c toInput config init i₀ m).AdviceWritesConsistentFrom i₀ := by
+  induction m with
+  | zero => exact Operations.adviceWritesConsistentFrom_nil i₀
+  | succ k ih =>
+    rw [FormalCircuit.foldOps, Operations.adviceWritesConsistentFrom_append,
+      FormalCircuit.foldOps_regionCount c toInput config init i₀ k]
+    refine ⟨ih (fun i => configured ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩)
+      (fun i => hadvice ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩), ?_⟩
+    exact (c k).call_adviceWritesConsistent config
+      (configured ⟨k, Nat.lt_succ_self k⟩) (hadvice ⟨k, Nat.lt_succ_self k⟩)
+      (FormalCircuit.foldState c toInput config init i₀ k).1
+      (FormalCircuit.foldState c toInput config init i₀ k).2
+
+/-- Per-region advice-write consistency composes over a serial fold from each folded child. -/
+@[keygen_norm, keygen_spine]
+theorem FormalCircuit.foldCall_adviceWritesConsistent
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config)
+    (hadvice : ∀ i : Fin m, (c i).elaborated.adviceColumnRequirements config) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀)
+      |>.AdviceWritesConsistentFrom i₀ := by
+  rw [FormalCircuit.foldCall_operations]
+  exact FormalCircuit.foldOps_adviceWritesConsistentFrom c toInput config init i₀ m configured hadvice
 
 /-- The soundness-side split: `Constraints` of the fold is the per-round folded chunks. -/
 theorem FormalCircuit.foldOps_constraints (place : RegionIndex → ℕ) (env : Environment F)

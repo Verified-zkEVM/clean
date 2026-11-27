@@ -679,6 +679,11 @@ structure TopLevelCircuit
   selectorRequirements : formalCircuit.selectorRequirements () {}
   /-- A closed circuit borrows no queryable columns from an incoming configure state. -/
   queryRequirements : formalCircuit.queryRequirements () {}
+  /-- The closed circuit's configured advice columns satisfy any distinctness requirements. -/
+  adviceColumnRequirements :
+    formalCircuit.elaborated.adviceColumnRequirements
+      (TopLevelCompilation.config formalCircuit) := by
+    trivial
   /-- Physical columns shared by regions using each auxiliary lookup selector. -/
   lookupSelectorAnchor : ℕ → FloorPlanner.RegionColumn
   /-- The closed circuit solves the lookup-anchor equations exported by its children. -/
@@ -934,19 +939,33 @@ theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
   TopLevelCompilation.operations self.formalCircuit
 
+/-- Every consumed (copied or read) cell in a closed top-level circuit is assigned before use. -/
+theorem operationsConsumedCellsAssigned
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.ConsumedCellsAssigned 0 [] := by
+  exact self.formalCircuit.operationsConsumedCellsAssigned
+    () () self.noCallerRequirements
+
 /-- Every copied cell in a closed top-level circuit is assigned before use. -/
 theorem operationsCopyCellsAssigned
     (self : TopLevelCircuit F Config PublicInput) :
-    self.operations.CopyCellsAssigned 0 [] := by
-  exact self.formalCircuit.operationsCopyCellsAssigned
-    () () self.noCallerRequirements
+    self.operations.CopyCellsAssigned 0 [] :=
+  Operations.copyCellsAssigned_of_consumed _ 0 [] self.operationsConsumedCellsAssigned
+
+/-- Every region in a closed top-level circuit writes advice cells consistently. -/
+theorem operationsAdviceWritesConsistent
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.AdviceWritesConsistent := by
+  rcases self.noCallerRequirements with ⟨hconfig, _, _, _, _, _, _, _, _⟩
+  exact self.formalCircuit.operationsAdviceWritesConsistent () ()
+    hconfig self.adviceColumnRequirements
 
 /-- The closed synthesis stream inherits its circuit-local fixed-write discipline. -/
 theorem fixedWritesLawful
     (self : TopLevelCircuit F Config PublicInput) :
     self.operations.FixedWritesLawful self.constraintSystem.constants := by
   rcases self.noCallerRequirements with
-    ⟨hconfig, _, _, _, hconstantColumns, _, _⟩
+    ⟨hconfig, _, _, _, hconstantColumns, _, _, _, _⟩
   let program := self.formalCircuit.configure ()
   have hsource := self.formalCircuit.elaborated.fixedWritesLawful
     () {} hconfig () 0

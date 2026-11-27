@@ -392,16 +392,19 @@ def Assignments.ComputableWitnesses (place : RegionIndex → ℕ)
 
 /-- A flat assignment list has consistent writes relative to initial determined set `S₀` when:
 - no assignment writes to a non-fixed cell already in `S₀`; and
-- advice writes are pairwise distinct (no advice clobber), while repeated fixed writes to the same
-  physical address must agree on their value in every environment. -/
+- whenever two assignments in order target the same physical address, either both compute the same
+  value in every environment (e.g. equal-valued fixed re-pins or identical shared advice copies) or
+  the later assignment is an idempotent self-copy
+  (`(b.program.eval ⟨place, env⟩)[0] = env.read b.destination` for all `env`). -/
 structure Assignments.WritesConsistent (place : RegionIndex → ℕ)
     (S₀ : Address → Prop) (assignments : List (Assignment F)) : Prop where
   initialDisjoint : ∀ a ∈ assignments, S₀ a.destination → a.destination.1.kind = .fixed
   adviceUnique : assignments.Pairwise fun a b =>
     a.destination = b.destination →
-      a.destination.1.kind = .fixed ∧
-      ∀ env : ProverEnvironment F,
-        (a.program.eval ⟨place, env⟩)[0] = (b.program.eval ⟨place, env⟩)[0]
+      (∀ env : ProverEnvironment F,
+        (a.program.eval ⟨place, env⟩)[0] = (b.program.eval ⟨place, env⟩)[0]) ∨
+      (∀ env : ProverEnvironment F,
+        (b.program.eval ⟨place, env⟩)[0] = env.read b.destination)
 
 /-- `ComputableWitnesses` at the `Operations` level (flat write-trace order). -/
 def Operations.ComputableWitnesses (place : RegionIndex → ℕ)
@@ -514,13 +517,16 @@ theorem run_instance (place : RegionIndex → ℕ) (self : RegionIndex)
   have hkind := congrArg (fun addr : Address => addr.1.kind) heq
   exact ops.assignments_not_instance place self assignment hmem hkind.symm
 
-/-- Core soundness theorem for `Execute.run`: under `ComputableWitnesses`, `WritesConsistent`, and
-agreement of `initial` with any assignment targeting an initially determined fixed cell, sequential
-execution preserves `S` and satisfies every assignment equation in the final environment. -/
-theorem run_agreesOn_and_satisfies (place : RegionIndex → ℕ) (assignments : List (Assignment F))
+private theorem run_agreesOn_and_satisfies_aux (place : RegionIndex → ℕ)
+    (assignments : List (Assignment F))
     (S : Address → Prop) (initial : ProverEnvironment F)
     (hcomp : Assignments.ComputableWitnesses place S assignments)
-    (hcons : Assignments.WritesConsistent place S assignments)
+    (hpairAll : assignments.Pairwise fun a b =>
+      a.destination = b.destination →
+        (∀ env : ProverEnvironment F,
+          (a.program.eval ⟨place, env⟩)[0] = (b.program.eval ⟨place, env⟩)[0]) ∨
+        (∀ env : ProverEnvironment F,
+          (b.program.eval ⟨place, env⟩)[0] = env.read b.destination))
     (hinit : ∀ a ∈ assignments, S a.destination →
       ∀ env : ProverEnvironment F, AgreesOn S initial env →
         (a.program.eval ⟨place, env⟩)[0] = initial.read a.destination) :
@@ -531,7 +537,7 @@ theorem run_agreesOn_and_satisfies (place : RegionIndex → ℕ) (assignments : 
     exact ⟨AgreesOn.refl S initial, fun _ hmem => False.elim (List.not_mem_nil hmem)⟩
   | cons assignment rest ih =>
     rcases hcomp with ⟨ha_comp, hrest_comp⟩
-    have hpair := List.pairwise_cons.mp hcons.adviceUnique
+    have hpair := List.pairwise_cons.mp hpairAll
     let S' : Address → Prop := fun addr => addr = assignment.destination ∨ S addr
     let env₁ := step place initial assignment
     have hstep_agree : AgreesOn S initial env₁ := by
@@ -539,14 +545,6 @@ theorem run_agreesOn_and_satisfies (place : RegionIndex → ℕ) (assignments : 
       · exact AgreesOn.write_of_eq initial assignment.destination _
           (hinit assignment List.mem_cons_self hS initial (AgreesOn.refl S initial))
       · exact AgreesOn.write_of_not_mem initial assignment.destination _ hS
-    have hrest_cons : Assignments.WritesConsistent place S' rest := by
-      refine ⟨?_, hpair.2⟩
-      intro b hb hS'
-      rcases hS' with heq | hS
-      · have hfixed := (hpair.1 b hb heq.symm).1
-        rw [heq]
-        exact hfixed
-      · exact hcons.initialDisjoint b (List.mem_cons_of_mem _ hb) hS
     have hrest_init : ∀ b ∈ rest, S' b.destination →
         ∀ env : ProverEnvironment F, AgreesOn S' env₁ env →
           (b.program.eval ⟨place, env⟩)[0] = env₁.read b.destination := by
@@ -554,14 +552,16 @@ theorem run_agreesOn_and_satisfies (place : RegionIndex → ℕ) (assignments : 
       have hagreeS : AgreesOn S initial env :=
         hstep_agree.trans (hagree'.mono fun _ h => Or.inr h)
       rcases hS' with heq | hS
-      · have hvalEq := (hpair.1 b hb heq.symm).2 env
-        have haEq := ha_comp initial env hagreeS
-        rw [← hvalEq, ← haEq, heq]
-        exact (ProverEnvironment.read_write_same initial assignment.destination _).symm
+      · rcases hpair.1 b hb heq.symm with hvalEq | hself
+        · have haEq := ha_comp initial env hagreeS
+          rw [← hvalEq env, ← haEq, heq]
+          exact (ProverEnvironment.read_write_same initial assignment.destination _).symm
+        · rw [hself env]
+          exact (hagree'.2.2 b.destination (Or.inl heq)).symm
       · have hbInit := hinit b (List.mem_cons_of_mem _ hb) hS env hagreeS
         rw [hbInit]
         exact hstep_agree.2.2 b.destination hS
-    obtain ⟨hrest_agree, hrest_sat⟩ := ih S' env₁ hrest_comp hrest_cons hrest_init
+    obtain ⟨hrest_agree, hrest_sat⟩ := ih S' env₁ hrest_comp hpair.2 hrest_init
     have hfinal_agree : AgreesOn S initial (run place (assignment :: rest) initial) :=
       hstep_agree.trans (hrest_agree.mono fun _ h => Or.inr h)
     refine ⟨hfinal_agree, ?_⟩
@@ -574,6 +574,20 @@ theorem run_agreesOn_and_satisfies (place : RegionIndex → ℕ) (assignments : 
         (assignment.program.eval ⟨place, run place (assignment :: rest) initial⟩)[0] :=
       ha_comp initial (run place (assignment :: rest) initial) hfinal_agree
     exact hdest.trans ((ProverEnvironment.read_write_same initial assignment.destination _).trans hprog)
+
+/-- Core soundness theorem for `Execute.run`: under `ComputableWitnesses`, `WritesConsistent`, and
+agreement of `initial` with any assignment targeting an initially determined cell, sequential
+execution preserves `S` and satisfies every assignment equation in the final environment. -/
+theorem run_agreesOn_and_satisfies (place : RegionIndex → ℕ) (assignments : List (Assignment F))
+    (S : Address → Prop) (initial : ProverEnvironment F)
+    (hcomp : Assignments.ComputableWitnesses place S assignments)
+    (hcons : Assignments.WritesConsistent place S assignments)
+    (hinit : ∀ a ∈ assignments, S a.destination →
+      ∀ env : ProverEnvironment F, AgreesOn S initial env →
+        (a.program.eval ⟨place, env⟩)[0] = initial.read a.destination) :
+    AgreesOn S initial (run place assignments initial) ∧
+      Assignments.Satisfies place (run place assignments initial) assignments :=
+  run_agreesOn_and_satisfies_aux place assignments S initial hcomp hcons.adviceUnique hinit
 
 /-- Specialized soundness when no assignment targets an initially determined cell in `S₀`. -/
 theorem run_agreesOn_and_satisfies_of_disjoint (place : RegionIndex → ℕ)
@@ -918,7 +932,7 @@ theorem orderedAdvice_sound (place : RegionIndex → ℕ) (assignments : List (A
     | fixed => rfl
     | «instance» => exact False.elim (hni hk)
   · exact List.Pairwise.imp_of_mem (fun {a b} ha hb h => fun heq =>
-      ⟨h heq, hfixedAgree a ha b hb heq (h heq)⟩) hpair
+      Or.inl (hfixedAgree a ha b hb heq (h heq))) hpair
 
 end Fast
 
