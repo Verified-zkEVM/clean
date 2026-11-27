@@ -81,6 +81,14 @@ deriving ProvableStruct
 def k0Wit (y : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[((bitrange (readCell env y).val 1 9 : ℕ) : Fp)]
 
+@[witness_support]
+theorem witnessFunctionSupport_k0Wit (y : AssignedCell Fp) :
+    WitnessFunctionSupport [y] (programFunction (k0Wit y)) := by
+  intro env₁ env₂ hagree
+  have hy : readCell env₁ y = readCell env₂ y := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues y List.mem_cons_self
+  simp only [programFunction, k0Wit, Witgen.WitgenIROver.eval, hy]
+
 @[circuit_norm]
 theorem k0Wit_eval (y : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -93,6 +101,14 @@ theorem k0Wit_eval (y : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
 /-- `k_2 = y[250..254]`. -/
 def k2Wit (y : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[((bitrange (readCell env y).val 250 4 : ℕ) : Fp)]
+
+@[witness_support]
+theorem witnessFunctionSupport_k2Wit (y : AssignedCell Fp) :
+    WitnessFunctionSupport [y] (programFunction (k2Wit y)) := by
+  intro env₁ env₂ hagree
+  have hy : readCell env₁ y = readCell env₂ y := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues y List.mem_cons_self
+  simp only [programFunction, k2Wit, Witgen.WitgenIROver.eval, hy]
 
 @[circuit_norm]
 theorem k2Wit_eval (y : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
@@ -107,6 +123,17 @@ theorem k2Wit_eval (y : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
 def k3Wit (y : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[((bitrange (readCell env y).val 254 1 : ℕ) : Fp)]
 
+@[witness_support]
+theorem witnessFunctionSupport_k3Wit (y : AssignedCell Fp) :
+    WitnessFunctionSupport [y] (programFunction (k3Wit y)) := by
+  intro env₁ env₂ hagree
+  have hy : readCell env₁ y = readCell env₂ y := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues y List.mem_cons_self
+  simp only [programFunction, k3Wit, Witgen.WitgenIROver.eval, hy]
+
+def k3Supported (y : AssignedCell Fp) : SupportedProgram Fp :=
+  { program := k3Wit y, reads := [y], support := witnessFunctionSupport_k3Wit y }
+
 @[circuit_norm]
 theorem k3Wit_eval (y : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -118,16 +145,27 @@ theorem k3Wit_eval (y : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
 
 /-- `j = LSB + 2·k_0 + 2¹⁰·k_1` (Rust computes it from the `lsb`/`k_0`/`k_1` values;
 `k_1 = y[10..250]`). -/
-def jWit (wlsb : WitgenIR Fp 1) (y : AssignedCell Fp) : WitgenIR Fp 1 :=
+def jWit (wlsb : SupportedProgram Fp) (y : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env =>
-    #v[(wlsb.eval env)[0] + ((bitrange (readCell env y).val 1 9 : ℕ) : Fp) * 2
+    #v[(wlsb.program.eval env)[0] + ((bitrange (readCell env y).val 1 9 : ℕ) : Fp) * 2
       + ((bitrange (readCell env y).val 10 240 : ℕ) : Fp) * (1024 : Fp)]
 
+@[witness_support]
+theorem witnessFunctionSupport_jWit (wlsb : SupportedProgram Fp) (y : AssignedCell Fp) :
+    WitnessFunctionSupport (y :: wlsb.reads) (programFunction (jWit wlsb y)) := by
+  intro env₁ env₂ hagree
+  have hy : readCell env₁ y = readCell env₂ y := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues y List.mem_cons_self
+  have hw : (wlsb.program.eval env₁)[0] = (wlsb.program.eval env₂)[0] :=
+    wlsb.support env₁ env₂ (hagree.mono fun c hc => List.mem_cons_of_mem y hc)
+  dsimp only [programFunction, jWit]
+  rw [Witgen.WitgenIROver.eval_native_apply, Witgen.WitgenIROver.eval_native_apply, hy, hw]
+
 @[circuit_norm]
-theorem jWit_eval (wlsb : WitgenIR Fp 1) (y : AssignedCell Fp)
+theorem jWit_eval (wlsb : SupportedProgram Fp) (y : AssignedCell Fp)
     (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((jWit wlsb y).eval env)[j]
-      = (wlsb.eval env)[0] + ((bitrange (readCell env y).val 1 9 : ℕ) : Fp) * 2
+      = (wlsb.program.eval env)[0] + ((bitrange (readCell env y).val 1 9 : ℕ) : Fp) * 2
         + ((bitrange (readCell env y).val 10 240 : ℕ) : Fp) * (1024 : Fp) := by
   have hj0 : j = 0 := by omega
   subst hj0
@@ -137,6 +175,16 @@ theorem jWit_eval (wlsb : WitgenIR Fp 1) (y : AssignedCell Fp)
 /-- `j' = j + 2¹³⁰ − t_P` (Rust `canon_bitshift_130`, computed from the `j` cell). -/
 def jPrimeWit (jCell : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env jCell + ((2 ^ 130 : ℕ) : Fp) - tP]
+
+@[witness_support]
+theorem witnessFunctionSupport_jPrimeWit (jCell : AssignedCell Fp) :
+    WitnessFunctionSupport [jCell] (programFunction (jPrimeWit jCell)) := by
+  intro env₁ env₂ hagree
+  have hj : readCell env₁ jCell = readCell env₂ jCell := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues jCell List.mem_cons_self
+  unfold programFunction jPrimeWit
+  dsimp only [Witgen.WitgenIROver.eval]
+  exact congrArg (fun x : Fp => (#v[x + ((2 ^ 130 : ℕ) : Fp) - tP] : Vector Fp 1)[0]) hj
 
 @[circuit_norm]
 theorem jPrimeWit_eval (jCell : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
@@ -150,15 +198,15 @@ theorem jPrimeWit_eval (jCell : AssignedCell Fp) (env : Placed ProverEnvironment
 
 /-- The gate child: the `YCanonicity` region bundle in its own layouter region, with the
 canonical `k_3` program. -/
-def gateChild (wlsb : WitgenIR Fp 1) (input : Inputs (AssignedCell Fp)) :
+def gateChild (wlsb : SupportedProgram Fp) (input : Inputs (AssignedCell Fp)) :
     FormalCircuit Fp YCanonicity.Config YCanonicity.Config YCanonicity.Row field :=
-  (YCanonicity.bundle wlsb (k3Wit input.y)).toFormal "y canonicity"
+  (YCanonicity.bundle wlsb (k3Supported input.y)).toFormal "y canonicity"
 
-derive_contract_bridges gateChild (wlsb : WitgenIR Fp 1)
+derive_contract_bridges gateChild (wlsb : SupportedProgram Fp)
   (input : Inputs (AssignedCell Fp)) := gateChild wlsb input
 
 @[keygen_norm]
-theorem gateChild_inputCells (wlsb : WitgenIR Fp 1)
+theorem gateChild_inputCells (wlsb : SupportedProgram Fp)
     (input : Var Inputs Fp) {cfg : YCanonicity.Config}
     (configured : (gateChild wlsb input).Configured cfg)
     (row : Var YCanonicity.Row Fp) :
@@ -170,7 +218,7 @@ theorem gateChild_inputCells (wlsb : WitgenIR Fp 1)
   rfl
 
 @[synthesis_summary_norm]
-theorem gateChild_synthesisSummary (wlsb : WitgenIR Fp 1)
+theorem gateChild_synthesisSummary (wlsb : SupportedProgram Fp)
     (input : Var Inputs Fp) (cfg : YCanonicity.Config)
     (row : Var YCanonicity.Row Fp) (region : RegionIndex) :
     (gateChild wlsb input).elaborated.synthesisSummary cfg row region =
@@ -182,15 +230,15 @@ theorem gateChild_synthesisSummary (wlsb : WitgenIR Fp 1)
 
 /-- The gate child's output, at its concrete cell (one hop deeper than the generated
 `gateChild_output`, which stops at the lifted region bundle's folded output). -/
-private theorem gateChild_output_cells (wlsb : WitgenIR Fp 1) (input : Inputs (AssignedCell Fp))
+private theorem gateChild_output_cells (wlsb : SupportedProgram Fp) (input : Inputs (AssignedCell Fp))
     (cfg : YCanonicity.Config) (row : Var YCanonicity.Row Fp) (i : RegionIndex) :
     (gateChild wlsb input).output cfg row i
       = AssignedCell.of i 0 (cfg.advices 6) := by
-  show ((YCanonicity.bundle wlsb (k3Wit input.y)).synthesize cfg 0 row).output i = _
-  exact YCanonicity.bundleSynthesize_output wlsb (k3Wit input.y) cfg 0 row i
+  show ((YCanonicity.bundle wlsb (k3Supported input.y)).synthesize cfg 0 row).output i = _
+  exact YCanonicity.bundleSynthesize_output wlsb (k3Supported input.y) cfg 0 row i
 
 /-- The gate child's returned low-bit cell is assigned by its sole region. -/
-theorem gateChild_call_output_cell_assigned (wlsb : WitgenIR Fp 1)
+theorem gateChild_call_output_cell_assigned (wlsb : SupportedProgram Fp)
     (input : Var Inputs Fp) (cfg : YCanonicity.Config)
     (row : Var YCanonicity.Row Fp) (self : RegionIndex) :
     ((gateChild wlsb input).output cfg row self).cell ∈
@@ -203,24 +251,24 @@ theorem gateChild_call_output_cell_assigned (wlsb : WitgenIR Fp 1)
     RegionOperations.assignedCells, RegionOperation.assignedCells,
     List.flatMap_cons, List.mem_cons, true_or]
 
-theorem gateChild_call_witnesses (wlsb : WitgenIR Fp 1)
+theorem gateChild_call_witnesses (wlsb : SupportedProgram Fp)
     (input : Inputs (AssignedCell Fp)) (cfg : YCanonicity.Config)
     (row : Var YCanonicity.Row Fp) (i : RegionIndex) (place : RegionIndex → ℕ)
     (env : ProverEnvironment Fp) :
     ExtendsWitnesses place env (((gateChild wlsb input).call cfg row).operations i) i
       = RegionOperations.ExtendsWitnesses place i env
-          (((YCanonicity.bundle wlsb (k3Wit input.y)).synthesize cfg 0 row).operations i)
+          (((YCanonicity.bundle wlsb (k3Supported input.y)).synthesize cfg 0 row).operations i)
  :=
   FormalRegionCircuit.toFormal_call_extendsWitnesses _ _ cfg row i place env
 
-private theorem gateChild_extract_cells (wlsb : WitgenIR Fp 1)
+private theorem gateChild_extract_cells (wlsb : SupportedProgram Fp)
     (input : Inputs (AssignedCell Fp)) (cfg : YCanonicity.Config)
     (row : Var YCanonicity.Row Fp) (i : RegionIndex) (env : Placed Environment Fp) :
     (gateChild wlsb input).extract cfg row i env
       = (eval env (AssignedCell.of i 0 (cfg.advices 6) : Var field Fp),
          eval env (AssignedCell.of i 0 (cfg.advices 9) : Var field Fp)) := rfl
 
-def synth (wlsb : WitgenIR Fp 1) (gcfg : YCanonicity.Config)
+def synth (wlsb : SupportedProgram Fp) (gcfg : YCanonicity.Config)
     (lcfg : LookupRangeCheck.Config 10) (input : Inputs (AssignedCell Fp)) :
     Circuit Fp (Var field Fp) := do
   let k0 ← LookupRangeCheck.witnessShortCheck 10 9 lcfg (k0Wit input.y)
@@ -247,7 +295,7 @@ theorem synthesisSummary_lookupActivationCount
     (synthesisSummary gcfg lcfg).lookupActivationCount = 42 := by
   simp only [synthesisSummary, synthesis_summary_norm]
 
-theorem synth_regionCount (wlsb : WitgenIR Fp 1) (gcfg : YCanonicity.Config)
+theorem synth_regionCount (wlsb : SupportedProgram Fp) (gcfg : YCanonicity.Config)
     (lcfg : LookupRangeCheck.Config 10) (input : Inputs (AssignedCell Fp))
     (i : RegionIndex) :
     Operations.regionCount ((synth wlsb gcfg lcfg input).operations i) = 5 := by
@@ -259,7 +307,7 @@ theorem synth_regionCount (wlsb : WitgenIR Fp 1) (gcfg : YCanonicity.Config)
 its reading is the extraction data. `Spec`: given the lsb cell's booleanity (constrained
 outside, by the decompose gates on the copied cell), `lsb` is the low bit of `y` — the
 donor composite payoff. -/
-def circuit (wlsb : WitgenIR Fp 1) :
+def circuit (wlsb : SupportedProgram Fp) :
     FormalCircuit Fp (YCanonicity.Config × LookupRangeCheck.Config 10)
       (YCanonicity.Config × LookupRangeCheck.Config 10) Inputs field where
   name := "y canonicity"
@@ -275,26 +323,55 @@ def circuit (wlsb : WitgenIR Fp 1) :
           permutationColumns cfg _ :=
             [cfg.1.advices 5, cfg.1.advices 6, cfg.1.advices 7,
               cfg.1.advices 8, cfg.1.advices 9, cfg.2.runningSum]
-          inputCells _ _ input := [input.y.cell] }
+          inputCells _ _ input := [input.y.cell]
+          readCells _ _ _ := wlsb.reads.map (·.cell) }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct
+          [cfg.1.advices 5, cfg.1.advices 6, cfg.1.advices 7, cfg.1.advices 8, cfg.1.advices 9]
       registered _ _ _ _ _ := by
         keygen_registration
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
-        simp only [synth, Configure.output_pure, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessCheckDecomposed_copyCellsAssignedFrom
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
-        · apply (gateChild wlsb input).call_copyCellsAssignedFrom
+        simp only [synth, Configure.output_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil]
+        apply Operations.AssignedFrom.append
+        · exact LookupRangeCheck.witnessShortCheck_consumedCellsAssignedFrom 10 9 configInput.2
+            (k0Wit input.y) [input.y] (witnessFunctionSupport_k0Wit input.y) i _
+            (by intro c hc; simp only [List.mem_singleton] at hc; subst hc; simp)
+        apply Operations.AssignedFrom.append
+        · exact LookupRangeCheck.witnessShortCheck_consumedCellsAssignedFrom 10 4 configInput.2
+            (k2Wit input.y) [input.y] (witnessFunctionSupport_k2Wit input.y) _ _
+            (by intro c hc; simp only [List.mem_singleton] at hc; subst hc; simp)
+        apply Operations.AssignedFrom.append
+        · exact LookupRangeCheck.witnessCheckDecomposed_consumedCellsAssignedFrom configInput.2
+            (jWit wlsb input.y) (input.y :: wlsb.reads) (witnessFunctionSupport_jWit wlsb input.y) _ _
+            (by intro c hc; simp only [List.mem_cons] at hc
+                rcases hc with rfl | ha
+                · simp
+                · simp [List.mem_map_of_mem ha])
+        apply Operations.AssignedFrom.append
+        · exact LookupRangeCheck.witnessCheck_consumedCellsAssignedFrom 10 13 false (by simp)
+            configInput.2 _ _ (witnessFunctionSupport_jPrimeWit _) _ _
+            (by intro c hc
+                simp only [List.mem_singleton] at hc
+                subst hc
+                have hj := LookupRangeCheck.witnessCheckDecomposed_output_cells_assigned
+                  configInput.2 (jWit wlsb input.y) (i + 2)
+                simp only [LookupRangeCheck.witnessShortCheck_regionCount,
+                  Nat.add_assoc, Nat.reduceAdd, List.mem_append] at hj ⊢
+                exact Or.inr hj.1)
+        · apply (gateChild wlsb input).call_consumedCellsAssignedFrom
             (hconfigured := FormalCircuit.Configured.ofOutput
               (gateChild wlsb input) configInput.1 {} (by keygen_registration))
           intro cell hcell
-          rw [gateChild_inputCells] at hcell
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, FormalCircuit.Configured.ofOutput,
+            gateChild, FormalRegionCircuit.toFormal_keygenRequirements,
+            YCanonicity.bundle, YCanonicity.bundleElaborated,
+            k3Supported, FormalRegionCircuit.keygenRequirements,
+            ElaboratedRegionCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hcell
           have hk0 := LookupRangeCheck.witnessShortCheck_output_cell_assigned
             10 9 configInput.2 (k0Wit input.y) i
           have hk2 := LookupRangeCheck.witnessShortCheck_output_cell_assigned
@@ -312,9 +389,9 @@ def circuit (wlsb : WitgenIR Fp 1) :
               (jPrimeWit
                 ((LookupRangeCheck.witnessCheckDecomposed configInput.2
                   (jWit wlsb input.y)).output (i + 2)).z0) (i + 3)
-          simp only [List.mem_append]
-          rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-          · exact Or.inl (Or.inl (Or.inl (Or.inl (by simp))))
+          simp only [List.mem_append, List.mem_cons]
+          rcases hcell with (rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl) | hread
+          · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl rfl))))
           · exact Or.inl (Or.inl (Or.inl (Or.inr hk0)))
           · exact Or.inl (Or.inl (Or.inr (by
               simpa only [LookupRangeCheck.witnessShortCheck_regionCount,
@@ -354,6 +431,22 @@ def circuit (wlsb : WitgenIR Fp 1) :
                 configInput.2 (jWit wlsb input.y) (i + 2)),
               (LookupRangeCheck.witnessCheckDecomposed_regionCount
                 configInput.2 (jWit wlsb input.y) (i + 2))] using hjp.2)
+          · rcases hread with hw | hmem
+            · exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr hw))))
+            · simp only [List.mem_map, List.mem_singleton] at hmem
+              rcases hmem with ⟨_, rfl, rfl⟩
+              exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl rfl))))
+      adviceWritesConsistent := by
+        intro configInput counts _hconfig hadvice input i
+        simp only [synth, Configure.output_pure, circuit_norm,
+          Operations.adviceWritesConsistentFrom_append]
+        refine ⟨LookupRangeCheck.witnessShortCheck_adviceWritesConsistent 10 9 configInput.2 _ i,
+          LookupRangeCheck.witnessShortCheck_adviceWritesConsistent 10 4 configInput.2 _ (i + 1),
+          LookupRangeCheck.witnessCheckDecomposed_adviceWritesConsistent configInput.2 _ (i + 2),
+          LookupRangeCheck.witnessCheck_adviceWritesConsistent 10 13 false (by simp)
+            configInput.2 _ (i + 3),
+          (gateChild wlsb input).call_adviceWritesConsistent configInput.1
+            (FormalCircuit.Configured.ofPure _ configInput.1 () rfl) hadvice _ (i + 4)⟩
       output cfg _ i := .of (i + 4) 0 (cfg.1.advices 6)
       regionCount _ := 5
       synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
@@ -489,7 +582,7 @@ def circuit (wlsb : WitgenIR Fp 1) :
     -- region chunk (defeq) and destructure it like the bundle's own completeness
     rw [gateChild_call_witnesses] at hWgate
     have hWgate' := hWgate
-    simp only [YCanonicity.bundle, YCanonicity.bundleSynthesize,
+    simp only [YCanonicity.bundle, YCanonicity.bundleSynthesize, k3Supported,
       YCanonicity.gate, circuit_norm, readCell] at hWgate'
     obtain ⟨hgy, hglsb, hgk0, hgk2, hgk3, hgj, hgz1, hgz13, hgjp, hgz13p⟩ := hWgate'
     rw [h_input] at hWk0 hWk2 hWj hgk3
@@ -645,21 +738,21 @@ def circuit (wlsb : WitgenIR Fp 1) :
         simp
 
 @[synthesis_summary_norm]
-theorem circuit_synthesisSummary_eq (wlsb : WitgenIR Fp 1)
+theorem circuit_synthesisSummary_eq (wlsb : SupportedProgram Fp)
     (cfg : YCanonicity.Config × LookupRangeCheck.Config 10)
     (input : Var Inputs Fp) (region : RegionIndex) :
     (circuit wlsb).elaborated.synthesisSummary cfg input region =
       synthesisSummary cfg.1 cfg.2 := rfl
 
 @[keygen_norm]
-theorem circuit_inputCells (wlsb : WitgenIR Fp 1) {cfg}
+theorem circuit_inputCells (wlsb : SupportedProgram Fp) {cfg}
     (configured : (circuit wlsb).Configured cfg)
     (input : Var Inputs Fp) :
     configured.inputCells input = [input.y.cell] := by
   rfl
 
 /-- The composite's output is the cell assigned by its final gate child. -/
-theorem circuit_call_output_cell_assigned (wlsb : WitgenIR Fp 1)
+theorem circuit_call_output_cell_assigned (wlsb : SupportedProgram Fp)
     (cfg : YCanonicity.Config × LookupRangeCheck.Config 10)
     (input : Var Inputs Fp) (self : RegionIndex) :
     ((circuit wlsb).output cfg input self).cell ∈
@@ -693,6 +786,6 @@ theorem circuit_call_output_cell_assigned (wlsb : WitgenIR Fp 1)
   simp only [List.mem_append]
   exact Or.inr (Or.inr (Or.inr (Or.inr hgate)))
 
-derive_contract_bridges circuit (wlsb : WitgenIR Fp 1) := circuit wlsb
+derive_contract_bridges circuit (wlsb : SupportedProgram Fp) := circuit wlsb
 
 end Zcash.Circuits.NoteCommit.YCanonicityCheck

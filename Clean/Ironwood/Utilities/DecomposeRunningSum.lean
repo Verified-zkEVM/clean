@@ -162,6 +162,17 @@ field from the `α` cell as halo2 does (`Witgen.FExprOver.runningSum`). -/
 def zWitness (W idx : ℕ) (alpha : AssignedCell Fp) : WitgenIR Fp 1 :=
   .ofFExpr ((Witgen.FExprOver.expr alpha).runningSum W idx)
 
+@[witness_support]
+theorem witnessFunctionSupport_zWitness (W idx : ℕ) (alpha : AssignedCell Fp) :
+    WitnessFunctionSupport [alpha] (programFunction (zWitness W idx alpha)) := by
+  intro left right agreement
+  have ha : Witgen.FExprOver.eval { env := left } (.expr alpha) =
+      Witgen.FExprOver.eval { env := right } (.expr alpha) :=
+    agreement.cellValues alpha (List.mem_singleton_self _)
+  dsimp only [programFunction, zWitness]
+  rw [Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.WitgenIROver.getElem_eval_ofFExpr,
+    Witgen.FExprOver.eval_runningSum, Witgen.FExprOver.eval_runningSum, ha]
+
 /-- The selector-enable loop (Rust `decompose` lines 161-164): the range-check gate on
 every window row. A named def (not inline `forRange'`) so the constraints/witness chunks
 stay folded through `circuit_proof_start` (the `LookupRangeCheck.rangeCheckLoop`
@@ -179,25 +190,67 @@ def assignLoop (W : ℕ) (cfg : Config) (alpha : AssignedCell Fp) (offset numWin
     return ())
 
 @[keygen_norm]
-theorem enableLoop_copyCellsAssignedFrom (W : ℕ) (cfg : Config)
+theorem enableLoop_consumedCellsAssignedFrom (W : ℕ) (cfg : Config)
     (offset numWindows : ℕ) (self : RegionIndex) (available : List Cell) :
-    ((enableLoop W cfg offset numWindows).operations self).CopyCellsAssignedFrom
-      self available := by
+    ((enableLoop W cfg offset numWindows).operations self).AssignedFrom
+      RegionOperation.Consumes self available := by
   unfold enableLoop
-  apply RegionCircuit.forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  apply RegionCircuit.forRange'_assignedFrom_of_forall_consumes_nil
   intro i
-  simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]
+  simp only [circuit_norm, keygen_norm, List.Forall, RegionOperation.copiedCells,
+    RegionOperation.mem_copies_iff, RegionOperation.reads_enableGate,
+    Language.nil_mem_one, and_self]
+
+theorem assignLoop_consumedCellsAssignedFrom (W : ℕ) (cfg : Config)
+    (alpha : AssignedCell Fp) (offset numWindows : ℕ) (self : RegionIndex)
+    (available : List Cell) (halpha : alpha.cell ∈ available) :
+    ((assignLoop W cfg alpha offset numWindows).operations self).AssignedFrom
+      RegionOperation.Consumes self available := by
+  unfold assignLoop
+  apply RegionCircuit.forRange'_assignedFrom_of_forall
+  intro i
+  simp only [circuit_norm, keygen_norm]
+  refine ⟨[alpha], witnessFunctionSupport_zWitness W (i + 1) alpha, ?_⟩
+  intro cell hcell _
+  simp only [List.mem_singleton] at hcell
+  subst hcell
+  exact halpha
 
 @[keygen_norm]
-theorem assignLoop_copyCellsAssignedFrom (W : ℕ) (cfg : Config)
-    (alpha : AssignedCell Fp) (offset numWindows : ℕ) (self : RegionIndex)
-    (available : List Cell) :
-    ((assignLoop W cfg alpha offset numWindows).operations self).CopyCellsAssignedFrom
-      self available := by
+theorem enableLoop_adviceWrites (W : ℕ) (cfg : Config) (offset numWindows : ℕ)
+    (self : RegionIndex) :
+    ((enableLoop W cfg offset numWindows).operations self).adviceWrites = [] := by
+  unfold enableLoop
+  rw [RegionCircuit.forRange'_operations]
+  simp [RegionOperations.adviceWrites, circuit_norm, RegionOperation.adviceWrites]
+
+theorem assignLoop_adviceWritesDistinct (W : ℕ) (cfg : Config) (alpha : AssignedCell Fp)
+    (offset numWindows : ℕ) (self : RegionIndex) :
+    ((assignLoop W cfg alpha offset numWindows).operations self).AdviceWritesDistinct := by
   unfold assignLoop
-  apply RegionCircuit.forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-  intro i
-  simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]
+  apply RegionCircuit.forRange'_adviceWritesDistinct_of_disjoint
+  · intro i
+    simp [circuit_norm, RegionOperations.AdviceWritesDistinct, RegionOperations.adviceWrites,
+      RegionOperation.adviceWrites]
+  · intro i j hij
+    rw [List.disjoint_left]
+    rintro ⟨col, row⟩ hi hj
+    simp only [circuit_norm, RegionOperations.adviceWrites, List.flatMap_cons,
+      List.flatMap_nil, RegionOperation.adviceWrites, List.append_nil,
+      List.mem_singleton, Prod.mk.injEq] at hi hj
+    have hlt : i.val < j.val := hij
+    omega
+
+theorem assignLoop_adviceWrites_gt (W : ℕ) (cfg : Config) (alpha : AssignedCell Fp)
+    (offset numWindows : ℕ) (self : RegionIndex) (col : Column .advice) (row : ℕ)
+    (hmem : (col, row) ∈ ((assignLoop W cfg alpha offset numWindows).operations self).adviceWrites) :
+    offset < row := by
+  unfold assignLoop at hmem
+  obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRange'_adviceWrites_iff offset 1 numWindows _ self col row).mp hmem
+  simp only [circuit_norm, RegionOperations.adviceWrites, List.flatMap_cons,
+    List.flatMap_nil, RegionOperation.adviceWrites, List.append_nil,
+    List.mem_singleton, Prod.mk.injEq] at hi
+  omega
 
 @[keygen_norm]
 theorem finalCell_mem_assignLoop_assignedCellsAfter (W : ℕ) (cfg : Config)
@@ -468,11 +521,31 @@ def elaborated (W numWindows : ℕ) :
       intro _ _ _ _ _ _ anchor _ _
       apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
       keygen_registration [body]
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       keygen_registration [body]
       apply finalCell_mem_assignLoop_assignedCellsAfter
       apply RegionOperations.mem_assignedCellsAfter_of_mem
       simp
+    adviceWritesConsistent := by
+      intro configInput counts hconfig _hadvice offset input region
+      apply RegionOperations.AdviceWritesDistinct.toConsistent
+      simp only [body,
+        RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_copyAdvice,
+        operations_cellAt, operations_cellVec, operations_constrainConstant,
+        List.nil_append, List.append_nil, List.cons_append,
+        RegionOperations.adviceWritesDistinct_assignAdvice_cons,
+        RegionOperations.adviceWritesDistinct_constrainEqual_cons,
+        RegionOperations.adviceWritesDistinct_append_iff,
+        RegionOperations.adviceWrites_append, enableLoop_adviceWrites,
+        RegionOperations.adviceWritesDistinct_nil,
+        RegionOperations.adviceWritesDistinct_constrainConstant_cons,
+        RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_constrainConstant,
+        RegionOperation.adviceWrites_constrainEqual, RegionOperations.adviceWrites_cons,
+        List.disjoint_nil_left, List.disjoint_nil_right, and_true]
+      refine ⟨fun hmem => ?_, ?_, assignLoop_adviceWritesDistinct W _ input.alpha offset numWindows region⟩
+      · have hgt := assignLoop_adviceWrites_gt W _ input.alpha offset numWindows region _ _ hmem
+        omega
+      · simp [RegionOperations.AdviceWritesDistinct, enableLoop_adviceWrites]
     output cfg offset _ self :=
       { zs := Vector.ofFn fun j => AssignedCell.of self (offset + j) cfg.z }
     output_eq := by

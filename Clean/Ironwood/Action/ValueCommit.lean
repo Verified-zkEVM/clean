@@ -69,6 +69,9 @@ def keygenRequirements
           cfg.2.1.superConfig.addConfig.yQR] : List AnyColumn)
   inputCells _ _ input :=
     [input.magnitude.cell, input.sign.cell]
+  readCells _ _ input :=
+    ((Ecc.MulFixed.FullWidth.scalarWindows input.rcv).toList.flatMap
+      (Witgen.valueBuilderReads (value := field))).map (·.cell)
 
 def synthesisSummary
     (cfg : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×
@@ -100,7 +103,7 @@ theorem synthesisSummary_instanceRowExtent_eq
     (synthesisSummary cfg).instanceRowExtent = 0 := by
   simp only [synthesisSummary, synthesis_summary_norm]
 
-theorem synthesize_copyCellsAssignedFrom
+theorem synthesize_consumedCellsAssignedFrom
     (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
     (cfg : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×
       Ecc.Add.Config)
@@ -113,52 +116,66 @@ theorem synthesize_copyCellsAssignedFrom
           ⟨input.magnitude, input.sign⟩
         let blind ← (Ecc.MulFixed.FullWidth.circuit R).call cfg.2.1 input.rcv
         Ecc.Add.addFormal.call cfg.2.2 { p := commitment, q := blind })
-      |>.operations self).CopyCellsAssignedFrom self
-        [input.magnitude.cell, input.sign.cell] := by
+      |>.operations self).AssignedFrom RegionOperation.Consumes self
+        ([input.magnitude.cell, input.sign.cell] ++
+          ((Ecc.MulFixed.FullWidth.scalarWindows input.rcv).toList.flatMap
+            (Witgen.valueBuilderReads (value := field))).map AssignedCell.cell) := by
+  let initial := [input.magnitude.cell, input.sign.cell] ++
+    ((Ecc.MulFixed.FullWidth.scalarWindows input.rcv).toList.flatMap
+      (Witgen.valueBuilderReads (value := field))).map AssignedCell.cell
   let shortInput : Var Ecc.MulFixed.Short.Inputs Fp :=
     ⟨input.magnitude, input.sign⟩
   let shortOps := ((Ecc.MulFixed.Short.circuit V).call
     cfg.1 shortInput).operations self
   let shortOutput := (Ecc.MulFixed.Short.circuit V).output
     cfg.1 shortInput self
-  have hshort : shortOps.CopyCellsAssignedFrom self
-      [input.magnitude.cell, input.sign.cell] := by
-    apply (Ecc.MulFixed.Short.circuit V).call_copyCellsAssignedFrom
+  have hshort : shortOps.AssignedFrom RegionOperation.Consumes self initial := by
+    apply (Ecc.MulFixed.Short.circuit V).call_consumedCellsAssignedFrom
       cfg.1 configuredShort shortInput self
     intro cell hcell
-    rw [Ecc.MulFixed.Short.circuit_inputCells_eq] at hcell
-    simpa only [shortInput] using hcell
+    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+      FormalCircuit.Configured.readRelativeCellsAt, Ecc.MulFixed.Short.circuit,
+      FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil, shortInput] at hcell
+    exact List.mem_append_left _ hcell
   have hshortOutput := Ecc.MulFixed.Short.circuit_call_output_cells_assigned
     V cfg.1 shortInput self
   let fullWidthOps := ((Ecc.MulFixed.FullWidth.circuit R).call
     cfg.2.1 input.rcv).operations (self + 2)
   let fullWidthOutput := (Ecc.MulFixed.FullWidth.circuit R).output
     cfg.2.1 input.rcv (self + 2)
-  have hfullWidth : fullWidthOps.CopyCellsAssignedFrom (self + 2)
-      ([input.magnitude.cell, input.sign.cell] ++ shortOps.assignedCellsFrom self) := by
-    apply (Ecc.MulFixed.FullWidth.circuit R).call_copyCellsAssignedFrom
+  have hfullWidth : fullWidthOps.AssignedFrom RegionOperation.Consumes (self + 2)
+      (initial ++ shortOps.assignedCellsFrom self) := by
+    apply (Ecc.MulFixed.FullWidth.circuit R).call_consumedCellsAssignedFrom
       cfg.2.1 configuredFullWidth input.rcv (self + 2)
     intro cell hcell
-    rw [Ecc.MulFixed.FullWidth.circuit_inputCells_eq] at hcell
-    contradiction
+    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+      FormalCircuit.Configured.readRelativeCellsAt, Ecc.MulFixed.FullWidth.circuit,
+      FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.nil_append, List.map_nil,
+      List.append_nil] at hcell
+    exact List.mem_append_left _ (List.mem_append_right _ hcell)
   have hfullWidthOutput := Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
     R cfg.2.1 input.rcv (self + 2)
   let prefixOps := shortOps ++ fullWidthOps
-  have hprefix : prefixOps.CopyCellsAssignedFrom self
-      [input.magnitude.cell, input.sign.cell] := by
+  have hprefix : prefixOps.AssignedFrom RegionOperation.Consumes self initial := by
     apply hshort.append
     simpa only [shortOps, FormalCircuit.call_regionCount',
         Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount, Nat.add_zero] using hfullWidth
   have hadd : ((Ecc.Add.addFormal.call cfg.2.2
       { p := shortOutput, q := fullWidthOutput }).operations (self + 4))
-      |>.CopyCellsAssignedFrom (self + 4)
-        ([input.magnitude.cell, input.sign.cell] ++
-          prefixOps.assignedCellsFrom self) := by
-    apply Ecc.Add.addFormal.call_copyCellsAssignedFrom cfg.2.2 configuredAdd
+      |>.AssignedFrom RegionOperation.Consumes (self + 4)
+        (initial ++ prefixOps.assignedCellsFrom self) := by
+    apply Ecc.Add.addFormal.call_consumedCellsAssignedFrom cfg.2.2 configuredAdd
       { p := shortOutput, q := fullWidthOutput } (self + 4)
     intro cell hcell
-    rw [Ecc.Add.addFormal_inputCells] at hcell
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+      FormalCircuit.Configured.readRelativeCellsAt, Ecc.Add.addFormal,
+      FormalRegionCircuit.toFormal, Ecc.Add.add, Ecc.Add.addElaborated,
+      FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hcell
     rcases hcell with rfl | rfl | rfl | rfl
     · apply List.mem_append_right
       simpa only [prefixOps, shortOps, fullWidthOps,
@@ -296,11 +313,29 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
               (self + 2) anchor (by trivial)
         · exact Ecc.Add.addFormal.call_lookupSelectorsAnchoredBy
             cfg.2.2 hconfig.2.2 _ (self + 4) anchor (by trivial)
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        (Ecc.MulFixed.Short.circuit V).elaborated.adviceColumnRequirements cfg.1 ∧
+        (Ecc.MulFixed.FullWidth.circuit R).elaborated.adviceColumnRequirements cfg.2.1 ∧
+        Ecc.Add.addFormal.elaborated.adviceColumnRequirements cfg.2.2
+      consumedCellsAssigned := by
         intro cfg _ hconfig input self
-        simpa only [keygen_norm, keygen_spine, circuit_norm] using
-          synthesize_copyCellsAssignedFrom V R cfg input self
+        simpa only [keygen_norm, keygen_spine, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil] using
+          synthesize_consumedCellsAssignedFrom V R cfg input self
             hconfig.1 hconfig.2.1 hconfig.2.2
+      adviceWritesConsistent := by
+        intro cfg _ hconfig hadvice input self
+        rcases hadvice with ⟨hshortAdv, hfwAdv, haddAdv⟩
+        simp only [Configure.output_pure, Circuit.operations_bind,
+          Operations.adviceWritesConsistentFrom_append, FormalCircuit.call_regionCount',
+          Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.MulFixed.Short.circuit_regionCount,
+          circuit_norm, Nat.add_assoc, Nat.reduceAdd]
+        exact ⟨(Ecc.MulFixed.Short.circuit V).call_adviceWritesConsistent cfg.1
+            hconfig.1 hshortAdv _ self,
+          (Ecc.MulFixed.FullWidth.circuit R).call_adviceWritesConsistent cfg.2.1
+            hconfig.2.1 hfwAdv _ (self + 2),
+          Ecc.Add.addFormal.call_adviceWritesConsistent cfg.2.2
+            hconfig.2.2 haddAdv _ (self + 4)⟩
       fixedWritesLawful := by
         intro cfg counts hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree

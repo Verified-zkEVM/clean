@@ -21,7 +21,7 @@ open Specs (bitrange)
 open Specs.Sinsemilla (Generators hashToPoint HashGuarded
   commitIvkChunks chunksOf_mem_lt)
 open CompElliptic.Fields.Pasta (Fq)
-open NoteCommit.Main (brWit currentRegion)
+open NoteCommit.Main (brWit brSupported currentRegion)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 
 /-! ## Child contract bridges — the contract projections come from the generated home
@@ -429,16 +429,16 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
 
 /-- The `b_1`/`d_1` cells witnessed inside the canonicity gate region read the
 caller's bit programs (two-level witness projection). -/
-private theorem canon_bit_witness (wb1 wd1 : WitgenIR Fp 1)
+private theorem canon_bit_witness (wb1 wd1 : SupportedProgram Fp)
     (c : CommitIvk.Config × LookupRangeCheck.Config 10)
     (inp : Var Canonicity.Inputs Fp) (i : RegionIndex)
     (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
     (h : ExtendsWitnesses place env
       (((Canonicity.circuit wb1 wd1).call c inp).operations i) i) :
     env.advice (c.1.advices 4) ((place (i + 2) : ℕ) : ℤ)
-      = ((wb1.eval (⟨place, env⟩ : Placed ProverEnvironment Fp))[0]'(by norm_num)) ∧
+      = ((wb1.program.eval (⟨place, env⟩ : Placed ProverEnvironment Fp))[0]'(by norm_num)) ∧
     env.advice (c.1.advices 4) ((place (i + 2) + 1 : ℕ) : ℤ)
-      = ((wd1.eval (⟨place, env⟩ : Placed ProverEnvironment Fp))[0]'(by norm_num)) := by
+      = ((wd1.program.eval (⟨place, env⟩ : Placed ProverEnvironment Fp))[0]'(by norm_num)) := by
   rw [show ExtendsWitnesses place env
         (((Canonicity.circuit wb1 wd1).call c inp).operations i) i
       = ExtendsWitnesses place env
@@ -571,9 +571,9 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   have hpieceC := NoteCommit.pieceChunks_val_lt ns _ chunks
     ⟨2, by decide⟩ hPC' (by decide)
   -- the b1/d1 gate-internal witnesses
-  have hbits := canon_bit_witness (brWit input_var_ak 254 1) (brWit input_var_nk 254 1)
+  have hbits := canon_bit_witness (brSupported input_var_ak 254 1) (brSupported input_var_nk 254 1)
     (cfg.gate, cfg.lookupConfig) _ (i₀ + 11) place env hWCan
-  simp only [circuit_norm, readCell, Nat.add_assoc, Nat.reduceAdd] at hbits
+  simp only [brSupported, circuit_norm, readCell, Nat.add_assoc, Nat.reduceAdd] at hbits
   have hwb1 := hbits.1
   have hwd1 := hbits.2
   -- ── assemble ──
@@ -642,7 +642,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
                with_unfolding_all exact hHonest]
              exact hB0)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (Canonicity.circuit (brWit input_var_ak 254 1) (brWit input_var_nk 254 1))
+      (Canonicity.circuit (brSupported input_var_ak 254 1) (brSupported input_var_nk 254 1))
       (cfg.gate, cfg.lookupConfig) (i₀ + 11) place env _ hWCan
       ⟨(by rw [Canonicity.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
        (by rw [Canonicity.circuit_assumptions_eq]

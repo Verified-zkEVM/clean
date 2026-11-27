@@ -63,6 +63,16 @@ deriving ProvableStruct
 def aPrimeWit (a : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env a + ((2 ^ 130 : ℕ) : Fp) - tP]
 
+@[witness_support]
+theorem witnessFunctionSupport_aPrimeWit (a : AssignedCell Fp) :
+    WitnessFunctionSupport [a] (programFunction (aPrimeWit a)) := by
+  intro env₁ env₂ hagree
+  have ha : readCell env₁ a = readCell env₂ a := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues a List.mem_cons_self
+  unfold programFunction aPrimeWit
+  dsimp only [Witgen.WitgenIROver.eval]
+  exact congrArg (fun x : Fp => (#v[x + ((2 ^ 130 : ℕ) : Fp) - tP] : Vector Fp 1)[0]) ha
+
 @[circuit_norm]
 theorem aPrimeWit_eval (a : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -151,22 +161,39 @@ def circuit :
         · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
             (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
               (by keygen_registration)) _ (i + 1) anchor (by trivial)
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ]
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
-        simp only [synth, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
-        · apply gateChild.call_copyCellsAssignedFrom
+        simp only [synth, Configure.output_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil]
+        apply Operations.AssignedFrom.append
+        · exact LookupRangeCheck.witnessCheck_consumedCellsAssignedFrom 10 13 false (by simp)
+            configInput.2 _ [input.a] (witnessFunctionSupport_aPrimeWit input.a) i _
+            (by intro c hc; simp only [List.mem_singleton] at hc; subst hc; simp)
+        · apply gateChild.call_consumedCellsAssignedFrom
             (hconfigured := FormalCircuit.Configured.ofOutput
               gateChild configInput.1 {} (by keygen_registration))
           intro cell hcell
-          rw [gateChild_inputCells] at hcell
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, FormalCircuit.Configured.ofOutput,
+            gateChild, FormalRegionCircuit.toFormal_keygenRequirements, GdCanonicity.bundle,
+            FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_cons, List.not_mem_nil, or_false] at hcell
           have hout := LookupRangeCheck.witnessCheck_output_cells_assigned
             10 13 false (by simp) configInput.2 (aPrimeWit input.a) i
           simp only [List.mem_append]
           rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl
           all_goals simp_all
+      adviceWritesConsistent := by
+        intro configInput counts _hconfig hadvice input i
+        simp only [synth, Configure.output_pure, circuit_norm,
+          Operations.adviceWritesConsistentFrom_append]
+        exact ⟨LookupRangeCheck.witnessCheck_adviceWritesConsistent 10 13 false (by simp)
+            configInput.2 _ i,
+          gateChild.call_adviceWritesConsistent configInput.1
+            (FormalCircuit.Configured.ofPure _ configInput.1 () rfl) hadvice _ (i + 1)⟩
       output _ _ _ := ()
       regionCount _ := 2
       synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
@@ -287,6 +314,20 @@ deriving ProvableStruct
 def b3CPrimeWit (b3 c : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env b3 + ((2 ^ 4 : ℕ) : Fp) * readCell env c + ((2 ^ 140 : ℕ) : Fp) - tP]
 
+@[witness_support]
+theorem witnessFunctionSupport_b3CPrimeWit (b3 c : AssignedCell Fp) :
+    WitnessFunctionSupport [b3, c] (programFunction (b3CPrimeWit b3 c)) := by
+  intro env₁ env₂ hagree
+  have hb3 : readCell env₁ b3 = readCell env₂ b3 := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues b3 (by simp)
+  have hc : readCell env₁ c = readCell env₂ c := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues c (by simp)
+  unfold programFunction b3CPrimeWit
+  dsimp only [Witgen.WitgenIROver.eval]
+  exact congrArg₂
+    (fun x y : Fp => (#v[x + ((2 ^ 4 : ℕ) : Fp) * y + ((2 ^ 140 : ℕ) : Fp) - tP] : Vector Fp 1)[0])
+    hb3 hc
+
 @[circuit_norm]
 theorem b3CPrimeWit_eval (b3 c : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -369,23 +410,42 @@ def circuit :
         · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
             (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
               (by keygen_registration)) _ (i + 1) anchor (by trivial)
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ]
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
-        simp only [synth, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
-        · apply gateChild.call_copyCellsAssignedFrom
+        simp only [synth, Configure.output_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil]
+        apply Operations.AssignedFrom.append
+        · exact LookupRangeCheck.witnessCheck_consumedCellsAssignedFrom 10 14 false (by simp)
+            configInput.2 _ [input.b3, input.c]
+            (witnessFunctionSupport_b3CPrimeWit input.b3 input.c) i _
+            (by intro c hc; simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+                rcases hc with rfl | rfl <;> simp)
+        · apply gateChild.call_consumedCellsAssignedFrom
             (hconfigured := FormalCircuit.Configured.ofOutput
               gateChild configInput.1 {} (by keygen_registration))
           intro cell hcell
-          rw [gateChild_inputCells] at hcell
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, FormalCircuit.Configured.ofOutput,
+            gateChild, FormalRegionCircuit.toFormal_keygenRequirements, PkdCanonicity.bundle,
+            FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_cons, List.not_mem_nil, or_false] at hcell
           have hout := LookupRangeCheck.witnessCheck_output_cells_assigned
             10 14 false (by simp) configInput.2
               (b3CPrimeWit input.b3 input.c) i
           simp only [List.mem_append]
           rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl
           all_goals simp_all
+      adviceWritesConsistent := by
+        intro configInput counts _hconfig hadvice input i
+        simp only [synth, Configure.output_pure, circuit_norm,
+          Operations.adviceWritesConsistentFrom_append]
+        exact ⟨LookupRangeCheck.witnessCheck_adviceWritesConsistent 10 14 false (by simp)
+            configInput.2 _ i,
+          gateChild.call_adviceWritesConsistent configInput.1
+            (FormalCircuit.Configured.ofPure _ configInput.1 () rfl) hadvice _ (i + 1)⟩
       output _ _ _ := ()
       regionCount _ := 2
       synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
@@ -499,6 +559,20 @@ deriving ProvableStruct
 def e1FPrimeWit (e1 f : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env e1 + ((2 ^ 4 : ℕ) : Fp) * readCell env f + ((2 ^ 140 : ℕ) : Fp) - tP]
 
+@[witness_support]
+theorem witnessFunctionSupport_e1FPrimeWit (e1 f : AssignedCell Fp) :
+    WitnessFunctionSupport [e1, f] (programFunction (e1FPrimeWit e1 f)) := by
+  intro env₁ env₂ hagree
+  have he1 : readCell env₁ e1 = readCell env₂ e1 := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues e1 (by simp)
+  have hf : readCell env₁ f = readCell env₂ f := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues f (by simp)
+  unfold programFunction e1FPrimeWit
+  dsimp only [Witgen.WitgenIROver.eval]
+  exact congrArg₂
+    (fun x y : Fp => (#v[x + ((2 ^ 4 : ℕ) : Fp) * y + ((2 ^ 140 : ℕ) : Fp) - tP] : Vector Fp 1)[0])
+    he1 hf
+
 @[circuit_norm]
 theorem e1FPrimeWit_eval (e1 f : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -581,23 +655,42 @@ def circuit :
         · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
             (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
               (by keygen_registration)) _ (i + 1) anchor (by trivial)
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ]
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
-        simp only [synth, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
-        · apply gateChild.call_copyCellsAssignedFrom
+        simp only [synth, Configure.output_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil]
+        apply Operations.AssignedFrom.append
+        · exact LookupRangeCheck.witnessCheck_consumedCellsAssignedFrom 10 14 false (by simp)
+            configInput.2 _ [input.e1, input.f]
+            (witnessFunctionSupport_e1FPrimeWit input.e1 input.f) i _
+            (by intro c hc; simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+                rcases hc with rfl | rfl <;> simp)
+        · apply gateChild.call_consumedCellsAssignedFrom
             (hconfigured := FormalCircuit.Configured.ofOutput
               gateChild configInput.1 {} (by keygen_registration))
           intro cell hcell
-          rw [gateChild_inputCells] at hcell
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, FormalCircuit.Configured.ofOutput,
+            gateChild, FormalRegionCircuit.toFormal_keygenRequirements, RhoCanonicity.bundle,
+            FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_cons, List.not_mem_nil, or_false] at hcell
           have hout := LookupRangeCheck.witnessCheck_output_cells_assigned
             10 14 false (by simp) configInput.2
               (e1FPrimeWit input.e1 input.f) i
           simp only [List.mem_append]
           rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl
           all_goals simp_all
+      adviceWritesConsistent := by
+        intro configInput counts _hconfig hadvice input i
+        simp only [synth, Configure.output_pure, circuit_norm,
+          Operations.adviceWritesConsistentFrom_append]
+        exact ⟨LookupRangeCheck.witnessCheck_adviceWritesConsistent 10 14 false (by simp)
+            configInput.2 _ i,
+          gateChild.call_adviceWritesConsistent configInput.1
+            (FormalCircuit.Configured.ofPure _ configInput.1 () rfl) hadvice _ (i + 1)⟩
       output _ _ _ := ()
       regionCount _ := 2
       synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
@@ -709,6 +802,20 @@ deriving ProvableStruct
 def g1G2PrimeWit (g1 g2 : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env g1 + ((2 ^ 9 : ℕ) : Fp) * readCell env g2 + ((2 ^ 130 : ℕ) : Fp) - tP]
 
+@[witness_support]
+theorem witnessFunctionSupport_g1G2PrimeWit (g1 g2 : AssignedCell Fp) :
+    WitnessFunctionSupport [g1, g2] (programFunction (g1G2PrimeWit g1 g2)) := by
+  intro env₁ env₂ hagree
+  have hg1 : readCell env₁ g1 = readCell env₂ g1 := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues g1 (by simp)
+  have hg2 : readCell env₁ g2 = readCell env₂ g2 := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues g2 (by simp)
+  unfold programFunction g1G2PrimeWit
+  dsimp only [Witgen.WitgenIROver.eval]
+  exact congrArg₂
+    (fun x y : Fp => (#v[x + ((2 ^ 9 : ℕ) : Fp) * y + ((2 ^ 130 : ℕ) : Fp) - tP] : Vector Fp 1)[0])
+    hg1 hg2
+
 @[circuit_norm]
 theorem g1G2PrimeWit_eval (g1 g2 : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -792,23 +899,42 @@ def circuit :
         · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
             (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
               (by keygen_registration)) _ (i + 1) anchor (by trivial)
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ]
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
-        simp only [synth, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
-        · apply gateChild.call_copyCellsAssignedFrom
+        simp only [synth, Configure.output_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil]
+        apply Operations.AssignedFrom.append
+        · exact LookupRangeCheck.witnessCheck_consumedCellsAssignedFrom 10 13 false (by simp)
+            configInput.2 _ [input.g1, input.g2]
+            (witnessFunctionSupport_g1G2PrimeWit input.g1 input.g2) i _
+            (by intro c hc; simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+                rcases hc with rfl | rfl <;> simp)
+        · apply gateChild.call_consumedCellsAssignedFrom
             (hconfigured := FormalCircuit.Configured.ofOutput
               gateChild configInput.1 {} (by keygen_registration))
           intro cell hcell
-          rw [gateChild_inputCells] at hcell
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, FormalCircuit.Configured.ofOutput,
+            gateChild, FormalRegionCircuit.toFormal_keygenRequirements, PsiCanonicity.bundle,
+            FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_cons, List.not_mem_nil, or_false] at hcell
           have hout := LookupRangeCheck.witnessCheck_output_cells_assigned
             10 13 false (by simp) configInput.2
               (g1G2PrimeWit input.g1 input.g2) i
           simp only [List.mem_append]
           rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
           all_goals simp_all
+      adviceWritesConsistent := by
+        intro configInput counts _hconfig hadvice input i
+        simp only [synth, Configure.output_pure, circuit_norm,
+          Operations.adviceWritesConsistentFrom_append]
+        exact ⟨LookupRangeCheck.witnessCheck_adviceWritesConsistent 10 13 false (by simp)
+            configInput.2 _ i,
+          gateChild.call_adviceWritesConsistent configInput.1
+            (FormalCircuit.Configured.ofPure _ configInput.1 () rfl) hadvice _ (i + 1)⟩
       output _ _ _ := ()
       regionCount _ := 2
       synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg

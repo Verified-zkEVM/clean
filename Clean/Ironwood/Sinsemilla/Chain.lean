@@ -146,11 +146,45 @@ def boundaryYA (last : DoubleAndAddRow (AssignedCell Fp)) (xNext : AssignedCell 
            lambda2 := last.lambda2.eval env.place env.env }
     (xNext.eval env.place env.env) * (2 : Fp)⁻¹
 
+theorem witnessFunctionSupport_boundaryYA (last : DoubleAndAddRow (AssignedCell Fp))
+    (xNext : AssignedCell Fp) :
+    WitnessFunctionSupport [last.xA, last.xP, last.lambda1, last.lambda2, xNext]
+      (fun env => boundaryYA last xNext env.toEnvironment) := by
+  intro left right agreement
+  have hxA : last.xA.eval left.place left.env.toEnvironment =
+      last.xA.eval right.place right.env.toEnvironment := by
+    simpa [Witgen.WitgenEnv.readVar] using agreement.cellValues last.xA (by simp)
+  have hxP : last.xP.eval left.place left.env.toEnvironment =
+      last.xP.eval right.place right.env.toEnvironment := by
+    simpa [Witgen.WitgenEnv.readVar] using agreement.cellValues last.xP (by simp)
+  have hl1 : last.lambda1.eval left.place left.env.toEnvironment =
+      last.lambda1.eval right.place right.env.toEnvironment := by
+    simpa [Witgen.WitgenEnv.readVar] using agreement.cellValues last.lambda1 (by simp)
+  have hl2 : last.lambda2.eval left.place left.env.toEnvironment =
+      last.lambda2.eval right.place right.env.toEnvironment := by
+    simpa [Witgen.WitgenEnv.readVar] using agreement.cellValues last.lambda2 (by simp)
+  have hxn : xNext.eval left.place left.env.toEnvironment =
+      xNext.eval right.place right.env.toEnvironment := by
+    simpa [Witgen.WitgenEnv.readVar] using agreement.cellValues xNext (by simp)
+  simp only [boundaryYA, Placed.toEnvironment, hxA, hxP, hl1, hl2, hxn]
+
+def boundaryYASupported (last : DoubleAndAddRow (AssignedCell Fp)) (xNext : AssignedCell Fp) :
+    SupportedEnvironmentFunction Fp Fp :=
+  ⟨boundaryYA last xNext, [last.xA, last.xP, last.lambda1, last.lambda2, xNext],
+    witnessFunctionSupport_boundaryYA last xNext⟩
+
 /-- The trailing dummy row's `λ₁` witness: the final `y_a` (Rust `hash_all_pieces`
 post-loop). -/
 def finalYAWit (last : DoubleAndAddRow (AssignedCell Fp)) (xNext : AssignedCell Fp) :
     WitgenIR Fp 1 :=
   .native fun env => #v[boundaryYA last xNext env.toEnvironment]
+
+@[witness_support]
+theorem witnessFunctionSupport_finalYAWit (last : DoubleAndAddRow (AssignedCell Fp))
+    (xNext : AssignedCell Fp) :
+    WitnessFunctionSupport [last.xA, last.xP, last.lambda1, last.lambda2, xNext]
+      (programFunction (finalYAWit last xNext)) :=
+  witnessFunctionSupport_boundaryYA last xNext
 
 @[circuit_norm]
 theorem finalYAWit_eval (last : DoubleAndAddRow (AssignedCell Fp)) (xNext : AssignedCell Fp)
@@ -163,6 +197,12 @@ theorem finalYAWit_eval (last : DoubleAndAddRow (AssignedCell Fp)) (xNext : Assi
 
 /-- Constant-zero witness (the dummy `λ₂`/`x_p` cells of the trailing row). -/
 def zeroWit : WitgenIR Fp 1 := .native fun _ => #v[(0 : Fp)]
+
+@[witness_support]
+theorem witnessFunctionSupport_zeroWit :
+    WitnessFunctionSupport [] (programFunction zeroWit) := by
+  intro _ _ _
+  rfl
 
 @[circuit_norm]
 theorem zeroWit_eval (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
@@ -196,19 +236,19 @@ theorem output_zsCells (cfg : Config) (ns : List ℕ) (off : ℕ) (self : Region
 
 -- contract bridges for the piece child (opened by the chain's proofs)
 derive_contract_bridges pieceC (G : Generators) (n : ℕ) (b : Bool)
-  (ya : Placed Environment Fp → Fp) := HashPiece.circuit G n b ya
+  (ya : SupportedEnvironmentFunction Fp Fp) := HashPiece.circuit G n b ya
 
 /-- One piece's slot of the chain loop, at piece index `i` and base row `base` (top-level
 def — the outer peel keeps it folded; the per-slot reduction unfolds it selectively).
 `prev`/`xEnter` name the boundary cells for the entering-`y` derivation (junk reads at
 `i = 0`, where `yaIn` is used instead). -/
-def pieceSlot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp)
+def pieceSlot (G : Generators) (ns : List ℕ) (yaIn : SupportedEnvironmentFunction Fp Fp)
     (cfg : Config) (pieces : Vector (AssignedCell Fp) ns.length) (i base : ℕ) :
     RegionCircuit Fp Unit := do
   let prev ← readState cfg (base - 1)
   let xEnter ← HashPiece.cellAt cfg.xA base
   let _ ← (HashPiece.circuit G (ns.getD i 0) (decide (i = ns.length - 1))
-      (if i = 0 then yaIn else boundaryYA prev.row xEnter)).call cfg base (pieces[i]!)
+      (if i = 0 then yaIn else boundaryYASupported prev.row xEnter)).call cfg base (pieces[i]!)
   let _q ← assignFixed cfg.qS2 (base + ns.getD i 0)
     (qS2Boundary (decide (i = ns.length - 1)))
   (sinsemillaGate cfg).enable (base + ns.getD i 0)
@@ -356,7 +396,7 @@ theorem slotSynthesisSummary_lookupActivationCount
 piece call's width-dependent output lives inside this bundle). Slot `i` of the width list
 `ns`: the `HashPiece` call at its own base row, the boundary `q_s2` re-pin, and the
 piece-linking `sinsemillaGate` at its last row. -/
-def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) (i : ℕ) :
+def slot (G : Generators) (ns : List ℕ) (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) :
     FormalRegionCircuit Fp Config Config field unit where
   configure := pure
   elaborated :=
@@ -365,7 +405,16 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
           lookups cfg _ := [HashPiece.generatorLookup G cfg]
           fixedColumns cfg _ := [cfg.qS2]
           permutationColumns cfg _ := [cfg.bits]
-          inputCells _ _ input := [input.cell] }
+          inputCells _ _ input := [input.cell]
+          readCells _ _ _ := if i = 0 then yaIn.reads.map (·.cell) else []
+          readRelativeCells cfg _ _ := [(cfg.xA, 0)]
+          readOffsetCells cfg _ region base _ :=
+            if i = 0 then []
+            else
+              [Cell.of region (base - 1) cfg.xA, Cell.of region (base - 1) cfg.xP,
+                Cell.of region (base - 1) cfg.lambda1, Cell.of region (base - 1) cfg.lambda2] }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.bits, cfg.xP, cfg.lambda1, cfg.lambda2, cfg.xA]
       synthesisSummary cfg base _ _ := slotSynthesisSummary ns i cfg base
       synthesisSummary_eq := by
         intro _ _ _ _
@@ -374,7 +423,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         intro configInput counts hconfig base input region
         let child := HashPiece.circuit G (ns.getD i 0)
           (decide (i = ns.length - 1))
-          (if i = 0 then yaIn else boundaryYA
+          (if i = 0 then yaIn else boundaryYASupported
             (HashPiece.reads configInput (base - 1) region).row
             (AssignedCell.of region base configInput.xA))
         have hchild : child.keygenRequirements.configLawful configInput := hconfig
@@ -388,38 +437,65 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
             HashPiece.operations_cellAt, HashPiece.output_readState, HashPiece.output_cellAt,
             child, List.nil_append, List.append_nil]
           using hfixed
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig base input region
         simp only [Configure.output_pure, RegionCircuit.operations_bind,
           RegionCircuit.operations_pure, HashPiece.operations_readState,
           HashPiece.operations_cellAt, HashPiece.output_readState,
-          HashPiece.output_cellAt, List.nil_append, List.append_nil]
+          HashPiece.output_cellAt, List.nil_append, List.append_nil,
+          RegionOperations.ConsumedCellsAssigned]
         let child := HashPiece.circuit G (ns.getD i 0)
           (decide (i = ns.length - 1))
-          (if i = 0 then yaIn else boundaryYA
+          (if i = 0 then yaIn else boundaryYASupported
             (HashPiece.reads configInput (base - 1) region).row
             (AssignedCell.of region base configInput.xA))
         have hchild : child.keygenRequirements.configLawful configInput := hconfig
-        apply child.call_copyCellsAssignedFrom configInput
+        apply child.call_consumedCellsAssignedFrom configInput
           (FormalRegionCircuit.Configured.ofPure child configInput hchild rfl)
         intro cell hcell
-        simpa only [child, HashPiece.circuit, HashPiece.circuitKeygenRequirements,
+        simp only [child, HashPiece.circuit, HashPiece.circuitKeygenRequirements,
           FormalRegionCircuit.keygenRequirements,
           ElaboratedRegionCircuit.keygenRequirements,
           FormalRegionCircuit.Configured.inputCells,
-          FormalRegionCircuit.Configured.ofPure, List.mem_singleton] using hcell }
+          FormalRegionCircuit.Configured.readCells,
+          FormalRegionCircuit.Configured.readRelativeCellsAt,
+          FormalRegionCircuit.Configured.ofPure,
+          KeygenRequirements.readRelativeCellsAt,
+          List.mem_append, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+          or_false, Nat.add_zero, List.append_nil] at hcell ⊢
+        by_cases hi : i = 0
+        · simp only [hi, ite_true] at hcell ⊢
+          rcases hcell with (rfl | hya) | rfl
+          · exact Or.inl (Or.inl rfl)
+          · exact Or.inl (Or.inr hya)
+          · exact Or.inr (Or.inl rfl)
+        · simp only [hi, ite_false, boundaryYASupported, HashPiece.reads,
+            List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+            AssignedCell.of_cell] at hcell ⊢
+          rcases hcell with (rfl | rfl | rfl | rfl | rfl | rfl) | rfl <;>
+            simp [Cell.of]
+      adviceWritesConsistent := by
+        intro configInput counts hconfig hadvice base input region
+        apply RegionOperations.AdviceWritesDistinct.toConsistent
+        simp only [Configure.output_pure, RegionCircuit.operations_bind,
+          RegionCircuit.operations_pure, HashPiece.operations_readState,
+          HashPiece.operations_cellAt, HashPiece.output_readState,
+          HashPiece.output_cellAt, List.nil_append, List.append_nil,
+          FormalRegionCircuit.call_operations]
+        exact HashPiece.circuitBody_adviceWritesDistinct G (ns.getD i 0)
+          (decide (i = ns.length - 1)) _ configInput hadvice base input region }
 
   synthesize cfg base (piece : AssignedCell Fp) := do
     let prev ← readState cfg (base - 1)
     let xEnter ← HashPiece.cellAt cfg.xA base
     let _ ← (HashPiece.circuit G (ns.getD i 0) (decide (i = ns.length - 1))
-        (if i = 0 then yaIn else boundaryYA prev.row xEnter)).call cfg base piece
+        (if i = 0 then yaIn else boundaryYASupported prev.row xEnter)).call cfg base piece
     pure ()
 
   Witness := SlotReads (ns.getD i 0 + 1)
   extract cfg base _ self env :=
     { eval env (slotReads cfg (ns.getD i 0) base self) with
-      yIn := if i = 0 then yaIn env
+      yIn := if i = 0 then yaIn.compute env
         else boundaryYA (slotReads cfg (ns.getD i 0) base self).prev
           (AssignedCell.of self base cfg.xA) env }
 
@@ -447,15 +523,15 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
             (AssignedCell.of self offset cfg.xA : Var field Fp),
           (if i = 0 then yaIn
-            else boundaryYA (reads cfg (offset - 1) self).row
-              (AssignedCell.of self offset cfg.xA))
+            else boundaryYASupported (reads cfg (offset - 1) self).row
+              (AssignedCell.of self offset cfg.xA)).compute
             (⟨place, env.toEnvironment⟩ : Placed Environment Fp)) := by
       rw [input_eq]
       refine ⟨hbound, A, B, hAon, ?_, ?_, hchain⟩
       · rw [hAx]
         with_unfolding_all rfl
       · rw [hAy]
-        by_cases hi : i = 0 <;> simp [hi, reads]
+        by_cases hi : i = 0 <;> simp [hi, reads, boundaryYASupported]
     rw [pieceC_envAssumptions_eq, pieceC_assumptions_eq,
       pieceC_proverAssumptions_eq] at out_spec
     have hsp := out_spec env_assumptions trivial (input_eq ▸ wit_out_eq ▸ hCPA)
@@ -469,13 +545,13 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
       intro A' B' hA'x hA'y hchain'
       have hres := hPS A' B'
         (by rw [hA'x])
-        (by rw [hA'y]; by_cases hi : i = 0 <;> simp [hi, reads])
+        (by rw [hA'y]; by_cases hi : i = 0 <;> simp [hi, reads, boundaryYASupported])
         hchain'
       exact hres
 
 /-- A slot's fixed writes are exactly those of its hash-piece child. -/
 theorem slot_assignFixed_mem_iff (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : Config)
     (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
     (column : Column .fixed) (row : ℕ) (value : Fp) :
     .assignFixed column row value ∈
@@ -497,7 +573,7 @@ theorem slot_assignFixed_mem_iff (G : Generators) (ns : List ℕ)
 @[synthesis_summary_norm]
 theorem slot_synthesisSummary_eq
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ)
     (cfg : Config) (base : ℕ) (piece : AssignedCell Fp)
     (self : RegionIndex) :
     (slot G ns yaIn i).elaborated.synthesisSummary cfg base piece self =
@@ -513,7 +589,7 @@ theorem slotSynthesisSummary_constantSiteCount
 @[synthesis_summary_norm]
 theorem slot_synthesisSummary_constantSiteCount
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ)
     (config : Config) (offset : ℕ) (piece : AssignedCell Fp)
     (region : RegionIndex) :
     ((slot G ns yaIn i).elaborated.synthesisSummary
@@ -525,14 +601,14 @@ theorem slot_synthesisSummary_constantSiteCount
 `yaIn` binder); only the applied deep-extract bridge stays hand-written. -/
 
 derive_contract_bridges slotC (G : Generators) (ns : List ℕ)
-  (yaIn : Placed Environment Fp → Fp) (i : ℕ) := slot G ns yaIn i
+  (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) := slot G ns yaIn i
 
 private theorem slotC_extract_cells (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config) (base : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : Config) (base : ℕ)
     (iv : AssignedCell Fp) (self : RegionIndex) (env : Placed Environment Fp) :
     (slot G ns yaIn i).extract cfg base iv self env
       = { eval env (slotReads cfg (ns.getD i 0) base self) with
-          yIn := if i = 0 then yaIn env
+          yIn := if i = 0 then yaIn.compute env
             else boundaryYA (slotReads cfg (ns.getD i 0) base self).prev
               (AssignedCell.of self base cfg.xA) env } := rfl
 
@@ -629,8 +705,7 @@ private theorem eval_zsCellsVal_flat (cfg : Config) (self : RegionIndex)
     · rw [eval_fields_eq_map]
       apply Vector.ext
       intro r hr
-      simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-        Cell.of_column, Environment.get_advice]
+      simp [AssignedCell.eval_of_advice]
     · exact ih (off + (n + 1))
 
 /-- The `Eval`-head version of `eval_zsCellsVal_flat`. -/
@@ -1110,10 +1185,10 @@ private theorem output_eval_literal_prover (env : Placed ProverEnvironment Fp)
 
 /-- The slot-`k` entering-`y` VALUE (the `yaIn` program for slot 0, the positional
 boundary derivation otherwise) — choice-free spelling shared by the completeness facts. -/
-private def slotEnterVal (yaIn : Placed Environment Fp → Fp) (cfg : Config)
+private def slotEnterVal (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config)
     (ns : List ℕ) (offset : ℕ) (self : RegionIndex) (env : Placed Environment Fp)
     (k : ℕ) : Fp :=
-  if k = 0 then yaIn env
+  if k = 0 then yaIn.compute env
   else boundaryYA (slotReads cfg (ns.getD k 0) (offset + prefixRows ns k) self).prev
     (AssignedCell.of self (offset + prefixRows ns k) cfg.xA) env
 
@@ -1188,7 +1263,7 @@ theorem slotIterationSynthesisSummary_lookupActivationCount
 @[synthesis_summary_norm]
 theorem slotIteration_synthesisSummary_eq
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : Config)
     (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex) :
     FloorPlanner.regionSynthesisSummary
         ((do
@@ -1227,7 +1302,7 @@ theorem slotIterationSynthesisSummary_constantSiteCount
 rows and both child and parent write the same boundary marker. -/
 theorem slotIteration_assignFixed_mem_iff
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : Config)
     (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
     (column : Column .fixed) (row : ℕ) (value : Fp) :
     .assignFixed column row value ∈ ((do
@@ -1248,7 +1323,7 @@ theorem slotIteration_assignFixed_mem_iff
 duplicated boundary assignment shared by the child and its parent. -/
 theorem slotIteration_fixedAssignmentsAgree
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : Config)
     (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex) :
     ((do
         let _ ← (slot G ns yaIn i).call cfg base piece
@@ -1275,7 +1350,7 @@ theorem slotIteration_fixedAssignmentsAgree
 /-- One chain iteration's fixed writes stay in its allotted row interval. -/
 theorem slotIteration_assignFixed_row_bounds
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : Config)
     (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
     (column : Column .fixed) (row : ℕ) (value : Fp)
     (hassignment : .assignFixed column row value ∈ ((do
@@ -1290,35 +1365,60 @@ theorem slotIteration_assignFixed_row_bounds
     omega
   · omega
 
-theorem slotIteration_copyCellsAssignedFrom
+theorem slotIteration_consumedCellsAssignedFrom
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : Config)
     (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
-    (available : List Cell) (hpiece : piece.cell ∈ available) :
-    RegionOperations.CopyCellsAssignedFrom self available ((do
+    (available : List Cell)
+    (hpiece : piece.cell ∈ available)
+    (hxA : Cell.of self base cfg.xA ∈ available)
+    (hya : i = 0 → ∀ cell ∈ yaIn.reads, cell.cell ∈ available)
+    (hprev : i ≠ 0 →
+      Cell.of self (base - 1) cfg.xA ∈ available ∧
+      Cell.of self (base - 1) cfg.xP ∈ available ∧
+      Cell.of self (base - 1) cfg.lambda1 ∈ available ∧
+      Cell.of self (base - 1) cfg.lambda2 ∈ available) :
+    RegionOperations.AssignedFrom RegionOperation.Consumes self available ((do
         let _ ← (slot G ns yaIn i).call cfg base piece
         let _ ← assignFixed cfg.qS2 (base + ns.getD i 0)
           (qS2Boundary (decide (i = ns.length - 1)))
         (sinsemillaGate cfg).enable (base + ns.getD i 0)).operations self) := by
-  simp only [RegionCircuit.operations_bind,
-    RegionOperations.copyCellsAssignedFrom_append_iff]
-  constructor
-  · apply (slot G ns yaIn i).call_copyCellsAssignedFrom cfg
-      (FormalRegionCircuit.Configured.ofPure
-        (slot G ns yaIn i) cfg () rfl)
-    intro cell hcell
-    have heq : cell = piece.cell := by
-      simpa only [slot, FormalRegionCircuit.Configured.inputCells,
-      FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
-        ElaboratedRegionCircuit.keygenRequirements, List.mem_singleton] using hcell
-    exact heq ▸ hpiece
-  · constructor <;>
-      apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil <;>
-      simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]
+  simp only [RegionCircuit.operations_bind, operations_assignFixed, operations_enable,
+    RegionOperations.assignedFrom_append_iff, RegionOperations.assignedFrom_cons_iff,
+    RegionOperations.assignedFrom_nil_iff, RegionOperation.consumesFrom_consumes_iff,
+    RegionOperation.consumesFrom_copies_iff, RegionOperation.consumesFrom_reads_iff,
+    RegionOperation.copiedCells, List.not_mem_nil, false_implies, implies_true,
+    and_true]
+  apply (slot G ns yaIn i).call_consumedCellsAssignedFrom cfg
+    (FormalRegionCircuit.Configured.ofPure (slot G ns yaIn i) cfg () rfl)
+  intro cell hcell
+  simp only [slot, FormalRegionCircuit.Configured.inputCells,
+    FormalRegionCircuit.Configured.readCells,
+    FormalRegionCircuit.Configured.readRelativeCellsAt,
+    FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, KeygenRequirements.readRelativeCellsAt,
+    List.mem_append, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+    or_false, Nat.add_zero] at hcell
+  by_cases hi : i = 0
+  · simp only [hi, ite_true, List.not_mem_nil, or_false] at hcell
+    rcases hcell with (rfl | hmem) | rfl
+    · exact hpiece
+    · obtain ⟨c, hc, rfl⟩ := List.mem_map.mp hmem
+      exact hya hi c hc
+    · exact hxA
+  · simp only [hi, ite_false, List.mem_cons, List.not_mem_nil, or_false] at hcell
+    obtain ⟨h1, h2, h3, h4⟩ := hprev hi
+    rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl
+    · exact hpiece
+    · exact hxA
+    · exact h1
+    · exact h2
+    · exact h3
+    · exact h4
 
 /-- A slot assigns the next accumulator x-coordinate through its HashPiece child. -/
 theorem slot_exitX_cell_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : HashPiece.Config)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : HashPiece.Config)
     (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
     (available : List Cell) :
     Cell.of self (base + ns.getD i 0 + 1) cfg.xA ∈
@@ -1330,13 +1430,39 @@ theorem slot_exitX_cell_assigned (G : Generators) (ns : List ℕ)
     List.nil_append, List.append_nil]
   exact HashPiece.circuit_output_xANext_cell_assigned G (ns.getD i 0)
     (decide (i = ns.length - 1))
-    (if i = 0 then yaIn else boundaryYA
+    (if i = 0 then yaIn else boundaryYASupported
       (HashPiece.reads cfg (base - 1) self).row
-    (AssignedCell.of self base cfg.xA)) cfg base piece self available
+      (AssignedCell.of self base cfg.xA)) cfg base piece self available
+
+theorem slot_exitState_cells_assigned (G : Generators) (ns : List ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ) (cfg : HashPiece.Config)
+    (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
+    (available : List Cell) (hxA0 : Cell.of self base cfg.xA ∈ available) :
+    Cell.of self (base + ns.getD i 0) cfg.xA ∈
+        (((slot G ns yaIn i).call cfg base piece).operations self
+          |>.assignedCellsAfter self available) ∧
+    Cell.of self (base + ns.getD i 0) cfg.xP ∈
+        (((slot G ns yaIn i).call cfg base piece).operations self
+          |>.assignedCellsAfter self available) ∧
+    Cell.of self (base + ns.getD i 0) cfg.lambda1 ∈
+        (((slot G ns yaIn i).call cfg base piece).operations self
+          |>.assignedCellsAfter self available) ∧
+    Cell.of self (base + ns.getD i 0) cfg.lambda2 ∈
+        (((slot G ns yaIn i).call cfg base piece).operations self
+          |>.assignedCellsAfter self available) ∧
+    Cell.of self (base + ns.getD i 0 + 1) cfg.xA ∈
+        (((slot G ns yaIn i).call cfg base piece).operations self
+          |>.assignedCellsAfter self available) := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [slot, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    HashPiece.operations_readState, HashPiece.operations_cellAt,
+    List.nil_append, List.append_nil, FormalRegionCircuit.call_operations, HashPiece.circuit]
+  exact HashPiece.circuitBody_exitState_cells_assigned G (ns.getD i 0)
+    (decide (i = ns.length - 1)) _ cfg base piece self available hxA0
 
 /-- Every running-sum cell exposed by a slot is assigned by its hash-piece child. -/
 theorem slot_z_cell_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ)
     (cfg : Config) (base : ℕ)
     (piece : AssignedCell Fp) (self : RegionIndex) (available : List Cell) :
     ∀ r : Fin (ns.getD i 0 + 1), Cell.of self (base + r.val) cfg.bits ∈
@@ -1345,7 +1471,7 @@ theorem slot_z_cell_assigned (G : Generators) (ns : List ℕ)
   intro r
   let child := HashPiece.circuit G (ns.getD i 0)
     (decide (i = ns.length - 1))
-    (if i = 0 then yaIn else boundaryYA
+    (if i = 0 then yaIn else boundaryYASupported
       (HashPiece.reads cfg (base - 1) self).row
       (AssignedCell.of self base cfg.xA))
   have hops : (((slot G ns yaIn i).call cfg base piece).operations self) =
@@ -1360,13 +1486,13 @@ theorem slot_z_cell_assigned (G : Generators) (ns : List ℕ)
     Vector.getElem_ofFn, AssignedCell.of_cell] using
       HashPiece.circuit_output_z_cell_assigned G (ns.getD i 0)
         (decide (i = ns.length - 1))
-        (if i = 0 then yaIn else boundaryYA
+        (if i = 0 then yaIn else boundaryYASupported
           (HashPiece.reads cfg (base - 1) self).row
           (AssignedCell.of self base cfg.xA)) cfg base piece self available r
 
 /-- A nontrivial slot assigns its first interior running-sum cell. -/
 theorem slot_z1_cell_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (i : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (i : ℕ)
     (hi : 0 < ns.getD i 0) (cfg : Config) (base : ℕ)
     (piece : AssignedCell Fp) (self : RegionIndex) (available : List Cell) :
     Cell.of self (base + 1) cfg.bits ∈
@@ -1377,7 +1503,7 @@ theorem slot_z1_cell_assigned (G : Generators) (ns : List ℕ)
 /-- Every running-sum cell of a chain slot is assigned inside the symbolic
 variable-stride loop. -/
 theorem loop_z_cell_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (input : Var (Inputs ns.length) Fp) (self : RegionIndex)
     (available : List Cell) (i : Fin ns.length)
     (r : Fin (ns.getD i.val 0 + 1)) :
@@ -1424,7 +1550,7 @@ theorem loop_z_cell_assigned (G : Generators) (ns : List ℕ)
 /-- The first interior running sum of any nontrivial chain slot is assigned by
 that slot inside the symbolic variable-stride loop. -/
 theorem loop_z1_cell_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (input : Var (Inputs ns.length) Fp) (self : RegionIndex)
     (available : List Cell) (i : Fin ns.length)
     (hi : 0 < ns.getD i.val 0) :
@@ -1440,7 +1566,7 @@ theorem loop_z1_cell_assigned (G : Generators) (ns : List ℕ)
 
 /-- The last slot of a nonempty chain assigns the chain's exit x-coordinate. -/
 theorem loop_exitX_cell_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (hns : ns ≠ [])
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (hns : ns ≠ [])
     (cfg : HashPiece.Config) (offset : ℕ)
     (input : Var (Inputs ns.length) Fp) (self : RegionIndex)
     (available : List Cell) :
@@ -1582,13 +1708,54 @@ theorem circuitSynthesisSummary_constantSiteCount
 /-- The chain's extraction data at the region placed at `offset`: the entering `x_a`
 cell, the `yaIn` value and the running sums of every piece. Reducible, so that proofs about
 the chain and its callers see the record's fields. -/
-abbrev extract (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+abbrev extract (ns : List ℕ) (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (self : RegionIndex) (env : Placed Environment Fp) : ChainWit ns Fp :=
   { xIn := eval env (AssignedCell.of self offset cfg.xA : Var field Fp),
-    yIn := yaIn env,
+    yIn := yaIn.compute env,
     zs := eval env (zsCellsVal cfg self ns offset) }
 
-def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) :
+private theorem loopAux_exitState_cells_assigned (G : Generators) (ns : List ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
+    (input : Var (Inputs ns.length) Fp) (self : RegionIndex) (available : List Cell)
+    (hxA0 : Cell.of self offset cfg.xA ∈ available) :
+    ∀ k ≤ ns.length,
+      let ops := (RegionCircuit.loopAux (fun i => offset + prefixRows ns i)
+        (fun i base => do
+          let _ ← (slot G ns yaIn i).call cfg base (input.pieces[i]!)
+          let _ ← assignFixed cfg.qS2 (base + ns.getD i 0)
+            (qS2Boundary (decide (i = ns.length - 1)))
+          (sinsemillaGate cfg).enable (base + ns.getD i 0)) k).operations self
+      Cell.of self (offset + prefixRows ns k) cfg.xA ∈ ops.assignedCellsAfter self available ∧
+      (0 < k →
+        Cell.of self (offset + prefixRows ns k - 1) cfg.xA ∈ ops.assignedCellsAfter self available ∧
+        Cell.of self (offset + prefixRows ns k - 1) cfg.xP ∈ ops.assignedCellsAfter self available ∧
+        Cell.of self (offset + prefixRows ns k - 1) cfg.lambda1 ∈ ops.assignedCellsAfter self available ∧
+        Cell.of self (offset + prefixRows ns k - 1) cfg.lambda2 ∈ ops.assignedCellsAfter self available) := by
+  intro k hk
+  induction k with
+  | zero =>
+      refine ⟨by simpa [RegionCircuit.loopAux, RegionCircuit.operations_pure,
+        RegionOperations.assignedCellsAfter, prefixRows_zero] using hxA0, fun h => by omega⟩
+  | succ m ih =>
+      obtain ⟨hxAm, _⟩ := ih (by omega)
+      have hm : m < ns.length := by omega
+      have hstep : offset + prefixRows ns (m + 1) =
+          offset + prefixRows ns m + ns.getD m 0 + 1 := by
+        rw [prefixRows_step ns m hm]; omega
+      have hprev : offset + prefixRows ns (m + 1) - 1 =
+          offset + prefixRows ns m + ns.getD m 0 := by omega
+      have hslot := slot_exitState_cells_assigned G ns yaIn m cfg
+        (offset + prefixRows ns m) input.pieces[m]! self _ hxAm
+      simp only [RegionCircuit.loopAux_operations_succ, RegionCircuit.operations_bind,
+        operations_assignFixed, operations_enable, RegionOperations.assignedCellsAfter_append,
+        RegionOperations.assignedCellsAfter_cons, RegionOperations.assignedCellsAfter_nil,
+        RegionOperation.assignedCells, List.nil_append]
+      rw [hprev, hstep]
+      exact ⟨List.mem_append_right _ hslot.2.2.2.2, fun _ =>
+        ⟨List.mem_append_right _ hslot.1, List.mem_append_right _ hslot.2.1,
+          List.mem_append_right _ hslot.2.2.1, List.mem_append_right _ hslot.2.2.2.1⟩⟩
+
+def circuit (G : Generators) (ns : List ℕ) (yaIn : SupportedEnvironmentFunction Fp Fp) :
     FormalRegionCircuit Fp Config Config (Inputs ns.length) Output where
   name := "sinsemilla hash_all_pieces"
   configure := pure
@@ -1619,7 +1786,16 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           fixedColumns cfg _ := [cfg.qS2]
           permutationColumns cfg _ := [cfg.bits]
           inputCells _ _ input :=
-            input.pieces.toList.map (·.cell) }
+            input.pieces.toList.map (·.cell)
+          readCells _ _ _ := yaIn.reads.map (·.cell)
+          readRelativeCells cfg _ _ := [(cfg.xA, 0)]
+          readOffsetCells cfg _ region offset _ :=
+            if ns = [] then
+              [Cell.of region (offset - 1) cfg.xA, Cell.of region (offset - 1) cfg.xP,
+                Cell.of region (offset - 1) cfg.lambda1, Cell.of region (offset - 1) cfg.lambda2]
+            else [] }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.bits, cfg.xP, cfg.lambda1, cfg.lambda2, cfg.xA]
       registered := by
         intro cfg counts hconfig offset input region
         simp only [Configure.output_pure, RegionCircuit.operations_bind,
@@ -1632,21 +1808,167 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             (offset + prefixRows ns i) input.pieces[i]! region
         all_goals try keygen_registration
         right
-        refine ⟨input.pieces[i]!.cell, ?_, rfl⟩
-        exact ⟨input.pieces[i]!, by simp, rfl⟩
-      copyCellsAssigned := by
+        refine ⟨input.pieces[i]!, by simp, rfl⟩
+      consumedCellsAssigned := by
         intro cfg counts hconfig offset input region
         simp only [Configure.output_pure, RegionCircuit.operations_bind,
-          RegionCircuit.operations_pure, RegionOperations.CopyCellsAssigned]
-        rw [RegionOperations.copyCellsAssignedFrom_append_iff]
-        constructor
-        · apply RegionCircuit.forRangeVar'_copyCellsAssignedFrom
-          intro i
-          apply slotIteration_copyCellsAssignedFrom G ns yaIn i cfg
-          simp only [List.mem_map]
-          exact ⟨input.pieces[i]!, by simp, rfl⟩
-        · apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-          simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]
+          RegionCircuit.operations_pure, HashPiece.operations_readState,
+          HashPiece.operations_cellAt, HashPiece.output_readState, HashPiece.output_cellAt,
+          operations_assignAdvice, List.nil_append, List.append_nil,
+          RegionOperations.ConsumedCellsAssigned, RegionOperations.assignedFrom_append_iff]
+        have hxA0 : Cell.of region offset cfg.xA ∈
+            input.pieces.toList.map (·.cell) ++ yaIn.reads.map (·.cell) ++
+              KeygenRequirements.readRelativeCellsAt _ cfg hconfig region offset input := by
+          simp [KeygenRequirements.readRelativeCellsAt, Cell.of]
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · apply RegionCircuit.forRangeVar'_assignedFrom_of_earlier_rounds
+          · intro hpos
+            apply slotIteration_consumedCellsAssignedFrom G ns yaIn 0 cfg
+            · simp only [List.mem_append, List.mem_map]
+              refine Or.inl (Or.inl ⟨input.pieces[0]!, ?_, rfl⟩)
+              rw [getElem!_pos input.pieces 0 hpos, Vector.mem_toList_iff]
+              exact Vector.getElem_mem _
+            · simpa [prefixRows_zero] using hxA0
+            · intro _ cell hc
+              simp only [List.mem_append, List.mem_map]
+              exact Or.inl (Or.inr ⟨cell, hc, rfl⟩)
+            · intro h; exact absurd rfl h
+          · intro m hm
+            have hst := loopAux_exitState_cells_assigned G ns yaIn cfg offset input region _
+              hxA0 (m + 1) (by omega)
+            obtain ⟨hxAm1, hprev⟩ := hst
+            obtain ⟨h1, h2, h3, h4⟩ := hprev (by omega)
+            apply slotIteration_consumedCellsAssignedFrom G ns yaIn (m + 1) cfg
+            · apply RegionOperations.mem_assignedCellsAfter_of_mem
+              simp only [List.mem_append, List.mem_map]
+              refine Or.inl (Or.inl ⟨input.pieces[m + 1]!, ?_, rfl⟩)
+              rw [getElem!_pos input.pieces (m + 1) hm, Vector.mem_toList_iff]
+              exact Vector.getElem_mem _
+            · exact hxAm1
+            · intro h; omega
+            · intro _; exact ⟨h1, h2, h3, h4⟩
+        · simp only [RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+            RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+            RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+            List.not_mem_nil, false_implies, implies_true, true_and, and_true]
+          refine ⟨_, witnessFunctionSupport_finalYAWit _ _, ?_⟩
+          intro cell hcell _
+          simp only [HashPiece.reads, List.mem_cons, List.not_mem_nil, or_false] at hcell
+          by_cases hns : ns = []
+          · subst hns
+            apply RegionOperations.mem_assignedCellsAfter_of_mem
+            simp only [List.length_nil,
+              KeygenRequirements.readRelativeCellsAt, List.map_cons, List.map_nil,
+              List.mem_append, List.mem_cons, List.not_mem_nil, or_false]
+            rcases hcell with rfl | rfl | rfl | rfl | rfl <;>
+              simp [Cell.of, AssignedCell.of_cell]
+          · have hlen : 0 < ns.length := List.length_pos_iff.mpr hns
+            have hst := loopAux_exitState_cells_assigned G ns yaIn cfg offset input region _
+              hxA0 ns.length (le_refl _)
+            obtain ⟨hxAn, hprev⟩ := hst
+            obtain ⟨h1, h2, h3, h4⟩ := hprev hlen
+            rw [← RegionCircuit.forRangeVar'] at hxAn h1 h2 h3 h4
+            rcases hcell with rfl | rfl | rfl | rfl | rfl
+            · simpa [AssignedCell.of_cell] using h1
+            · simpa [AssignedCell.of_cell] using h2
+            · simpa [AssignedCell.of_cell] using h3
+            · simpa [AssignedCell.of_cell] using h4
+            · simpa [AssignedCell.of_cell] using hxAn
+        · keygen_registration
+        · keygen_registration
+      adviceWritesConsistent := by
+        intro cfg counts _hconfig hadvice offset input region
+        apply RegionOperations.AdviceWritesDistinct.toConsistent
+        have hdistinct := hadvice
+        simp only [Configure.output_pure, ColumnsDistinct, List.nodup_cons, List.mem_cons,
+          List.not_mem_nil, or_false, not_or, not_false_eq_true, and_true,
+          List.nodup_nil] at hadvice
+        obtain ⟨⟨_, _, _, _⟩, ⟨hpl1, hpl2, hpa⟩, ⟨hl1l2, hl1a⟩, hl2a⟩ := hadvice
+        have hslotBounds : ∀ (i : Fin ns.length) (col : Column .advice) (row : ℕ),
+            (col, row) ∈ ((do
+              let _ ← (slot G ns yaIn i.val).call cfg (offset + prefixRows ns i.val)
+                (input.pieces[i.val]!)
+              let _ ← assignFixed cfg.qS2 (offset + prefixRows ns i.val + ns.getD i.val 0)
+                (qS2Boundary (decide (i.val = ns.length - 1)))
+              (sinsemillaGate cfg).enable
+                (offset + prefixRows ns i.val + ns.getD i.val 0)).operations region).adviceWrites →
+            (col = cfg.xA ∧ offset + prefixRows ns i.val + 1 ≤ row ∧
+              row ≤ offset + prefixRows ns (i.val + 1)) ∨
+            (col ≠ cfg.xA ∧ offset + prefixRows ns i.val ≤ row ∧
+              row < offset + prefixRows ns (i.val + 1)) := by
+          intro i col row hmem
+          simp only [RegionCircuit.operations_bind, operations_assignFixed, operations_enable,
+            RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+            RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_assignFixed,
+            RegionOperation.adviceWrites_enableGate, List.append_nil,
+            FormalRegionCircuit.call_operations, slot, RegionCircuit.operations_pure,
+            HashPiece.operations_readState, HashPiece.operations_cellAt, List.nil_append,
+            HashPiece.circuit] at hmem
+          have hb := HashPiece.circuitBody_adviceWrites_bounds G (ns.getD i.val 0)
+            (decide (i.val = ns.length - 1)) _ cfg hdistinct
+            (offset + prefixRows ns i.val) input.pieces[i.val]! region col row hmem
+          have hstep := prefixRows_step ns i.val i.isLt
+          rcases hb with ⟨hcol, h1, h2⟩ | ⟨hcol, h1, h2⟩
+          · exact Or.inl ⟨hcol, by omega, by omega⟩
+          · exact Or.inr ⟨hcol, by omega, by omega⟩
+        have hloop : ((RegionCircuit.forRangeVar' (fun i => offset + prefixRows ns i) ns.length
+            (fun i base => do
+              let _ ← (slot G ns yaIn i).call cfg base (input.pieces[i]!)
+              let _ ← assignFixed cfg.qS2 (base + ns.getD i 0)
+                (qS2Boundary (decide (i = ns.length - 1)))
+              (sinsemillaGate cfg).enable (base + ns.getD i 0))).operations
+            region).AdviceWritesDistinct := by
+          apply RegionCircuit.forRangeVar'_adviceWritesDistinct_of_disjoint
+          · intro i
+            simp only [RegionCircuit.operations_bind, operations_assignFixed, operations_enable,
+              RegionOperations.adviceWritesDistinct_append_iff,
+              RegionOperations.adviceWritesDistinct_assignFixed_cons,
+              RegionOperations.adviceWritesDistinct_enableGate_cons,
+              RegionOperations.adviceWritesDistinct_nil,
+              RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+              RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_assignFixed,
+              RegionOperation.adviceWrites_enableGate,
+              List.disjoint_nil_right, and_true, FormalRegionCircuit.call_operations, slot,
+              RegionCircuit.operations_pure, HashPiece.operations_readState,
+              HashPiece.operations_cellAt, List.nil_append, List.append_nil, HashPiece.circuit]
+            exact HashPiece.circuitBody_adviceWritesDistinct G (ns.getD i.val 0)
+              (decide (i.val = ns.length - 1)) _ cfg hdistinct
+              (offset + prefixRows ns i.val) input.pieces[i.val]! region
+          · intro i j hij
+            rw [List.disjoint_left]
+            rintro ⟨col, row⟩ hi hj
+            have hbi := hslotBounds i col row hi
+            have hbj := hslotBounds j col row hj
+            have hmono := prefixRows_mono ns (show i.val + 1 ≤ j.val by omega)
+            have hstep := prefixRows_step ns i.val i.isLt
+            rcases hbi with ⟨h1, _, _⟩ | ⟨h1, _, _⟩ <;>
+              rcases hbj with ⟨h2, _, _⟩ | ⟨h2, _, _⟩ <;>
+              first | omega | exact absurd h1 h2
+        simp only [Configure.output_pure, RegionCircuit.operations_bind,
+          RegionCircuit.operations_pure, HashPiece.operations_readState,
+          HashPiece.operations_cellAt, operations_assignAdvice, List.nil_append,
+          List.append_nil, List.cons_append,
+          RegionOperations.adviceWritesDistinct_append_iff,
+          RegionOperations.adviceWritesDistinct_assignAdvice_cons,
+          RegionOperations.adviceWritesDistinct_nil,
+          RegionOperations.adviceWrites_cons,
+          RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_assignAdvice,
+          List.mem_cons, List.not_mem_nil, or_false, not_or,
+          RegionOperations.not_adviceWrite_eq_iff, true_imp_iff, not_false_eq_true, and_true]
+        refine ⟨hloop, ⟨⟨hl1l2, fun h => hpl1 h.symm⟩, fun h => hpl2 h.symm⟩, ?_⟩
+        rw [List.disjoint_left]
+        rintro ⟨col, row⟩ hl hr
+        obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRangeVar'_adviceWrites_iff _ ns.length _
+          region col row).mp hl
+        have hbi := hslotBounds i col row hi
+        have hmono := prefixRows_mono ns (show i.val + 1 ≤ ns.length by omega)
+        simp only [List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hr
+        rcases hbi with ⟨rfl, _, _⟩ | ⟨_, _, hlt⟩ <;>
+          rcases hr with ⟨hcol, hrow⟩ | ⟨hcol, hrow⟩ | ⟨hcol, hrow⟩
+        · exact hl1a hcol.symm
+        · exact hl2a hcol.symm
+        · exact hpa hcol.symm
+        all_goals omega
       fixedAssignmentsAgree := by
         intro cfg counts hconfig offset input region
         have hloop := RegionCircuit.forRangeVar'_fixedAssignmentsAgree
@@ -1785,8 +2107,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           have hv := congrArg
             (fun v : Vector Fp (ns.getD j.val 0 + 1) => v[r.val]'r.isLt) hzsv
           simp only [Vector.getElem_map, Vector.getElem_ofFn] at hv
-          simpa [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-            Cell.of_rowOffset, Cell.of_column, Environment.get_advice] using hv)
+          simpa [AssignedCell.eval_of_advice] using hv)
       (by
         intro j
         simp only [Nat.zero_add]
@@ -1816,8 +2137,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     simp only [circuitOutputCells] at h_output
     rw [eval_cells_eq_eval, output_eval_literal, point_eval_literal,
       row_eval_literal] at h_output
-    simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at h_output
+    simp only [AssignedCell.eval_of_advice] at h_output
     refine ⟨chunksOf (fun j r => if h : j < ns.length then msF ⟨j, h⟩ r else 0) ns 0,
       hPC, ?_, ?_⟩
     · -- the running sums (the extraction data)
@@ -1826,10 +2146,8 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     · -- the chain contract
       intro A hAon hAx hAyA B hB
       rw [← h_output] at hAx hAyA
-      have hres := hContract A hAon (by simpa only [HashPiece.reads, AssignedCell.of_cell,
-        Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice] using hAx)
-        (by simpa only [HashPiece.reads, AssignedCell.of_cell, Cell.of_regionIndex,
-          Cell.of_rowOffset, Cell.of_column, Environment.get_advice] using hAyA) B hB
+      have hres := hContract A hAon (by simpa only [HashPiece.reads, AssignedCell.eval_of_advice] using hAx)
+        (by simpa only [HashPiece.reads, AssignedCell.eval_of_advice] using hAyA) B hB
       rw [← h_output]
       simp only []
       exact ⟨hres.1.symm ▸ rfl, hres.2.symm ▸ rfl⟩
@@ -1922,8 +2240,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           obtain ⟨-, hPS⟩ := hder
           unfold SlotPS at hPS
           rw [slotC_extract_cells, slotReads_eval] at hPS
-          simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-            Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hPS
+          simp only [AssignedCell.eval_of_advice] at hPS
           have hfacts := hPS Cm Dm hCx hCy (by
             rw [eval_field_cell]
             simp only [AssignedCell.eval]
@@ -1955,9 +2272,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
             exact hnx.symm
           · rw [slotEnterVal, ite_eq_right (by omega : ¬ m + 1 = 0)]
             have h2 : (2 : Fp) ≠ 0 := by decide
-            simp only [boundaryYA, nextYA, slotReads, AssignedCell.eval,
-              AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-              Cell.of_column, Environment.get_advice]
+            simp only [boundaryYA, nextYA, slotReads, AssignedCell.eval_of_advice]
             rw [hrowstep,
               show offset + prefixRows ns m + ns.getD m 0 + 1 - 1
                 = offset + prefixRows ns m + ns.getD m 0 from by omega]
@@ -2029,8 +2344,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         obtain ⟨-, hPS⟩ := hder
         unfold SlotPS at hPS
         rw [slotC_extract_cells, slotReads_eval] at hPS
-        simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-          Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hPS
+        simp only [AssignedCell.eval_of_advice] at hPS
         have hfacts := hPS Ci Di hCx hCy (by
           rw [eval_field_cell]
           simp only [AssignedCell.eval]
@@ -2048,10 +2362,8 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
               = offset + prefixRows ns m + ns.getD m 0 + 1 := by
             rw [prefixRows_step ns m hm]
             omega
-          simp only [boundaryYA, nextYA, slotReads, dRowP, yA, AssignedCell.eval,
-            AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-            Cell.of_column, Environment.get_advice, Placed.toEnvironment_place,
-            Placed.toEnvironment_env]
+          simp only [boundaryYA, nextYA, slotReads, dRowP, yA, AssignedCell.eval_of_advice,
+            Placed.toEnvironment_place, Placed.toEnvironment_env]
           rw [hrowstep,
             show offset + prefixRows ns m + ns.getD m 0 + 1 - 1
               = offset + prefixRows ns m + ns.getD m 0 from by omega]
@@ -2109,8 +2421,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
                 omega]
               rw [hWyFin]
               simp only [boundaryYA, nextYA, slotReads, HashPiece.reads,
-                AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-                Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+                AssignedCell.eval_of_advice,
                 Placed.toEnvironment_place, Placed.toEnvironment_env]
             · -- an interior boundary: the next slot's first-row `Y_A`
               rw [show (decide (m = ns.length - 1)) = false from by simp [hb]]
@@ -2132,9 +2443,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       change eval env (circuitOutputCells cfg ns offset self) = output at h_output
       simp only [circuitOutputCells] at h_output
       rw [output_eval_literal_prover, point_eval_literal, row_eval_literal] at h_output
-      simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell,
-        Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
-        Environment.get_advice] at h_output
+      simp only [HashPiece.reads, AssignedCell.eval_of_advice] at h_output
       intro A' B' hA'x hA'y hchain'
       have hA'A : A' = A := by
         cases A'
@@ -2155,8 +2464,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
       · exact hCx.symm
       · rw [hCy, slotEnterVal, ite_eq_right hlen0, hWyFin]
         simp only [boundaryYA, nextYA, slotReads, HashPiece.reads,
-          AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-          Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+          AssignedCell.eval_of_advice,
           Placed.toEnvironment_place, Placed.toEnvironment_env]
       · rw [show ns.isEmpty = false from by simp [hns]]
         simp only [enterYA, Bool.false_eq_true, ite_false]
@@ -2168,7 +2476,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (input : Var (Inputs ns.length) Fp) (self : RegionIndex) :
     (circuit G ns yaIn).elaborated.synthesisSummary cfg offset input self =
       circuitSynthesisSummary ns cfg offset := rfl
@@ -2177,7 +2485,7 @@ theorem circuit_synthesisSummary_eq
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_constantSiteCount
     (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (config : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (config : Config) (offset : ℕ)
     (input : Var (Inputs ns.length) Fp) (region : RegionIndex) :
     ((circuit G ns yaIn).elaborated.synthesisSummary
       config offset input region).constantSiteCount = 0 := by
@@ -2186,7 +2494,7 @@ theorem circuit_synthesisSummary_constantSiteCount
 
 /-- The chain's extraction data, stated on the folded circuit. -/
 theorem circuit_extract (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (iv : Var (Inputs ns.length) Fp) (self : RegionIndex) (env : Placed Environment Fp) :
     (circuit G ns yaIn).extract cfg offset iv self env = extract ns yaIn cfg offset self env :=
   rfl
@@ -2194,7 +2502,7 @@ theorem circuit_extract (G : Generators) (ns : List ℕ)
 /-- The chain's eval'd output, landed on raw advice reads (the public composition lemma —
 what `hash_message`-level consumers rewrite `(circuit …).output` with). -/
 theorem circuit_output_eval (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (iv : Var (Inputs ns.length) Fp) (self : RegionIndex) (env : Placed Environment Fp) :
     (eval env ((circuit G ns yaIn).output cfg offset iv self) : Value Output Fp)
       = { point :=
@@ -2228,12 +2536,11 @@ theorem circuit_output_eval (G : Generators) (ns : List ℕ)
     HashPiece.output_readState, HashPiece.output_cellAt, output_assignAdvice]
   rw [eval_cells_eq_eval, output_eval_literal, point_eval_literal,
     row_eval_literal]
-  simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+  simp only [HashPiece.reads, AssignedCell.eval_of_advice]
 
 /-- The chain's eval'd output, prover view (the completeness-side composition lemma). -/
 theorem circuit_output_eval_prover (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (iv : Var (Inputs ns.length) Fp) (self : RegionIndex)
     (env : Placed ProverEnvironment Fp) :
     (eval env ((circuit G ns yaIn).output cfg offset iv self) : Value Output Fp)
@@ -2267,24 +2574,57 @@ theorem circuit_output_eval_prover (G : Generators) (ns : List ℕ)
   simp only [RegionCircuit.output_bind, RegionCircuit.output_pure,
     HashPiece.output_readState, HashPiece.output_cellAt, output_assignAdvice]
   rw [output_eval_literal_prover, point_eval_literal, row_eval_literal]
-  simp only [HashPiece.reads, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+  simp only [HashPiece.reads, AssignedCell.eval_of_advice]
+
+/-- The chain's advice writes stay above `(cfg.xA, offset)` on the `xA` column. -/
+theorem circuit_adviceWrites_not_xA_offset (G : Generators) (ns : List ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config)
+    (hadvice : ColumnsDistinct [cfg.bits, cfg.xP, cfg.lambda1, cfg.lambda2, cfg.xA])
+    (offset : ℕ) (input : Var (Inputs ns.length) Fp) (region : RegionIndex) :
+    (cfg.xA, offset) ∉ (((circuit G ns yaIn).call cfg offset input).operations region).adviceWrites := by
+  have hdistinct := hadvice
+  simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+    not_false_eq_true, and_true, List.nodup_nil] at hadvice
+  obtain ⟨⟨_, _, _, _⟩, ⟨_, _, hpa⟩, ⟨_, hl1a⟩, hl2a⟩ := hadvice
+  rw [FormalRegionCircuit.call_operations]
+  simp only [circuit, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    HashPiece.operations_readState, HashPiece.operations_cellAt, operations_assignAdvice,
+    List.nil_append, List.append_nil, List.cons_append,
+    RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+    RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_assignAdvice,
+    List.mem_append, List.mem_cons, List.not_mem_nil, or_false, not_or, Prod.mk.injEq]
+  refine ⟨fun hloop => ?_, fun h => hl1a h.1.symm, fun h => hl2a h.1.symm, fun h => hpa h.1.symm⟩
+  obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRangeVar'_adviceWrites_iff _ ns.length _
+    region cfg.xA offset).mp hloop
+  simp only [RegionCircuit.operations_bind, operations_assignFixed, operations_enable,
+    RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+    RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_assignFixed,
+    RegionOperation.adviceWrites_enableGate, List.append_nil,
+    FormalRegionCircuit.call_operations, slot, RegionCircuit.operations_pure,
+    HashPiece.operations_readState, HashPiece.operations_cellAt, List.nil_append,
+    HashPiece.circuit] at hi
+  have hb := HashPiece.circuitBody_adviceWrites_bounds G (ns.getD i.val 0)
+    (decide (i.val = ns.length - 1)) _ cfg hdistinct
+    (offset + prefixRows ns i.val) input.pieces[i.val]! region cfg.xA offset hi
+  rcases hb with ⟨_, h1, _⟩ | ⟨hne, _, _⟩
+  · omega
+  · exact hne rfl
 
 /-- The chain output's `point.x` cell (positional — the exit `x_a`). -/
-theorem output_point_x (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp)
+theorem output_point_x (G : Generators) (ns : List ℕ) (yaIn : SupportedEnvironmentFunction Fp Fp)
     (cfg : Config) (offset : ℕ) (iv : Var (Inputs ns.length) Fp) (self : RegionIndex) :
     ((circuit G ns yaIn).output cfg offset iv self).point.x
       = AssignedCell.of self (offset + prefixRows ns ns.length) cfg.xA := rfl
 
 /-- The chain output's `point.y` cell (positional — the trailing `y_a` in `λ₁`). -/
-theorem output_point_y (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp)
+theorem output_point_y (G : Generators) (ns : List ℕ) (yaIn : SupportedEnvironmentFunction Fp Fp)
     (cfg : Config) (offset : ℕ) (iv : Var (Inputs ns.length) Fp) (self : RegionIndex) :
     ((circuit G ns yaIn).output cfg offset iv self).point.y
       = AssignedCell.of self (offset + prefixRows ns ns.length) cfg.lambda1 := rfl
 
 /-- Both coordinates exposed by a nonempty chain were assigned by its synthesis. -/
 theorem circuit_output_point_cells_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (hns : ns ≠ [])
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (hns : ns ≠ [])
     (cfg : HashPiece.Config) (offset : ℕ)
     (input : Var (Inputs ns.length) Fp) (self : RegionIndex)
     (available : List Cell) :
@@ -2315,7 +2655,7 @@ theorem circuit_output_point_cells_assigned (G : Generators) (ns : List ℕ)
 /-- Every running-sum cell exported for a slot is assigned by the symbolic chain
 loop. -/
 theorem circuit_z_cell_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (input : Var (Inputs ns.length) Fp) (self : RegionIndex)
     (available : List Cell) (i : Fin ns.length)
     (r : Fin (ns.getD i.val 0 + 1)) :
@@ -2333,7 +2673,7 @@ theorem circuit_z_cell_assigned (G : Generators) (ns : List ℕ)
 /-- Every first running-sum cell exported for a nontrivial slot is assigned by the
 symbolic chain loop. -/
 theorem circuit_z1_cell_assigned (G : Generators) (ns : List ℕ)
-    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (yaIn : SupportedEnvironmentFunction Fp Fp) (cfg : Config) (offset : ℕ)
     (input : Var (Inputs ns.length) Fp) (self : RegionIndex)
     (available : List Cell) (i : Fin ns.length)
     (hi : 0 < ns.getD i.val 0) :

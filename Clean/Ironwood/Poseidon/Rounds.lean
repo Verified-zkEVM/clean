@@ -32,6 +32,18 @@ def stateRow (cfg : Config) (o : ℕ) (self : RegionIndex) : State (AssignedCell
   x1 := .of self o (cfg.state 1)
   x2 := .of self o (cfg.state 2)
 
+@[keygen_norm]
+theorem stateRow_x0 (cfg : Config) (o : ℕ) (self : RegionIndex) :
+    (stateRow cfg o self).x0 = .of self o (cfg.state 0) := rfl
+
+@[keygen_norm]
+theorem stateRow_x1 (cfg : Config) (o : ℕ) (self : RegionIndex) :
+    (stateRow cfg o self).x1 = .of self o (cfg.state 1) := rfl
+
+@[keygen_norm]
+theorem stateRow_x2 (cfg : Config) (o : ℕ) (self : RegionIndex) :
+    (stateRow cfg o self).x2 = .of self o (cfg.state 2) := rfl
+
 /-- Name the entering state cells inside `synthesize` (no ops emitted). -/
 def readStateRow (cfg : Config) (o : ℕ) : RegionCircuit Fp (State (AssignedCell Fp)) :=
   fun self => (stateRow cfg o self, [])
@@ -40,7 +52,7 @@ def readStateRow (cfg : Config) (o : ℕ) : RegionCircuit Fp (State (AssignedCel
 theorem operations_readStateRow (cfg : Config) (o : ℕ) (self : RegionIndex) :
     (readStateRow cfg o).operations self = [] := rfl
 
-@[circuit_norm]
+@[circuit_norm, keygen_output_norm]
 theorem output_readStateRow (cfg : Config) (o : ℕ) (self : RegionIndex) :
     (readStateRow cfg o).output self = stateRow cfg o self := rfl
 
@@ -53,6 +65,17 @@ def rowValue (w : State (AssignedCell Fp)) (env : Placed ProverEnvironment Fp) :
 /-- A witness program computing one field of a state-function of the entering row. -/
 def rowWit (w : State (AssignedCell Fp)) (f : State Fp → Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[f (rowValue w env)]
+
+@[witness_support]
+theorem witnessFunctionSupport_rowWit (w : State (AssignedCell Fp)) (f : State Fp → Fp) :
+    WitnessFunctionSupport [w.x0, w.x1, w.x2] (programFunction (rowWit w f)) := by
+  intro left right agreement
+  have h0 : readCell left w.x0 = readCell right w.x0 := agreement.cellValues w.x0 (by simp)
+  have h1 : readCell left w.x1 = readCell right w.x1 := agreement.cellValues w.x1 (by simp)
+  have h2 : readCell left w.x2 = readCell right w.x2 := agreement.cellValues w.x2 (by simp)
+  change f (rowValue w left) = f (rowValue w right)
+  congr 1
+  simp only [rowValue, h0, h1, h2]
 
 @[circuit_norm]
 theorem rowWit_eval (w : State (AssignedCell Fp)) (f : State Fp → Fp)
@@ -112,7 +135,12 @@ def fullRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
   { keygenRequirements :=
       { configLawful cfg := Config.FixedColumnsLawful cfg
         gates cfg _ := [fullRoundGate cfg]
-        fixedColumns cfg _ := cfg.fixedColumns }
+        fixedColumns cfg _ := cfg.fixedColumns
+        readRelativeCells cfg _ _ := [(cfg.state 0, 0), (cfg.state 1, 0), (cfg.state 2, 0)] }
+    adviceColumnRequirements cfg :=
+      cfg.state 0 ≠ cfg.state 1 ∧ cfg.state 0 ≠ cfg.state 2 ∧ cfg.state 1 ≠ cfg.state 2
+    consumedCellsAssigned := by keygen_registration [fullRoundSynthesize, stateRow]
+    adviceWritesConsistent := by keygen_registration [fullRoundSynthesize]
     output config offset _ self := stateRow config (offset + 1) self
     synthesisSummary config offset _ _ :=
       fullRoundSynthesisSummary config offset
@@ -183,7 +211,12 @@ def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
   { keygenRequirements :=
       { configLawful cfg := Config.FixedColumnsLawful cfg
         gates cfg _ := [partialRoundsGate cfg]
-        fixedColumns cfg _ := cfg.fixedColumns }
+        fixedColumns cfg _ := cfg.fixedColumns
+        readRelativeCells cfg _ _ := [(cfg.state 0, 0), (cfg.state 1, 0), (cfg.state 2, 0)] }
+    adviceColumnRequirements cfg :=
+      cfg.state 0 ≠ cfg.state 1 ∧ cfg.state 0 ≠ cfg.state 2 ∧ cfg.state 1 ≠ cfg.state 2
+    consumedCellsAssigned := by keygen_registration [partialRoundSynthesize, stateRow]
+    adviceWritesConsistent := by keygen_registration [partialRoundSynthesize]
     output config offset _ self := stateRow config (offset + 1) self
     synthesisSummary config offset _ _ :=
       partialRoundSynthesisSummary config offset

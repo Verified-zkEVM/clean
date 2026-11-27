@@ -398,14 +398,29 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       output _ _ _ := ()
       regionCount _ := 3
       synthesisSummary cfg _ _ := circuitSynthesisSummary K cfg
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.adv0, cfg.adv1, cfg.adv2]
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
         simp only [synthesize, circuit_norm]
-        unfold Operations.CopyCellsAssigned
-        rw [Operations.copyCellsAssignedFrom_region_iff]
-        refine ⟨by keygen_registration, ?_⟩
-        apply Operations.CopyCellsAssignedFrom.append
-        · keygen_registration
+        unfold Operations.ConsumedCellsAssigned
+        rw [Operations.assignedFrom_region_iff]
+        refine ⟨by keygen_registration [sWit], ?_⟩
+        apply Operations.AssignedFrom.append
+        · apply (LookupRangeCheck.copyCheck K (numWords K) false).call_consumedCellsAssignedFrom
+            ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+              configInput.2.2.2).output counts).lookupConfig
+            (FormalCircuit.Configured.ofPure _ _ () rfl)
+          intro cell hcell
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, FormalCircuit.Configured.ofPure,
+            LookupRangeCheck.copyCheck, FormalRegionCircuit.toFormal_keygenRequirements,
+            LookupRangeCheck.rangeCheck, LookupRangeCheck.rangeCheckElaborated,
+            FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_singleton] at hcell
+          subst hcell
+          simp [Cell.of, AssignedCell.of_cell, RegionOperations.assignedCellsAfter,
+            RegionOperation.assignedCells]
         · have hdec := LookupRangeCheck.copyCheck_output_cells_assigned
             K (numWords K) false
             ((configure K configInput.1 configInput.2.1 configInput.2.2.1
@@ -414,10 +429,55 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
                 ((configure K configInput.1 configInput.2.1 configInput.2.2.1
                   configInput.2.2.2).output counts).adv0 }
             (i + 1)
-          rw [← (LookupRangeCheck.copyCheck K (numWords K) false).call_operations]
-            at hdec
-          simp only [gateRegion, circuit_norm, keygen_norm, keygen_spine]
-          simp_all
+          rw [← (LookupRangeCheck.copyCheck K (numWords K) false).call_operations] at hdec
+          have hrc : Operations.regionCount
+              (((LookupRangeCheck.copyCheck K (numWords K) false).call
+                ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+                  configInput.2.2.2).output counts).lookupConfig
+                { element := AssignedCell.of i 0
+                    ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+                      configInput.2.2.2).output counts).adv0 }).operations (i + 1)) = 1 := by
+            rw [FormalCircuit.call_regionCount]; rfl
+          rw [hrc]
+          rw [Operations.assignedFrom_region_iff]
+          refine ⟨?_, Operations.AssignedFrom.nil _ _⟩
+          have hdec' :
+              ((LookupRangeCheck.copyCheck K (numWords K) false).output
+                ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+                  configInput.2.2.2).output counts).lookupConfig
+                { element := AssignedCell.of i 0
+                    ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+                      configInput.2.2.2).output counts).adv0 }
+                (i + 1)).zLast.cell ∈
+              Operations.assignedCellsFrom
+                (((LookupRangeCheck.copyCheck K (numWords K) false).call
+                  ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+                    configInput.2.2.2).output counts).lookupConfig
+                  { element := AssignedCell.of i 0
+                      ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+                        configInput.2.2.2).output counts).adv0 }).operations (i + 1)) (i + 1) :=
+            hdec.2
+          keygen_registration [gateRegion, etaWit]
+      adviceWritesConsistent := by
+        intro configInput counts _hconfig hadvice input i
+        simp only [synthesize, circuit_norm, Operations.adviceWritesConsistentFrom_region_cons,
+          Operations.adviceWritesConsistentFrom_append, Operations.adviceWritesConsistentFrom_nil,
+          RegionOperations.adviceWritesConsistent_assignAdvice_cons, List.not_mem_nil,
+          false_implies, implies_true, RegionOperations.adviceWritesConsistent_nil,
+          true_and, and_true]
+        refine ⟨(LookupRangeCheck.copyCheck K (numWords K) false).call_adviceWritesConsistent
+          _ (FormalCircuit.Configured.ofPure _ _ () rfl) trivial _ (i + 1), ?_⟩
+        apply RegionOperations.AdviceWritesDistinct.toConsistent
+        simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false,
+          not_or, not_false_eq_true, and_true, List.nodup_nil] at hadvice
+        obtain ⟨⟨h01, h02⟩, h12⟩ := hadvice
+        simp only [gateRegion, circuit_norm, RegionOperations.AdviceWritesDistinct,
+          RegionOperations.adviceWrites, RegionOperation.adviceWrites, List.flatMap_cons,
+          List.flatMap_nil, List.nil_append, List.append_nil, List.cons_append, List.nodup_cons,
+          List.mem_cons, List.not_mem_nil, or_false, not_or, Prod.mk.injEq,
+          List.nodup_nil, not_false_eq_true, and_true]
+        repeat' apply And.intro
+        all_goals grind
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun cfg input i => (synthesize_regionCount K cfg input i).symm
       synthesisSummary_eq := by

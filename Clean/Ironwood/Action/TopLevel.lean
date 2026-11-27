@@ -142,7 +142,7 @@ theorem actionSelectorRequirements :
 /-- The closed Action circuit borrows no key-generation resources from a caller. -/
 def actionNoCallerRequirements :
     (circuit Specs.Sinsemilla.orchardGenerators orchardBases).keygenRequirements.EmptyAt () := by
-  exact ⟨(), rfl, rfl, rfl, rfl, rfl, fun _ => rfl⟩
+  exact ⟨(), rfl, rfl, rfl, rfl, rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
 
 /-- Action's closed configure run borrows no queryable columns from a caller. -/
 theorem actionQueryRequirements :

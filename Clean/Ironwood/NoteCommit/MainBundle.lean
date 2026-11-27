@@ -45,41 +45,41 @@ private theorem rangeCheckAt_output (n : ℕ) (cfg : LookupRangeCheck.Config 10)
 private theorem rangeCheckAt13_not_strict : false = true → 0 < 13 := by simp
 private theorem rangeCheckAt14_not_strict : false = true → 0 < 14 := by simp
 
-private theorem yc_output (w : WitgenIR Fp 1)
+private theorem yc_output (w : SupportedProgram Fp)
     (c : YCanonicity.Config × LookupRangeCheck.Config 10)
     (inp : Var YCanonicityCheck.Inputs Fp) (i : RegionIndex) :
     (YCanonicityCheck.circuit w).output c inp i
       = AssignedCell.of (i + 4) 0 (c.1.advices 6) := rfl
 
-private theorem yc_extract (w : WitgenIR Fp 1)
+private theorem yc_extract (w : SupportedProgram Fp)
     (c : YCanonicity.Config × LookupRangeCheck.Config 10)
     (inp : Var YCanonicityCheck.Inputs Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
     (YCanonicityCheck.circuit w).extract c inp i env
       = eval env (AssignedCell.of (i + 4) 0 (c.1.advices 6) : Var field Fp) := rfl
 
-private theorem decomposeB_output (w : WitgenIR Fp 1) (name : String)
+private theorem decomposeB_output (w : SupportedProgram Fp) (name : String)
     (cfg : DecomposeB.Config) (inp : Var DecomposeB.Inputs Fp) (i : RegionIndex) :
     ((DecomposeB.bundle w).toFormal name).output cfg inp i
       = AssignedCell.of i 0 cfg.colR := by
   show (((DecomposeB.bundle w).synthesize cfg 0 inp)).output i = _
   simp only [DecomposeB.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
 
-private theorem decomposeD_output (w : WitgenIR Fp 1) (name : String)
+private theorem decomposeD_output (w : SupportedProgram Fp) (name : String)
     (cfg : DecomposeD.Config) (inp : Var DecomposeD.Inputs Fp) (i : RegionIndex) :
     ((DecomposeD.bundle w).toFormal name).output cfg inp i
       = AssignedCell.of i 0 cfg.colM := by
   show (((DecomposeD.bundle w).synthesize cfg 0 inp)).output i = _
   simp only [DecomposeD.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
 
-private theorem decomposeG_output (w : WitgenIR Fp 1) (name : String)
+private theorem decomposeG_output (w : SupportedProgram Fp) (name : String)
     (cfg : DecomposeG.Config) (inp : Var DecomposeG.Inputs Fp) (i : RegionIndex) :
     ((DecomposeG.bundle w).toFormal name).output cfg inp i
       = AssignedCell.of i 0 cfg.colM := by
   show (((DecomposeG.bundle w).synthesize cfg 0 inp)).output i = _
   simp only [DecomposeG.bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
 
-private theorem decomposeH_output (w : WitgenIR Fp 1) (name : String)
+private theorem decomposeH_output (w : SupportedProgram Fp) (name : String)
     (cfg : DecomposeH.Config) (inp : Var DecomposeH.Inputs Fp) (i : RegionIndex) :
     ((DecomposeH.bundle w).toFormal name).output cfg inp i
       = AssignedCell.of i 0 cfg.colR := by
@@ -120,11 +120,11 @@ private theorem peelGates (cfg : Config) (input : Var Inputs Fp)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (h : Constraints place env ((synthGates cfg input pcs ccs iHash).operations i₀) i₀) :
     Constraints place env
-      ((((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
+      ((((DecomposeB.bundle (brSupported input.gdX 254 1)).toFormal
         "NoteCommit MessagePiece b").call cfg.gates.b
         { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }).operations i₀) i₀ ∧
     Constraints place env
-      ((((DecomposeD.bundle (brWit input.pkdX 254 1)).toFormal
+      ((((DecomposeD.bundle (brSupported input.pkdX 254 1)).toFormal
         "NoteCommit MessagePiece d").call cfg.gates.d
         { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
           d3 := zCell cfg.hashConfig iHash 3 1 }).operations (i₀ + 1)) (i₀ + 1) ∧
@@ -132,12 +132,12 @@ private theorem peelGates (cfg : Config) (input : Var Inputs Fp)
       (((DecomposeE.bundle.toFormal "NoteCommit MessagePiece e").call cfg.gates.e
         { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 }).operations (i₀ + 2)) (i₀ + 2) ∧
     Constraints place env
-      ((((DecomposeG.bundle (brWit input.rho 254 1)).toFormal
+      ((((DecomposeG.bundle (brSupported input.rho 254 1)).toFormal
         "NoteCommit MessagePiece g").call cfg.gates.g
         { g := pcs.g, g1 := pcs.g1,
           g2 := zCell cfg.hashConfig iHash 6 1 }).operations (i₀ + 3)) (i₀ + 3) ∧
     Constraints place env
-      ((((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
+      ((((DecomposeH.bundle (brSupported input.psi 254 1)).toFormal
         "NoteCommit MessagePiece h").call cfg.gates.h
         { h := pcs.h, h0 := pcs.h0 }).operations (i₀ + 4)) (i₀ + 4) ∧
     Constraints place env
@@ -320,11 +320,11 @@ private theorem buildGates (cfg : Config) (input : Var Inputs Fp)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (h :
     Constraints place env
-      ((((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
+      ((((DecomposeB.bundle (brSupported input.gdX 254 1)).toFormal
         "NoteCommit MessagePiece b").call cfg.gates.b
         { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }).operations i₀) i₀ ∧
     Constraints place env
-      ((((DecomposeD.bundle (brWit input.pkdX 254 1)).toFormal
+      ((((DecomposeD.bundle (brSupported input.pkdX 254 1)).toFormal
         "NoteCommit MessagePiece d").call cfg.gates.d
         { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
           d3 := zCell cfg.hashConfig iHash 3 1 }).operations (i₀ + 1)) (i₀ + 1) ∧
@@ -332,12 +332,12 @@ private theorem buildGates (cfg : Config) (input : Var Inputs Fp)
       (((DecomposeE.bundle.toFormal "NoteCommit MessagePiece e").call cfg.gates.e
         { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 }).operations (i₀ + 2)) (i₀ + 2) ∧
     Constraints place env
-      ((((DecomposeG.bundle (brWit input.rho 254 1)).toFormal
+      ((((DecomposeG.bundle (brSupported input.rho 254 1)).toFormal
         "NoteCommit MessagePiece g").call cfg.gates.g
         { g := pcs.g, g1 := pcs.g1,
           g2 := zCell cfg.hashConfig iHash 6 1 }).operations (i₀ + 3)) (i₀ + 3) ∧
     Constraints place env
-      ((((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
+      ((((DecomposeH.bundle (brSupported input.psi 254 1)).toFormal
         "NoteCommit MessagePiece h").call cfg.gates.h
         { h := pcs.h, h0 := pcs.h0 }).operations (i₀ + 4)) (i₀ + 4) ∧
     Constraints place env
@@ -430,10 +430,10 @@ private theorem buildChecks (G : Generators) (R : FixedBase)
     (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
     (h :
     Constraints place env
-      (((YCanonicityCheck.circuit (brWit input.gdY 0 1)).call
+      (((YCanonicityCheck.circuit (brSupported input.gdY 0 1)).call
         (cfg.gates.y, cfg.lookupConfig) { y := input.gdY }).operations i₀) i₀ ∧
     Constraints place env
-      (((YCanonicityCheck.circuit (brWit input.pkdY 0 1)).call
+      (((YCanonicityCheck.circuit (brSupported input.pkdY 0 1)).call
         (cfg.gates.y, cfg.lookupConfig) { y := input.pkdY }).operations (i₀ + 5))
       (i₀ + 5) ∧
     Constraints place env
@@ -492,11 +492,11 @@ private theorem peelGatesW (cfg : Config) (input : Var Inputs Fp)
       ((synthGates cfg input pcs ccs iHash).operations i₀) i₀) :
 
     ExtendsWitnesses place env
-      ((((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
+      ((((DecomposeB.bundle (brSupported input.gdX 254 1)).toFormal
         "NoteCommit MessagePiece b").call cfg.gates.b
         { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }).operations i₀) i₀ ∧
     ExtendsWitnesses place env
-      ((((DecomposeD.bundle (brWit input.pkdX 254 1)).toFormal
+      ((((DecomposeD.bundle (brSupported input.pkdX 254 1)).toFormal
         "NoteCommit MessagePiece d").call cfg.gates.d
         { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
           d3 := zCell cfg.hashConfig iHash 3 1 }).operations (i₀ + 1)) (i₀ + 1) ∧
@@ -504,12 +504,12 @@ private theorem peelGatesW (cfg : Config) (input : Var Inputs Fp)
       (((DecomposeE.bundle.toFormal "NoteCommit MessagePiece e").call cfg.gates.e
         { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 }).operations (i₀ + 2)) (i₀ + 2) ∧
     ExtendsWitnesses place env
-      ((((DecomposeG.bundle (brWit input.rho 254 1)).toFormal
+      ((((DecomposeG.bundle (brSupported input.rho 254 1)).toFormal
         "NoteCommit MessagePiece g").call cfg.gates.g
         { g := pcs.g, g1 := pcs.g1,
           g2 := zCell cfg.hashConfig iHash 6 1 }).operations (i₀ + 3)) (i₀ + 3) ∧
     ExtendsWitnesses place env
-      ((((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
+      ((((DecomposeH.bundle (brSupported input.psi 254 1)).toFormal
         "NoteCommit MessagePiece h").call cfg.gates.h
         { h := pcs.h, h0 := pcs.h0 }).operations (i₀ + 4)) (i₀ + 4) ∧
     ExtendsWitnesses place env
@@ -549,14 +549,14 @@ private theorem peelGatesW (cfg : Config) (input : Var Inputs Fp)
 
 /-- The `lsb` cell witnessed inside a y-canonicity flow's gate region reads the
 caller's program (two-level witness projection). -/
-private theorem yc_lsb_witness (w : WitgenIR Fp 1)
+private theorem yc_lsb_witness (w : SupportedProgram Fp)
     (c : YCanonicity.Config × LookupRangeCheck.Config 10)
     (inp : Var YCanonicityCheck.Inputs Fp) (i : RegionIndex)
     (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
     (h : ExtendsWitnesses place env
       (((YCanonicityCheck.circuit w).call c inp).operations i) i) :
     env.advice (c.1.advices 6) ((place (i + 4) : ℕ) : ℤ)
-      = ((w.eval (⟨place, env⟩ : Placed ProverEnvironment Fp))[0]'(by norm_num)) := by
+      = ((w.program.eval (⟨place, env⟩ : Placed ProverEnvironment Fp))[0]'(by norm_num)) := by
   rw [show ExtendsWitnesses place env
         (((YCanonicityCheck.circuit w).call c inp).operations i) i
       = ExtendsWitnesses place env
@@ -569,7 +569,7 @@ private theorem yc_lsb_witness (w : WitgenIR Fp 1)
     circuit_norm] at h
   have hg := h.2.2.2.2
   rw [YCanonicityCheck.gateChild_call_witnesses] at hg
-  simp only [YCanonicity.bundle, YCanonicity.gate, circuit_norm] at hg
+  simp only [YCanonicity.bundle, circuit_norm] at hg
   have hlsb := hg.2.2.2.1
   simp only [Nat.add_assoc, Nat.reduceAdd] at hlsb ⊢
   exact hlsb
@@ -599,25 +599,25 @@ private theorem honestChunks_donor_eq :
   intro ms pieces
   rfl
 
-private theorem decomposeB_extract_eq (w : WitgenIR Fp 1) (name : String)
+private theorem decomposeB_extract_eq (w : SupportedProgram Fp) (name : String)
     (cfg : DecomposeB.Config) (inp : Var DecomposeB.Inputs Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
     ((DecomposeB.bundle w).toFormal name).extract cfg inp i env
       = (eval env (AssignedCell.of i 0 cfg.colR : Var field Fp) : Fp) := rfl
 
-private theorem decomposeD_extract_eq (w : WitgenIR Fp 1) (name : String)
+private theorem decomposeD_extract_eq (w : SupportedProgram Fp) (name : String)
     (cfg : DecomposeD.Config) (inp : Var DecomposeD.Inputs Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
     ((DecomposeD.bundle w).toFormal name).extract cfg inp i env
       = (eval env (AssignedCell.of i 0 cfg.colM : Var field Fp) : Fp) := rfl
 
-private theorem decomposeG_extract_eq (w : WitgenIR Fp 1) (name : String)
+private theorem decomposeG_extract_eq (w : SupportedProgram Fp) (name : String)
     (cfg : DecomposeG.Config) (inp : Var DecomposeG.Inputs Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
     ((DecomposeG.bundle w).toFormal name).extract cfg inp i env
       = (eval env (AssignedCell.of i 0 cfg.colM : Var field Fp) : Fp) := rfl
 
-private theorem decomposeH_extract_eq (w : WitgenIR Fp 1) (name : String)
+private theorem decomposeH_extract_eq (w : SupportedProgram Fp) (name : String)
     (cfg : DecomposeH.Config) (inp : Var DecomposeH.Inputs Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
     ((DecomposeH.bundle w).toFormal name).extract cfg inp i env
@@ -659,15 +659,14 @@ private theorem pieces_eval_eq_env (place : RegionIndex → ℕ) (env : Environm
     (eval (Var := Var (Sinsemilla.CommitDomain.Input ns.length) Fp)
       (⟨place, env⟩ : Placed Environment Fp)
       { pieces := #v[c₀, c₁, c₂, c₃, c₄, c₅, c₆, c₇], r := r }).pieces
-    = #v[env.get c₀.cell.column ((place c₀.cell.regionIndex + c₀.cell.rowOffset : ℕ) : ℤ),
-        env.get c₁.cell.column ((place c₁.cell.regionIndex + c₁.cell.rowOffset : ℕ) : ℤ),
-        env.get c₂.cell.column ((place c₂.cell.regionIndex + c₂.cell.rowOffset : ℕ) : ℤ),
-        env.get c₃.cell.column ((place c₃.cell.regionIndex + c₃.cell.rowOffset : ℕ) : ℤ),
-        env.get c₄.cell.column ((place c₄.cell.regionIndex + c₄.cell.rowOffset : ℕ) : ℤ),
-        env.get c₅.cell.column ((place c₅.cell.regionIndex + c₅.cell.rowOffset : ℕ) : ℤ),
-        env.get c₆.cell.column ((place c₆.cell.regionIndex + c₆.cell.rowOffset : ℕ) : ℤ),
-        env.get c₇.cell.column ((place c₇.cell.regionIndex
-          + c₇.cell.rowOffset : ℕ) : ℤ)] := by
+    = #v[AssignedCell.eval place env c₀,
+        AssignedCell.eval place env c₁,
+        AssignedCell.eval place env c₂,
+        AssignedCell.eval place env c₃,
+        AssignedCell.eval place env c₄,
+        AssignedCell.eval place env c₅,
+        AssignedCell.eval place env c₆,
+        AssignedCell.eval place env c₇] := by
   with_unfolding_all rfl
 
 /-- The commit child's derived verifier contract on the completeness side, standalone
@@ -1175,26 +1174,27 @@ theorem completeness (G : Generators) (R : FixedBase)
   have hWgh := hGW.2.2.2.2.1
   rw [FormalRegionCircuit.toFormal_call_extendsWitnesses] at hWgb hWgd hWgg hWgh
   simp only [DecomposeB.bundle, synthPieces_output, synthChecks_output,
-        circuit_norm, readCell, AssignedCell.of_cell,
+        circuit_norm,
     Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgb
   simp only [DecomposeD.bundle, synthPieces_output, synthChecks_output, zCell,
     prefixRows_ns_3,
-    circuit_norm, readCell, AssignedCell.of_cell,
+    circuit_norm,
     Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgd
   simp only [DecomposeG.bundle, synthPieces_output, zCell,
     prefixRows_ns_6,
-    circuit_norm, readCell, AssignedCell.of_cell,
+    circuit_norm,
     Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgg
   simp only [DecomposeH.bundle, synthPieces_output,
-        circuit_norm, readCell, AssignedCell.of_cell,
+        circuit_norm,
     Environment.get_advice, Nat.add_assoc, Nat.reduceAdd, Nat.add_zero] at hWgh
-  have hwb2 := yc_lsb_witness (brWit input_var_gdY 0 1) _ _ _ place env hWy1
-  have hwd1 := yc_lsb_witness (brWit input_var_pkdY 0 1) _ _ _ place env hWy2
-  simp only [circuit_norm, readCell, Nat.add_assoc, Nat.reduceAdd] at hwb2 hwd1
+  have hwb2 := yc_lsb_witness (brSupported input_var_gdY 0 1) _ _ _ place env hWy1
+  have hwd1 := yc_lsb_witness (brSupported input_var_pkdY 0 1) _ _ _ place env hWy2
+  simp only [brSupported, circuit_norm, readCell, Nat.add_assoc, Nat.reduceAdd] at hwb2 hwd1
   have hwb1 := hWgb.2.2.1
   have hwd0 := hWgd.2.1
   have hwg0 := hWgg.2.1
   have hwh1 := hWgh.2.2
+  simp only [brSupported, circuit_norm, readCell] at hwb1 hwd0 hwg0 hwh1
   have hMCF : NoteCommit.MessageCellFacts
       ⟨AssignedCell.eval place env.toEnvironment input_var_gdX, AssignedCell.eval place env.toEnvironment input_var_gdY⟩
       ⟨AssignedCell.eval place env.toEnvironment input_var_pkdX, AssignedCell.eval place env.toEnvironment input_var_pkdY⟩
@@ -1319,8 +1319,7 @@ theorem completeness (G : Generators) (R : FixedBase)
   obtain ⟨chunks, hPC, hZs, hContract⟩ := hCmS
   rw [Sinsemilla.Chain.eval_zsCellsVal] at hZs
   rw [pieces_eval_eq_env] at hPC
-  simp only [AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset,
-    Cell.of_column, Environment.get_advice, Nat.add_zero, Nat.add_assoc,
+  simp only [AssignedCell.eval_of_advice, Nat.add_zero, Nat.add_assoc,
     Nat.reduceAdd] at hPC
   have hPC' := (pieceChunks_donor_iff _ _ _).mp hPC
   have hZs' := (zsFacts_donor_iff _ _ _).mp hZs
@@ -1673,7 +1672,7 @@ theorem completeness (G : Generators) (R : FixedBase)
            rw [hwh0, Specs.cast_bitrange_val (by norm_num)]
            exact Specs.bitrange_lt _ _ _)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (YCanonicityCheck.circuit (brWit input_var_gdY 0 1))
+      (YCanonicityCheck.circuit (brSupported input_var_gdY 0 1))
       (cfg.gates.y, cfg.lookupConfig) (i₀ + 15) place env _ hWy1
       ⟨(by rw [YCanonicityCheck.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
        (by rw [YCanonicityCheck.circuit_assumptions_eq]; trivial),
@@ -1685,7 +1684,7 @@ theorem completeness (G : Generators) (R : FixedBase)
              = ZMod.val (AssignedCell.eval place env.toEnvironment input_var_gdY) % 2 from by
              simp [Specs.bitrange]])⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      (YCanonicityCheck.circuit (brWit input_var_pkdY 0 1))
+      (YCanonicityCheck.circuit (brSupported input_var_pkdY 0 1))
       (cfg.gates.y, cfg.lookupConfig) (i₀ + 20) place env _ hWy2
       ⟨(by rw [YCanonicityCheck.circuit_envAssumptions_eq]; exact ⟨hTableL, hDistinct⟩),
        (by rw [YCanonicityCheck.circuit_assumptions_eq]; trivial),
@@ -1749,7 +1748,7 @@ theorem completeness (G : Generators) (R : FixedBase)
            norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD]),
        (by rw [LookupRangeCheck.rangeCheckAt_proverAssumptions_eq]; simp)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      ((DecomposeB.bundle (brWit input_var_gdX 254 1)).toFormal
+      ((DecomposeB.bundle (brSupported input_var_gdX 254 1)).toFormal
         "NoteCommit MessagePiece b") cfg.gates.b (i₀ + 33) place env _ hGW.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
@@ -1767,7 +1766,7 @@ theorem completeness (G : Generators) (R : FixedBase)
            · rw [hwb, ← hwb0, ← hwb1, ← hwb2, ← hwb3]
              try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      ((DecomposeD.bundle (brWit input_var_pkdX 254 1)).toFormal
+      ((DecomposeD.bundle (brSupported input_var_pkdX 254 1)).toFormal
         "NoteCommit MessagePiece d") cfg.gates.d (i₀ + 34) place env _ hGW.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
@@ -1798,7 +1797,7 @@ theorem completeness (G : Generators) (R : FixedBase)
            rw [hwe, ← hwe0, ← hwe1]
            try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      ((DecomposeG.bundle (brWit input_var_rho 254 1)).toFormal
+      ((DecomposeG.bundle (brSupported input_var_rho 254 1)).toFormal
         "NoteCommit MessagePiece g") cfg.gates.g (i₀ + 36) place env _ hGW.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),
@@ -1815,7 +1814,7 @@ theorem completeness (G : Generators) (R : FixedBase)
            · rw [hzgEq, hwg, ← hwg0, ← hwg1]
              try ring)⟩
   · exact Halo2.SubcircuitRw.layouter_completeness_leaf
-      ((DecomposeH.bundle (brWit input_var_psi 254 1)).toFormal
+      ((DecomposeH.bundle (brSupported input_var_psi 254 1)).toFormal
         "NoteCommit MessagePiece h") cfg.gates.h (i₀ + 37) place env _ hGW.2.2.2.2.1
       ⟨(by rw [toFormal_envAssumptions_eq]; trivial),
        (by rw [toFormal_assumptions_eq]; trivial),

@@ -83,7 +83,9 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
             [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
           inputCells _ _ input :=
             [input.value.cell, input.d2.cell, input.d3.cell, input.e0.cell] }
-      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+      consumedCellsAssigned := by keygen_registration [bundleSynthesize]
+      adviceWritesConsistent := by keygen_registration [bundleSynthesize]
       synthesisSummary cfg offset _ _ := ValueCanonicity.synthesisSummary cfg offset
       synthesisSummary_eq := by
         intro _ _ _ _
@@ -191,7 +193,9 @@ def bundleElaborated :
         inputCells _ _ input :=
           [input.gdX.cell, input.b0.cell, input.b1.cell, input.a.cell,
             input.aPrime.cell, input.z13A.cell, input.z13APrime.cell] }
-    copyCellsAssigned := by keygen_registration [bundleSynthesize]
+    adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+    consumedCellsAssigned := by keygen_registration [bundleSynthesize]
+    adviceWritesConsistent := by keygen_registration [bundleSynthesize]
     synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
     synthesisSummary_eq := by
       intro _ _ _ _
@@ -359,7 +363,9 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
           inputCells _ _ input :=
             [input.pkdX.cell, input.b3.cell, input.d0.cell, input.c.cell,
               input.b3CPrime.cell, input.z13C.cell, input.z14B3CPrime.cell] }
-      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+      consumedCellsAssigned := by keygen_registration [bundleSynthesize]
+      adviceWritesConsistent := by keygen_registration [bundleSynthesize]
       synthesisSummary cfg offset _ _ := PkdCanonicity.synthesisSummary cfg offset
       synthesisSummary_eq := bundleSynthesisSummary_eq }
   -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
@@ -504,7 +510,9 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
           inputCells _ _ input :=
             [input.rho.cell, input.e1.cell, input.g0.cell, input.f.cell,
               input.e1FPrime.cell, input.z13F.cell, input.z14E1FPrime.cell] }
-      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+      consumedCellsAssigned := by keygen_registration [bundleSynthesize]
+      adviceWritesConsistent := by keygen_registration [bundleSynthesize]
       synthesisSummary cfg offset _ _ := RhoCanonicity.synthesisSummary cfg offset
       synthesisSummary_eq := bundleSynthesisSummary_eq }
   -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
@@ -653,7 +661,9 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
             [input.psi.cell, input.h0.cell, input.g1.cell, input.h1.cell,
               input.g2.cell, input.g1G2Prime.cell, input.z13G.cell,
               input.z13G1G2Prime.cell] }
-      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+      consumedCellsAssigned := by keygen_registration [bundleSynthesize]
+      adviceWritesConsistent := by keygen_registration [bundleSynthesize]
       synthesisSummary cfg offset _ _ := PsiCanonicity.synthesisSummary cfg offset
       synthesisSummary_eq := bundleSynthesisSummary_eq }
   -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
@@ -760,14 +770,14 @@ theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
   simp only [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
-def bundleSynthesize (wlsb wk3 : WitgenIR Fp 1) (cfg : Config) (offset : ℕ)
+def bundleSynthesize (wlsb wk3 : SupportedProgram Fp) (cfg : Config) (offset : ℕ)
     (input : Var Row Fp) : RegionCircuit Fp (Var field Fp) := do
   (gate cfg).enable offset
   let _y ← copyAdvice input.y (cfg.advices 5) offset
-  let lsb ← assignAdvice (cfg.advices 6) offset wlsb
+  let lsb ← assignAdvice (cfg.advices 6) offset wlsb.program
   let _k0 ← copyAdvice input.k0 (cfg.advices 7) offset
   let _k2 ← copyAdvice input.k2 (cfg.advices 8) offset
-  let _k3 ← assignAdvice (cfg.advices 9) offset wk3
+  let _k3 ← assignAdvice (cfg.advices 9) offset wk3.program
   let _j ← copyAdvice input.j (cfg.advices 5) (offset + 1)
   let _z1 ← copyAdvice input.z1J (cfg.advices 6) (offset + 1)
   let _z13 ← copyAdvice input.z13J (cfg.advices 7) (offset + 1)
@@ -776,13 +786,13 @@ def bundleSynthesize (wlsb wk3 : WitgenIR Fp 1) (cfg : Config) (offset : ℕ)
   pure lsb
 
 @[circuit_norm]
-theorem bundleSynthesize_output (wlsb wk3 : WitgenIR Fp 1)
+theorem bundleSynthesize_output (wlsb wk3 : SupportedProgram Fp)
     (cfg : Config) (offset : ℕ) (input : Var Row Fp) (self : RegionIndex) :
     (bundleSynthesize wlsb wk3 cfg offset input).output self =
       AssignedCell.of self offset (cfg.advices 6) := by
   simp only [bundleSynthesize, circuit_norm]
 
-theorem bundleSynthesisSummary_eq (wlsb wk3 : WitgenIR Fp 1)
+theorem bundleSynthesisSummary_eq (wlsb wk3 : SupportedProgram Fp)
     (cfg : Config) (offset : ℕ) (input : Var Row Fp) (self : RegionIndex) :
     synthesisSummary cfg offset =
       FloorPlanner.regionSynthesisSummary
@@ -810,23 +820,63 @@ copies `y`/`k_0`/`k_2` and witnesses `LSB`/`k_3` (the `wlsb`/`wk3` programs); ro
 CONDITIONED on the output's booleanity — as in Rust, the lsb cell is boolean-constrained
 *outside* this gate (the decompose gates' `bool_check` on the copied cell), so the
 composite threads it back as a rely. -/
-def bundle (wlsb wk3 : WitgenIR Fp 1) :
+theorem bundle_consumedCellsAssigned (wlsb wk3 : SupportedProgram Fp) :
+    ∀ (configInput : Config) (counts : ConfigureCounts) (_hconfig : True)
+      (offset : ℕ) (input : Var Row Fp) (region : RegionIndex),
+    ((bundleSynthesize wlsb wk3 ((pure configInput : Configure Fp Config).output counts)
+        offset input).operations region)
+      |>.ConsumedCellsAssigned region
+        ([input.y.cell, input.k0.cell, input.k2.cell, input.j.cell,
+          input.z1J.cell, input.z13J.cell, input.jPrime.cell, input.z13JPrime.cell] ++
+          (wlsb.reads.map (·.cell) ++ wk3.reads.map (·.cell)) ++ []) := by
+  keygen_registration [bundleSynthesize]
+
+theorem bundle_adviceWritesConsistent (wlsb wk3 : SupportedProgram Fp) :
+    ∀ (configInput : Config) (counts : ConfigureCounts) (_hconfig : True)
+      (_hadvice : ColumnsDistinct [((pure configInput : Configure Fp Config).output counts).advices 5,
+        ((pure configInput : Configure Fp Config).output counts).advices 6,
+        ((pure configInput : Configure Fp Config).output counts).advices 7,
+        ((pure configInput : Configure Fp Config).output counts).advices 8,
+        ((pure configInput : Configure Fp Config).output counts).advices 9])
+      (offset : ℕ) (input : Var Row Fp) (region : RegionIndex),
+    ((bundleSynthesize wlsb wk3 ((pure configInput : Configure Fp Config).output counts)
+        offset input).operations region)
+      |>.AdviceWritesConsistent region := by
+  keygen_registration [bundleSynthesize]
+
+@[instance_reducible]
+def bundleElaborated (wlsb wk3 : SupportedProgram Fp) :
+    ElaboratedRegionCircuit Fp Config Config Row field pure (bundleSynthesize wlsb wk3) :=
+  { keygenRequirements :=
+      { gates cfg _ := [gate cfg]
+        permutationColumns cfg _ :=
+          [cfg.advices 5, cfg.advices 6, cfg.advices 7,
+            cfg.advices 8, cfg.advices 9]
+        inputCells _ _ input :=
+          [input.y.cell, input.k0.cell, input.k2.cell, input.j.cell,
+            input.z1J.cell, input.z13J.cell, input.jPrime.cell,
+            input.z13JPrime.cell]
+        readCells _ _ _ :=
+          wlsb.reads.map (·.cell) ++ wk3.reads.map (·.cell) }
+    adviceColumnRequirements cfg :=
+      ColumnsDistinct [cfg.advices 5, cfg.advices 6, cfg.advices 7,
+        cfg.advices 8, cfg.advices 9]
+    consumedCellsAssigned := by
+      intro configInput counts _hconfig offset input region
+      simpa [KeygenRequirements.readRelativeCellsAt] using
+        bundle_consumedCellsAssigned wlsb wk3 configInput counts trivial offset input region
+    adviceWritesConsistent := by
+      intro configInput counts _hconfig hadvice offset input region
+      exact bundle_adviceWritesConsistent wlsb wk3 configInput counts trivial hadvice offset input
+        region
+    synthesisSummary cfg offset _ _ := YCanonicity.synthesisSummary cfg offset
+    synthesisSummary_eq := bundleSynthesisSummary_eq wlsb wk3 }
+
+def bundle (wlsb wk3 : SupportedProgram Fp) :
     FormalRegionCircuit Fp Config Config Row field where
   configure := pure
   synthesize := bundleSynthesize wlsb wk3
-  elaborated :=
-    { keygenRequirements :=
-        { gates cfg _ := [gate cfg]
-          permutationColumns cfg _ :=
-            [cfg.advices 5, cfg.advices 6, cfg.advices 7,
-              cfg.advices 8, cfg.advices 9]
-          inputCells _ _ input :=
-            [input.y.cell, input.k0.cell, input.k2.cell, input.j.cell,
-              input.z1J.cell, input.z13J.cell, input.jPrime.cell,
-              input.z13JPrime.cell] }
-      copyCellsAssigned := by keygen_registration [bundleSynthesize]
-      synthesisSummary cfg offset _ _ := YCanonicity.synthesisSummary cfg offset
-      synthesisSummary_eq := bundleSynthesisSummary_eq wlsb wk3 }
+  elaborated := bundleElaborated wlsb wk3
   Witness := fieldPair
   extract cfg offset _ self env :=
     (eval env (AssignedCell.of self offset (cfg.advices 6) : Var field Fp),
@@ -851,7 +901,7 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
   ProverSpec := fun _ (out : Fp) (wit : Fp × Fp) _ => out = wit.1
 
   soundness := by
-    circuit_proof_start [gate, boolCheck]
+    circuit_proof_start [bundleElaborated, gate, boolCheck]
     obtain ⟨⟨hk3c, hjdec, hyc, hjpc, hg1, hg2, hg3⟩,
       hcy, hck0, hck2, hcj, hcz1, hcz13, hcjp, hcz13p⟩ := hc
     rw [hcj, hck0, hcz1] at hjdec
@@ -877,13 +927,13 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
         (by simp only [toDonor]; push_cast at hg3 ⊢; linear_combination hg3)⟩
 
   completeness := by
-    circuit_proof_start [gate, boolCheck]
+    circuit_proof_start [bundleElaborated, gate, boolCheck]
     have heqs := NoteCommit.YCanonicity.Gate.eqs_of_spec
       (toDonor { y := input_y, k0 := input_k0, k2 := input_k2, j := input_j,
                  z1J := input_z1J, z13J := input_z13J, jPrime := input_jPrime,
                  z13JPrime := input_z13JPrime }
-        (Witgen.WitgenIROver.eval wlsb ⟨place, env⟩)[0]
-        (Witgen.WitgenIROver.eval wk3 ⟨place, env⟩)[0])
+        (Witgen.WitgenIROver.eval wlsb.program ⟨place, env⟩)[0]
+        (Witgen.WitgenIROver.eval wk3.program ⟨place, env⟩)[0])
       ⟨hPA.1, hA.1, hA.2.1, hA.2.2.1, hPA.2.2, hA.2.2.2.1,
         hA.2.2.2.2.1, hA.2.2.2.2.2⟩ hPA.2.1
     obtain ⟨hb, he2, he3, he4, he5, he6, he7⟩ := heqs
@@ -900,13 +950,13 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
     · linear_combination he7
 
 @[synthesis_summary_norm]
-theorem bundle_synthesisSummary_eq (wlsb wk3 : WitgenIR Fp 1)
+theorem bundle_synthesisSummary_eq (wlsb wk3 : SupportedProgram Fp)
     (cfg : Config) (offset : ℕ) (input : Var Row Fp)
     (region : RegionIndex) :
     (bundle wlsb wk3).elaborated.synthesisSummary cfg offset input region =
       synthesisSummary cfg offset := rfl
 
-derive_contract_bridges bundle (wlsb wk3 : WitgenIR Fp 1) := bundle wlsb wk3
+derive_contract_bridges bundle (wlsb wk3 : SupportedProgram Fp) := bundle wlsb wk3
 
 end YCanonicity
 

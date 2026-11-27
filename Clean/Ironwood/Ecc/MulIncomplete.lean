@@ -179,20 +179,151 @@ theorem loopProgram_hasNoFixedAssignments
   rw [← loopSynthesisSummary_eq]
   exact loopSynthesisSummary_hasNoFixedColumns n cfg offset
 
+private theorem round_state_mem_assignedCells (i : ℕ) (cfg : Config) (o : ℕ)
+    (alpha : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    Cell.of self (o + 1) cfg.z ∈ (((round i).call cfg o alpha).operations self).assignedCells self ∧
+    Cell.of self (o + 2) cfg.xA ∈ (((round i).call cfg o alpha).operations self).assignedCells self ∧
+    Cell.of self (o + 2) cfg.lambda1 ∈ (((round i).call cfg o alpha).operations self).assignedCells self ∧
+    Cell.of self (o + 2) cfg.lambda2 ∈ (((round i).call cfg o alpha).operations self).assignedCells self ∧
+    Cell.of self (o + 2) cfg.xP ∈ (((round i).call cfg o alpha).operations self).assignedCells self ∧
+    Cell.of self (o + 2) cfg.yP ∈ (((round i).call cfg o alpha).operations self).assignedCells self := by
+  rw [FormalRegionCircuit.call_operations]
+  simp [round, circuit_norm, RegionOperations.assignedCells, RegionOperation.assignedCells]
+
+private theorem round_adviceWrites_eq (i : ℕ) (cfg : Config) (o : ℕ)
+    (alpha : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    (((round i).call cfg o alpha).operations self).adviceWrites =
+      [(cfg.z, o + 1), (cfg.xA, o + 2), (cfg.lambda1, o + 2), (cfg.lambda2, o + 2),
+       (cfg.xP, o + 2), (cfg.yP, o + 2)] := by
+  rw [FormalRegionCircuit.call_operations]
+  simp [round, circuit_norm, RegionOperations.adviceWrites, RegionOperation.adviceWrites]
+
+private theorem loopProgram_adviceWritesDistinct (n w : ℕ) (cfg : Config)
+    (hadvice : ColumnsDistinct [cfg.z, cfg.xA, cfg.lambda1, cfg.lambda2, cfg.xP, cfg.yP])
+    (offset : ℕ) (alpha : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    ((loopProgram n w cfg offset alpha).operations self).AdviceWritesDistinct := by
+  simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+    not_false_eq_true, and_true, List.nodup_nil] at hadvice
+  obtain ⟨⟨hzx, hzl1, hzl2, hzxp, hzyp⟩, ⟨hxl1, hxl2, hxxp, hxyp⟩, ⟨hl1l2, hl1xp, hl1yp⟩,
+    ⟨hl2xp, hl2yp⟩, hxpyp⟩ := hadvice
+  rw [loopProgram_operations]
+  apply RegionCircuit.forRange'_adviceWritesDistinct_of_disjoint
+  · intro i
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.AdviceWritesDistinct, round_adviceWrites_eq, List.nodup_cons,
+      List.mem_cons, List.not_mem_nil, Prod.mk.injEq, not_or, not_and, List.nodup_nil,
+      and_true, not_false_eq_true, or_false]
+    refine ⟨⟨fun _ h => by omega, fun _ h => by omega, fun _ h => by omega,
+        fun _ h => by omega, fun _ h => by omega⟩,
+      ⟨hxl1, hxl2, hxxp, hxyp⟩,
+      ⟨hl1l2, hl1xp, hl1yp⟩,
+      ⟨hl2xp, hl2yp⟩,
+      hxpyp⟩
+  · intro i j hij
+    rw [List.disjoint_left]
+    intro entry hi hj
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+      round_adviceWrites_eq, List.mem_cons, List.not_mem_nil, or_false] at hi hj
+    have hlt : i.val < j.val := hij
+    rcases hi with rfl | rfl | rfl | rfl | rfl | rfl <;>
+      rcases hj with h | h | h | h | h | h <;>
+      simp only [Prod.mk.injEq] at h
+    all_goals
+      first
+      | omega
+      | exact hzx h.1.symm
+      | exact hzl1 h.1.symm
+      | exact hzl2 h.1.symm
+      | exact hzxp h.1.symm
+      | exact hzyp h.1.symm
+
+private theorem loopProgram_adviceWrites_bounds (n w : ℕ) (cfg : Config)
+    (offset : ℕ) (alpha : Var (Unconstrained field) Fp) (self : RegionIndex)
+    (col : Column .advice) (row : ℕ)
+    (hmem : (col, row) ∈ ((loopProgram n w cfg offset alpha).operations self).adviceWrites) :
+    (col = cfg.z ∧ offset + 1 ≤ row ∧ row ≤ offset + n) ∨
+    ((col = cfg.xA ∨ col = cfg.lambda1 ∨ col = cfg.lambda2 ∨ col = cfg.xP ∨ col = cfg.yP) ∧
+      offset + 2 ≤ row ∧ row ≤ offset + n + 1) := by
+  rw [loopProgram_operations] at hmem
+  obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRange'_adviceWrites_iff offset 1 n _ self col row).mp hmem
+  have hi_lt := i.isLt
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+    round_adviceWrites_eq, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hi
+  rcases hi with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+  · exact Or.inl ⟨rfl, by omega, by omega⟩
+  · exact Or.inr ⟨Or.inl rfl, by omega, by omega⟩
+  · exact Or.inr ⟨Or.inr (Or.inl rfl), by omega, by omega⟩
+  · exact Or.inr ⟨Or.inr (Or.inr (Or.inl rfl)), by omega, by omega⟩
+  · exact Or.inr ⟨Or.inr (Or.inr (Or.inr (Or.inl rfl))), by omega, by omega⟩
+  · exact Or.inr ⟨Or.inr (Or.inr (Or.inr (Or.inr rfl))), by omega, by omega⟩
+
 @[reducible] def loopElaborated (n w : ℕ) :
     ElaboratedRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n)
       pure (loopProgram n w) :=
-  { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
+  { keygenRequirements :=
+      { gates cfg _ := [qMul2Gate cfg]
+        readCells _ _ alpha := (Witgen.valueBuilderReads (value := field) alpha).map (·.cell)
+        readRelativeCells cfg _ _ :=
+          [(cfg.z, 0), (cfg.xA, 1), (cfg.lambda1, 1), (cfg.lambda2, 1), (cfg.xP, 1), (cfg.yP, 1)] }
+    adviceColumnRequirements cfg :=
+      ColumnsDistinct [cfg.z, cfg.xA, cfg.lambda1, cfg.lambda2, cfg.xP, cfg.yP]
     synthesisSummary cfg offset _ _ := loopSynthesisSummary n cfg offset
     synthesisSummary_eq := loopSynthesisSummary_eq n w
     registered := by keygen_registration
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
-      simp only [Configure.output_pure, RegionOperations.CopyCellsAssigned]
+      simp only [Configure.output_pure, RegionOperations.ConsumedCellsAssigned]
       rw [loopProgram_operations]
-      apply RegionCircuit.forRange'_copyCellsAssignedFrom
-      intro i
-      keygen_registration
+      apply RegionCircuit.forRange'_assignedFrom_of_earlier_rounds
+      · intro _
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil]
+        apply (round (w + 0)).call_consumedCellsAssignedFrom configInput
+          (FormalRegionCircuit.Configured.ofPure (round (w + 0)) configInput hconfig rfl)
+        intro cell hcell
+        simpa only [FormalRegionCircuit.Configured.inputCells,
+          FormalRegionCircuit.Configured.readCells,
+          FormalRegionCircuit.Configured.readRelativeCellsAt,
+          FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, round,
+          KeygenRequirements.readRelativeCellsAt, List.nil_append] using hcell
+      · intro i _
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+          Nat.mul_one]
+        apply (round (w + (i + 1))).call_consumedCellsAssignedFrom configInput
+          (FormalRegionCircuit.Configured.ofPure (round (w + (i + 1))) configInput hconfig rfl)
+        intro cell hcell
+        simp only [FormalRegionCircuit.Configured.inputCells,
+          FormalRegionCircuit.Configured.readCells,
+          FormalRegionCircuit.Configured.readRelativeCellsAt,
+          FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, round,
+          KeygenRequirements.readRelativeCellsAt, List.nil_append, List.mem_append,
+          List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false] at hcell
+        have hprev := round_state_mem_assignedCells (w + i) configInput (offset + i) input region
+        rcases hcell with halpha | rfl | rfl | rfl | rfl | rfl | rfl
+        · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _
+            (by simp [List.mem_append, halpha])
+        · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i region _ _
+            (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one] using hprev.1)
+        · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i region _ _
+            (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+              Nat.add_assoc] using hprev.2.1)
+        · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i region _ _
+            (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+              Nat.add_assoc] using hprev.2.2.1)
+        · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i region _ _
+            (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+              Nat.add_assoc] using hprev.2.2.2.1)
+        · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i region _ _
+            (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+              Nat.add_assoc] using hprev.2.2.2.2.1)
+        · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i region _ _
+            (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+              Nat.add_assoc] using hprev.2.2.2.2.2)
+    adviceWritesConsistent := by
+      intro configInput counts _hconfig hadvice offset input region
+      exact (loopProgram_adviceWritesDistinct n w configInput hadvice offset input region).toConsistent
+        region
     fixedAssignmentsAgree := by
       intro configInput counts hconfig offset input region
       exact (loopProgram_hasNoFixedAssignments n w
@@ -395,6 +526,28 @@ def initLambdaWit (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (base a
   .native fun env => #v[f (lambdaCellsValue (readCell env base.x) (readCell env base.y)
     (readCell env acc.x) (readCell env acc.y) (bitWit alpha w env))]
 
+@[witness_support]
+theorem witnessFunctionSupport_initLambdaWit
+    (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
+    (base acc : Point (AssignedCell Fp)) (w : ℕ)
+    (f : Ecc.Mul.Incomplete.DoubleAndAdd.LambdaCells Fp → Fp) :
+    WitnessFunctionSupport
+      (Witgen.valueBuilderReads (value := field) alpha ++ [base.x, base.y, acc.x, acc.y])
+      (programFunction (initLambdaWit alpha base acc w f)) := by
+  intro left right agreement
+  have halpha : Witgen.MOver.eval (value := field) left alpha =
+      Witgen.MOver.eval (value := field) right alpha :=
+    Witgen.valueBuilderReads_eval (value := field) alpha left right
+      agreement.left.cellValues agreement.left.indexed agreement.left.data agreement.left.hints
+  have hbit : bitWit alpha w left = bitWit alpha w right := by
+    simp only [bitWit, halpha]
+  have hbx : readCell left base.x = readCell right base.x := agreement.right.cellValues base.x (by simp)
+  have hby : readCell left base.y = readCell right base.y := agreement.right.cellValues base.y (by simp)
+  have hax : readCell left acc.x = readCell right acc.x := agreement.right.cellValues acc.x (by simp)
+  have hay : readCell left acc.y = readCell right acc.y := agreement.right.cellValues acc.y (by simp)
+  change f (lambdaCellsValue _ _ _ _ _) = f (lambdaCellsValue _ _ _ _ _)
+  rw [hbx, hby, hax, hay, hbit]
+
 @[circuit_norm]
 theorem initLambdaWit_eval (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (base acc : Point (AssignedCell Fp))
     (w : ℕ) (f : Ecc.Mul.Incomplete.DoubleAndAdd.LambdaCells Fp → Fp)
@@ -453,80 +606,321 @@ theorem doubleAndAddSynthesisSummary_hasNoFixedColumns
     loopSynthesisSummary_hasNoFixedColumns]
   simp
 
+@[reducible]
+def doubleAndAddConfigure :
+    Column .advice × Column .advice × Column .advice × Column .advice ×
+      Column .advice × Column .advice → Configure Fp Config :=
+  fun (z, xA, xP, yP, lambda1, lambda2) => configure z xA xP yP lambda1 lambda2
+
+def doubleAndAddSynthesize (n : ℕ) (w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) : RegionCircuit Fp (Var (Output (n + 1)) Fp) := do
+  -- start copies (Rust execution order), materializing round 0's neighborhood
+  let _z ← copyAdvice input.z cfg.z offset
+  let _xA ← copyAdvice input.acc.x cfg.xA (offset + 1)
+  let _yA ← copyAdvice input.acc.y cfg.lambda1 offset
+  let _xP ← copyAdvice input.base.x cfg.xP (offset + 1)
+  let _yP ← copyAdvice input.base.y cfg.yP (offset + 1)
+  let _l1 ← assignAdvice cfg.lambda1 (offset + 1)
+    (initLambdaWit input.alpha input.base input.acc w (·.lambda1))
+  let _l2 ← assignAdvice cfg.lambda2 (offset + 1)
+    (initLambdaWit input.alpha input.base input.acc w (·.lambda2))
+  (qMul1Gate cfg).enable offset
+  -- the interior rounds
+  let _lp ← (loop n w).call cfg offset input.alpha
+  -- the final `q_mul_3` round on the exit neighborhood
+  let ex ← readState cfg (offset + n)
+  (qMul3Gate cfg).enable (offset + n + 1)
+  let _zl ← assignAdvice cfg.z (offset + n + 1) (stepWit input.alpha ex (w + n) (·.z))
+  let _xf ← assignAdvice cfg.xA (offset + n + 2) (stepWit input.alpha ex (w + n) (·.xA))
+  let yf ← assignAdvice cfg.lambda1 (offset + n + 2) (readWit ex State.stepY)
+  let xf ← cellAt cfg.xA (offset + n + 2)
+  let zs ← cellVec cfg.z (fun j => offset + 1 + j) (n + 1)
+  return { acc := { x := xf, y := yf }, zs }
+
+private theorem doubleAndAdd_consumedCellsAssigned (n : ℕ) (w : ℕ) :
+    ∀ (configInput : Column .advice × Column .advice × Column .advice × Column .advice ×
+        Column .advice × Column .advice)
+      (counts : ConfigureCounts) (offset : ℕ) (input : Var Inputs Fp) (region : RegionIndex),
+    ((doubleAndAddSynthesize n w ((doubleAndAddConfigure configInput).output counts)
+        offset input).operations region).ConsumedCellsAssigned region
+      ([input.z.cell, input.acc.x.cell, input.acc.y.cell,
+          input.base.x.cell, input.base.y.cell] ++
+        (Witgen.valueBuilderReads (value := field) input.alpha).map (·.cell) ++ []) := by
+  intro configInput counts offset input region
+  rcases configInput with ⟨z, xA, xP, yP, lambda1, lambda2⟩
+  let cfg := (configure z xA xP yP lambda1 lambda2).output counts
+  have hcfg : cfg.z = z ∧ cfg.xA = xA ∧ cfg.xP = xP ∧ cfg.yP = yP ∧
+      cfg.lambda1 = lambda1 ∧ cfg.lambda2 = lambda2 := by
+    simp [cfg, configure]
+  simp only [doubleAndAddConfigure, doubleAndAddSynthesize,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_copyAdvice, operations_assignAdvice, operations_enable,
+    operations_readState, operations_cellAt, operations_cellVec,
+    RegionOperations.ConsumedCellsAssigned, RegionOperations.assignedFrom_append_iff,
+    List.nil_append, List.append_nil]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · apply (loop n w).call_consumedCellsAssignedFrom cfg
+      (FormalRegionCircuit.Configured.ofPure (loop n w) cfg () rfl)
+    intro cell hcell
+    simp only [FormalRegionCircuit.Configured.inputCells,
+      FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt,
+      FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, loop, loopElaborated,
+      KeygenRequirements.readRelativeCellsAt, List.nil_append, List.mem_append,
+      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
+      Nat.add_zero] at hcell
+    rcases hcell with halpha | rfl | rfl | rfl | rfl | rfl | rfl
+    · simp [RegionOperations.assignedCellsAfter, RegionOperation.assignedCells, halpha]
+    all_goals
+      simp [cfg, Cell.of, RegionOperations.assignedCellsAfter, RegionOperation.assignedCells]
+  · have hex : ∀ c ∈ [Cell.of region (offset + n) cfg.z,
+        Cell.of region (offset + n + 1) cfg.xA,
+        Cell.of region (offset + n + 1) cfg.lambda1,
+        Cell.of region (offset + n + 1) cfg.lambda2,
+        Cell.of region (offset + n + 1) cfg.xP,
+        Cell.of region (offset + n + 1) cfg.yP],
+        c ∈ (((loop n w).call cfg offset input.alpha).operations region).assignedCellsAfter
+          region
+          ([Cell.of region (offset + 1) cfg.lambda2, Cell.of region (offset + 1) cfg.lambda1,
+            Cell.of region (offset + 1) cfg.yP, Cell.of region (offset + 1) cfg.xP,
+            Cell.of region offset cfg.lambda1, Cell.of region (offset + 1) cfg.xA,
+            Cell.of region offset cfg.z] ++
+            ([input.z.cell, input.acc.x.cell, input.acc.y.cell, input.base.x.cell,
+              input.base.y.cell] ++
+              (Witgen.valueBuilderReads (value := field) input.alpha).map (·.cell))) := by
+      intro c hc
+      cases n with
+      | zero =>
+          apply RegionOperations.mem_assignedCellsAfter_of_mem
+          simp only [Nat.add_zero, List.mem_cons, List.not_mem_nil, or_false] at hc
+          rcases hc with rfl | rfl | rfl | rfl | rfl | rfl <;> simp
+      | succ k =>
+          rw [FormalRegionCircuit.call_operations]
+          change c ∈ ((loopProgram (k + 1) w cfg offset input.alpha).operations region).assignedCellsAfter _ _
+          rw [loopProgram_operations]
+          have hprev := round_state_mem_assignedCells (w + k) cfg (offset + k) input.alpha region
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+          rcases hc with rfl | rfl | rfl | rfl | rfl | rfl
+          · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ k region _ _
+              (by simpa [RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+                Nat.add_assoc] using hprev.1)
+          · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ k region _ _
+              (by simpa [RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+                Nat.add_assoc] using hprev.2.1)
+          · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ k region _ _
+              (by simpa [RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+                Nat.add_assoc] using hprev.2.2.1)
+          · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ k region _ _
+              (by simpa [RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+                Nat.add_assoc] using hprev.2.2.2.1)
+          · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ k region _ _
+              (by simpa [RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+                Nat.add_assoc] using hprev.2.2.2.2.1)
+          · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ k region _ _
+              (by simpa [RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+                Nat.add_assoc] using hprev.2.2.2.2.2)
+    have halphaMem : ∀ c ∈ (Witgen.valueBuilderReads (value := field) input.alpha).map (·.cell),
+        c ∈ (((loop n w).call cfg offset input.alpha).operations region).assignedCellsAfter
+          region
+          ([Cell.of region (offset + 1) cfg.lambda2, Cell.of region (offset + 1) cfg.lambda1,
+            Cell.of region (offset + 1) cfg.yP, Cell.of region (offset + 1) cfg.xP,
+            Cell.of region offset cfg.lambda1, Cell.of region (offset + 1) cfg.xA,
+            Cell.of region offset cfg.z] ++
+            ([input.z.cell, input.acc.x.cell, input.acc.y.cell, input.base.x.cell,
+              input.base.y.cell] ++
+              (Witgen.valueBuilderReads (value := field) input.alpha).map (·.cell))) := by
+      intro c hc
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      simp [hc]
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · keygen_registration
+    · simp only [RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+        RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+        RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+        List.not_mem_nil, false_implies, implies_true, true_and, and_true]
+      refine ⟨_, witnessFunctionSupport_stepWit input.alpha _ (w + n) _, ?_⟩
+      intro cell hcell _
+      simp only [output_readState, reads_z, reads_xA, reads_lambda1, reads_lambda2,
+        reads_base_x, reads_base_y, List.mem_append, List.mem_cons, List.not_mem_nil,
+        or_false] at hcell
+      simp only [RegionOperations.assignedCellsAfter_cons,
+        RegionOperations.assignedCellsAfter_nil, RegionOperation.assignedCells,
+        List.cons_append]
+      change cell.cell ∈ (((loop n w).call cfg offset input.alpha).operations region).assignedCellsAfter
+        region _
+      rcases hcell with ha | rfl | rfl | rfl | rfl | rfl | rfl
+      · exact halphaMem cell.cell (List.mem_map_of_mem (f := AssignedCell.cell) ha)
+      all_goals exact hex _ (by simp [cfg, Cell.of, AssignedCell.of_cell])
+    · simp only [RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+        RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+        RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+        List.not_mem_nil, false_implies, implies_true, true_and, and_true]
+      refine ⟨_, witnessFunctionSupport_stepWit input.alpha _ (w + n) _, ?_⟩
+      intro cell hcell _
+      simp only [output_readState, reads_z, reads_xA, reads_lambda1, reads_lambda2,
+        reads_base_x, reads_base_y, List.mem_append, List.mem_cons, List.not_mem_nil,
+        or_false] at hcell
+      simp only [RegionOperations.assignedCellsAfter_cons,
+        RegionOperations.assignedCellsAfter_nil, RegionOperation.assignedCells,
+        List.cons_append]
+      change cell.cell ∈ _ ::
+        (((loop n w).call cfg offset input.alpha).operations region).assignedCellsAfter
+          region _
+      rcases hcell with ha | rfl | rfl | rfl | rfl | rfl | rfl
+      · exact List.mem_cons_of_mem _
+          (halphaMem cell.cell (List.mem_map_of_mem (f := AssignedCell.cell) ha))
+      all_goals
+        exact List.mem_cons_of_mem _ (hex _ (by simp [cfg, Cell.of, AssignedCell.of_cell]))
+    · simp only [RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+        RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+        RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+        List.not_mem_nil, false_implies, implies_true, true_and, and_true]
+      refine ⟨_, witnessFunctionSupport_readWit _ _, ?_⟩
+      intro cell hcell _
+      simp only [output_readState, reads_z, reads_xA, reads_lambda1, reads_lambda2,
+        reads_base_x, reads_base_y, List.mem_cons, List.not_mem_nil, or_false] at hcell
+      simp only [RegionOperations.assignedCellsAfter_cons,
+        RegionOperations.assignedCellsAfter_nil, RegionOperation.assignedCells,
+        List.cons_append]
+      change cell.cell ∈ _ :: _ ::
+        (((loop n w).call cfg offset input.alpha).operations region).assignedCellsAfter
+          region _
+      rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl <;>
+        exact List.mem_cons_of_mem _
+          (List.mem_cons_of_mem _ (hex _ (by simp [cfg, Cell.of, AssignedCell.of_cell])))
+
+private theorem doubleAndAdd_adviceWritesConsistent (n : ℕ) (w : ℕ) :
+    ∀ (configInput : Column .advice × Column .advice × Column .advice × Column .advice ×
+        Column .advice × Column .advice)
+      (counts : ConfigureCounts)
+      (_hadvice : ColumnsDistinct
+        [((doubleAndAddConfigure configInput).output counts).z,
+          ((doubleAndAddConfigure configInput).output counts).xA,
+          ((doubleAndAddConfigure configInput).output counts).lambda1,
+          ((doubleAndAddConfigure configInput).output counts).lambda2,
+          ((doubleAndAddConfigure configInput).output counts).xP,
+          ((doubleAndAddConfigure configInput).output counts).yP])
+      (offset : ℕ) (input : Var Inputs Fp) (region : RegionIndex),
+    ((doubleAndAddSynthesize n w ((doubleAndAddConfigure configInput).output counts)
+        offset input).operations region).AdviceWritesConsistent region := by
+  intro configInput counts hadvice offset input region
+  apply RegionOperations.AdviceWritesDistinct.toConsistent
+  rcases configInput with ⟨z, xA, xP, yP, lambda1, lambda2⟩
+  let cfg := (configure z xA xP yP lambda1 lambda2).output counts
+  have hdistinct : ColumnsDistinct [cfg.z, cfg.xA, cfg.lambda1, cfg.lambda2, cfg.xP, cfg.yP] :=
+    hadvice
+  simp only [doubleAndAddConfigure, ColumnsDistinct, List.nodup_cons, List.mem_cons,
+    List.not_mem_nil, or_false, not_or, not_false_eq_true, and_true, List.nodup_nil] at hadvice
+  obtain ⟨⟨hzx, hzl1, hzl2, hzxp, hzyp⟩, ⟨hxl1, hxl2, hxxp, hxyp⟩, ⟨hl1l2, hl1xp, hl1yp⟩,
+    ⟨hl2xp, hl2yp⟩, hxpyp⟩ := hadvice
+  have hloop := loopProgram_adviceWritesDistinct n w cfg hdistinct offset input.alpha region
+  have hloopB := loopProgram_adviceWrites_bounds n w cfg offset input.alpha region
+  dsimp only [cfg] at hloop hloopB
+  simp only [doubleAndAddConfigure, doubleAndAddSynthesize,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_copyAdvice, operations_assignAdvice, operations_enable,
+    operations_readState, operations_cellAt, operations_cellVec,
+    List.nil_append, List.append_nil, List.cons_append,
+    RegionOperations.adviceWritesDistinct_assignAdvice_cons,
+    RegionOperations.adviceWritesDistinct_constrainEqual_cons,
+    RegionOperations.adviceWritesDistinct_enableGate_cons,
+    RegionOperations.adviceWritesDistinct_append_iff,
+    RegionOperations.adviceWritesDistinct_nil,
+    RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+    RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_assignAdvice,
+    RegionOperation.adviceWrites_constrainEqual, RegionOperation.adviceWrites_enableGate,
+    FormalRegionCircuit.call_operations, loop, List.mem_append, List.mem_cons,
+    List.not_mem_nil, or_false, not_or, RegionOperations.not_adviceWrite_eq_iff,
+    RegionOperations.adviceWrites_offset_eq_add, RegionOperations.adviceWrites_add_eq_offset,
+    RegionOperations.adviceWrites_add_eq_add, Nat.one_ne_zero,
+    true_imp_iff, false_imp_iff, not_false_eq_true, true_and, and_true]
+  repeat' apply And.intro
+  all_goals
+    first
+    | exact hloop
+    | grind
+    | (rw [List.disjoint_left]; rintro ⟨col, row⟩ hl hr;
+       simp only [List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hr;
+       rcases hloopB col row hl with ⟨hcol, h1, h2⟩ | ⟨hc, h1, h2⟩ <;>
+         rcases hr with ⟨hcol2, hrow2⟩ | ⟨hcol2, hrow2⟩ | ⟨hcol2, hrow2⟩ <;>
+         grind)
+
+@[reducible]
+def doubleAndAddElaborated (n : ℕ) (w : ℕ) :
+    ElaboratedRegionCircuit Fp
+      (Column .advice × Column .advice × Column .advice × Column .advice ×
+        Column .advice × Column .advice)
+      Config Inputs (Output (n + 1))
+      doubleAndAddConfigure (doubleAndAddSynthesize n w) :=
+  { keygenRequirements :=
+      { permutationColumns input _ :=
+          let (_, xA, xP, yP, _, _) := input
+          [xA, xP, yP]
+        inputCells _ _ input :=
+          [input.z.cell, input.acc.x.cell, input.acc.y.cell,
+            input.base.x.cell, input.base.y.cell]
+        readCells _ _ input :=
+          (Witgen.valueBuilderReads (value := field) input.alpha).map (·.cell) }
+    adviceColumnRequirements cfg :=
+      ColumnsDistinct [cfg.z, cfg.xA, cfg.lambda1, cfg.lambda2, cfg.xP, cfg.yP]
+    synthesisSummary cfg offset _ _ :=
+      doubleAndAddSynthesisSummary n cfg offset
+    synthesisSummary_eq := by
+      intro cfg offset input self
+      unfold doubleAndAddSynthesisSummary doubleAndAddSynthesize
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · simp only [circuit_norm, synthesis_summary_norm,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_columns]
+      · simp only [circuit_norm, synthesis_summary_norm,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount,
+          loopSynthesisSummary]
+        omega
+      · simp only [circuit_norm, synthesis_summary_norm,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp only [circuit_norm, synthesis_summary_norm,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
+      · simp only [circuit_norm, synthesis_summary_norm]
+      · simp only [circuit_norm, synthesis_summary_norm]
+    output cfg offset _ self :=
+      { acc :=
+          { x := .of self (offset + n + 2) cfg.xA
+            y := .of self (offset + n + 2) cfg.lambda1 }
+        zs := Vector.ofFn fun j => .of self (offset + 1 + j.val) cfg.z }
+    output_eq := by
+      intro _ _ _ _
+      simp only [doubleAndAddSynthesize, circuit_norm, keygen_output_norm]
+    registered := by keygen_registration [doubleAndAddSynthesize]
+    lookupSelectorsAnchoredBy_of_registered := by
+      intro _ _ _ _ _ _ anchor _ hregistered
+      rw [doubleAndAddConfigure, configure_delta_lookups] at hregistered
+      simp only [List.nil_append, List.append_nil] at hregistered
+      exact RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
+        hregistered anchor
+    consumedCellsAssigned := by
+      intro configInput counts _hconfig offset input region
+      simpa [KeygenRequirements.readRelativeCellsAt] using
+        doubleAndAdd_consumedCellsAssigned n w configInput counts offset input region
+    adviceWritesConsistent := by
+      intro configInput counts _hconfig hadvice offset input region
+      exact doubleAndAdd_adviceWritesConsistent n w configInput counts hadvice offset input region }
+
 def double_and_add (n : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp
       (Column .advice × Column .advice × Column .advice × Column .advice ×
         Column .advice × Column .advice)
       Config Inputs (Output (n + 1)) where
-  configure := fun (z, xA, xP, yP, lambda1, lambda2) =>
-    configure z xA xP yP lambda1 lambda2
-
-  elaborated :=
-    { keygenRequirements :=
-        { permutationColumns input _ :=
-            let (_, xA, xP, yP, _, _) := input
-            [xA, xP, yP]
-          inputCells _ _ input :=
-            [input.z.cell, input.acc.x.cell, input.acc.y.cell,
-              input.base.x.cell, input.base.y.cell] }
-      synthesisSummary cfg offset _ _ :=
-        doubleAndAddSynthesisSummary n cfg offset
-      synthesisSummary_eq := by
-        intro cfg offset input self
-        unfold doubleAndAddSynthesisSummary
-        apply FloorPlanner.RegionSynthesisSummary.ext
-        · simp only [circuit_norm, synthesis_summary_norm,
-            FloorPlanner.RegionSynthesisSummary.ofColumns_columns]
-        · simp only [circuit_norm, synthesis_summary_norm,
-            FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount,
-            loopSynthesisSummary]
-          omega
-        · simp only [circuit_norm, synthesis_summary_norm,
-            FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
-        · simp only [circuit_norm, synthesis_summary_norm,
-            FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
-        · simp only [circuit_norm, synthesis_summary_norm]
-        · simp only [circuit_norm, synthesis_summary_norm]
-      output cfg offset _ self :=
-        { acc :=
-            { x := .of self (offset + n + 2) cfg.xA
-              y := .of self (offset + n + 2) cfg.lambda1 }
-          zs := Vector.ofFn fun j => .of self (offset + 1 + j.val) cfg.z }
-      output_eq := by
-        intro _ _ _ _
-        simp only [circuit_norm, keygen_output_norm]
-      registered := by keygen_registration
-      lookupSelectorsAnchoredBy_of_registered := by
-        intro _ _ _ _ _ _ anchor _ hregistered
-        rw [configure_delta_lookups] at hregistered
-        simp only [List.nil_append, List.append_nil] at hregistered
-        exact RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
-          hregistered anchor
-      copyCellsAssigned := by keygen_registration }
-
-  synthesize cfg offset (input : Var Inputs Fp) := do
-    -- start copies (Rust execution order), materializing round 0's neighborhood
-    let _z ← copyAdvice input.z cfg.z offset
-    let _xA ← copyAdvice input.acc.x cfg.xA (offset + 1)
-    let _yA ← copyAdvice input.acc.y cfg.lambda1 offset
-    let _xP ← copyAdvice input.base.x cfg.xP (offset + 1)
-    let _yP ← copyAdvice input.base.y cfg.yP (offset + 1)
-    let _l1 ← assignAdvice cfg.lambda1 (offset + 1)
-      (initLambdaWit input.alpha input.base input.acc w (·.lambda1))
-    let _l2 ← assignAdvice cfg.lambda2 (offset + 1)
-      (initLambdaWit input.alpha input.base input.acc w (·.lambda2))
-    (qMul1Gate cfg).enable offset
-    -- the interior rounds
-    let _lp ← (loop n w).call cfg offset input.alpha
-    -- the final `q_mul_3` round on the exit neighborhood
-    let ex ← readState cfg (offset + n)
-    (qMul3Gate cfg).enable (offset + n + 1)
-    let _zl ← assignAdvice cfg.z (offset + n + 1) (stepWit input.alpha ex (w + n) (·.z))
-    let _xf ← assignAdvice cfg.xA (offset + n + 2) (stepWit input.alpha ex (w + n) (·.xA))
-    let yf ← assignAdvice cfg.lambda1 (offset + n + 2) (readWit ex State.stepY)
-    let xf ← cellAt cfg.xA (offset + n + 2)
-    let zs ← cellVec cfg.z (fun j => offset + 1 + j) (n + 1)
-    return { acc := { x := xf, y := yf }, zs }
+  configure := doubleAndAddConfigure
+  elaborated := doubleAndAddElaborated n w
+  synthesize := doubleAndAddSynthesize n w
 
   -- base is a non-identity on-curve point (Rust exceptional-case check).
   Assumptions input := (show Point Fp from input.base).OnCurve
@@ -897,8 +1291,8 @@ theorem Configured.lookups_eq_nil (n w : ℕ) {cfg : Config}
   rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
   cases outputEq
   simp only [FormalRegionCircuit.Configured.lookups,
-    FormalRegionCircuit.keygenRequirements,
-    ElaboratedRegionCircuit.keygenRequirements, double_and_add, configure,
-    keygen_norm]
+    FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+    double_and_add, doubleAndAddConfigure,
+    doubleAndAddElaborated, configure, keygen_norm]
 
 end Zcash.Circuits.Ecc.MulIncomplete

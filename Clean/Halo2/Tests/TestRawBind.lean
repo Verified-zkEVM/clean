@@ -55,7 +55,12 @@ def double : FormalCircuit Fp
         lookups _ configured := (configured.toFormal (name := "complete point addition")).lookups
         fixedColumns _ configured := (configured.toFormal (name := "complete point addition")).fixedColumns
         permutationColumns _ configured :=
-          (configured.toFormal (name := "complete point addition")).permutationColumns }
+          (configured.toFormal (name := "complete point addition")).permutationColumns
+        readCells _ _ point :=
+          (Witgen.valueBuilderReads (value := field) (Point.x <$> point) ++
+            Witgen.valueBuilderReads (value := field) (Point.y <$> point)).map (·.cell) }
+    adviceColumnRequirements cfg :=
+      cfg.1.1 ≠ cfg.1.2 ∧ Add.addFormal.elaborated.adviceColumnRequirements cfg.2
     registered := by
       intro configInput counts hconfig input i
       simp only [Configure.output_bind,
@@ -83,22 +88,68 @@ def double : FormalCircuit Fp
         · simp only [Add.addFormal_inputCells, List.forall_cons,
             List.forall_nil, and_true]
           and_intros <;> keygen_registration
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig input i
       simp only [Configure.output_bind,
-        Configure.output_pure, Circuit.operations_bind,
+        Configure.output_pure, Circuit.operations_bind, operations_assignRegion,
         nextRegionIndex_assignRegion, output_assignRegion,
         RegionCircuit.output_bind, output_assignAdvice,
-        RegionCircuit.output_pure]
-      apply Operations.CopyCellsAssignedFrom.append
-      · keygen_registration
+        RegionCircuit.output_pure, Operations.ConsumedCellsAssigned,
+        KeygenRequirements.readRelativeCellsAt, List.nil_append, List.map_nil,
+        List.append_nil]
+      apply Operations.AssignedFrom.append
+      · rw [Operations.assignedFrom_region_iff]
+        refine ⟨?_, by simp [Operations.assignedFrom_nil_iff]⟩
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          operations_assignAdvice, List.singleton_append, List.append_nil]
+        apply RegionOperations.AssignedFrom.cons
+        · exact ⟨[], rfl, (Witgen.valueBuilderReads (value := field) (Point.x <$> input)).map (·.cell),
+            ⟨_, witnessFunctionSupport_scalarBuilder _, fun _ hc _ => List.mem_map_of_mem hc⟩, rfl⟩
+        · intro c hc
+          simp only [List.nil_append, List.mem_map] at hc
+          obtain ⟨a, ha, rfl⟩ := hc
+          exact List.mem_map.mpr ⟨a, List.mem_append_left _ ha, rfl⟩
+        · apply RegionOperations.AssignedFrom.cons
+          · exact ⟨[], rfl, (Witgen.valueBuilderReads (value := field) (Point.y <$> input)).map (·.cell),
+              ⟨_, witnessFunctionSupport_scalarBuilder _, fun _ hc _ => List.mem_map_of_mem hc⟩, rfl⟩
+          · intro c hc
+            simp only [List.nil_append, List.mem_map] at hc
+            obtain ⟨a, ha, rfl⟩ := hc
+            exact List.mem_cons_of_mem _ (List.mem_map.mpr ⟨a, List.mem_append_right _ ha, rfl⟩)
+          · exact RegionOperations.AssignedFrom.nil _
       · simp only [keygen_spine]
-        apply Add.addFormal.call_copyCellsAssignedFrom
+        apply Add.addFormal.call_consumedCellsAssignedFrom
           configInput.2 hconfig.toFormal _ _
         intro cell hcell
-        simp only [Add.addFormal_inputCells, List.mem_cons] at hcell
-        rcases hcell with hcell | hcell | hcell | hcell <;>
-          simp_all [AssignedCell.of]
+        rw [List.mem_append, List.mem_append, Add.addFormal_inputCells] at hcell
+        rcases hcell with (hcell | hcell) | hcell
+        · simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          rcases hcell with hcell | hcell | hcell | hcell <;> simp_all [AssignedCell.of]
+        · exact False.elim (List.not_mem_nil hcell)
+        · exact False.elim (List.not_mem_nil hcell)
+    adviceWritesConsistent := by
+      intro configInput counts hconfig hadvice input i
+      rcases hadvice with ⟨hxy, haddAdv⟩
+      simp only [Configure.output_bind, Configure.output_pure, Circuit.operations_bind,
+        operations_assignRegion, nextRegionIndex_assignRegion, output_assignRegion,
+        RegionCircuit.output_bind, output_assignAdvice, RegionCircuit.output_pure,
+        Operations.adviceWritesConsistentFrom_append, Operations.regionCount]
+      refine ⟨?_, ?_⟩
+      · rw [Operations.adviceWritesConsistentFrom_region_cons]
+        refine ⟨?_, Operations.AdviceWritesConsistentFrom.nil _⟩
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          operations_assignAdvice, List.singleton_append, List.append_nil]
+        apply RegionOperations.adviceWritesConsistent_assignAdvice_of_not_mem
+        · intro hmem
+          have hmem' := RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy i hmem
+          simp only [RegionOperations.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+            RegionOperation.adviceWrites, List.append_nil, List.mem_singleton,
+            Prod.mk.injEq] at hmem'
+          exact hxy hmem'.1
+        · apply RegionOperations.adviceWritesConsistent_assignAdvice_of_not_mem
+          · simp [RegionOperations.nonSelfCopyAdviceWrites]
+          · exact RegionOperations.AdviceWritesConsistent.nil
+      · exact Add.addFormal.call_adviceWritesConsistent configInput.2 hconfig.toFormal haddAdv _ _
     fixedWritesLawful := by
       intro configInput counts hconfig input i
       apply Operations.HasNoFixedWrites.fixedWritesLawful

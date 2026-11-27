@@ -62,6 +62,9 @@ def keygenRequirements (G : FixedBase) : KeygenRequirements Fp
         cfg.1.superConfig.addConfig.yQR] : List AnyColumn)
   inputCells _ _ input :=
     [input.akP.x.cell, input.akP.y.cell]
+  readCells _ _ input :=
+    ((Ecc.MulFixed.FullWidth.scalarWindows input.alpha).toList.flatMap
+      (Witgen.valueBuilderReads (value := field))).map (·.cell)
 
 def synthesisSummary
     (cfg : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config) :
@@ -88,7 +91,7 @@ theorem synthesisSummary_instanceRowExtent_eq
     (synthesisSummary cfg).instanceRowExtent = 0 := by
   simp only [synthesisSummary, synthesis_summary_norm]
 
-theorem synthesize_copyCellsAssignedFrom
+theorem synthesize_consumedCellsAssignedFrom
     (G : FixedBase)
     (cfg : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (input : Var Input Fp) (self : RegionIndex)
@@ -98,36 +101,48 @@ theorem synthesize_copyCellsAssignedFrom
         let alphaCommitment ←
           (Ecc.MulFixed.FullWidth.circuit G).call cfg.1 input.alpha
         Ecc.Add.addFormal.call cfg.2 { p := alphaCommitment, q := input.akP })
-      |>.operations self).CopyCellsAssignedFrom self
-        [input.akP.x.cell, input.akP.y.cell] := by
+      |>.operations self).AssignedFrom RegionOperation.Consumes self
+        ([input.akP.x.cell, input.akP.y.cell] ++
+          ((Ecc.MulFixed.FullWidth.scalarWindows input.alpha).toList.flatMap
+            (Witgen.valueBuilderReads (value := field))).map AssignedCell.cell) := by
+  let initial := [input.akP.x.cell, input.akP.y.cell] ++
+    ((Ecc.MulFixed.FullWidth.scalarWindows input.alpha).toList.flatMap
+      (Witgen.valueBuilderReads (value := field))).map AssignedCell.cell
   let fullWidthOps := ((Ecc.MulFixed.FullWidth.circuit G).call
     cfg.1 input.alpha).operations self
   let fullWidthOutput := (Ecc.MulFixed.FullWidth.circuit G).output
     cfg.1 input.alpha self
-  have hfullWidth : fullWidthOps.CopyCellsAssignedFrom self
-      [input.akP.x.cell, input.akP.y.cell] := by
-    apply (Ecc.MulFixed.FullWidth.circuit G).call_copyCellsAssignedFrom
+  have hfullWidth : fullWidthOps.AssignedFrom RegionOperation.Consumes self initial := by
+    apply (Ecc.MulFixed.FullWidth.circuit G).call_consumedCellsAssignedFrom
       cfg.1 configuredFullWidth input.alpha self
     intro cell hcell
-    rw [Ecc.MulFixed.FullWidth.circuit_inputCells_eq] at hcell
-    contradiction
+    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+      FormalCircuit.Configured.readRelativeCellsAt, Ecc.MulFixed.FullWidth.circuit,
+      FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.nil_append, List.map_nil,
+      List.append_nil] at hcell
+    exact List.mem_append_right _ hcell
   have houtput := Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
     G cfg.1 input.alpha self
   have hadd : ((Ecc.Add.addFormal.call cfg.2
       { p := fullWidthOutput, q := input.akP }).operations (self + 2))
-      |>.CopyCellsAssignedFrom (self + 2)
-        ([input.akP.x.cell, input.akP.y.cell] ++
-          fullWidthOps.assignedCellsFrom self) := by
-    apply Ecc.Add.addFormal.call_copyCellsAssignedFrom
+      |>.AssignedFrom RegionOperation.Consumes (self + 2)
+        (initial ++ fullWidthOps.assignedCellsFrom self) := by
+    apply Ecc.Add.addFormal.call_consumedCellsAssignedFrom
       cfg.2 configuredAdd { p := fullWidthOutput, q := input.akP } (self + 2)
     intro cell hcell
-    rw [Ecc.Add.addFormal_inputCells] at hcell
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+      FormalCircuit.Configured.readRelativeCellsAt, Ecc.Add.addFormal,
+      FormalRegionCircuit.toFormal, Ecc.Add.add, Ecc.Add.addElaborated,
+      FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hcell
     rcases hcell with rfl | rfl | rfl | rfl
     · exact List.mem_append_right _ houtput.1
     · exact List.mem_append_right _ houtput.2
-    · simp
-    · simp
+    · exact List.mem_append_left _ (List.mem_append_left _ (by simp))
+    · exact List.mem_append_left _ (List.mem_append_left _ (by simp))
   have hall := hfullWidth.append (by
     simpa only [fullWidthOps, FormalCircuit.call_regionCount', Ecc.MulFixed.FullWidth.circuit_regionCount, Nat.add_zero] using hadd)
   simpa only [Circuit.operations_bind, Circuit.operations_pure,
@@ -204,10 +219,24 @@ def circuit (G : FixedBase) : FormalCircuit Fp
           FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
           FormalCircuit.call_regionCount', Ecc.MulFixed.FullWidth.circuit_regionCount,
           keygen_norm, keygen_spine]
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        (Ecc.MulFixed.FullWidth.circuit G).elaborated.adviceColumnRequirements cfg.1 ∧
+        Ecc.Add.addFormal.elaborated.adviceColumnRequirements cfg.2
+      consumedCellsAssigned := by
         intro cfg _ hconfig input self
-        simpa only [keygen_norm, keygen_spine, circuit_norm] using
-          synthesize_copyCellsAssignedFrom G cfg input self hconfig.1 hconfig.2
+        simpa only [keygen_norm, keygen_spine, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil] using
+          synthesize_consumedCellsAssignedFrom G cfg input self hconfig.1 hconfig.2
+      adviceWritesConsistent := by
+        intro cfg _ hconfig hadvice input self
+        rcases hadvice with ⟨hfwAdv, haddAdv⟩
+        simp only [Configure.output_pure, Circuit.operations_bind,
+          Operations.adviceWritesConsistentFrom_append, FormalCircuit.call_regionCount',
+          Ecc.MulFixed.FullWidth.circuit_regionCount, circuit_norm]
+        exact ⟨(Ecc.MulFixed.FullWidth.circuit G).call_adviceWritesConsistent cfg.1
+            hconfig.1 hfwAdv input.alpha self,
+          Ecc.Add.addFormal.call_adviceWritesConsistent cfg.2
+            hconfig.2 haddAdv _ (self + 2)⟩
       fixedWritesLawful := by
         intro cfg counts hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree

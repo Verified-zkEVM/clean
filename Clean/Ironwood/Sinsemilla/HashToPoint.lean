@@ -34,6 +34,16 @@ open Specs.Sinsemilla (Generators)
 /-- Constant single-cell witness program. -/
 def constWit (c : Fp) : WitgenIR Fp 1 := .native fun _ => #v[c]
 
+@[witness_support]
+theorem witnessFunctionSupport_constWit (c : Fp) :
+    WitnessFunctionSupport [] (programFunction (constWit c)) := by
+  intro _ _ _
+  rfl
+
+/-- Constant environment function with empty read support. -/
+def constEnv (c : Fp) : SupportedEnvironmentFunction Fp Fp :=
+  ⟨fun _ => c, [], fun _ _ _ => rfl⟩
+
 @[circuit_norm]
 theorem constWit_eval (c : Fp) (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((constWit c).eval env)[j] = c := by
@@ -123,6 +133,39 @@ theorem witnessMessagePiece_copyCellsAssignedFrom
     ((witnessMessagePiece cfg w).operations region)
       |>.CopyCellsAssignedFrom region available := by
   simp only [witnessMessagePiece, circuit_norm, keygen_spine]
+
+@[keygen_norm]
+theorem witnessMessagePiece_consumedCellsAssignedFrom
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (reads : List (AssignedCell Fp))
+    (hsupport : WitnessFunctionSupport reads (programFunction w))
+    (region : RegionIndex) (available : List Cell)
+    (hreads : ∀ cell ∈ reads, cell.cell ∈ available) :
+    ((witnessMessagePiece cfg w).operations region)
+      |>.AssignedFrom RegionOperation.Consumes region available := by
+  simp only [witnessMessagePiece, operations_assignRegion, operations_assignAdvice,
+    Operations.assignedFrom_region_iff, Operations.assignedFrom_nil_iff,
+    RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+    RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+    RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+    List.not_mem_nil, false_implies, implies_true, true_and, and_true]
+  exact ⟨reads, hsupport, fun c hc _ => hreads c hc⟩
+
+@[keygen_norm]
+theorem witnessMessagePiece_adviceWritesDistinct
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1) (region : RegionIndex) :
+    ((witnessMessagePiece cfg w).operations region).AdviceWritesDistinct := by
+  simp only [witnessMessagePiece, operations_assignRegion, operations_assignAdvice,
+    Operations.adviceWritesDistinct_region_cons, Operations.adviceWritesDistinct_nil,
+    RegionOperations.adviceWritesDistinct_assignAdvice_cons,
+    RegionOperations.adviceWritesDistinct_nil, RegionOperations.adviceWrites_nil,
+    List.not_mem_nil, not_false_eq_true, and_self]
+
+@[keygen_norm]
+theorem witnessMessagePiece_adviceWritesConsistent
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1) (region : RegionIndex) :
+    ((witnessMessagePiece cfg w).operations region).AdviceWritesConsistentFrom region :=
+  (witnessMessagePiece_adviceWritesDistinct cfg w region).toConsistent region
 
 /-- Witnessing a message piece does not introduce malformed lookup
 activations. -/
@@ -288,7 +331,7 @@ def ProverSpec (G : Generators) (ns : List ℕ) (Q : Point Fp)
     output.point.x = B.x ∧ output.point.y = B.y
 
 derive_contract_bridges chainC (G : Generators) (ns : List ℕ) (Q : Point Fp) :=
-  Sinsemilla.Chain.circuit G ns (fun _ => Q.y)
+  Sinsemilla.Chain.circuit G ns (constEnv Q.y)
 
 /-- Literal-eval bridge for the output record. -/
 private theorem out_eval_lit {k : ℕ} (env : Placed Environment Fp)
@@ -350,7 +393,7 @@ def hashRegionSynthesize (G : Generators) (ns : List ℕ) (Q : Point Fp)
   let _yq ← assignFixed cfg.fixedYQ offset Q.y
   let xa ← assignAdvice cfg.xA offset (constWit Q.x)
   constrainConstant xa Q.x
-  let out ← (Sinsemilla.Chain.circuit G ns (fun _ => Q.y)).call cfg offset pieces
+  let out ← (Sinsemilla.Chain.circuit G ns (constEnv Q.y)).call cfg offset pieces
   let z1s ← z1Cells ns cfg offset
   pure ({ point := out.point, z1s := z1s } : Output ns.length (AssignedCell Fp))
 
@@ -380,7 +423,7 @@ theorem hashRegionSynthesize_assignFixed_mem_iff
         (hashRegionSynthesize G ns Q cfg offset input).operations self ↔
       (column = cfg.fixedYQ ∧ row = offset ∧ value = Q.y) ∨
         .assignFixed column row value ∈
-          ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).call
+          ((Sinsemilla.Chain.circuit G ns (constEnv Q.y)).call
             cfg offset input).operations self := by
   simp only [hashRegionSynthesize, circuit_norm, List.mem_append]
   rw [z1Cells_operations]
@@ -427,10 +470,12 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           permutationColumns cfg _ := [cfg.xA, cfg.lambda1, cfg.bits]
           inputCells _ _ input :=
             input.pieces.toList.map (·.cell) }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.bits, cfg.xP, cfg.lambda1, cfg.lambda2, cfg.xA]
       registered := by
         intro cfg counts hconfig offset input region
         keygen_registration [hashRegionSynthesize]
-        apply (Sinsemilla.Chain.circuit G ns fun _ => Q.y).callPacked_keygenRegistered cfg
+        apply (Sinsemilla.Chain.circuit G ns (constEnv Q.y)).callPacked_keygenRegistered cfg
           (.ofPure _ cfg () rfl) offset input region
         case hgates => keygen_registration
         case hlookups => keygen_registration
@@ -439,13 +484,53 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
         case hinputCells =>
           keygen_registration
           grind [List.forall_iff_forall_mem]
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro cfg counts hconfig offset input region
-        keygen_registration [hashRegionSynthesize, z1Cells]
-        exact RegionOperations.CopyCellsAssignedFrom.nil _
+        simp only [Configure.output_pure, hashRegionSynthesize, RegionCircuit.operations_bind,
+          RegionCircuit.operations_pure, operations_enable, operations_assignFixed,
+          operations_assignAdvice, operations_constrainConstant, z1Cells_operations,
+          List.append_nil, RegionOperations.ConsumedCellsAssigned,
+          RegionOperations.assignedFrom_append_iff, KeygenRequirements.readRelativeCellsAt,
+          List.map_nil]
+        refine ⟨?_, ?_, ?_, ?_, ?_⟩
+        · keygen_registration
+        · keygen_registration
+        · keygen_registration
+        · keygen_registration
+        · apply (Sinsemilla.Chain.circuit G ns (constEnv Q.y)).call_consumedCellsAssignedFrom cfg
+            (FormalRegionCircuit.Configured.ofPure _ cfg () rfl)
+          intro cell hcell
+          simp only [FormalRegionCircuit.Configured.inputCells,
+            FormalRegionCircuit.Configured.readCells,
+            FormalRegionCircuit.Configured.readRelativeCellsAt,
+            FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+            ElaboratedRegionCircuit.keygenRequirements, Sinsemilla.Chain.circuit,
+            KeygenRequirements.readRelativeCellsAt, constEnv, hns, ite_false,
+            List.map_cons, List.map_nil, List.mem_append, List.mem_cons, List.not_mem_nil,
+            or_false, Nat.add_zero, List.append_nil] at hcell
+          rcases hcell with hin | rfl
+          · simp [RegionOperations.assignedCellsAfter, RegionOperation.assignedCells, hin]
+          · simp [Cell.of, RegionOperations.assignedCellsAfter, RegionOperation.assignedCells]
+      adviceWritesConsistent := by
+        intro cfg counts _hconfig hadvice offset input region
+        simp only [Configure.output_pure, hashRegionSynthesize, RegionCircuit.operations_bind,
+          RegionCircuit.operations_pure, operations_enable, operations_assignFixed,
+          operations_assignAdvice, operations_constrainConstant, z1Cells_operations,
+          List.nil_append, List.append_nil, List.cons_append,
+          RegionOperations.adviceWritesConsistent_enableGate_cons,
+          RegionOperations.adviceWritesConsistent_assignFixed_cons]
+        apply RegionOperations.adviceWritesConsistent_assignAdvice_of_not_mem region
+        · intro hmem
+          simp only [RegionOperations.nonSelfCopyAdviceWrites_cons,
+            RegionOperation.nonSelfCopyAdviceWrites_constrainConstant, List.nil_append] at hmem
+          exact Sinsemilla.Chain.circuit_adviceWrites_not_xA_offset G ns (constEnv Q.y) cfg hadvice
+            offset input region (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy region hmem)
+        · rw [RegionOperations.adviceWritesConsistent_constrainConstant_cons]
+          exact (Sinsemilla.Chain.circuit G ns (constEnv Q.y)).call_adviceWritesConsistent cfg
+            (FormalRegionCircuit.Configured.ofPure _ cfg () rfl) hadvice offset input region
       fixedAssignmentsAgree := by
         intro cfg counts hconfig offset input region
-        let child := Sinsemilla.Chain.circuit G ns fun _ => Q.y
+        let child := Sinsemilla.Chain.circuit G ns (constEnv Q.y)
         let hchain : child.Configured cfg :=
           FormalRegionCircuit.Configured.ofPure _ cfg () rfl
         have hchild := child.call_fixedAssignmentsAgree
@@ -495,7 +580,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
         exact (hashRegionSynthesize_output G ns Q config offset input self).symm }
 
   Witness := Sinsemilla.Chain.ChainWit ns
-  extract cfg offset _ self env := Sinsemilla.Chain.extract ns (fun _ => Q.y) cfg offset self env
+  extract cfg offset _ self env := Sinsemilla.Chain.extract ns (constEnv Q.y) cfg offset self env
 
   EnvAssumptions cfg env :=
     Sinsemilla.GeneratorTableLoaded G cfg.generatorTable env.env
@@ -515,9 +600,8 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     -- the chain's contract
     have hSpec := out_spec env_assumptions trivial
     -- fold the destructured `Q` atoms back into the point literal, so the Q-generic
-    -- bridge pattern (`fun _ => ?Q.y`) matches
-    rw [show (fun _ : Placed Environment Fp => Q_y)
-        = (fun _ : Placed Environment Fp => ({ x := Q_x, y := Q_y } : Point Fp).y)
+    -- bridge pattern (`constEnv ?Q.y`) matches
+    rw [show constEnv Q_y = constEnv ({ x := Q_x, y := Q_y } : Point Fp).y
       from rfl] at hSpec
     rw [chainC_spec_eq] at hSpec
     rw [Sinsemilla.Chain.circuit_extract] at wit_out_eq
@@ -529,13 +613,11 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
       intro hpos
       rw [← ho_z1s, Sinsemilla.Chain.eval_zsCellsVal, z1View_zsFam _ _ _ hpos]
       ext j hj
-      simp only [circuit_norm, Vector.getElem_ofFn, AssignedCell.eval,
-        AssignedCell.of_cell, Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
-        Environment.get_advice]
+      simp only [circuit_norm, Vector.getElem_ofFn, AssignedCell.eval_of_advice]
       congr 2
     · -- the hash from `Q`
       intro B hB
-      have hout := Sinsemilla.Chain.circuit_output_eval G ns (fun _ => Q_y)
+      have hout := Sinsemilla.Chain.circuit_output_eval G ns (constEnv Q_y)
         cfg offset { pieces := input_var_pieces } self (⟨place, env⟩ : Placed Environment Fp)
       rw [eval_cells_eq_eval, out_eq] at hout
       have hfirst : (ProvableStruct.Halo2.eval place env out).first
@@ -580,21 +662,19 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     clear region_2
     obtain ⟨⟨ho_x, ho_y⟩, ho_z1s⟩ := output_eq
     -- fold the destructured `Q` atoms back into the point literal ONCE, so the
-    -- Q-generic bridge patterns (`fun _ => ?Q.y`) match everywhere
-    rw [show (fun _ : Placed Environment Fp => Q_y)
-        = (fun _ : Placed Environment Fp => ({ x := Q_x, y := Q_y } : Point Fp).y)
+    -- Q-generic bridge patterns (`constEnv ?Q.y`) match everywhere
+    rw [show constEnv Q_y = constEnv ({ x := Q_x, y := Q_y } : Point Fp).y
       from rfl] at out_spec wit_out_eq ⊢
     -- the chain's honest-prover precondition, transported to the minted witness
     have hPAchain : (Sinsemilla.Chain.circuit G ns
-          fun _ => ({ x := Q_x, y := Q_y } : Point Fp).y).ProverAssumptions
+          (constEnv ({ x := Q_x, y := Q_y } : Point Fp).y)).ProverAssumptions
         { pieces := input_pieces } wit_out env.hint := by
       rw [← wit_out_eq, chainC_proverAssumptions_eq]
       show Sinsemilla.Chain.ProverAssumptions G ns { pieces := input_pieces } _
       refine ⟨hns, hbounds, { x := Q_x, y := Q_y }, B0, hQ, ?_, rfl, hchain0⟩
       show Q_x = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
         (AssignedCell.of self offset cfg.xA : Var field Fp) : Fp)
-      simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell,
-        Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+      simp only [circuit_norm, AssignedCell.eval_of_advice]
       exact region_1.symm
     -- the chain's honest contract
     have hsp := out_spec (by rw [chainC_envAssumptions_eq]; exact env_assumptions)
@@ -604,12 +684,10 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     have hfacts := hPSchain ({ x := Q_x, y := Q_y } : Point Fp) B0 (by
         show Q_x = (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
           (AssignedCell.of self offset cfg.xA : Var field Fp) : Fp)
-        simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell,
-          Cell.of_regionIndex, Cell.of_rowOffset, Cell.of_column,
-          Environment.get_advice]
+        simp only [circuit_norm, AssignedCell.eval_of_advice]
         exact region_1.symm) rfl hchain0
     obtain ⟨hpx, hpy, henter⟩ := hfacts
-    have hout := Sinsemilla.Chain.circuit_output_eval G ns (fun _ => Q_y)
+    have hout := Sinsemilla.Chain.circuit_output_eval G ns (constEnv Q_y)
       cfg offset { pieces := input_var_pieces } self (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
     rw [eval_cells_eq_eval, out_eq] at hout
     refine ⟨⟨?_, region_0, region_1,
@@ -1029,7 +1107,7 @@ theorem hashCircuit_call_output_point_cells_assigned
     RegionOperations.assignedCells, RegionOperation.assignedCells,
     List.flatMap_cons, List.flatMap_append, List.mem_append, List.append_nil]
   have h := Sinsemilla.Chain.circuit_output_point_cells_assigned G ns
-    (fun _ => Q.y) hns cfg 0 input self []
+    (constEnv Q.y) hns cfg 0 input self []
   dsimp only at h
   rw [Sinsemilla.Chain.output_point_x,
     Sinsemilla.Chain.output_point_y] at h
@@ -1058,7 +1136,7 @@ theorem hashCircuit_call_z_cell_assigned
     RegionOperations.assignedCells, RegionOperation.assignedCells,
     List.flatMap_cons, List.flatMap_append, List.mem_append, List.append_nil]
   have h := Sinsemilla.Chain.circuit_z_cell_assigned G ns
-    (fun _ => Q.y) cfg 0 input self [] i r
+    (constEnv Q.y) cfg 0 input self [] i r
   simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
     Nat.zero_add] at h
   rw [FormalRegionCircuit.call_operations]
@@ -1153,12 +1231,10 @@ theorem hashCircuit_output_eval (G : Generators) (ns : List ℕ) (Q : Point Fp)
             Vector.ofFn (fun j : Fin ns.length => env.env.advice cfg.bits
               ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) : ℕ) : ℤ)) } := by
   rw [hashCircuit_output_eq G ns Q hQ hns cfg pieces i, out_eval_lit]
-  simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+  simp only [AssignedCell.eval_of_advice]
   congr 1
   ext j hj
-  simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+  simp [AssignedCell.eval_of_advice]
 
 /-- The hash bundle's eval'd output (prover view), landed on raw advice reads. -/
 theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Point Fp)
@@ -1177,12 +1253,10 @@ theorem hashCircuit_output_eval_prover (G : Generators) (ns : List ℕ) (Q : Poi
             Vector.ofFn (fun j : Fin ns.length => env.env.advice cfg.bits
               ((env.place i + (0 + Sinsemilla.Chain.prefixRows ns ↑j + 1) : ℕ) : ℤ)) } := by
   rw [hashCircuit_output_eq G ns Q hQ hns cfg pieces i, out_eval_lit_prover]
-  simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+  simp only [AssignedCell.eval_of_advice]
   congr 1
   ext j hj
-  simp [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-    Cell.of_rowOffset, Cell.of_column, Environment.get_advice]
+  simp [AssignedCell.eval_of_advice]
 
 /-- The hash-to-point extraction data, stated on the folded layouter circuit. -/
 theorem hashCircuit_extract (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -1190,7 +1264,7 @@ theorem hashCircuit_extract (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ 
     (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
     (hashCircuit G ns Q hQ hns).extract cfg input i env =
-      Sinsemilla.Chain.extract ns (fun _ => Q.y) cfg 0 i env :=
+      Sinsemilla.Chain.extract ns (constEnv Q.y) cfg 0 i env :=
   rfl
 
 derive_contract_bridges hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp)

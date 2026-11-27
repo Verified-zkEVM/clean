@@ -76,7 +76,7 @@ theorem synthesisSummary_instanceRowExtent_eq
   simp only [synthesisSummary, Ecc.WitnessPoint.pointNonIdSynthesisSummary,
     synthesis_summary_norm]
 
-theorem synthesize_copyCellsAssignedFrom
+theorem synthesize_consumedCellsAssignedFrom
     (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     (input : Var Input Fp) (self : RegionIndex)
     (configuredMul : Ecc.Mul.mul.Configured cfg.1)
@@ -88,32 +88,41 @@ theorem synthesize_copyCellsAssignedFrom
         assignRegion "constrain equal" (do
           constrainEqual derived.x pkDOld.x
           constrainEqual derived.y pkDOld.y)
-        pure pkDOld).operations self).CopyCellsAssignedFrom self
-      [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] := by
+        pure pkDOld).operations self).AssignedFrom RegionOperation.Consumes self
+      ([input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] ++
+        (Witgen.valueBuilderReads (value := Point) input.pkDOld).map AssignedCell.cell) := by
+  let initial := [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] ++
+    (Witgen.valueBuilderReads (value := Point) input.pkDOld).map AssignedCell.cell
   let mulOps := (Ecc.Mul.mul.call cfg.1
     { alpha := input.ivk, base := input.gDOld }).operations self
   let mulOutput := Ecc.Mul.mul.output cfg.1
     { alpha := input.ivk, base := input.gDOld } self
-  have hmul : mulOps.CopyCellsAssignedFrom self
-      [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] := by
-    apply Ecc.Mul.mul.call_copyCellsAssignedFrom cfg.1 configuredMul _ self
+  have hmul : mulOps.AssignedFrom RegionOperation.Consumes self initial := by
+    apply Ecc.Mul.mul.call_consumedCellsAssignedFrom cfg.1 configuredMul _ self
     intro cell hcell
-    rw [Ecc.Mul.mul_inputCells] at hcell
-    simpa only [List.mem_cons, List.not_mem_nil, or_false] using hcell
+    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+      FormalCircuit.Configured.readRelativeCellsAt, Ecc.Mul.mul, Ecc.Mul.mulElaborated,
+      FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt] at hcell
+    exact List.mem_append_left _ hcell
   let pointRegion := self + Ecc.Mul.mul.regionCount
     { alpha := input.ivk, base := input.gDOld }
   let pointOps := (Ecc.WitnessPoint.pointNonIdFormal.call
     cfg.2 input.pkDOld).operations pointRegion
   let pointOutput := Ecc.WitnessPoint.pointNonIdFormal.output
     cfg.2 input.pkDOld pointRegion
-  have hpoint : pointOps.CopyCellsAssignedFrom pointRegion
-      ([input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] ++
-        mulOps.assignedCellsFrom self) := by
-    apply Ecc.WitnessPoint.pointNonIdFormal.call_copyCellsAssignedFrom
+  have hpoint : pointOps.AssignedFrom RegionOperation.Consumes pointRegion
+      (initial ++ mulOps.assignedCellsFrom self) := by
+    apply Ecc.WitnessPoint.pointNonIdFormal.call_consumedCellsAssignedFrom
       cfg.2 configuredPoint input.pkDOld pointRegion
     intro cell hcell
-    rw [Ecc.WitnessPoint.pointNonIdFormal_inputCells] at hcell
-    contradiction
+    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+      FormalCircuit.Configured.readRelativeCellsAt, Ecc.WitnessPoint.pointNonIdFormal,
+      FormalRegionCircuit.toFormal_keygenRequirements, FormalRegionCircuit.keygenRequirements,
+      Ecc.WitnessPoint.pointNonId, ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.nil_append, List.map_nil,
+      List.append_nil] at hcell
+    exact List.mem_append_left _ (List.mem_append_right _ hcell)
   have hmulOutput := Ecc.Mul.mul_call_output_cells_assigned cfg.1
     { alpha := input.ivk, base := input.gDOld } self
   have hpointOutput :=
@@ -123,19 +132,19 @@ theorem synthesize_copyCellsAssignedFrom
       ((assignRegion "constrain equal" (do
           constrainEqual mulOutput.x pointOutput.x
           constrainEqual mulOutput.y pointOutput.y)).operations
-        (pointRegion + 1)).CopyCellsAssignedFrom (pointRegion + 1)
-          (([input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] ++
-              mulOps.assignedCellsFrom self) ++
+        (pointRegion + 1)).AssignedFrom RegionOperation.Consumes (pointRegion + 1)
+          ((initial ++ mulOps.assignedCellsFrom self) ++
             pointOps.assignedCellsFrom pointRegion) := by
     simp only [operations_assignRegion,
-      Operations.copyCellsAssignedFrom_region_iff,
-      Operations.copyCellsAssignedFrom_nil_iff,
+      Operations.assignedFrom_region_iff, Operations.assignedFrom_nil_iff,
       RegionCircuit.operations_bind, operations_constrainEqual,
-      RegionOperations.copyCellsAssignedFrom_append_iff,
-      RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
-      RegionOperations.copyCellsAssignedFrom_nil_iff,
+      RegionOperations.assignedFrom_append_iff, RegionOperations.assignedFrom_cons_iff,
+      RegionOperations.assignedFrom_nil_iff,
+      RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+      RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
       RegionOperations.assignedCellsAfter, List.foldl_cons, List.foldl_nil,
-      RegionOperation.assignedCells, List.nil_append, and_true]
+      RegionOperation.assignedCells, List.nil_append, List.mem_cons, List.not_mem_nil,
+      or_false, forall_eq_or_imp, forall_eq, and_true]
     exact ⟨⟨List.mem_append_left _ (List.mem_append_right _ hmulOutput.1),
         List.mem_append_right _ hpointOutput.1⟩,
       ⟨List.mem_append_left _ (List.mem_append_right _ hmulOutput.2),
@@ -184,7 +193,12 @@ def circuit : FormalCircuit Fp
               cfg.2.x, cfg.2.y] : List AnyColumn) ++
               configured.1.permutationColumns ++ configured.2.permutationColumns
           inputCells _ _ input :=
-            [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] }
+            [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell]
+          readCells _ _ input :=
+            (Witgen.valueBuilderReads (value := Point) input.pkDOld).map (·.cell) }
+      adviceColumnRequirements cfg :=
+        Ecc.Mul.mul.elaborated.adviceColumnRequirements cfg.1 ∧
+        Ecc.WitnessPoint.pointNonIdFormal.elaborated.adviceColumnRequirements cfg.2
       registered := by
         intro cfg counts hconfig input self
         simp only [Configure.output_pure, Configure.delta_pure,
@@ -229,10 +243,26 @@ def circuit : FormalCircuit Fp
               operations_constrainEqual,
               List.forall_append, List.forall_cons, List.forall_nil, and_self]
           · exact Operations.LookupSelectorsAnchoredBy.nil anchor
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro cfg _ hconfig input self
-        simpa only [keygen_norm] using
-          synthesize_copyCellsAssignedFrom cfg input self hconfig.1 hconfig.2
+        simpa only [keygen_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil] using
+          synthesize_consumedCellsAssignedFrom cfg input self hconfig.1 hconfig.2
+      adviceWritesConsistent := by
+        intro cfg _ hconfig hadvice input self
+        rcases hadvice with ⟨hmulAdv, hptAdv⟩
+        simp only [Configure.output_pure, Circuit.operations_bind,
+          operations_assignRegion, Circuit.operations_pure,
+          Operations.adviceWritesConsistentFrom_append,
+          Operations.adviceWritesConsistentFrom_region_cons,
+          Operations.adviceWritesConsistentFrom_nil,
+          RegionCircuit.operations_bind, operations_constrainEqual,
+          RegionOperations.adviceWritesConsistent_constrainEqual_cons,
+          RegionOperations.adviceWritesConsistent_nil,
+          circuit_norm, Nat.add_assoc, Nat.reduceAdd, and_true]
+        exact ⟨Ecc.Mul.mul.call_adviceWritesConsistent cfg.1 hconfig.1 hmulAdv _ self,
+          Ecc.WitnessPoint.pointNonIdFormal.call_adviceWritesConsistent
+            cfg.2 hconfig.2 hptAdv input.pkDOld (self + 4)⟩
       fixedWritesLawful := by
         intro cfg counts hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree

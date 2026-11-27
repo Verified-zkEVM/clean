@@ -60,7 +60,7 @@ theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
 /-- Rust `DecomposeB::assign` (`note_commit.rs:179-215`), parameterized by the `b_1`
 witness program (Rust: `RangeConstrained::bitrange_of(gd_x, 254..255)`). Output is the
 witnessed `b_1` cell; `Spec` is the donor `DecomposeB.Gate.Spec`. -/
-def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
+def bundle (wb1 : SupportedProgram Fp) : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
   elaborated :=
     { keygenRequirements :=
@@ -68,7 +68,9 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
           permutationColumns cfg _ :=
             [cfg.colL, cfg.colM, cfg.colR]
           inputCells _ _ input :=
-            [input.b.cell, input.b0.cell, input.b2.cell, input.b3.cell] }
+            [input.b.cell, input.b0.cell, input.b2.cell, input.b3.cell]
+          readCells _ _ _ := wb1.reads.map (·.cell) }
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR]
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -90,7 +92,7 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     (gate cfg).enable offset
     let _b ← copyAdvice input.b cfg.colL offset
     let _b0 ← copyAdvice input.b0 cfg.colM offset
-    let b1 ← assignAdvice cfg.colR offset wb1
+    let b1 ← assignAdvice cfg.colR offset wb1.program
     let _b2 ← copyAdvice input.b2 cfg.colM (offset + 1)
     let _b3 ← copyAdvice input.b3 cfg.colR (offset + 1)
     pure b1
@@ -124,15 +126,15 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     · linear_combination hpa3
 
 @[synthesis_summary_norm]
-theorem bundle_synthesisSummary_eq (wb1 : WitgenIR Fp 1) (cfg : Config)
+theorem bundle_synthesisSummary_eq (wb1 : SupportedProgram Fp) (cfg : Config)
     (offset : ℕ) (input : Var Inputs Fp) (region : RegionIndex) :
     (bundle wb1).elaborated.synthesisSummary cfg offset input region =
       synthesisSummary cfg offset := rfl
 
-derive_contract_bridges bundle (wb1 : WitgenIR Fp 1) := bundle wb1
+derive_contract_bridges bundle (wb1 : SupportedProgram Fp) := bundle wb1
 
 /-- The returned `b₁` cell is assigned by the enclosing call. -/
-theorem bundle_call_output_cell_assigned (wb1 : WitgenIR Fp 1)
+theorem bundle_call_output_cell_assigned (wb1 : SupportedProgram Fp)
     (name : String) (cfg : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :
     (((bundle wb1).toFormal name).output cfg input self).cell ∈
@@ -180,7 +182,7 @@ theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
 /-- Rust `DecomposeD::assign` (`note_commit.rs:297-340`), parameterized by the `d_0`
 witness program (bit 254 of `x(pk_d)`). Output is the witnessed `d_0` cell; `Spec` is
 the donor `DecomposeD.Gate.Spec`. -/
-def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
+def bundle (wd0 : SupportedProgram Fp) : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
   elaborated :=
     { keygenRequirements :=
@@ -188,7 +190,9 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
           permutationColumns cfg _ :=
             [cfg.colL, cfg.colM, cfg.colR]
           inputCells _ _ input :=
-            [input.d.cell, input.d1.cell, input.d2.cell, input.d3.cell] }
+            [input.d.cell, input.d1.cell, input.d2.cell, input.d3.cell]
+          readCells _ _ _ := wd0.reads.map (·.cell) }
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR]
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -209,7 +213,7 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
     let _d ← copyAdvice input.d cfg.colL offset
-    let d0 ← assignAdvice cfg.colM offset wd0
+    let d0 ← assignAdvice cfg.colM offset wd0.program
     let _d1 ← copyAdvice input.d1 cfg.colR offset
     let _d2 ← copyAdvice input.d2 cfg.colM (offset + 1)
     let _d3 ← copyAdvice input.d3 cfg.colR (offset + 1)
@@ -244,15 +248,15 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     · linear_combination hpa3
 
 @[synthesis_summary_norm]
-theorem bundle_synthesisSummary_eq (wd0 : WitgenIR Fp 1) (cfg : Config)
+theorem bundle_synthesisSummary_eq (wd0 : SupportedProgram Fp) (cfg : Config)
     (offset : ℕ) (input : Var Inputs Fp) (region : RegionIndex) :
     (bundle wd0).elaborated.synthesisSummary cfg offset input region =
       synthesisSummary cfg offset := rfl
 
-derive_contract_bridges bundle (wd0 : WitgenIR Fp 1) := bundle wd0
+derive_contract_bridges bundle (wd0 : SupportedProgram Fp) := bundle wd0
 
 /-- The returned `d₀` cell is assigned by the enclosing call. -/
-theorem bundle_call_output_cell_assigned (wd0 : WitgenIR Fp 1)
+theorem bundle_call_output_cell_assigned (wd0 : SupportedProgram Fp)
     (name : String) (cfg : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :
     (((bundle wd0).toFormal name).output cfg input self).cell ∈
@@ -305,6 +309,7 @@ def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
             [cfg.colL, cfg.colM, cfg.colR]
           inputCells _ _ input :=
             [input.e.cell, input.e0.cell, input.e1.cell] }
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR]
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -381,14 +386,16 @@ theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
 /-- Rust `DecomposeG::assign` (`note_commit.rs:540-575`), parameterized by the `g_0`
 witness program (bit 254 of `rho`). Output is the witnessed `g_0` cell; `Spec` is the
 donor `DecomposeG.Gate.Spec`. -/
-def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
+def bundle (wg0 : SupportedProgram Fp) : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [gate cfg]
           permutationColumns cfg _ := [cfg.colL, cfg.colM]
           inputCells _ _ input :=
-            [input.g.cell, input.g1.cell, input.g2.cell] }
+            [input.g.cell, input.g1.cell, input.g2.cell]
+          readCells _ _ _ := wg0.reads.map (·.cell) }
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM]
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -409,7 +416,7 @@ def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
     let _g ← copyAdvice input.g cfg.colL offset
-    let g0 ← assignAdvice cfg.colM offset wg0
+    let g0 ← assignAdvice cfg.colM offset wg0.program
     let _g1 ← copyAdvice input.g1 cfg.colL (offset + 1)
     let _g2 ← copyAdvice input.g2 cfg.colM (offset + 1)
     pure g0
@@ -440,15 +447,15 @@ def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     · linear_combination hpa2
 
 @[synthesis_summary_norm]
-theorem bundle_synthesisSummary_eq (wg0 : WitgenIR Fp 1) (cfg : Config)
+theorem bundle_synthesisSummary_eq (wg0 : SupportedProgram Fp) (cfg : Config)
     (offset : ℕ) (input : Var Inputs Fp) (region : RegionIndex) :
     (bundle wg0).elaborated.synthesisSummary cfg offset input region =
       synthesisSummary cfg offset := rfl
 
-derive_contract_bridges bundle (wg0 : WitgenIR Fp 1) := bundle wg0
+derive_contract_bridges bundle (wg0 : SupportedProgram Fp) := bundle wg0
 
 /-- The returned `g₀` cell is assigned by the enclosing call. -/
-theorem bundle_call_output_cell_assigned (wg0 : WitgenIR Fp 1)
+theorem bundle_call_output_cell_assigned (wg0 : SupportedProgram Fp)
     (name : String) (cfg : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :
     (((bundle wg0).toFormal name).output cfg input self).cell ∈
@@ -492,7 +499,7 @@ theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
 /-- Rust `DecomposeH::assign` (`note_commit.rs:660-694`), parameterized by the `h_1`
 witness program (bit 254 of `psi`). Output is the witnessed `h_1` cell; `Spec` is the
 donor `DecomposeH.Gate.Spec`. -/
-def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs field where
+def bundle (wh1 : SupportedProgram Fp) : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
   elaborated :=
     { keygenRequirements :=
@@ -500,7 +507,9 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
           permutationColumns cfg _ :=
             [cfg.colL, cfg.colM, cfg.colR]
           inputCells _ _ input :=
-            [input.h.cell, input.h0.cell] }
+            [input.h.cell, input.h0.cell]
+          readCells _ _ _ := wh1.reads.map (·.cell) }
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.colL, cfg.colM, cfg.colR]
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -522,7 +531,7 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     (gate cfg).enable offset
     let _h ← copyAdvice input.h cfg.colL offset
     let _h0 ← copyAdvice input.h0 cfg.colM offset
-    let h1 ← assignAdvice cfg.colR offset wh1
+    let h1 ← assignAdvice cfg.colR offset wh1.program
     pure h1
 
   Witness := field
@@ -549,15 +558,15 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     · linear_combination hpa2
 
 @[synthesis_summary_norm]
-theorem bundle_synthesisSummary_eq (wh1 : WitgenIR Fp 1) (cfg : Config)
+theorem bundle_synthesisSummary_eq (wh1 : SupportedProgram Fp) (cfg : Config)
     (offset : ℕ) (input : Var Inputs Fp) (region : RegionIndex) :
     (bundle wh1).elaborated.synthesisSummary cfg offset input region =
       synthesisSummary cfg offset := rfl
 
-derive_contract_bridges bundle (wh1 : WitgenIR Fp 1) := bundle wh1
+derive_contract_bridges bundle (wh1 : SupportedProgram Fp) := bundle wh1
 
 /-- The returned `h₁` cell is assigned by the enclosing call. -/
-theorem bundle_call_output_cell_assigned (wh1 : WitgenIR Fp 1)
+theorem bundle_call_output_cell_assigned (wh1 : SupportedProgram Fp)
     (name : String) (cfg : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :
     (((bundle wh1).toFormal name).output cfg input self).cell ∈

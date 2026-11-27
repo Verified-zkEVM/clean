@@ -360,9 +360,32 @@ def readState (cfg : Config) (offset : ℕ) : RegionCircuit Fp (State (AssignedC
 theorem operations_readState (cfg : Config) (offset : ℕ) (self : RegionIndex) :
     (readState cfg offset).operations self = [] := rfl
 
-@[circuit_norm]
+@[keygen_spine]
+theorem operations_readState_var (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    @RegionCircuit.operations Fp _ (Var State Fp) (readState cfg offset) self = [] := rfl
+
+@[circuit_norm, keygen_output_norm]
 theorem output_readState (cfg : Config) (offset : ℕ) (self : RegionIndex) :
     (readState cfg offset).output self = reads cfg offset self := rfl
+
+@[keygen_norm]
+theorem reads_z (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).z = .of self offset cfg.z := rfl
+@[keygen_norm]
+theorem reads_xA (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).xA = .of self (offset + 1) cfg.xA := rfl
+@[keygen_norm]
+theorem reads_lambda1 (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).lambda1 = .of self (offset + 1) cfg.lambda1 := rfl
+@[keygen_norm]
+theorem reads_lambda2 (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).lambda2 = .of self (offset + 1) cfg.lambda2 := rfl
+@[keygen_norm]
+theorem reads_base_x (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).base.x = .of self (offset + 1) cfg.xP := rfl
+@[keygen_norm]
+theorem reads_base_y (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).base.y = .of self (offset + 1) cfg.yP := rfl
 
 /-- Bit `i` of the working scalar, from the scalar's witness program (the prover-only
 `Value` the Rust source decomposes). -/
@@ -402,6 +425,26 @@ def State.stepY (s : State Fp) : Fp :=
 def readWit (w : State (AssignedCell Fp)) (f : State Fp → Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[f (readsValue w env)]
 
+@[witness_support]
+theorem witnessFunctionSupport_readWit (w : State (AssignedCell Fp)) (f : State Fp → Fp) :
+    WitnessFunctionSupport [w.z, w.xA, w.lambda1, w.lambda2, w.base.x, w.base.y]
+      (programFunction (readWit w f)) := by
+  intro left right agreement
+  have hz : readCell left w.z = readCell right w.z := agreement.cellValues w.z (by simp)
+  have hxA : readCell left w.xA = readCell right w.xA := agreement.cellValues w.xA (by simp)
+  have hl1 : readCell left w.lambda1 = readCell right w.lambda1 :=
+    agreement.cellValues w.lambda1 (by simp)
+  have hl2 : readCell left w.lambda2 = readCell right w.lambda2 :=
+    agreement.cellValues w.lambda2 (by simp)
+  have hbx : readCell left w.base.x = readCell right w.base.x :=
+    agreement.cellValues w.base.x (by simp)
+  have hby : readCell left w.base.y = readCell right w.base.y :=
+    agreement.cellValues w.base.y (by simp)
+  have hreads : readsValue w left = readsValue w right := by
+    simp only [readsValue, hz, hxA, hl1, hl2, hbx, hby]
+  change f (readsValue w left) = f (readsValue w right)
+  rw [hreads]
+
 @[circuit_norm]
 theorem readWit_eval (w : State (AssignedCell Fp)) (f : State Fp → Fp)
     (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
@@ -418,6 +461,39 @@ def stepWit (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
     (f : State Fp → Fp) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[f ((readsValue w env).step (bitWit alpha i env) (bitWit alpha (i + 1) env))]
+
+@[witness_support]
+theorem witnessFunctionSupport_stepWit
+    (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
+    (w : State (AssignedCell Fp)) (i : ℕ) (f : State Fp → Fp) :
+    WitnessFunctionSupport
+      (Witgen.valueBuilderReads (value := field) alpha ++
+        [w.z, w.xA, w.lambda1, w.lambda2, w.base.x, w.base.y])
+      (programFunction (stepWit alpha w i f)) := by
+  intro left right agreement
+  have halpha : Witgen.MOver.eval (value := field) left alpha =
+      Witgen.MOver.eval (value := field) right alpha :=
+    Witgen.valueBuilderReads_eval (value := field) alpha left right
+      agreement.left.cellValues agreement.left.indexed agreement.left.data agreement.left.hints
+  have hbit1 : bitWit alpha i left = bitWit alpha i right := by
+    simp only [bitWit, halpha]
+  have hbit2 : bitWit alpha (i + 1) left = bitWit alpha (i + 1) right := by
+    simp only [bitWit, halpha]
+  have hz : readCell left w.z = readCell right w.z := agreement.right.cellValues w.z (by simp)
+  have hxA : readCell left w.xA = readCell right w.xA := agreement.right.cellValues w.xA (by simp)
+  have hl1 : readCell left w.lambda1 = readCell right w.lambda1 :=
+    agreement.right.cellValues w.lambda1 (by simp)
+  have hl2 : readCell left w.lambda2 = readCell right w.lambda2 :=
+    agreement.right.cellValues w.lambda2 (by simp)
+  have hbx : readCell left w.base.x = readCell right w.base.x :=
+    agreement.right.cellValues w.base.x (by simp)
+  have hby : readCell left w.base.y = readCell right w.base.y :=
+    agreement.right.cellValues w.base.y (by simp)
+  have hreads : readsValue w left = readsValue w right := by
+    simp only [readsValue, hz, hxA, hl1, hl2, hbx, hby]
+  change f ((readsValue w left).step (bitWit alpha i left) (bitWit alpha (i + 1) left)) =
+    f ((readsValue w right).step (bitWit alpha i right) (bitWit alpha (i + 1) right))
+  rw [hreads, hbit1, hbit2]
 
 /-- Evaluation of the round's witness closures, in one step and without exposing the
 native-eval plumbing: the peel reduces every assigned value directly to a folded
@@ -668,7 +744,13 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
     readState cfg (offset + 1)
 
   elaborated :=
-    { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
+    { keygenRequirements :=
+        { gates cfg _ := [qMul2Gate cfg]
+          readCells _ _ alpha := (Witgen.valueBuilderReads (value := field) alpha).map (·.cell)
+          readRelativeCells cfg _ _ :=
+            [(cfg.z, 0), (cfg.xA, 1), (cfg.lambda1, 1), (cfg.lambda2, 1), (cfg.xP, 1), (cfg.yP, 1)] }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.xA, cfg.lambda1, cfg.lambda2, cfg.xP, cfg.yP]
       registered := by keygen_registration
       synthesisSummary config offset _ _ :=
         .ofColumns

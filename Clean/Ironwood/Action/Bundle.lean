@@ -47,7 +47,7 @@ that is what made the `nextRegionIndex_call'`-based compositional proofs kernel-
 
 private theorem merkle_call_nextRegionIndex (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l₀ : ℕ) (hld : l₀ + 16 ≤ 2 ^ 10)
-    (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
+    (wsib : ℕ → SupportedProgram Fp) (wswap : ℕ → SupportedFunction Fp Bool)
     (c : CondSwap.Config × Sinsemilla.Merkle.Config ×
       LookupRangeCheck.Config 10)
     (inp : Var Sinsemilla.Merkle.Layer.Input Fp) (j : RegionIndex) :
@@ -951,17 +951,7 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
     | apply AddressIntegrity.circuit.call_keygenRegistered_ofCertificate
         (addressIntegrityCertificate G counts)
   all_goals simp_all only [keygen_norm, keygen_output_norm,
-    synthWitness_output, actionConfigureContext_permutationColumns,
-    Nat.reduceEqDiff, ite_false]
-  all_goals
-    intro column hcolumn
-    rcases hcolumn with ⟨cell, hcell, rfl⟩
-    try simp_all only [keygen_norm, keygen_output_norm]
-  all_goals
-    rcases hcell with rfl | rfl | rfl | rfl
-    all_goals first
-      | exact hadvice 0
-      | exact hwitnessY
+    synthWitness_output, actionConfigureContext_permutationColumns]
 
 private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
     (counts : ConfigureCounts) (i : RegionIndex) :
@@ -999,8 +989,7 @@ private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
     | exact configure_output_orchardGate_mem_gates G counts
   all_goals simp_all only [keygen_norm, keygen_output_norm,
     synthWitness_output, synthChecks_output,
-    actionConfigureContext_permutationColumns,
-    Nat.reduceEqDiff, ite_false]
+    actionConfigureContext_permutationColumns]
 
 private theorem synthChecks_regionFixedColumns_forall
     (G : Generators) (B : Bases) (counts : ConfigureCounts)
@@ -1068,19 +1057,504 @@ private theorem synthNotes_keygenRegistered_full
       (configure_regionFixedColumns_forall_fixedColumns G counts)
   · exact fun _ hcolumn => hcolumn
 
-private theorem synthWitness_copyCellsAssigned (G : Generators)
+private theorem u64Reads_windowList_eq_nil (lo len : ℕ)
+    (xs : List (Witgen.U64ExprOver Fp (AssignedCell Fp)))
+    (hxs : ∀ x ∈ xs, Witgen.u64Reads x = []) :
+    Witgen.u64Reads (Witgen.LimbsOver.windowList lo len xs) = [] := by
+  induction xs generalizing lo with
+  | nil => rfl
+  | cons a as ih =>
+    unfold Witgen.LimbsOver.windowList
+    split
+    · exact ih (lo - 64) (fun x hx => hxs x (List.mem_cons_of_mem a hx))
+    · have ha : Witgen.u64Reads a = [] := hxs a (List.mem_cons_self ..)
+      have hhead : Witgen.u64Reads (as.headD (.const 0)) = [] := by
+        cases as with
+        | nil => rfl
+        | cons b bs => exact hxs b (List.mem_cons_of_mem a (List.mem_cons_self ..))
+      split
+      · simp only [Witgen.u64Reads, List.append_nil, ha]
+      · simp only [Witgen.u64Reads, List.append_nil, ha, hhead]
+
+private theorem valueBuilderReads_pure_field (e : FExpr Fp) :
+    Witgen.valueBuilderReads (value := field) (pure e) = Witgen.fieldReads e := by
+  have hrun : (pure e : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) #[] = (e, #[]) := rfl
+  simp only [Witgen.valueBuilderReads, hrun,
+    Witgen.stepsReads, toElements, Vector.toList_mk, List.toList_toArray,
+    Witgen.fieldListReads, List.nil_append, List.append_nil]
+
+private theorem valueBuilderReads_bind_pure_field {α : Type} (a : α) (f : α → FExpr Fp) :
+    Witgen.valueBuilderReads (value := field)
+      ((pure a : Witgen.MOver Fp (AssignedCell Fp) α) >>= fun x => pure (f x)) =
+    Witgen.fieldReads (f a) := by
+  have hrun : ((pure a : Witgen.MOver Fp (AssignedCell Fp) α) >>= fun x => pure (f x)) #[] =
+      (f a, #[]) := rfl
+  simp only [Witgen.valueBuilderReads, hrun,
+    Witgen.stepsReads, toElements, Vector.toList_mk, List.toList_toArray,
+    Witgen.fieldListReads, List.nil_append, List.append_nil]
+
+private theorem u64Reads_fexprWindow_eq_nil (x : FExpr Fp) (hx : Witgen.fieldReads x = [])
+    (start k : ℕ) :
+    Witgen.u64Reads (x.window start k) = [] := by
+  induction k with
+  | zero => rfl
+  | succ k ih =>
+    simp only [Witgen.FExprOver.window, Witgen.u64Reads, Witgen.boolReads, ih, hx,
+      List.append_nil]
+
+private theorem scalarWindows_natHint_reads_eq_nil (key : String) :
+    ((Ecc.MulFixed.FullWidth.scalarWindows (natHint key)).toList.flatMap
+      (Witgen.valueBuilderReads (value := field))) = [] := by
+  rw [List.flatMap_eq_nil_iff]
+  intro w hw
+  rw [Ecc.MulFixed.FullWidth.scalarWindows, Vector.toList_ofFn, List.mem_ofFn] at hw
+  obtain ⟨i, rfl⟩ := hw
+  have hlimbs : ∀ x ∈ (Vector.ofFn (n := 4) fun j : Fin 4 =>
+      (Witgen.FExprOver.hintGet (F := Fp) (V := AssignedCell Fp) key 1 (.const 0) 0).window
+        (64 * j.val) 64).toList,
+      Witgen.u64Reads x = [] := by
+    intro x hx
+    rw [Vector.toList_ofFn, List.mem_ofFn] at hx
+    obtain ⟨j, rfl⟩ := hx
+    exact u64Reads_fexprWindow_eq_nil _ rfl _ _
+  rw [natHint, valueBuilderReads_bind_pure_field]
+  simp only [Witgen.LimbsOver.ofField, Witgen.LimbsOver.window, Witgen.fieldReads,
+    u64Reads_windowList_eq_nil _ _ _ hlimbs]
+
+private theorem valueBuilderReads_fieldHint (key : String) :
+    Witgen.valueBuilderReads (value := field) (fieldHint key) = [] := by
+  rw [fieldHint, valueBuilderReads_pure_field]
+  rfl
+
+private theorem witnessFunctionSupport_fieldHint (key : String) :
+    WitnessFunctionSupport [] (programFunction (Witgen.MOver.toIRScalar (fieldHint key))) := by
+  simpa only [valueBuilderReads_fieldHint] using
+    witnessFunctionSupport_scalarBuilder (fieldHint key)
+
+private theorem valueBuilderReads_pointHint (key : String) :
+    Witgen.valueBuilderReads (value := Point) (pointHint key) = [] := rfl
+
+private theorem ecc_adviceColumnRequirements_of_injective
+    (advices : Fin 10 → Column .advice) (hadv : Function.Injective advices)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (lookupConfig : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
+    let eccCfg := (Ecc.configure advices lagrangeCoeffs lookupConfig).output counts
+    Ecc.WitnessPoint.pointFormal.elaborated.adviceColumnRequirements eccCfg.witnessPoint ∧
+    Ecc.WitnessPoint.pointNonIdFormal.elaborated.adviceColumnRequirements eccCfg.witnessPoint ∧
+    Ecc.Add.addFormal.elaborated.adviceColumnRequirements eccCfg.add ∧
+    (∀ R, (Ecc.MulFixed.FullWidth.circuit R).elaborated.adviceColumnRequirements eccCfg.mulFixedFull) ∧
+    (∀ V, (Ecc.MulFixed.Short.circuit V).elaborated.adviceColumnRequirements eccCfg.mulFixedShort) ∧
+    (∀ K, (Ecc.MulFixed.BaseFieldElem.circuit K).elaborated.adviceColumnRequirements eccCfg.mulFixedBaseField) ∧
+    Ecc.Mul.mul.elaborated.adviceColumnRequirements eccCfg.mul := by
+  dsimp only
+  have hne : ∀ i j : Fin 10, i ≠ j → advices i ≠ advices j := fun i j hij h => hij (hadv h)
+  refine ⟨?_, ?_, ?_, fun _ => ?_, fun _ => ?_, fun _ => ?_, ?_⟩
+  · simp only [Ecc.configure, Ecc.WitnessPoint.configure, Configure.output_bind,
+      Configure.output_pure]
+    exact hne 0 1 (by decide)
+  · simp only [Ecc.configure, Ecc.WitnessPoint.configure, Configure.output_bind,
+      Configure.output_pure]
+    exact hne 0 1 (by decide)
+  · change ColumnsDistinct _
+    simp only [Ecc.configure, Ecc.Add.add, Configure.output_bind, Configure.output_pure,
+      ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+      List.nodup_nil, not_false_eq_true, and_true]
+    repeat' apply And.intro
+    all_goals exact hne _ _ (by decide)
+  · refine ⟨?_, ?_⟩
+    · repeat' apply And.intro
+      all_goals
+        simp only [Ecc.configure, Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
+          Ecc.Add.add, Ecc.AddIncomplete.add,
+          Configure.output_bind, Configure.output_pure,
+          ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+          List.nodup_nil, not_false_eq_true, and_true]
+      all_goals
+        repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+    · change ColumnsDistinct _
+      simp only [Ecc.configure, Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
+        Ecc.Add.add, Configure.output_bind, Configure.output_pure,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+        List.nodup_nil, not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+  · refine ⟨?_, ?_, ?_⟩
+    · repeat' apply And.intro
+      all_goals
+        simp only [Ecc.configure, Ecc.MulFixed.configure, Ecc.MulFixed.Short.configure,
+          Ecc.Add.add, Ecc.AddIncomplete.add,
+          Configure.output_bind, Configure.output_pure,
+          ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+          List.nodup_nil, not_false_eq_true, and_true]
+      all_goals
+        repeat' apply And.intro
+      all_goals first | rfl | exact hne _ _ (by decide)
+    · change ColumnsDistinct _
+      simp only [Ecc.configure, Ecc.MulFixed.configure, Ecc.MulFixed.Short.configure,
+        Ecc.Add.add, Configure.output_bind, Configure.output_pure,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+        List.nodup_nil, not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+    · simp only [Ecc.configure, Ecc.MulFixed.configure, Ecc.MulFixed.Short.configure,
+        Ecc.Add.add, Configure.output_bind, Configure.output_pure,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+        List.nodup_nil, not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+  · refine ⟨?_, ?_, ?_⟩
+    · repeat' apply And.intro
+      all_goals
+        simp only [Ecc.configure, Ecc.MulFixed.configure, Ecc.MulFixed.BaseFieldElem.configure,
+          Ecc.Add.add, Ecc.AddIncomplete.add,
+          Configure.output_bind, Configure.output_pure,
+          ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+          List.nodup_nil, not_false_eq_true, and_true]
+      all_goals
+        repeat' apply And.intro
+      all_goals first | rfl | exact hne _ _ (by decide)
+    · change ColumnsDistinct _
+      simp only [Ecc.configure, Ecc.MulFixed.configure, Ecc.MulFixed.BaseFieldElem.configure,
+        Ecc.Add.add, Configure.output_bind, Configure.output_pure,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+        List.nodup_nil, not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+    · simp only [Ecc.configure, Ecc.MulFixed.configure, Ecc.MulFixed.BaseFieldElem.configure,
+        Configure.output_bind, Configure.output_pure,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+        List.nodup_nil, not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+  · refine ⟨?_, ?_⟩
+    · repeat' apply And.intro
+      all_goals
+        simp only [Ecc.configure, Ecc.Mul.configure,
+          Ecc.MulIncomplete.configure,
+          Ecc.MulComplete.configure, Ecc.MulComplete.adviceColumnRequirements,
+          Ecc.Add.add, Configure.output_bind, Configure.output_pure,
+          ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+          List.nodup_nil, not_false_eq_true, and_true]
+      all_goals
+        repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+    · change ColumnsDistinct _
+      simp only [Ecc.configure, Ecc.Mul.configure, Ecc.MulOverflow.configure,
+        Configure.output_bind, Configure.output_pure,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+        List.nodup_nil, not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+
+private theorem noteCommit_adviceColumnRequirements_of_injective
+    (advices : Fin 10 → Column .advice) (hadv : Function.Injective advices)
+    (counts : ConfigureCounts) :
+    let ncCfg := (NoteCommit.configure advices).output counts
+    ColumnsDistinct [ncCfg.y.advices 5, ncCfg.y.advices 6, ncCfg.y.advices 7, ncCfg.y.advices 8, ncCfg.y.advices 9] ∧
+    ColumnsDistinct [ncCfg.b.colL, ncCfg.b.colM, ncCfg.b.colR] ∧
+    ColumnsDistinct [ncCfg.d.colL, ncCfg.d.colM, ncCfg.d.colR] ∧
+    ColumnsDistinct [ncCfg.e.colL, ncCfg.e.colM, ncCfg.e.colR] ∧
+    ColumnsDistinct [ncCfg.g.colL, ncCfg.g.colM] ∧
+    ColumnsDistinct [ncCfg.h.colL, ncCfg.h.colM, ncCfg.h.colR] ∧
+    ColumnsDistinct [ncCfg.gd.colL, ncCfg.gd.colM, ncCfg.gd.colR, ncCfg.gd.colZ] ∧
+    ColumnsDistinct [ncCfg.pkd.colL, ncCfg.pkd.colM, ncCfg.pkd.colR, ncCfg.pkd.colZ] ∧
+    ColumnsDistinct [ncCfg.value.colL, ncCfg.value.colM, ncCfg.value.colR, ncCfg.value.colZ] ∧
+    ColumnsDistinct [ncCfg.rho.colL, ncCfg.rho.colM, ncCfg.rho.colR, ncCfg.rho.colZ] ∧
+    ColumnsDistinct [ncCfg.psi.colL, ncCfg.psi.colM, ncCfg.psi.colR, ncCfg.psi.colZ] := by
+  dsimp only
+  have hne : ∀ i j : Fin 10, i ≠ j → advices i ≠ advices j := fun i j hij h => hij (hadv h)
+  repeat' apply And.intro
+  all_goals
+    simp only [NoteCommit.configure, NoteCommit.DecomposeB.configure,
+      NoteCommit.DecomposeD.configure, NoteCommit.DecomposeE.configure,
+      NoteCommit.DecomposeG.configure, NoteCommit.DecomposeH.configure,
+      NoteCommit.GdCanonicity.configure, NoteCommit.PkdCanonicity.configure,
+      NoteCommit.ValueCanonicity.configure, NoteCommit.RhoCanonicity.configure,
+      NoteCommit.PsiCanonicity.configure, NoteCommit.YCanonicity.configure,
+      Configure.output_bind, Configure.output_pure, ColumnsDistinct, List.nodup_cons,
+      List.mem_cons, List.not_mem_nil, or_false, not_or, List.nodup_nil,
+      not_false_eq_true, and_true]
+  all_goals
+    repeat' apply And.intro
+  all_goals exact hne _ _ (by decide)
+
+private theorem configured_adviceColumnRequirements (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) :
+    let cfg := (configure G).output counts
+    Ecc.WitnessPoint.pointFormal.elaborated.adviceColumnRequirements cfg.eccConfig.witnessPoint ∧
+    Ecc.WitnessPoint.pointNonIdFormal.elaborated.adviceColumnRequirements cfg.eccConfig.witnessPoint ∧
+    (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve 0 16 (by norm_num)
+      hintWitnesses.merkleSib hintWitnesses.merkleSwap).elaborated.adviceColumnRequirements
+      (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) ∧
+    (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve 16 16 (by norm_num)
+      (fun j => hintWitnesses.merkleSib (16 + j))
+      (fun j => hintWitnesses.merkleSwap (16 + j))).elaborated.adviceColumnRequirements
+      (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) ∧
+    (ValueCommit.circuit B.valueCommitV B.valueCommitR).elaborated.adviceColumnRequirements
+      (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) ∧
+    (DeriveNullifier.circuit B.nullifierK).elaborated.adviceColumnRequirements
+      (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add) ∧
+    (SpendAuthority.circuit B.spendAuthG).elaborated.adviceColumnRequirements
+      (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) ∧
+    (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ B.ivkQ_onCurve).elaborated.adviceColumnRequirements
+      { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } ∧
+    AddressIntegrity.circuit.elaborated.adviceColumnRequirements
+      (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) ∧
+    (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve).elaborated.adviceColumnRequirements
+      { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } ∧
+    (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve).elaborated.adviceColumnRequirements
+      { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } := by
+  dsimp only
+  have hadv : Function.Injective (configureBase.output counts).advices := by
+    simpa only [configure, configureChips, Configure.output_bind, Configure.output_pure] using
+      configure_output_advices_injective G counts
+  have hne : ∀ i j : Fin 10, i ≠ j →
+      (configureBase.output counts).advices i ≠ (configureBase.output counts).advices j :=
+    fun i j hij h => hij (hadv h)
+  have hecc := ecc_adviceColumnRequirements_of_injective (configureBase.output counts).advices
+    hadv (configureBase.output counts).lagrangeCoeffs (configureBase.output counts).lookupConfig
+    (configureBase.finalCounts counts)
+  obtain ⟨hwp, hwpNonId, hadd, hfw, hsh, hbfe, hmul⟩ := hecc
+  have hposeidon : (Poseidon.hash (Poseidon.Hash.ConstantLength.capacity 2)).elaborated.adviceColumnRequirements
+      ((configure G).output counts).poseidonConfig := by
+    have hcfg : ((configure G).output counts).poseidonConfig.state =
+        ![(configureBase.output counts).advices 6, (configureBase.output counts).advices 7,
+          (configureBase.output counts).advices 8] ∧
+        ((configure G).output counts).poseidonConfig.partialSbox =
+        (configureBase.output counts).advices 5 := by
+      simp only [configure, configureChips, Poseidon.configure, Configure.output_bind,
+        Configure.output_pure, and_self]
+    change ColumnsDistinct _
+    rw [hcfg.1, hcfg.2]
+    change ColumnsDistinct [(configureBase.output counts).advices 6,
+      (configureBase.output counts).advices 7,
+      (configureBase.output counts).advices 8,
+      (configureBase.output counts).advices 5]
+    simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons,
+      List.not_mem_nil, or_false, not_or, List.nodup_nil, not_false_eq_true, and_true]
+    repeat' apply And.intro
+    all_goals exact hne _ _ (by decide)
+  have haddChip : AddChip.addFormal.elaborated.adviceColumnRequirements
+      ((configure G).output counts).addChipConfig := by
+    have hneBase : ∀ i j : Fin 10, i ≠ j →
+        configureAdvices.output counts i ≠ configureAdvices.output counts j := by
+      simpa only [configureBase, configureShared, Configure.output_bind, Configure.output_pure] using hne
+    change ColumnsDistinct _
+    simp only [configure, configureChips, configureBase, configureShared, AddChip.configure,
+      Configure.output_bind, Configure.output_pure, ColumnsDistinct, List.nodup_cons,
+      List.mem_cons, List.not_mem_nil, or_false, not_or, List.nodup_nil,
+      not_false_eq_true, and_true]
+    repeat' apply And.intro
+    all_goals exact hneBase _ _ (by decide)
+  have hsins1 : ∀ ns Q hQ hns,
+      (Sinsemilla.HashToPoint.hashCircuit G ns Q hQ hns).elaborated.adviceColumnRequirements
+        ((configure G).output counts).sinsemilla1 := by
+    intro ns Q hQ hns
+    change ColumnsDistinct _
+    simp only [configure, configureChips, Sinsemilla.HashPiece.configure,
+      Configure.output_bind, Configure.output_pure, ColumnsDistinct, List.nodup_cons,
+      List.mem_cons, List.not_mem_nil, or_false, not_or, List.nodup_nil,
+      not_false_eq_true, and_true]
+    repeat' apply And.intro
+    all_goals exact hne _ _ (by decide)
+  have hsins2 : ∀ ns Q hQ hns,
+      (Sinsemilla.HashToPoint.hashCircuit G ns Q hQ hns).elaborated.adviceColumnRequirements
+        ((configure G).output counts).sinsemilla2 := by
+    intro ns Q hQ hns
+    change ColumnsDistinct _
+    simp only [configure, configureChips, Sinsemilla.HashPiece.configure,
+      Configure.output_bind, Configure.output_pure, ColumnsDistinct, List.nodup_cons,
+      List.mem_cons, List.not_mem_nil, or_false, not_or, List.nodup_nil,
+      not_false_eq_true, and_true]
+    repeat' apply And.intro
+    all_goals exact hne _ _ (by decide)
+  have hmerkle1 : (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve 0 16
+      (by norm_num) hintWitnesses.merkleSib hintWitnesses.merkleSwap).elaborated.adviceColumnRequirements
+      (((configure G).output counts).merkle1.condSwap, ((configure G).output counts).merkle1,
+        ((configure G).output counts).lookupConfig) := by
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · simp only [configure, configureChips, Sinsemilla.Merkle.configure, CondSwap.configure,
+        Sinsemilla.HashPiece.configure, Configure.output_bind, Configure.output_pure,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+        List.nodup_nil, not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+    · simpa only [configure, configureChips, Sinsemilla.Merkle.configure,
+        Configure.output_bind, Configure.output_pure] using
+        hsins1 Sinsemilla.Merkle.HashLayer.merkleNs B.merkleQ B.merkleQ_onCurve (by decide)
+    · simp only [configure, configureChips, Sinsemilla.Merkle.configure,
+        Sinsemilla.Merkle.Gate.configure, Sinsemilla.HashPiece.configure,
+        Configure.output_bind, Configure.output_pure, ColumnsDistinct, List.nodup_cons,
+        List.mem_cons, List.not_mem_nil, or_false, not_or, List.nodup_nil,
+        not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+    · simp only [configure, configureChips, Sinsemilla.Merkle.configure,
+        Sinsemilla.Merkle.Gate.configure, Sinsemilla.HashPiece.configure,
+        Configure.output_bind, Configure.output_pure, ColumnsDistinct, List.nodup_cons,
+        List.mem_cons, List.not_mem_nil, or_false, not_or, List.nodup_nil,
+        not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+  have hmerkle2 : (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve 16 16
+      (by norm_num) (fun j => hintWitnesses.merkleSib (16 + j))
+      (fun j => hintWitnesses.merkleSwap (16 + j))).elaborated.adviceColumnRequirements
+      (((configure G).output counts).merkle2.condSwap, ((configure G).output counts).merkle2,
+        ((configure G).output counts).lookupConfig) := by
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · simp only [configure, configureChips, Sinsemilla.Merkle.configure, CondSwap.configure,
+        Sinsemilla.HashPiece.configure, Configure.output_bind, Configure.output_pure,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+        List.nodup_nil, not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+    · simpa only [configure, configureChips, Sinsemilla.Merkle.configure,
+        Configure.output_bind, Configure.output_pure] using
+        hsins2 Sinsemilla.Merkle.HashLayer.merkleNs B.merkleQ B.merkleQ_onCurve (by decide)
+    · simp only [configure, configureChips, Sinsemilla.Merkle.configure,
+        Sinsemilla.Merkle.Gate.configure, Sinsemilla.HashPiece.configure,
+        Configure.output_bind, Configure.output_pure, ColumnsDistinct, List.nodup_cons,
+        List.mem_cons, List.not_mem_nil, or_false, not_or, List.nodup_nil,
+        not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+    · simp only [configure, configureChips, Sinsemilla.Merkle.configure,
+        Sinsemilla.Merkle.Gate.configure, Sinsemilla.HashPiece.configure,
+        Configure.output_bind, Configure.output_pure, ColumnsDistinct, List.nodup_cons,
+        List.mem_cons, List.not_mem_nil, or_false, not_or, List.nodup_nil,
+        not_false_eq_true, and_true]
+      repeat' apply And.intro
+      all_goals exact hne _ _ (by decide)
+  have hcfgEcc : ((configure G).output counts).eccConfig =
+      (Ecc.configure (configureBase.output counts).advices (configureBase.output counts).lagrangeCoeffs
+        (configureBase.output counts).lookupConfig).output (configureBase.finalCounts counts) := by
+    simp only [configure, configureChips, Configure.output_bind, Configure.output_pure]
+  have hncOld : ∃ counts', ((configure G).output counts).noteCommitOld =
+      (NoteCommit.configure (configureBase.output counts).advices).output counts' := by
+    simp only [configure, configureChips, Configure.output_bind, Configure.output_pure]
+    exact ⟨_, rfl⟩
+  have hncNew : ∃ counts', ((configure G).output counts).noteCommitNew =
+      (NoteCommit.configure (configureBase.output counts).advices).output counts' := by
+    simp only [configure, configureChips, Configure.output_bind, Configure.output_pure]
+    exact ⟨_, rfl⟩
+  rw [hcfgEcc]
+  refine ⟨hwp, hwpNonId, hmerkle1, hmerkle2,
+    ⟨hsh B.valueCommitV, hfw B.valueCommitR, hadd⟩,
+    ⟨hposeidon, haddChip, hbfe B.nullifierK, hadd⟩,
+    ⟨hfw B.spendAuthG, hadd⟩,
+    ⟨⟨hfw B.commitIvkR, hsins1 _ _ _ _, hadd⟩, ?_⟩,
+    ⟨hmul, hwpNonId⟩,
+    ?_, ?_⟩
+  · simp only [configure, configureChips, CommitIvk.configure, Configure.output_bind,
+      Configure.output_pure, ColumnsDistinct, List.nodup_cons, List.mem_cons,
+      List.not_mem_nil, or_false, not_or, List.nodup_nil, not_false_eq_true, and_true]
+    repeat' apply And.intro
+    all_goals exact hne _ _ (by decide)
+  · obtain ⟨cOld, hcOld⟩ := hncOld
+    have hgates := noteCommit_adviceColumnRequirements_of_injective
+      (configureBase.output counts).advices hadv cOld
+    rw [hcOld]
+    exact ⟨hgates.1, ⟨hfw B.noteCommitR, hsins1 _ _ _ _, hadd⟩, hgates.2⟩
+  · obtain ⟨cNew, hcNew⟩ := hncNew
+    have hgates := noteCommit_adviceColumnRequirements_of_injective
+      (configureBase.output counts).advices hadv cNew
+    rw [hcNew]
+    exact ⟨hgates.1, ⟨hfw B.noteCommitR, hsins2 _ _ _ _, hadd⟩, hgates.2⟩
+
+private theorem synthWitness_consumedCellsAssigned (G : Generators)
     (counts : ConfigureCounts) (i : RegionIndex) :
     (synthWitness G hintWitnesses ((configure G).output counts)).operations i
-      |>.CopyCellsAssignedFrom i [] := by
-  apply Operations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-  simp only [synthWitness, Sinsemilla.load, loadPrivate, circuit_norm,
-    Operation.copiedCells, RegionOperation.copiedCells,
-    RegionOperations.copiedCells, List.flatMap_cons, List.flatMap_nil,
-    List.nil_append, List.forall_append, List.forall_cons,
-    and_true]
-  exact ⟨Ecc.WitnessPoint.pointFormal_call_operations_copyFree _ _ _,
-    Ecc.WitnessPoint.pointNonIdFormal_call_operations_copyFree _ _ _,
-    Ecc.WitnessPoint.pointNonIdFormal_call_operations_copyFree _ _ _⟩
+      |>.AssignedFrom RegionOperation.Consumes i [] := by
+  have hpoint := (eccFullConfigureCertificate G counts).witnessPointFormal.configured
+  have hpointNonId := (eccFullConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  unfold synthWitness
+  apply FormalCircuit.bind_assignedFrom
+  · simp only [Sinsemilla.load, Circuit.operations_bind, operations_loadTable,
+      List.singleton_append, Operations.assignedFrom_loadTable_iff,
+      Operations.assignedFrom_nil_iff]
+  · simp only [Sinsemilla.load, Circuit.operations_bind, operations_loadTable,
+      Circuit.nextRegionIndex_bind, nextRegionIndex_loadTable,
+      List.singleton_append, Operations.regionCount, Nat.add_zero]
+  · apply FormalCircuit.bind_assignedFrom
+    · exact loadPrivate_consumedCellsAssignedFrom _ _ [] (witnessFunctionSupport_fieldHint _) _ _ (by simp)
+    · simp only [loadPrivate, nextRegionIndex_assignRegion, operations_assignRegion,
+        Operations.regionCount]
+    · apply FormalCircuit.bind_assignedFrom
+      · exact loadPrivate_consumedCellsAssignedFrom _ _ [] (witnessFunctionSupport_fieldHint _) _ _ (by simp)
+      · simp only [loadPrivate, nextRegionIndex_assignRegion, operations_assignRegion,
+          Operations.regionCount]
+      · apply Ecc.WitnessPoint.pointFormal.call_bind_consumedCellsAssignedFrom _ hpoint
+        · intro cell hcell
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, Ecc.WitnessPoint.pointFormal,
+            FormalRegionCircuit.toFormal_keygenRequirements, FormalRegionCircuit.keygenRequirements,
+            Ecc.WitnessPoint.point, ElaboratedRegionCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, hintWitnesses, valueBuilderReads_pointHint,
+            List.map_nil, List.append_nil, List.not_mem_nil] at hcell
+        · apply Ecc.WitnessPoint.pointNonIdFormal.call_bind_consumedCellsAssignedFrom _ hpointNonId
+          · intro cell hcell
+            simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+              FormalCircuit.Configured.readRelativeCellsAt, Ecc.WitnessPoint.pointNonIdFormal,
+              FormalRegionCircuit.toFormal_keygenRequirements, FormalRegionCircuit.keygenRequirements,
+              Ecc.WitnessPoint.pointNonId, ElaboratedRegionCircuit.keygenRequirements,
+              KeygenRequirements.readRelativeCellsAt, hintWitnesses, valueBuilderReads_pointHint,
+              List.map_nil, List.append_nil, List.not_mem_nil] at hcell
+          · apply Ecc.WitnessPoint.pointNonIdFormal.call_bind_consumedCellsAssignedFrom _ hpointNonId
+            · intro cell hcell
+              simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+                FormalCircuit.Configured.readRelativeCellsAt, Ecc.WitnessPoint.pointNonIdFormal,
+                FormalRegionCircuit.toFormal_keygenRequirements, FormalRegionCircuit.keygenRequirements,
+                Ecc.WitnessPoint.pointNonId, ElaboratedRegionCircuit.keygenRequirements,
+                KeygenRequirements.readRelativeCellsAt, hintWitnesses, valueBuilderReads_pointHint,
+                List.map_nil, List.append_nil, List.not_mem_nil] at hcell
+            · apply FormalCircuit.bind_assignedFrom
+              · exact loadPrivate_consumedCellsAssignedFrom _ _ []
+                  (witnessFunctionSupport_fieldHint _) _ _ (by simp)
+              · simp only [loadPrivate, nextRegionIndex_assignRegion, operations_assignRegion,
+                  Operations.regionCount]
+              · apply FormalCircuit.bind_assignedFrom
+                · exact loadPrivate_consumedCellsAssignedFrom _ _ []
+                    (witnessFunctionSupport_fieldHint _) _ _ (by simp)
+                · simp only [loadPrivate, nextRegionIndex_assignRegion, operations_assignRegion,
+                    Operations.regionCount]
+                · apply FormalCircuit.bind_assignedFrom
+                  · exact loadPrivate_consumedCellsAssignedFrom _ _ []
+                      (witnessFunctionSupport_fieldHint _) _ _ (by simp)
+                  · simp only [loadPrivate, nextRegionIndex_assignRegion, operations_assignRegion,
+                      Operations.regionCount]
+                  · simp only [Circuit.operations_pure, Operations.assignedFrom_nil_iff]
+
+private theorem synthWitness_adviceWritesConsistent (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    (synthWitness G hintWitnesses ((configure G).output counts)).operations i
+      |>.AdviceWritesConsistentFrom i := by
+  have hpoint := (eccFullConfigureCertificate G counts).witnessPointFormal.configured
+  have hpointNonId := (eccFullConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  obtain ⟨hpointAdv, hpointNonIdAdv, -⟩ :=
+    configured_adviceColumnRequirements G B counts
+  unfold synthWitness
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+    Sinsemilla.load, operations_loadTable, nextRegionIndex_loadTable,
+    loadPrivate, operations_assignRegion, operations_assignAdvice, nextRegionIndex_assignRegion,
+    List.singleton_append, Operations.adviceWritesConsistentFrom_loadTable_cons,
+    Operations.adviceWritesConsistentFrom_append,
+    Operations.adviceWritesConsistentFrom_region_cons,
+    Operations.adviceWritesConsistentFrom_nil,
+    RegionOperations.adviceWritesConsistent_assignAdvice_cons,
+    RegionOperations.adviceWritesConsistent_nil, List.not_mem_nil, false_implies,
+    implies_true, Operations.regionCount, FormalCircuit.nextRegionIndex_call',
+    FormalCircuit.call_regionCount', Nat.add_zero, true_and, and_true]
+  refine ⟨
+    Ecc.WitnessPoint.pointFormal.call_adviceWritesConsistent _ hpoint hpointAdv _ _,
+    Ecc.WitnessPoint.pointNonIdFormal.call_adviceWritesConsistent _ hpointNonId hpointNonIdAdv _ _,
+    Ecc.WitnessPoint.pointNonIdFormal.call_adviceWritesConsistent _ hpointNonId hpointNonIdAdv _ _⟩
 
 private theorem synthWitness_output_copyInputCells_assigned (G : Generators)
     (counts : ConfigureCounts) (i : RegionIndex) :
@@ -1375,12 +1849,12 @@ private theorem synthChecks_loadedTableColumns_eq_nil
   rw [synthChecks_synthesisSummary_eq,
     synthChecksSynthesisSummary_tableRowExtent_eq]
 
-private theorem synthChecks_copyCellsAssigned (G : Generators) (B : Bases)
+private theorem synthChecks_consumedCellsAssigned (G : Generators) (B : Bases)
     (counts : ConfigureCounts) (cfg : Config)
     (hcfg : cfg = (configure G).output counts)
     (wc : WitnessCells) (i : RegionIndex) :
     (synthChecks G B hintWitnesses cfg wc).operations i
-      |>.CopyCellsAssignedFrom i wc.copyInputCells := by
+      |>.AssignedFrom RegionOperation.Consumes i wc.copyInputCells := by
   have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
   have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
   have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
@@ -1392,52 +1866,63 @@ private theorem synthChecks_copyCellsAssigned (G : Generators) (B : Bases)
   have haddressIntegrity :=
     synthChecksAddressIntegrityConfigured G counts cfg hcfg
   rw [synthChecks_eq]
-  unfold synthChecksProgram loadPrivate
-  apply FormalCircuit.bind_copyCellsAssignedFrom
-  · apply Sinsemilla.Merkle.CalculateRoot.circuit_call_copyCellsAssignedFrom
+  unfold synthChecksProgram
+  apply FormalCircuit.bind_assignedFrom
+  · apply Sinsemilla.Merkle.CalculateRoot.circuit_call_consumedCellsAssignedFrom
       G B.merkleQ B.merkleQ_onCurve 0 16 (by norm_num)
       hintWitnesses.merkleSib hintWitnesses.merkleSwap _ hmerkle1
-    keygen_registration [WitnessCells.copyInputCells]
+    · keygen_registration [WitnessCells.copyInputCells]
+    · intro idx
+      simp [hintWitnesses, merkleSiblingHint, merkleSwapHint]
   · exact FormalCircuit.nextRegionIndex_call _ _ _ _
-  · apply FormalCircuit.bind_copyCellsAssignedFrom
-    · apply Sinsemilla.Merkle.CalculateRoot.circuit_call_copyCellsAssignedFrom
+  · apply FormalCircuit.bind_assignedFrom
+    · apply Sinsemilla.Merkle.CalculateRoot.circuit_call_consumedCellsAssignedFrom
         G B.merkleQ B.merkleQ_onCurve 16 16 (by norm_num)
         (fun j => hintWitnesses.merkleSib (16 + j))
         (fun j => hintWitnesses.merkleSwap (16 + j)) _ hmerkle2
-      have hroot :=
-        Sinsemilla.Merkle.CalculateRoot.circuit_call_output_cell_mem_input_or_assigned
-          (G := G) (Q := B.merkleQ) (hQ := B.merkleQ_onCurve)
-          (l₀ := 0) (d := 16) (hld := by norm_num)
-          (wsib := hintWitnesses.merkleSib)
-          (wswap := hintWitnesses.merkleSwap)
-          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
-          { node := wc.cmOld.x } i
-      rw [FormalCircuit.output_call']
-      rw [List.mem_append]
-      exact Or.imp
-        (fun hcell => by
-          simp only [WitnessCells.copyInputCells, List.mem_cons,
-            List.not_mem_nil, or_false]
-          apply Or.inr
-          apply Or.inr
-          apply Or.inl
-          rw [← List.mem_singleton]
-          convert hcell using 1)
-        (fun hcell => by convert hcell using 1)
-        (List.mem_append.mp hroot)
+      · have hroot :=
+          Sinsemilla.Merkle.CalculateRoot.circuit_call_output_cell_mem_input_or_assigned
+            (G := G) (Q := B.merkleQ) (hQ := B.merkleQ_onCurve)
+            (l₀ := 0) (d := 16) (hld := by norm_num)
+            (wsib := hintWitnesses.merkleSib)
+            (wswap := hintWitnesses.merkleSwap)
+            (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+            { node := wc.cmOld.x } i
+        rw [FormalCircuit.output_call']
+        rw [List.mem_append]
+        exact Or.imp
+          (fun hcell => by
+            simp only [WitnessCells.copyInputCells, List.mem_cons,
+              List.not_mem_nil, or_false]
+            apply Or.inr
+            apply Or.inr
+            apply Or.inl
+            rw [← List.mem_singleton]
+            convert hcell using 1)
+          (fun hcell => by convert hcell using 1)
+          (List.mem_append.mp hroot)
+      · intro idx
+        simp [hintWitnesses, merkleSiblingHint, merkleSwapHint]
     · exact FormalCircuit.nextRegionIndex_call _ _ _ _
-    · apply FormalCircuit.bind_copyCellsAssignedFrom
-      · apply loadPrivate_copyCellsAssignedFrom
-      · simp only [nextRegionIndex_assignRegion, operations_assignRegion,
+    · apply FormalCircuit.bind_assignedFrom
+      · exact loadPrivate_consumedCellsAssignedFrom _ _ []
+          (witnessFunctionSupport_fieldHint _) _ _ (by simp)
+      · simp only [loadPrivate, nextRegionIndex_assignRegion, operations_assignRegion,
           Operations.regionCount]
-      · apply FormalCircuit.bind_copyCellsAssignedFrom
-        · apply loadPrivate_copyCellsAssignedFrom
-        · simp only [nextRegionIndex_assignRegion, operations_assignRegion,
+      · apply FormalCircuit.bind_assignedFrom
+        · exact loadPrivate_consumedCellsAssignedFrom _ _ []
+            (witnessFunctionSupport_fieldHint _) _ _ (by simp)
+        · simp only [loadPrivate, nextRegionIndex_assignRegion, operations_assignRegion,
             Operations.regionCount]
         · apply (ValueCommit.circuit B.valueCommitV B.valueCommitR)
-              |>.call_bind_copyCellsAssignedFrom _ hvalueCommit
+              |>.call_bind_consumedCellsAssignedFrom _ hvalueCommit
           · intro cell hcell
-            rw [ValueCommit.circuit_inputCells_eq] at hcell
+            simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+              FormalCircuit.Configured.readRelativeCellsAt, ValueCommit.circuit,
+              ValueCommit.keygenRequirements,
+              FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+              KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+              hintWitnesses, scalarWindows_natHint_reads_eq_nil] at hcell
             let merkle1 := (Sinsemilla.Merkle.CalculateRoot.circuit G
               B.merkleQ B.merkleQ_onCurve 0 16 (by norm_num)
               hintWitnesses.merkleSib hintWitnesses.merkleSwap).call
@@ -1465,43 +1950,50 @@ private theorem synthChecks_copyCellsAssigned (G : Generators) (B : Bases)
             have hsign' := hsign
             simp only [signRegion, magnitudeLoad, magnitudeRegion,
               merkle2, merkle1] at hsign'
-            rw [List.mem_cons] at hcell
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
             rcases hcell with hcell | hcell
             · rw [hcell]
               simp only [List.mem_append]
               exact Or.inl (Or.inr hmagnitude')
-            · rw [List.mem_cons] at hcell
-              rcases hcell with hcell | hcell
-              · rw [hcell]
-                simp only [List.mem_append]
-                exact Or.inr hsign'
-              · simp only [List.not_mem_nil] at hcell
-          · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+            · rw [hcell]
+              simp only [List.mem_append]
+              exact Or.inr hsign'
+          · apply FormalCircuit.constrainInstance_bind_assignedFrom
             · exact List.mem_append_right _
                 (ValueCommit.circuit_call_output_cells_assigned
                   B.valueCommitV B.valueCommitR _ _ _).1
-            · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+            · apply FormalCircuit.constrainInstance_bind_assignedFrom
               · exact List.mem_append_right _
                   (ValueCommit.circuit_call_output_cells_assigned
                     B.valueCommitV B.valueCommitR _ _ _).2
               · apply (DeriveNullifier.circuit B.nullifierK)
-                    |>.call_bind_copyCellsAssignedFrom _ hderiveNullifier
+                    |>.call_bind_consumedCellsAssignedFrom _ hderiveNullifier
                 · intro cell hcell
-                  rw [DeriveNullifier.circuit_inputCells_eq] at hcell
+                  simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+                    FormalCircuit.Configured.readRelativeCellsAt, DeriveNullifier.circuit,
+                    DeriveNullifier.keygenRequirements,
+                    FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+                    KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil] at hcell
                   have hsmall : cell ∈ wc.copyInputCells := by
                     simp only [WitnessCells.copyInputCells, List.mem_cons,
                       List.not_mem_nil, or_false] at hcell ⊢
                     aesop
                   simp only [List.mem_append]
                   exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl hsmall))))
-                · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+                · apply FormalCircuit.constrainInstance_bind_assignedFrom
                   · exact List.mem_append_right _
                       (DeriveNullifier.circuit_call_output_cell_assigned
                         B.nullifierK _ _ _)
                   · apply (SpendAuthority.circuit B.spendAuthG)
-                        |>.call_bind_copyCellsAssignedFrom _ hspendAuthority
+                        |>.call_bind_consumedCellsAssignedFrom _ hspendAuthority
                     · intro cell hcell
-                      rw [SpendAuthority.circuit_inputCells_eq] at hcell
+                      simp only [FormalCircuit.Configured.inputCells,
+                        FormalCircuit.Configured.readCells,
+                        FormalCircuit.Configured.readRelativeCellsAt, SpendAuthority.circuit,
+                        SpendAuthority.keygenRequirements,
+                        FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+                        KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+                        hintWitnesses, scalarWindows_natHint_reads_eq_nil] at hcell
                       have hsmall : cell ∈ wc.copyInputCells := by
                         simp only [WitnessCells.copyInputCells, List.mem_cons,
                           List.not_mem_nil, or_false] at hcell ⊢
@@ -1509,19 +2001,25 @@ private theorem synthChecks_copyCellsAssigned (G : Generators) (B : Bases)
                       simp only [List.mem_append]
                       exact Or.inl (Or.inl (Or.inl (Or.inl
                         (Or.inl (Or.inl hsmall)))))
-                    · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+                    · apply FormalCircuit.constrainInstance_bind_assignedFrom
                       · exact List.mem_append_right _
                           (SpendAuthority.circuit_call_output_cells_assigned
                             B.spendAuthG _ _ _).1
-                      · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+                      · apply FormalCircuit.constrainInstance_bind_assignedFrom
                         · exact List.mem_append_right _
                             (SpendAuthority.circuit_call_output_cells_assigned
                               B.spendAuthG _ _ _).2
                         · apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
-                              B.ivkQ_onCurve).call_bind_copyCellsAssignedFrom _
+                              B.ivkQ_onCurve).call_bind_consumedCellsAssignedFrom _
                               hcommitIvk
                           · intro cell hcell
-                            rw [CommitIvk.Main.circuit_inputCells_eq] at hcell
+                            simp only [FormalCircuit.Configured.inputCells,
+                              FormalCircuit.Configured.readCells,
+                              FormalCircuit.Configured.readRelativeCellsAt, CommitIvk.Main.circuit,
+                              CommitIvk.Main.elaborated, CommitIvk.Main.keygenRequirements,
+                              FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+                              KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+                              hintWitnesses, scalarWindows_natHint_reads_eq_nil] at hcell
                             have hsmall : cell ∈ wc.copyInputCells := by
                               simp only [WitnessCells.copyInputCells,
                                 List.mem_cons, List.not_mem_nil, or_false]
@@ -1531,30 +2029,85 @@ private theorem synthChecks_copyCellsAssigned (G : Generators) (B : Bases)
                             exact Or.inl (Or.inl (Or.inl (Or.inl
                               (Or.inl (Or.inl (Or.inl hsmall))))))
                           · apply AddressIntegrity.circuit
-                                |>.call_bind_copyCellsAssignedFrom _
+                                |>.call_bind_consumedCellsAssignedFrom _
                                   haddressIntegrity
-                            intro cell hcell
-                            rw [AddressIntegrity.circuit_inputCells_eq] at hcell
-                            simp only [List.mem_cons, List.not_mem_nil,
-                              or_false] at hcell
-                            rcases hcell with hcell | hcell | hcell
-                            · rw [hcell]
-                              simp only [List.mem_append]
-                              exact Or.inr
-                                (CommitIvk.Main.circuit_call_output_cell_assigned
-                                  G B.commitIvkR B.ivkQ B.ivkQ_onCurve _ _ _)
-                            · rw [hcell]
-                              simp only [WitnessCells.copyInputCells,
-                                List.mem_append, List.mem_cons,
-                                List.not_mem_nil, or_false]
-                              aesop
-                            · rw [hcell]
-                              simp only [WitnessCells.copyInputCells,
-                                List.mem_append, List.mem_cons,
-                                List.not_mem_nil, or_false]
-                              aesop
-                            simp only [Circuit.operations_pure,
-                              Operations.copyCellsAssignedFrom_nil_iff]
+                            · intro cell hcell
+                              simp only [FormalCircuit.Configured.inputCells,
+                                FormalCircuit.Configured.readCells,
+                                FormalCircuit.Configured.readRelativeCellsAt,
+                                AddressIntegrity.circuit,
+                                FormalCircuit.keygenRequirements,
+                                ElaboratedCircuit.keygenRequirements,
+                                KeygenRequirements.readRelativeCellsAt, List.map_nil,
+                                List.append_nil, hintWitnesses,
+                                valueBuilderReads_pointHint,
+                                List.mem_cons, List.not_mem_nil, or_false] at hcell
+                              rcases hcell with hcell | hcell | hcell
+                              · rw [hcell]
+                                simp only [List.mem_append]
+                                exact Or.inr
+                                  (CommitIvk.Main.circuit_call_output_cell_assigned
+                                    G B.commitIvkR B.ivkQ B.ivkQ_onCurve _ _ _)
+                              · rw [hcell]
+                                simp only [WitnessCells.copyInputCells,
+                                  List.mem_append, List.mem_cons,
+                                  List.not_mem_nil, or_false]
+                                aesop
+                              · rw [hcell]
+                                simp only [WitnessCells.copyInputCells,
+                                  List.mem_append, List.mem_cons,
+                                  List.not_mem_nil, or_false]
+                                aesop
+                            · simp only [Circuit.operations_pure,
+                                Operations.assignedFrom_nil_iff]
+
+private theorem synthChecks_adviceWritesConsistent (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    (synthChecks G B hintWitnesses cfg wc).operations i
+      |>.AdviceWritesConsistentFrom i := by
+  have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
+  have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
+  have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
+  have hderiveNullifier :=
+    synthChecksDeriveNullifierConfigured G B counts cfg hcfg
+  have hspendAuthority :=
+    synthChecksSpendAuthorityConfigured G B counts cfg hcfg
+  have hcommitIvk := synthChecksCommitIvkConfigured G B counts cfg hcfg
+  have haddressIntegrity :=
+    synthChecksAddressIntegrityConfigured G counts cfg hcfg
+  obtain ⟨-, -, hmerkle1Adv, hmerkle2Adv, hvcAdv, hdnAdv, hsaAdv, hciAdv, haiAdv, -⟩ :=
+    configured_adviceColumnRequirements G B counts
+  subst cfg
+  rw [synthChecks_eq]
+  unfold synthChecksProgram
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+    operations_constrainInstance, nextRegionIndex_constrainInstance,
+    Operations.adviceWritesConsistentFrom_append,
+    Operations.adviceWritesConsistentFrom_constrainInstance_cons,
+    Operations.adviceWritesConsistentFrom_nil, true_and,
+    FormalCircuit.nextRegionIndex_call']
+  refine ⟨
+    (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve 0 16 (by norm_num)
+      hintWitnesses.merkleSib hintWitnesses.merkleSwap).call_adviceWritesConsistent _
+      hmerkle1 hmerkle1Adv _ _,
+    (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve 16 16 (by norm_num)
+      (fun j => hintWitnesses.merkleSib (16 + j))
+      (fun j => hintWitnesses.merkleSwap (16 + j))).call_adviceWritesConsistent _
+      hmerkle2 hmerkle2Adv _ _,
+    loadPrivate_adviceWritesConsistent _ _ _,
+    loadPrivate_adviceWritesConsistent _ _ _,
+    (ValueCommit.circuit B.valueCommitV B.valueCommitR).call_adviceWritesConsistent _
+      hvalueCommit hvcAdv _ _,
+    (DeriveNullifier.circuit B.nullifierK).call_adviceWritesConsistent _
+      hderiveNullifier hdnAdv _ _,
+    (SpendAuthority.circuit B.spendAuthG).call_adviceWritesConsistent _
+      hspendAuthority hsaAdv _ _,
+    (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ B.ivkQ_onCurve).call_adviceWritesConsistent _
+      hcommitIvk hciAdv _ _,
+    AddressIntegrity.circuit.call_adviceWritesConsistent _
+      haddressIntegrity haiAdv _ _⟩
 
 private theorem synthNotes_fixedAssignmentsAgree
     (G : Generators) (B : Bases) (counts : ConfigureCounts)
@@ -1689,12 +2242,12 @@ private theorem synthNotes_loadedTableColumns_eq_nil
   rw [synthNotes_synthesisSummary_eq,
     synthNotesSynthesisSummary_tableRowExtent_eq]
 
-private theorem synthNotes_copyCellsAssigned (G : Generators) (B : Bases)
+private theorem synthNotes_consumedCellsAssigned (G : Generators) (B : Bases)
     (counts : ConfigureCounts) (wc : WitnessCells) (cc : CheckCells)
     (i : RegionIndex) :
     let cfg := (configure G).output counts
     (synthNotes G B hintWitnesses cfg wc cc).operations i
-      |>.CopyCellsAssignedFrom i (wc.copyInputCells ++ cc.copyInputCells) := by
+      |>.AssignedFrom RegionOperation.Consumes i (wc.copyInputCells ++ cc.copyInputCells) := by
   have hold := (noteCommitOldCertificate G B counts).configured
   have hnew := (noteCommitNewCertificate G B counts).configured
   have hpoint := (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
@@ -1703,13 +2256,18 @@ private theorem synthNotes_copyCellsAssigned (G : Generators) (B : Bases)
   rw [synthNotes_eq]
   unfold synthNotesProgram
   apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve)
-      |>.call_bind_copyCellsAssignedFrom _ hold
+      |>.call_bind_consumedCellsAssignedFrom _ hold
   · intro cell hcell
-    rw [NoteCommit.Main.Configured.inputCells_eq] at hcell
+    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+      FormalCircuit.Configured.readRelativeCellsAt, NoteCommit.Main.circuit,
+      NoteCommit.Main.elaborated, NoteCommit.Main.keygenRequirements,
+      FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      hintWitnesses, scalarWindows_natHint_reads_eq_nil] at hcell
     simp only [WitnessCells.copyInputCells, CheckCells.copyInputCells,
       List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hcell ⊢
     aesop
-  · apply FormalCircuit.bind_copyCellsAssignedFrom
+  · apply FormalCircuit.bind_assignedFrom
     · have hderived := NoteCommit.Main.circuit_call_output_cells_assigned
         G B.noteCommitR B.noteQ B.noteQ_onCurve
         { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
@@ -1721,60 +2279,57 @@ private theorem synthNotes_copyCellsAssigned (G : Generators) (B : Bases)
           value := wc.vOld, rho := wc.rhoOld, psi := wc.psiOld,
           rcm := hintWitnesses.rcmOld } i
       simp only [operations_assignRegion,
-        Operations.copyCellsAssignedFrom_region_iff,
-        Operations.copyCellsAssignedFrom_nil_iff,
+        Operations.assignedFrom_region_iff,
+        Operations.assignedFrom_nil_iff,
         RegionCircuit.operations_bind, operations_constrainEqual,
-        RegionOperations.copyCellsAssignedFrom_append_iff,
-        RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
-        RegionOperations.copyCellsAssignedFrom_nil_iff,
+        RegionOperations.assignedFrom_append_iff,
+        RegionOperations.assignedFrom_cons_iff,
+        RegionOperations.assignedFrom_nil_iff,
+        RegionOperation.consumesFrom_consumes_iff,
+        RegionOperation.consumesFrom_copies_iff,
+        RegionOperation.consumesFrom_reads_iff,
+        RegionOperation.copiedCells,
         RegionOperations.assignedCellsAfter, List.foldl_cons, List.foldl_nil,
         RegionOperation.assignedCells, List.nil_append, List.mem_append,
         WitnessCells.copyInputCells, List.mem_cons, List.not_mem_nil,
-        or_false, and_true]
+        or_false, forall_eq_or_imp, forall_eq, and_true]
       exact ⟨⟨Or.inr hderived.1, Or.inl (Or.inl (by aesop))⟩,
         ⟨Or.inr hderived.2, Or.inl (Or.inl (by aesop))⟩⟩
     · simp only [nextRegionIndex_assignRegion, operations_assignRegion,
         Operations.regionCount]
     · apply Ecc.WitnessPoint.pointNonIdFormal
-          |>.call_bind_copyCellsAssignedFrom _ hpoint
-      · rw [Ecc.WitnessPoint.pointNonIdFormal_inputCells]
-        intro cell hcell
-        simp_all only [List.not_mem_nil]
+          |>.call_bind_consumedCellsAssignedFrom _ hpoint
+      · intro cell hcell
+        simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+          FormalCircuit.Configured.readRelativeCellsAt, Ecc.WitnessPoint.pointNonIdFormal,
+          FormalRegionCircuit.toFormal_keygenRequirements, FormalRegionCircuit.keygenRequirements,
+          Ecc.WitnessPoint.pointNonId, ElaboratedRegionCircuit.keygenRequirements,
+          KeygenRequirements.readRelativeCellsAt, hintWitnesses, valueBuilderReads_pointHint,
+          List.map_nil, List.append_nil, List.not_mem_nil] at hcell
       · apply Ecc.WitnessPoint.pointNonIdFormal
-            |>.call_bind_copyCellsAssignedFrom _ hpoint
-        · rw [Ecc.WitnessPoint.pointNonIdFormal_inputCells]
-          intro cell hcell
-          simp_all only [List.not_mem_nil]
-        · apply FormalCircuit.bind_copyCellsAssignedFrom
-          · apply loadPrivate_copyCellsAssignedFrom
+            |>.call_bind_consumedCellsAssignedFrom _ hpoint
+        · intro cell hcell
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, Ecc.WitnessPoint.pointNonIdFormal,
+            FormalRegionCircuit.toFormal_keygenRequirements, FormalRegionCircuit.keygenRequirements,
+            Ecc.WitnessPoint.pointNonId, ElaboratedRegionCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, hintWitnesses, valueBuilderReads_pointHint,
+            List.map_nil, List.append_nil, List.not_mem_nil] at hcell
+        · apply FormalCircuit.bind_assignedFrom
+          · exact loadPrivate_consumedCellsAssignedFrom _ _ []
+              (witnessFunctionSupport_fieldHint _) _ _ (by simp)
           · unfold loadPrivate
             simp only [nextRegionIndex_assignRegion, operations_assignRegion,
               Operations.regionCount]
           · apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
-                B.noteQ_onCurve).call_bind_copyCellsAssignedFrom _ hnew
+                B.noteQ_onCurve).call_bind_consumedCellsAssignedFrom _ hnew
             · intro cell hcell
-              rw [NoteCommit.Main.Configured.inputCells_eq] at hcell
-              let oldCall := (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
-                B.noteQ_onCurve).call
-                  { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
-                    lookupConfig := cfg.lookupConfig,
-                    mulConfig := cfg.eccConfig.mulFixedFull,
-                    addConfig := cfg.eccConfig.add }
-                  { gdX := wc.gdOld.x, gdY := wc.gdOld.y,
-                    pkdX := cc.pkdOld.x, pkdY := cc.pkdOld.y,
-                    value := wc.vOld, rho := wc.rhoOld, psi := wc.psiOld,
-                    rcm := hintWitnesses.rcmOld }
-              let equalRegion := assignRegion "constrain equal" (do
-                constrainEqual (oldCall.output i).x wc.cmOld.x
-                constrainEqual (oldCall.output i).y wc.cmOld.y)
-              let gdRegion := equalRegion.nextRegionIndex
-                (oldCall.nextRegionIndex i)
-              let gdCall := Ecc.WitnessPoint.pointNonIdFormal.call
-                cfg.eccConfig.witnessPoint hintWitnesses.gdNew
-              let pkdRegion := gdCall.nextRegionIndex gdRegion
-              let pkdCall := Ecc.WitnessPoint.pointNonIdFormal.call
-                cfg.eccConfig.witnessPoint hintWitnesses.pkdNew
-              let psiRegion := pkdCall.nextRegionIndex pkdRegion
+              simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+                FormalCircuit.Configured.readRelativeCellsAt, NoteCommit.Main.circuit,
+                NoteCommit.Main.elaborated, NoteCommit.Main.keygenRequirements,
+                FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+                KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+                hintWitnesses, scalarWindows_natHint_reads_eq_nil] at hcell
               simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
               rcases hcell with hcell | hcell | hcell | hcell | hcell | hcell | hcell
               · rw [hcell]
@@ -1808,17 +2363,91 @@ private theorem synthNotes_copyCellsAssigned (G : Generators) (B : Bases)
               · rw [hcell]
                 simp only [List.mem_append]
                 exact Or.inr (loadPrivate_output_cell_assigned _ _ _)
-            · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+            · apply FormalCircuit.constrainInstance_bind_assignedFrom
               · exact List.mem_append_right _
                   (NoteCommit.Main.circuit_call_output_cells_assigned
                     G B.noteCommitR B.noteQ B.noteQ_onCurve _ _ _).1
-              · apply FormalCircuit.bind_copyCellsAssignedFrom
-                · keygen_registration [synthOrchardChecks,
-                    WitnessCells.copyInputCells, CheckCells.copyInputCells]
+              · apply FormalCircuit.bind_assignedFrom
+                · simp only [operations_assignRegion, Operations.assignedFrom_region_iff,
+                    Operations.assignedFrom_nil_iff, synthOrchardChecks, circuit_norm,
+                    RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+                    RegionOperation.consumesFrom_consumes_iff,
+                    RegionOperation.consumesFrom_copies_iff,
+                    RegionOperation.consumesFrom_reads_iff,
+                    RegionOperation.copiedCells, RegionOperation.assignedCells,
+                    List.nil_append, List.singleton_append,
+                    List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
+                    false_implies, implies_true, true_and, and_true]
+                  have hvOld : wc.vOld.cell ∈ wc.copyInputCells := by
+                    simp [WitnessCells.copyInputCells]
+                  have hvNew : wc.vNew.cell ∈ wc.copyInputCells := by
+                    simp [WitnessCells.copyInputCells]
+                  have hmag : cc.magnitude.cell ∈ cc.copyInputCells := by
+                    simp [CheckCells.copyInputCells]
+                  have hsign : cc.sign.cell ∈ cc.copyInputCells := by
+                    simp [CheckCells.copyInputCells]
+                  have hroot : cc.root.cell ∈ cc.copyInputCells := by
+                    simp [CheckCells.copyInputCells]
+                  refine ⟨
+                    ⟨[wc.vOld], witnessFunctionSupport_ofFExpr (.expr wc.vOld), by
+                      simp [hvOld]⟩,
+                    by simp [hvOld],
+                    ⟨[wc.vNew], witnessFunctionSupport_ofFExpr (.expr wc.vNew), by
+                      simp [hvNew]⟩,
+                    by simp [hvNew],
+                    ⟨[cc.magnitude], witnessFunctionSupport_ofFExpr (.expr cc.magnitude), by
+                      simp [hmag]⟩,
+                    by simp [hmag],
+                    ⟨[cc.sign], witnessFunctionSupport_ofFExpr (.expr cc.sign), by
+                      simp [hsign]⟩,
+                    by simp [hsign],
+                    ⟨[cc.root], witnessFunctionSupport_ofFExpr (.expr cc.root), by
+                      simp [hroot]⟩,
+                    by simp [hroot],
+                    ⟨[], witnessFunctionSupport_instanceGet _ _, by simp⟩,
+                    ⟨[], witnessFunctionSupport_instanceGet _ _, by simp⟩,
+                    ⟨[], witnessFunctionSupport_instanceGet _ _, by simp⟩⟩
                 · simp only [nextRegionIndex_assignRegion,
                     operations_assignRegion, Operations.regionCount]
                 · simp only [Circuit.operations_pure,
-                    Operations.copyCellsAssignedFrom_nil_iff]
+                    Operations.assignedFrom_nil_iff]
+
+private theorem synthNotes_adviceWritesConsistent (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (wc : WitnessCells) (cc : CheckCells)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    (synthNotes G B hintWitnesses cfg wc cc).operations i
+      |>.AdviceWritesConsistentFrom i := by
+  have hold := (noteCommitOldCertificate G B counts).configured
+  have hnew := (noteCommitNewCertificate G B counts).configured
+  have hpoint := (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  obtain ⟨-, hpointAdv, -, -, -, -, -, -, -, holdAdv, hnewAdv⟩ :=
+    configured_adviceColumnRequirements G B counts
+  let cfg := (configure G).output counts
+  simp only
+  rw [synthNotes_eq]
+  unfold synthNotesProgram
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+    operations_assignRegion, operations_constrainInstance,
+    nextRegionIndex_assignRegion, nextRegionIndex_constrainInstance,
+    List.singleton_append, Operations.adviceWritesConsistentFrom_append,
+    Operations.adviceWritesConsistentFrom_region_cons,
+    Operations.adviceWritesConsistentFrom_constrainInstance_cons,
+    Operations.adviceWritesConsistentFrom_nil, and_true,
+    FormalCircuit.nextRegionIndex_call']
+  refine ⟨
+    (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve).call_adviceWritesConsistent _
+      hold holdAdv _ _,
+    by simp only [RegionCircuit.operations_bind, operations_constrainEqual, List.singleton_append,
+        RegionOperations.adviceWritesConsistent_constrainEqual_cons,
+        RegionOperations.adviceWritesConsistent_nil],
+    Ecc.WitnessPoint.pointNonIdFormal.call_adviceWritesConsistent _ hpoint hpointAdv _ _,
+    Ecc.WitnessPoint.pointNonIdFormal.call_adviceWritesConsistent _ hpoint hpointAdv _ _,
+    loadPrivate_adviceWritesConsistent _ _ _,
+    (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve).call_adviceWritesConsistent _
+      hnew hnewAdv _ _,
+    synthOrchardChecks_adviceWritesConsistent cfg (configure_output_advices_injective G counts)
+      wc cc _⟩
 
 private theorem synthChecks_output_copyInputCells_assigned
     (G : Generators) (B : Bases) (counts : ConfigureCounts)
@@ -2009,16 +2638,18 @@ instance elaborated (G : Generators) (B : Bases) :
   fixedWritesLawful := by
     intro configInput counts hconfig input i
     exact main_fixedWritesLawful G B counts i
-  copyCellsAssigned := by
+  consumedCellsAssigned := by
     intro configInput counts hconfig input i
     simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
-      Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
-    apply Operations.CopyCellsAssignedFrom.append
-    · exact synthWitness_copyCellsAssigned G counts i
-    · apply Operations.CopyCellsAssignedFrom.append
+      Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+      Operations.ConsumedCellsAssigned, KeygenRequirements.readRelativeCellsAt,
+      List.map_nil, List.append_nil]
+    apply Operations.AssignedFrom.append
+    · exact synthWitness_consumedCellsAssigned G counts i
+    · apply Operations.AssignedFrom.append
       · rw [synthWitness_regionCount]
         rw [synthWitness_nextRegionIndex]
-        have hchecks := synthChecks_copyCellsAssigned G B counts
+        have hchecks := synthChecks_consumedCellsAssigned G B counts
           ((configure G).output counts) rfl
           (synthWitness G hintWitnesses ((configure G).output counts) |>.output i)
           (synthWitness G hintWitnesses ((configure G).output counts) |>.nextRegionIndex i)
@@ -2030,7 +2661,7 @@ instance elaborated (G : Generators) (B : Bases) :
           (synthWitness_output_copyInputCells_assigned G counts i) cell hcell
       · rw [synthWitness_regionCount, synthWitness_nextRegionIndex,
           synthChecks_regionCount, synthChecks_nextRegionIndex]
-        have hnotes := synthNotes_copyCellsAssigned G B counts
+        have hnotes := synthNotes_consumedCellsAssigned G B counts
           (synthWitness G hintWitnesses ((configure G).output counts) |>.output i)
           (synthChecks G B hintWitnesses ((configure G).output counts)
             (synthWitness G hintWitnesses ((configure G).output counts) |>.output i) |>.output
@@ -2048,6 +2679,16 @@ instance elaborated (G : Generators) (B : Bases) :
             (synthChecks_output_copyInputCells_assigned G B counts
               (synthWitness G hintWitnesses ((configure G).output counts) |>.output i)
               (i + 8)) cell hcell)
+  adviceWritesConsistent := by
+    intro configInput counts _hconfig _hadvice input i
+    simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
+      Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+      Operations.adviceWritesConsistentFrom_append,
+      synthWitness_regionCount, synthWitness_nextRegionIndex,
+      synthChecks_regionCount, synthChecks_nextRegionIndex]
+    exact ⟨synthWitness_adviceWritesConsistent G B counts i,
+      synthChecks_adviceWritesConsistent G B counts ((configure G).output counts) rfl _ _,
+      synthNotes_adviceWritesConsistent G B counts _ _ _⟩
   lookupActivationsWellFormed := by
     intro config input i
     simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
@@ -3410,22 +4051,23 @@ private theorem mainPost_keygenRegistered
     simpa only [FormalCircuit.output_call'] using
       synthCrossAddressChecks_baseOutput_keygenRegistered G B counts i (i + 394)
 
-private theorem mainPost_copyCellsAssigned
+private theorem mainPost_consumedCellsAssigned
     (G : Generators) (B : Bases) (counts : ConfigureCounts)
     (i : RegionIndex) :
     ((mainPost G B ((configure G).output counts) ()).operations i)
-      |>.CopyCellsAssignedFrom i [] := by
+      |>.AssignedFrom RegionOperation.Consumes i [] := by
   dsimp only [mainPost]
   rw [Circuit.operations_bind]
   simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
-  apply Operations.CopyCellsAssignedFrom.append
+  apply Operations.AssignedFrom.append
   · rw [(baseCircuit G B).call_operations]
     simpa only [FormalCircuit.keygenRequirements, baseCircuit,
-      ElaboratedCircuit.keygenRequirements, Operations.CopyCellsAssigned] using
-        (elaborated G B).copyCellsAssigned () counts () () i
+      ElaboratedCircuit.keygenRequirements, Operations.ConsumedCellsAssigned,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil] using
+        (elaborated G B).consumedCellsAssigned () counts () () i
   · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
     rw [FormalCircuit.output_call']
-    apply (synthCrossAddressChecks_copyCellsAssigned
+    apply (synthCrossAddressChecks_consumedCellsAssigned
       ((configure G).output counts)
       ((baseCircuit G B).output ((configure G).output counts) () i)
       (i + 394)).mono
@@ -3435,6 +4077,22 @@ private theorem mainPost_copyCellsAssigned
     exact List.mem_append_right _
       (List.forall_iff_forall_mem.mp
         (main_output_copyInputCells_assigned G B counts i) cell hcell)
+
+private theorem mainPost_adviceWritesConsistent
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    ((mainPost G B ((configure G).output counts) ()).operations i)
+      |>.AdviceWritesConsistentFrom i := by
+  dsimp only [mainPost]
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+    Operations.adviceWritesConsistentFrom_append]
+  constructor
+  · rw [(baseCircuit G B).call_operations]
+    exact (elaborated G B).adviceWritesConsistent () counts () trivial () i
+  · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
+    exact synthCrossAddressChecks_adviceWritesConsistent
+      ((configure G).output counts)
+      (configure_output_advices_injective G counts) _ (i + 394)
 
 private theorem mainPost_fixedWritesLawful
     (G : Generators) (B : Bases) (counts : ConfigureCounts)
@@ -3524,13 +4182,21 @@ instance elaboratedPost (G : Generators) (B : Bases) :
     cases configInput
     cases input
     exact mainPost_fixedWritesLawful G B counts i
-  copyCellsAssigned := by
+  consumedCellsAssigned := by
     intro configInput counts hconfig input i
     cases configInput
     cases hconfig
     cases input
-    simpa only [KeygenRequirements.inputCells, Operations.CopyCellsAssigned] using
-      mainPost_copyCellsAssigned G B counts i
+    simpa only [KeygenRequirements.inputCells, KeygenRequirements.readCells,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      Operations.ConsumedCellsAssigned] using
+      mainPost_consumedCellsAssigned G B counts i
+  adviceWritesConsistent := by
+    intro configInput counts hconfig _hadvice input i
+    cases configInput
+    cases hconfig
+    cases input
+    exact mainPost_adviceWritesConsistent G B counts i
   lookupSelectorAssignmentsAgree_of_registered := by
     intro configInput counts hconfig input i program operations _hregistered
     cases configInput

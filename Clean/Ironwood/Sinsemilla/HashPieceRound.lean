@@ -610,13 +610,33 @@ def reads (cfg : Config) (offset : ℕ) (self : RegionIndex) : State (AssignedCe
 def readState (cfg : Config) (offset : ℕ) : RegionCircuit Fp (State (AssignedCell Fp)) :=
   fun self => (reads cfg offset self, [])
 
-@[circuit_norm]
+@[circuit_norm, keygen_spine]
 theorem operations_readState (cfg : Config) (offset : ℕ) (self : RegionIndex) :
     (readState cfg offset).operations self = [] := rfl
 
-@[circuit_norm]
+@[keygen_spine]
+theorem operations_readState_var (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    @RegionCircuit.operations Fp _ (Var State Fp) (readState cfg offset) self = [] := rfl
+
+@[circuit_norm, keygen_output_norm]
 theorem output_readState (cfg : Config) (offset : ℕ) (self : RegionIndex) :
     (readState cfg offset).output self = reads cfg offset self := rfl
+
+@[keygen_norm]
+theorem reads_z (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).z = .of self offset cfg.bits := rfl
+@[keygen_norm]
+theorem reads_row_xA (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).row.xA = .of self offset cfg.xA := rfl
+@[keygen_norm]
+theorem reads_row_xP (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).row.xP = .of self offset cfg.xP := rfl
+@[keygen_norm]
+theorem reads_row_lambda1 (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).row.lambda1 = .of self offset cfg.lambda1 := rfl
+@[keygen_norm]
+theorem reads_row_lambda2 (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    (reads cfg offset self).row.lambda2 = .of self offset cfg.lambda2 := rfl
 
 /-! ## Honest witness programs -/
 
@@ -655,6 +675,16 @@ theorem zWit_eval (piece : AssignedCell Fp) (r : ℕ) (env : Placed ProverEnviro
   simp only [zWit, Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.FExprOver.eval_runningSum]
   rfl
 
+@[witness_support]
+theorem witnessFunctionSupport_zWit (piece : AssignedCell Fp) (r : ℕ) :
+    WitnessFunctionSupport [piece] (programFunction (zWit piece r)) := by
+  intro left right agreement
+  have hp : AssignedCell.eval left.place left.env.toEnvironment piece =
+      AssignedCell.eval right.place right.env.toEnvironment piece :=
+    agreement.cellValues piece (List.mem_singleton_self _)
+  dsimp only [programFunction]
+  rw [zWit_eval, zWit_eval, hp]
+
 /-- Honest witness for one output cell of round `i`: the corresponding field of
 `State.step` over the neighborhood readings, at the next word's generator and running sum
 (read off the piece cell). -/
@@ -664,6 +694,29 @@ def stepWit (G : Generators) (piece : AssignedCell Fp) (w : State (AssignedCell 
     let p := readCell env piece
     #v[f ((readsValue w env).step
       ((G.S (pieceWord p (i + 1))).x, (G.S (pieceWord p (i + 1))).y) (pieceZ p (i + 1)))]
+
+@[witness_support]
+theorem witnessFunctionSupport_stepWit (G : Generators) (piece : AssignedCell Fp)
+    (w : State (AssignedCell Fp)) (i : ℕ) (f : State Fp → Fp) :
+    WitnessFunctionSupport [piece, w.z, w.row.xA, w.row.xP, w.row.lambda1, w.row.lambda2]
+      (programFunction (stepWit G piece w i f)) := by
+  intro left right agreement
+  have hp : readCell left piece = readCell right piece :=
+    agreement.cellValues piece (by simp)
+  have hz : readCell left w.z = readCell right w.z :=
+    agreement.cellValues w.z (by simp)
+  have hxA : readCell left w.row.xA = readCell right w.row.xA :=
+    agreement.cellValues w.row.xA (by simp)
+  have hxP : readCell left w.row.xP = readCell right w.row.xP :=
+    agreement.cellValues w.row.xP (by simp)
+  have hl1 : readCell left w.row.lambda1 = readCell right w.row.lambda1 :=
+    agreement.cellValues w.row.lambda1 (by simp)
+  have hl2 : readCell left w.row.lambda2 = readCell right w.row.lambda2 :=
+    agreement.cellValues w.row.lambda2 (by simp)
+  have hreads : readsValue w left = readsValue w right := by
+    simp only [readsValue, hz, hxA, hxP, hl1, hl2]
+  change f ((readsValue w left).step _ _) = f ((readsValue w right).step _ _)
+  rw [hreads, hp]
 
 /-- Evaluation of the round's witness closures, in one step and without exposing the
 native-eval plumbing: the peel reduces every assigned value directly to a folded
@@ -1112,7 +1165,12 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
           lookups cfg _ := [generatorLookup G cfg]
-          fixedColumns cfg _ := [cfg.qS2] }
+          fixedColumns cfg _ := [cfg.qS2]
+          readCells _ _ piece := [piece.cell]
+          readRelativeCells cfg _ _ :=
+            [(cfg.bits, 0), (cfg.xA, 0), (cfg.xP, 0), (cfg.lambda1, 0), (cfg.lambda2, 0)] }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.bits, cfg.xP, cfg.lambda1, cfg.lambda2, cfg.xA]
       synthesisSummary config offset _ _ := roundSynthesisSummary config offset
       synthesisSummary_eq := by
         intro _ _ _ _

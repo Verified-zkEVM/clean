@@ -300,61 +300,94 @@ def circuit (K : FixedBase) : FormalCircuit Fp
           · exact Ecc.Add.addFormal.call_fixedAssignmentsAgree
               cfg.2.2.2 hconfig.2.2.2 _ (self + 8)
         · simp only [synthesize, circuit_norm, synthesis_summary_norm]
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        (Poseidon.hash (Hash.ConstantLength.capacity 2)).elaborated.adviceColumnRequirements cfg.1 ∧
+        AddChip.addFormal.elaborated.adviceColumnRequirements cfg.2.1 ∧
+        (Ecc.MulFixed.BaseFieldElem.circuit K).elaborated.adviceColumnRequirements cfg.2.2.1 ∧
+        Ecc.Add.addFormal.elaborated.adviceColumnRequirements cfg.2.2.2
+      consumedCellsAssigned := by
         intro cfg counts hconfig input self
         simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
-          List.append_nil, Configure.output_pure, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
+          List.append_nil, Configure.output_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          keygenRequirements, KeygenRequirements.readRelativeCellsAt, List.map_nil,
+          List.append_nil]
+        apply Operations.AssignedFrom.append
         · apply (Poseidon.hash (Hash.ConstantLength.capacity 2))
-            |>.call_copyCellsAssignedFrom cfg.1 hconfig.1 _ self
+            |>.call_consumedCellsAssignedFrom cfg.1 hconfig.1 _ self
           intro cell hcell
-          rw [Poseidon.hash_inputCells] at hcell
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
-          rcases hcell with rfl | rfl
-          · simp only [keygenRequirements, List.mem_cons, true_or]
-          · simp only [keygenRequirements, List.mem_cons, true_or, or_true]
-        · apply Operations.CopyCellsAssignedFrom.append
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, Poseidon.hash,
+            FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_cons, List.not_mem_nil, or_false] at hcell
+          rcases hcell with rfl | rfl <;> simp
+        · apply Operations.AssignedFrom.append
           · simp only [circuit_norm]
-            apply AddChip.addFormal.call_copyCellsAssignedFrom
+            apply AddChip.addFormal.call_consumedCellsAssignedFrom
               cfg.2.1 hconfig.2.1 _ _
             intro cell hcell
-            rw [AddChip.addFormal_inputCells] at hcell
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
-            simp only [keygenRequirements, List.mem_append, List.mem_cons,
-              List.not_mem_nil, or_false] at ⊢
+            simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+              FormalCircuit.Configured.readRelativeCellsAt, AddChip.addFormal,
+              FormalRegionCircuit.toFormal_keygenRequirements,
+              FormalRegionCircuit.keygenRequirements, AddChip.add,
+              ElaboratedRegionCircuit.keygenRequirements,
+              KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+              List.mem_cons, List.not_mem_nil, or_false] at hcell
             rcases hcell with rfl | rfl
-            · exact Or.inr (Poseidon.hash_call_output_cell_assigned
-                (Hash.ConstantLength.capacity 2) cfg.1 _ self)
-            · exact Or.inl (Or.inr (Or.inr (Or.inl rfl)))
+            · simp only [List.mem_cons]
+              exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+                (Poseidon.hash_call_output_cell_assigned
+                  (Hash.ConstantLength.capacity 2) cfg.1 _ self)))))
+            · simp
           · simp only [circuit_norm, Nat.add_assoc]
-            apply Operations.CopyCellsAssignedFrom.append
+            apply Operations.AssignedFrom.append
             · apply (Ecc.MulFixed.BaseFieldElem.circuit K)
-                |>.call_copyCellsAssignedFrom cfg.2.2.1 hconfig.2.2.1 _ _
+                |>.call_consumedCellsAssignedFrom cfg.2.2.1 hconfig.2.2.1 _ _
               intro cell hcell
-              rw [Ecc.MulFixed.BaseFieldElem.circuit_inputCells_eq] at hcell
-              simp only [List.mem_singleton] at hcell
+              simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+                FormalCircuit.Configured.readRelativeCellsAt, Ecc.MulFixed.BaseFieldElem.circuit,
+                Ecc.MulFixed.BaseFieldElem.keygenRequirements,
+                FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+                KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+                List.mem_singleton] at hcell
               subst cell
-              simp only [keygenRequirements, List.mem_append, List.mem_cons,
-                List.not_mem_nil, or_false] at ⊢
-              exact Or.inr (Or.inr
-                (AddChip.addFormal_call_output_cell_assigned cfg.2.1 _ _))
+              simp only [List.mem_cons, List.mem_append]
+              exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+                (AddChip.addFormal_call_output_cell_assigned cfg.2.1 _ (self + 3)))))))
             · simp only [circuit_norm, Nat.add_assoc]
-              apply Ecc.Add.addFormal.call_copyCellsAssignedFrom
+              apply Ecc.Add.addFormal.call_consumedCellsAssignedFrom
                 cfg.2.2.2 hconfig.2.2.2 _ _
               intro cell hcell
-              rw [Ecc.Add.addFormal_inputCells] at hcell
-              simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
-              simp only [keygenRequirements, List.mem_append, List.mem_cons,
-                List.not_mem_nil, or_false] at ⊢
+              simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+                FormalCircuit.Configured.readRelativeCellsAt, Ecc.Add.addFormal,
+                FormalRegionCircuit.toFormal, Ecc.Add.add, Ecc.Add.addElaborated,
+                FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+                ElaboratedRegionCircuit.keygenRequirements,
+                KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+                List.mem_cons, List.not_mem_nil, or_false] at hcell
               rcases hcell with rfl | rfl | rfl | rfl
-              · exact Or.inl (Or.inr (Or.inr (Or.inr (Or.inl rfl))))
-              · exact Or.inl (Or.inr (Or.inr (Or.inr (Or.inr rfl))))
-              · exact Or.inr (Or.inr (Or.inr
+              · simp
+              · simp
+              · simp only [List.mem_cons, List.mem_append]
+                exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
                   (Ecc.MulFixed.BaseFieldElem.circuit_call_output_cells_assigned
-                    K cfg.2.2.1 _ _).1))
-              · exact Or.inr (Or.inr (Or.inr
+                    K cfg.2.2.1 _ (self + 4)).1))))))
+              · simp only [List.mem_cons, List.mem_append]
+                exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
                   (Ecc.MulFixed.BaseFieldElem.circuit_call_output_cells_assigned
-                    K cfg.2.2.1 _ _).2))
+                    K cfg.2.2.1 _ (self + 4)).2))))))
+      adviceWritesConsistent := by
+        intro cfg _ hconfig hadvice input self
+        rcases hadvice with ⟨hposAdv, haddChipAdv, hbfeAdv, haddAdv⟩
+        simp only [synthesize, Configure.output_pure, Circuit.operations_bind,
+          Circuit.operations_pure, Operations.adviceWritesConsistentFrom_append,
+          circuit_norm, Nat.add_assoc, Nat.reduceAdd]
+        exact ⟨(Poseidon.hash (Hash.ConstantLength.capacity 2)).call_adviceWritesConsistent
+            cfg.1 hconfig.1 hposAdv _ self,
+          AddChip.addFormal.call_adviceWritesConsistent cfg.2.1 hconfig.2.1 haddChipAdv _ (self + 3),
+          (Ecc.MulFixed.BaseFieldElem.circuit K).call_adviceWritesConsistent
+            cfg.2.2.1 hconfig.2.2.1 hbfeAdv _ (self + 4),
+          Ecc.Add.addFormal.call_adviceWritesConsistent cfg.2.2.2 hconfig.2.2.2 haddAdv _ (self + 8)⟩
       lookupActivationsWellFormed := by
         intro cfg input self
         simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,

@@ -68,8 +68,8 @@ def aW : Action.Circuit.Witnesses Fp :=
     gdNew := unkPoint, pkdNew := unkPoint,
     rcv := unkNat, alpha := unkNat, rivk := unkNat,
     rcmOld := unkNat, rcmNew := unkNat,
-    merkleSib := fun _ => .native fun _ => #v[(0 : Fp)],
-    merkleSwap := fun _ _ => false }
+    merkleSib := fun _ => { program := .native fun _ => #v[(0 : Fp)], reads := [], support := fun _ _ _ => rfl },
+    merkleSwap := fun _ => { compute := fun _ => false, reads := [], support := fun _ _ _ => rfl } }
 
 /-- THE REAL ironwood (post-NU 6.3) circuit, at the REAL certified bases. -/
 def aProgram : Circuit Fp Unit :=

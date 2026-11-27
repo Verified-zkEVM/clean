@@ -65,6 +65,17 @@ deriving ProvableStruct
 def sumWit (a b : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env a + readCell env b]
 
+@[witness_support]
+theorem witnessFunctionSupport_sumWit (a b : AssignedCell Fp) :
+    WitnessFunctionSupport [a, b] (programFunction (sumWit a b)) := by
+  intro left right agreement
+  have ha : readCell left a = readCell right a :=
+    agreement.cellValues a (by simp)
+  have hb : readCell left b = readCell right b :=
+    agreement.cellValues b (by simp)
+  change readCell left a + readCell left b = readCell right a + readCell right b
+  rw [ha, hb]
+
 @[circuit_norm]
 theorem sumWit_eval (a b : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -108,7 +119,9 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
         { gates cfg _ := [addGate cfg]
           permutationColumns input _ := [input.a, input.b]
           inputCells _ _ input := [input.a.cell, input.b.cell] }
+      adviceColumnRequirements cfg := ColumnsDistinct [cfg.a, cfg.b, cfg.c]
       registered := by keygen_registration [synthesize]
+      adviceWritesConsistent := by keygen_registration [synthesize]
       output cfg offset _ self := .of self offset cfg.c
       synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
       output_eq := by

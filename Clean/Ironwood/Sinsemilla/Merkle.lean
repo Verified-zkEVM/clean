@@ -314,20 +314,61 @@ def elaborated (l : Fp) :
           [input.aWhole.cell, input.bWhole.cell, input.cWhole.cell,
             input.leftNode.cell, input.rightNode.cell, input.z1A.cell,
             input.z1B.cell, input.b1.cell, input.b2.cell] }
+    adviceColumnRequirements cfg :=
+      ColumnsDistinct [cfg.aWhole, cfg.bWhole, cfg.cWhole, cfg.leftNode, cfg.rightNode] ∧
+      ColumnsDistinct [cfg.lWhole, cfg.z1A, cfg.z1B, cfg.b1, cfg.b2]
     synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
     synthesisSummary_eq := fun cfg offset input self =>
       synthesisSummary_eq cfg l input offset self
     registered := by keygen_registration [body, permutationColumns]
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
       simp only [body, circuit_norm,
-        RegionOperations.CopyCellsAssigned,
-        RegionOperations.copyCellsAssignedFrom_assignAdvice_iff,
-        RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
-        RegionOperations.copyCellsAssignedFrom_constrainConstant_iff,
-        RegionOperations.copyCellsAssignedFrom_enableGate_iff,
-        RegionOperations.copyCellsAssignedFrom_nil_iff, List.mem_cons,
-        List.not_mem_nil, or_false]
+        RegionOperations.ConsumedCellsAssigned,
+        KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+        RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+        RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+        RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+        RegionOperation.assignedCells, List.nil_append, List.singleton_append,
+        List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
+        false_implies, implies_true, true_and, and_true]
+      refine ⟨⟨[], fun _ _ _ => rfl, by simp⟩,
+        ⟨[input.aWhole], witnessFunctionSupport_ofFExpr (.expr input.aWhole), by simp⟩,
+        ⟨[input.bWhole], witnessFunctionSupport_ofFExpr (.expr input.bWhole), by simp⟩,
+        ⟨[input.cWhole], witnessFunctionSupport_ofFExpr (.expr input.cWhole), by simp⟩,
+        ⟨[input.leftNode], witnessFunctionSupport_ofFExpr (.expr input.leftNode), by simp⟩,
+        ⟨[input.rightNode], witnessFunctionSupport_ofFExpr (.expr input.rightNode), by simp⟩,
+        ⟨[input.z1A], witnessFunctionSupport_ofFExpr (.expr input.z1A), by simp⟩,
+        ⟨[input.z1B], witnessFunctionSupport_ofFExpr (.expr input.z1B), by simp⟩,
+        ⟨[input.b1], witnessFunctionSupport_ofFExpr (.expr input.b1), by simp⟩,
+        ⟨[input.b2], witnessFunctionSupport_ofFExpr (.expr input.b2), by simp⟩⟩
+    adviceWritesConsistent := by
+      intro configInput counts _hconfig hadvice offset input region
+      rcases hadvice with ⟨hrow0, hrow1⟩
+      simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false,
+        not_or, List.nodup_nil, not_false_eq_true, and_true] at hrow0 hrow1
+      apply RegionOperations.AdviceWritesDistinct.toConsistent
+      simp only [body, circuit_norm, RegionOperations.AdviceWritesDistinct,
+        RegionOperations.adviceWrites, RegionOperation.adviceWrites,
+        List.flatMap_cons, List.flatMap_nil, List.nil_append, List.append_nil,
+        List.cons_append, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false,
+        Prod.mk.injEq, not_or, not_and, List.nodup_nil, not_false_eq_true, and_true]
+      refine ⟨⟨fun _ h => by omega, fun _ h => by omega, fun _ h => by omega,
+          fun _ h => by omega, fun _ h => by omega, hrow1.1.1,
+          hrow1.1.2.1, hrow1.1.2.2.1, hrow1.1.2.2.2⟩,
+        ⟨hrow0.1.1, hrow0.1.2.1, hrow0.1.2.2.1,
+          hrow0.1.2.2.2, fun _ h => by omega, fun _ h => by omega,
+          fun _ h => by omega, fun _ h => by omega⟩,
+        ⟨hrow0.2.1.1, hrow0.2.1.2.1, hrow0.2.1.2.2,
+          fun _ h => by omega, fun _ h => by omega, fun _ h => by omega, fun _ h => by omega⟩,
+        ⟨hrow0.2.2.1.1, hrow0.2.2.1.2, fun _ h => by omega,
+          fun _ h => by omega, fun _ h => by omega, fun _ h => by omega⟩,
+        ⟨hrow0.2.2.2, fun _ h => by omega, fun _ h => by omega,
+          fun _ h => by omega, fun _ h => by omega⟩,
+        ⟨fun _ h => by omega, fun _ h => by omega, fun _ h => by omega, fun _ h => by omega⟩,
+        ⟨hrow1.2.1.1, hrow1.2.1.2.1, hrow1.2.1.2.2⟩,
+        ⟨hrow1.2.2.1.1, hrow1.2.2.1.2⟩,
+        hrow1.2.2.2⟩
     lookupActivationsWellFormed := by
       intro cfg offset input region
       simp only [body, circuit_norm,
@@ -478,8 +519,8 @@ instance (scfg : HashPiece.Config) :
 remain caller-supplied because `configure` receives their already-built configs. -/
 structure ConfigureCertificate (scfg : HashPiece.Config)
     (counts : ConfigureCounts) (context : KeygenContext Fp) where
-  condSwap : ∀ (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool),
+  condSwap : ∀ (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool),
     (CondSwap.swap wb wswap).ConfigurationCertificate
       (configure scfg |>.output counts).condSwap context
   gate : ∀ l : Fp,
@@ -1148,11 +1189,38 @@ def waWit (l : ℕ) (left : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[((l + 2 ^ 10 * bitrange (Sinsemilla.HashPiece.readCell env left).val 0 240 : ℕ) : Fp)]
 
+@[witness_support]
+theorem witnessFunctionSupport_waWit (l : ℕ) (left : AssignedCell Fp) :
+    WitnessFunctionSupport [left] (programFunction (waWit l left)) := by
+  intro env₁ env₂ hagree
+  have h1 : Sinsemilla.HashPiece.readCell env₁ left = Sinsemilla.HashPiece.readCell env₂ left := by
+    simpa only [Sinsemilla.HashPiece.readCell, Witgen.WitgenEnv.readVar] using
+      hagree.cellValues left List.mem_cons_self
+  simp only [programFunction, waWit, Witgen.WitgenIROver.eval, h1]
+
 def wb1Wit (left : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[((bitrange (Sinsemilla.HashPiece.readCell env left).val 250 5 : ℕ) : Fp)]
 
+@[witness_support]
+theorem witnessFunctionSupport_wb1Wit (left : AssignedCell Fp) :
+    WitnessFunctionSupport [left] (programFunction (wb1Wit left)) := by
+  intro env₁ env₂ hagree
+  have h1 : Sinsemilla.HashPiece.readCell env₁ left = Sinsemilla.HashPiece.readCell env₂ left := by
+    simpa only [Sinsemilla.HashPiece.readCell, Witgen.WitgenEnv.readVar] using
+      hagree.cellValues left List.mem_cons_self
+  simp only [programFunction, wb1Wit, Witgen.WitgenIROver.eval, h1]
+
 def wb2Wit (right : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[((bitrange (Sinsemilla.HashPiece.readCell env right).val 0 5 : ℕ) : Fp)]
+
+@[witness_support]
+theorem witnessFunctionSupport_wb2Wit (right : AssignedCell Fp) :
+    WitnessFunctionSupport [right] (programFunction (wb2Wit right)) := by
+  intro env₁ env₂ hagree
+  have h1 : Sinsemilla.HashPiece.readCell env₁ right = Sinsemilla.HashPiece.readCell env₂ right := by
+    simpa only [Sinsemilla.HashPiece.readCell, Witgen.WitgenEnv.readVar] using
+      hagree.cellValues right List.mem_cons_self
+  simp only [programFunction, wb2Wit, Witgen.WitgenIROver.eval, h1]
 
 def wbWit (left right : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env =>
@@ -1160,8 +1228,29 @@ def wbWit (left right : AssignedCell Fp) : WitgenIR Fp 1 :=
         + 2 ^ 10 * bitrange (Sinsemilla.HashPiece.readCell env left).val 250 5
         + 2 ^ 15 * bitrange (Sinsemilla.HashPiece.readCell env right).val 0 5 : ℕ) : Fp)]
 
+@[witness_support]
+theorem witnessFunctionSupport_wbWit (left right : AssignedCell Fp) :
+    WitnessFunctionSupport [left, right] (programFunction (wbWit left right)) := by
+  intro env₁ env₂ hagree
+  have h1 : Sinsemilla.HashPiece.readCell env₁ left = Sinsemilla.HashPiece.readCell env₂ left := by
+    simpa only [Sinsemilla.HashPiece.readCell, Witgen.WitgenEnv.readVar] using
+      hagree.cellValues left (by simp)
+  have h2 : Sinsemilla.HashPiece.readCell env₁ right = Sinsemilla.HashPiece.readCell env₂ right := by
+    simpa only [Sinsemilla.HashPiece.readCell, Witgen.WitgenEnv.readVar] using
+      hagree.cellValues right (by simp)
+  simp only [programFunction, wbWit, Witgen.WitgenIROver.eval, h1, h2]
+
 def wcWit (right : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[((bitrange (Sinsemilla.HashPiece.readCell env right).val 5 250 : ℕ) : Fp)]
+
+@[witness_support]
+theorem witnessFunctionSupport_wcWit (right : AssignedCell Fp) :
+    WitnessFunctionSupport [right] (programFunction (wcWit right)) := by
+  intro env₁ env₂ hagree
+  have h1 : Sinsemilla.HashPiece.readCell env₁ right = Sinsemilla.HashPiece.readCell env₂ right := by
+    simpa only [Sinsemilla.HashPiece.readCell, Witgen.WitgenEnv.readVar] using
+      hagree.cellValues right List.mem_cons_self
+  simp only [programFunction, wcWit, Witgen.WitgenIROver.eval, h1]
 
 /-- The MerkleCRH piece widths (25/2/25 words). Implicit-reducible: `merkleNs.length`
 indexes the hash input's piece vector while the piece literal `#v[a, b, c]` has length `3`,
@@ -1709,27 +1798,50 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         · simp only [Configure.output_pure]
           rw [← HashLayer.synthesisSummary_eq G Q hQ l cfg.1 cfg.2 input self]
           exact HashLayer.synthesisSummary_tableRowExtent_eq cfg.1 cfg.2
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).elaborated.adviceColumnRequirements
+          cfg.1.sinsemilla ∧
+        ColumnsDistinct [cfg.1.gate.aWhole, cfg.1.gate.bWhole, cfg.1.gate.cWhole,
+          cfg.1.gate.leftNode, cfg.1.gate.rightNode] ∧
+        ColumnsDistinct [cfg.1.gate.lWhole, cfg.1.gate.z1A, cfg.1.gate.z1B,
+          cfg.1.gate.b1, cfg.1.gate.b2]
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
         unfold HashLayer.synthesize
         simp only [Configure.output_pure, Circuit.operations_bind,
-          Circuit.operations_pure, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
-        · exact HashToPoint.witnessMessagePiece_copyCellsAssignedFrom _ _ _ _
-        · apply Operations.CopyCellsAssignedFrom.append
-          · exact LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom _ _ _ _ _ _
-          · apply Operations.CopyCellsAssignedFrom.append
-            · exact LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom _ _ _ _ _ _
-            · apply Operations.CopyCellsAssignedFrom.append
-              · exact HashToPoint.witnessMessagePiece_copyCellsAssignedFrom _ _ _ _
-              · apply Operations.CopyCellsAssignedFrom.append
-                · exact HashToPoint.witnessMessagePiece_copyCellsAssignedFrom _ _ _ _
-                · apply Operations.CopyCellsAssignedFrom.append
+          Circuit.operations_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.append_nil]
+        apply Operations.AssignedFrom.append
+        · exact HashToPoint.witnessMessagePiece_consumedCellsAssignedFrom _ _ _
+            (HashLayer.witnessFunctionSupport_waWit l input.left) _ _
+            (by intro c hc; simp only [List.mem_singleton] at hc; subst hc; simp [HashLayer.keygenRequirements])
+        · apply Operations.AssignedFrom.append
+          · exact LookupRangeCheck.witnessShortCheck_consumedCellsAssignedFrom _ _ _ _ _
+              (HashLayer.witnessFunctionSupport_wb1Wit input.left) _ _
+              (by intro c hc; simp only [List.mem_singleton] at hc; subst hc; simp [HashLayer.keygenRequirements])
+          · apply Operations.AssignedFrom.append
+            · exact LookupRangeCheck.witnessShortCheck_consumedCellsAssignedFrom _ _ _ _ _
+                (HashLayer.witnessFunctionSupport_wb2Wit input.right) _ _
+                (by intro c hc; simp only [List.mem_singleton] at hc; subst hc; simp [HashLayer.keygenRequirements])
+            · apply Operations.AssignedFrom.append
+              · exact HashToPoint.witnessMessagePiece_consumedCellsAssignedFrom _ _ _
+                  (HashLayer.witnessFunctionSupport_wbWit input.left input.right) _ _
+                  (by intro c hc; simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+                      rcases hc with rfl | rfl <;> simp [HashLayer.keygenRequirements])
+              · apply Operations.AssignedFrom.append
+                · exact HashToPoint.witnessMessagePiece_consumedCellsAssignedFrom _ _ _
+                    (HashLayer.witnessFunctionSupport_wcWit input.right) _ _
+                    (by intro c hc; simp only [List.mem_singleton] at hc; subst hc; simp [HashLayer.keygenRequirements])
+                · apply Operations.AssignedFrom.append
                   · apply (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
-                      (by decide)).call_copyCellsAssignedFrom _ hconfig.2.1
+                      (by decide)).call_consumedCellsAssignedFrom _ hconfig.2.1
                     intro cell hcell
-                    rw [HashToPoint.hashCircuit_inputCells] at hcell
-                    simp only [Vector.toList_mk, List.map_cons, List.map_nil, List.mem_cons,
+                    simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+                      FormalCircuit.Configured.readRelativeCellsAt, HashToPoint.hashCircuit,
+                      FormalRegionCircuit.toFormal_keygenRequirements, HashToPoint.hashRegion,
+                      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+                      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+                      Vector.toList_mk, List.map_cons, List.mem_cons,
                       List.not_mem_nil, or_false] at hcell
                     rcases hcell with rfl | rfl | rfl
                     · simp only [List.mem_append]
@@ -1757,21 +1869,24 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                         Nat.add_assoc, Nat.reduceAdd] using
                         HashToPoint.witnessMessagePiece_output_cell_assigned
                           configInput.1.sinsemilla (wcWit input.right) (i + 2 + 2)
-                  · simp only [Operations.copyCellsAssignedFrom_region_iff,
-                      Operations.copyCellsAssignedFrom_nil_iff, and_true,
+                  · simp only [Operations.assignedFrom_region_iff,
+                      Operations.assignedFrom_nil_iff, and_true,
                       HashToPoint.witnessMessagePiece_regionCount,
                       LookupRangeCheck.witnessShortCheck_regionCount,
                       Nat.add_assoc, Nat.reduceAdd]
                     rw [HashToPoint.hashMessage_regionCount]
                     rw [HashToPoint.hashMessage_nextRegionIndex]
                     simp only [Nat.add_assoc, Nat.reduceAdd]
-                    apply (Gate.circuit (l : Fp)).call_copyCellsAssignedFrom
+                    apply (Gate.circuit (l : Fp)).call_consumedCellsAssignedFrom
                       configInput.1.gate hconfig.2.2 0 _ _
                     intro cell hcell
                     simp only [FormalRegionCircuit.Configured.inputCells,
+                      FormalRegionCircuit.Configured.readCells,
+                      FormalRegionCircuit.Configured.readRelativeCellsAt,
                       FormalRegionCircuit.keygenRequirements,
                       ElaboratedRegionCircuit.keygenRequirements,
                       Gate.circuit, Gate.elaborated,
+                      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
                       List.mem_cons, List.not_mem_nil, or_false] at hcell
                     rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
                     all_goals simp only [List.mem_append]
@@ -1845,6 +1960,26 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
                       apply Or.inr
                       exact LookupRangeCheck.witnessShortCheck_output_cell_assigned
                         10 5 configInput.2 (wb2Wit input.right) (i + 2)
+      adviceWritesConsistent := by
+        intro configInput counts hconfig hadvice input i
+        rcases hadvice with ⟨hhashAdv, hgateAdv⟩
+        unfold HashLayer.synthesize
+        simp only [Configure.output_pure, Circuit.operations_bind, Circuit.operations_pure,
+          operations_assignRegion, Operations.adviceWritesConsistentFrom_append,
+          Operations.adviceWritesConsistentFrom_region_cons, Operations.adviceWritesConsistentFrom_nil,
+          HashToPoint.witnessMessagePiece_regionCount, HashToPoint.witnessMessagePiece_nextRegionIndex,
+          LookupRangeCheck.witnessShortCheck_regionCount, LookupRangeCheck.witnessShortCheck_nextRegionIndex,
+          HashToPoint.hashMessage_regionCount, HashToPoint.hashMessage_nextRegionIndex,
+          Nat.add_assoc, Nat.reduceAdd, and_true]
+        exact ⟨HashToPoint.witnessMessagePiece_adviceWritesConsistent _ _ _,
+          LookupRangeCheck.witnessShortCheck_adviceWritesConsistent _ _ _ _ _,
+          LookupRangeCheck.witnessShortCheck_adviceWritesConsistent _ _ _ _ _,
+          HashToPoint.witnessMessagePiece_adviceWritesConsistent _ _ _,
+          HashToPoint.witnessMessagePiece_adviceWritesConsistent _ _ _,
+          (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).call_adviceWritesConsistent
+            configInput.1.sinsemilla hconfig.2.1 hhashAdv _ (i + 5),
+          (Gate.circuit (l : Fp)).call_adviceWritesConsistent configInput.1.gate hconfig.2.2
+            hgateAdv 0 _ (i + 6)⟩
       lookupActivationsWellFormed config input region := by
         unfold HashLayer.synthesize
         simp only [Circuit.operations_bind,
@@ -1942,8 +2077,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
     simp only [HashToPoint.hashCircuit_output_z1s] at hGateS
     rw [gateInputs_eval_literal] at hGateS
     -- flatten every cell eval to raw advice reads
-    simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice,
+    simp only [AssignedCell.eval_of_advice,
       Vector.getElem_ofFn] at hGateS hPC hb1 hb2
     -- land the running-sum extraction on the zsFam family and unpack the per-piece facts
     rw [show ((HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
@@ -2884,8 +3018,8 @@ def HashLayer.configurationCertificate (G : Generators) (Q : Point Fp)
 
 /-- The region count of the layer: the swap region + the hash layer's 7. -/
 theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool)
     (ccfg : CondSwap.Config) (cfg : Config)
     (lcfg : LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (i : RegionIndex) :
@@ -2905,8 +3039,8 @@ theorem layer_regionCount (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
       rfl]
 
 theorem layer_output (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool)
     (ccfg : CondSwap.Config) (cfg : Config)
     (lcfg : LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (i : RegionIndex) :
@@ -2926,8 +3060,8 @@ theorem layer_output (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
 @[keygen_norm]
 def Layer.keygenRequirements (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
-    (wsib : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) :
+    (wsib : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) :
     KeygenRequirements Fp
       (CondSwap.Config × Config × LookupRangeCheck.Config 10)
       (Var Layer.Input Fp) where
@@ -2941,6 +3075,7 @@ def Layer.keygenRequirements (G : Generators) (Q : Point Fp)
   permutationColumns _ configured :=
     configured.1.permutationColumns ++ configured.2.permutationColumns
   inputCells _ _ input := [input.node.cell]
+  readCells _ _ _ := wsib.reads.map AssignedCell.cell ++ wswap.reads.map AssignedCell.cell
 
 /-- Reduced footprint of one conditional-swap and hash layer. -/
 def Layer.synthesisSummary (ccfg : CondSwap.Config) (cfg : Config)
@@ -2997,7 +3132,7 @@ theorem Layer.synthesisSummary_physicalShapes_eq
 
 theorem Layer.synthesisSummary_eq (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
-    (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (wsib : SupportedProgram Fp) (wswap : SupportedFunction Fp Bool)
     (ccfg : CondSwap.Config) (cfg : Config)
     (lookupCfg : LookupRangeCheck.Config 10) (input : Var Layer.Input Fp)
     (region : RegionIndex) :
@@ -3020,8 +3155,8 @@ theorem Layer.synthesisSummary_eq (G : Generators) (Q : Point Fp)
 `(node, sibling)` by the position bit — sibling and bit are prover witness programs — then
 the layer hash. `Spec` is `MerkleStep`. -/
 def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
-    (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) :
+    (hl : l < 2 ^ 10) (wsib : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) :
     FormalCircuit Fp
       (CondSwap.Config × Config × LookupRangeCheck.Config 10)
       (CondSwap.Config × Config × LookupRangeCheck.Config 10)
@@ -3090,38 +3225,59 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
           rw [← Layer.synthesisSummary_eq G Q hQ l hl wsib wswap
             cfg.1 cfg.2.1 cfg.2.2 input self]
           exact Layer.synthesisSummary_tableRowExtent_eq cfg.1 cfg.2.1 cfg.2.2
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.1.a, cfg.1.b, cfg.1.swap, cfg.1.aSwapped, cfg.1.bSwapped] ∧
+        (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide)).elaborated.adviceColumnRequirements
+          cfg.2.1.sinsemilla ∧
+        ColumnsDistinct [cfg.2.1.gate.aWhole, cfg.2.1.gate.bWhole, cfg.2.1.gate.cWhole,
+          cfg.2.1.gate.leftNode, cfg.2.1.gate.rightNode] ∧
+        ColumnsDistinct [cfg.2.1.gate.lWhole, cfg.2.1.gate.z1A, cfg.2.1.gate.z1B,
+          cfg.2.1.gate.b1, cfg.2.1.gate.b2]
+      consumedCellsAssigned := by
         intro cfg counts hconfig input self
         simp only [Configure.output_pure, Circuit.operations_bind,
-          operations_assignRegion, circuit_norm]
-        unfold Operations.CopyCellsAssigned
-        rw [Operations.copyCellsAssignedFrom_region_iff]
+          operations_assignRegion, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt]
+        rw [Operations.assignedFrom_region_iff]
         constructor
-        · apply (CondSwap.swap wsib wswap).call_copyCellsAssignedFrom
+        · apply (CondSwap.swap wsib wswap).call_consumedCellsAssignedFrom
             cfg.1 hconfig.1 0 { a := input.node } self
           intro cell hcell
-          simpa only [FormalRegionCircuit.Configured.inputCells,
+          simp only [FormalRegionCircuit.Configured.inputCells,
+            FormalRegionCircuit.Configured.readCells,
+            FormalRegionCircuit.Configured.readRelativeCellsAt,
             CondSwap.swap, FormalRegionCircuit.keygenRequirements,
-            ElaboratedRegionCircuit.keygenRequirements, Layer.keygenRequirements] using hcell
-        · apply (HashLayer.circuit G Q hQ l hl).call_copyCellsAssignedFrom
+            ElaboratedRegionCircuit.keygenRequirements, Layer.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil] at hcell ⊢
+          exact hcell
+        · apply (HashLayer.circuit G Q hQ l hl).call_consumedCellsAssignedFrom
             (cfg.2.1, cfg.2.2) hconfig.2 _ (self + 1)
           intro cell hcell
-          rw [HashLayer.Configured.inputCells_eq] at hcell
-          have hcells :
-              cell = ((CondSwap.swap wsib wswap).output cfg.1 0
-                  { a := input.node } self).aSwapped.cell ∨
-                cell = ((CondSwap.swap wsib wswap).output cfg.1 0
-                  { a := input.node } self).bSwapped.cell := by
-            simpa using hcell
-          rcases hcells with hleft | hright
-          · rw [hleft, RegionOperations.mem_assignedCellsAfter_iff,
-              List.mem_append]
+          simp only [FormalCircuit.Configured.inputCells,
+            FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt,
+            FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+            HashLayer.circuit, HashLayer.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_cons, List.not_mem_nil, or_false] at hcell
+          rcases hcell with rfl | rfl
+          · rw [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
             exact Or.inr (CondSwap.swap_call_output_cells_assigned
               wsib wswap cfg.1 0 { a := input.node } self).1
-          · rw [hright, RegionOperations.mem_assignedCellsAfter_iff,
-              List.mem_append]
+          · rw [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
             exact Or.inr (CondSwap.swap_call_output_cells_assigned
               wsib wswap cfg.1 0 { a := input.node } self).2
+      adviceWritesConsistent := by
+        intro cfg counts hconfig hadvice input self
+        rcases hadvice with ⟨hswapAdv, hhashAdv⟩
+        simp only [Configure.output_pure, Circuit.operations_bind,
+          operations_assignRegion, List.singleton_append,
+          Operations.adviceWritesConsistentFrom_region_cons,
+          nextRegionIndex_assignRegion]
+        exact ⟨(CondSwap.swap wsib wswap).call_adviceWritesConsistent cfg.1 hconfig.1 hswapAdv
+            0 { a := input.node } self,
+          (HashLayer.circuit G Q hQ l hl).call_adviceWritesConsistent (cfg.2.1, cfg.2.2)
+            hconfig.2 hhashAdv _ (self + 1)⟩
       lookupActivationsWellFormed := by
         intro cfg input self
         simp only [Circuit.operations_bind, operations_assignRegion,
@@ -3307,14 +3463,14 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
 
 derive_contract_bridges Layer.circuit (G : Generators) (Q : Point Fp)
   (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
-  (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :=
+  (wsib : SupportedProgram Fp) (wswap : SupportedFunction Fp Bool) :=
     Layer.circuit G Q hQ l hl wsib wswap
 
 @[keygen_norm]
 theorem Layer.circuit_lookupSelectorAnchorRequirements
     (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool)
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (region : RegionIndex) :
     (Layer.circuit G Q hQ l hl wsib wswap).elaborated.lookupSelectorAnchorRequirements
@@ -3324,8 +3480,8 @@ theorem Layer.circuit_lookupSelectorAnchorRequirements
 /-- A complete layer returns the x-coordinate cell assigned by its hash child. -/
 theorem Layer.circuit_call_output_cell_assigned
     (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool)
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (self : RegionIndex) :
     ((Layer.circuit G Q hQ l hl wsib wswap).output cfg input self).cell ∈
@@ -3345,8 +3501,8 @@ layer has the same four requests as its hash layer. -/
 @[synthesis_summary_norm]
 theorem Layer.circuit_synthesisSummary_constantSiteCount
     (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool)
     (config : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (region : RegionIndex) :
     ((Layer.circuit G Q hQ l hl wsib wswap).elaborated.synthesisSummary
@@ -3367,7 +3523,7 @@ theorem Layer.circuit_synthesisSummary_constantSiteCount
 @[keygen_norm, keygen_output_norm]
 theorem Layer.circuit_output_column (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
-    (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (wsib : SupportedProgram Fp) (wswap : SupportedFunction Fp Bool)
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (i : RegionIndex) :
     ((Layer.circuit G Q hQ l hl wsib wswap).output cfg input i).cell.column =
@@ -3379,7 +3535,7 @@ theorem Layer.circuit_output_column (G : Generators) (Q : Point Fp)
 theorem Layer.Configured.outputColumn_mem_permutationColumns
     (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
     (l : ℕ) (hl : l < 2 ^ 10)
-    (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (wsib : SupportedProgram Fp) (wswap : SupportedFunction Fp Bool)
     {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
     (configured : (Layer.circuit G Q hQ l hl wsib wswap).Configured cfg) :
     cfg.2.1.sinsemilla.xA.toAny ∈ configured.permutationColumns := by
@@ -3396,7 +3552,7 @@ theorem Layer.Configured.outputColumn_mem_permutationColumns
 /-- Assemble one Merkle-layer capability from its two direct children. -/
 def Layer.configurationCertificate (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
-    (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (wsib : SupportedProgram Fp) (wswap : SupportedFunction Fp Bool)
     {ccfg : CondSwap.Config} {cfg : Config}
     {lcfg : LookupRangeCheck.Config 10} {context : KeygenContext Fp}
     (swap : (CondSwap.swap wsib wswap).ConfigurationCertificate ccfg context)
@@ -3484,7 +3640,7 @@ identity on the 32 layers used). Implicit-reducible: configured handles of a lay
 typed at either spelling of its circuit. -/
 @[implicit_reducible]
 def layerAt (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ : ℕ)
-    (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool) (i : ℕ) :
+    (wsib : ℕ → SupportedProgram Fp) (wswap : ℕ → SupportedFunction Fp Bool) (i : ℕ) :
     FormalCircuit Fp
       (CondSwap.Config × Config × LookupRangeCheck.Config 10)
       (CondSwap.Config × Config × LookupRangeCheck.Config 10)
@@ -3494,8 +3650,8 @@ def layerAt (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ : ℕ)
 @[keygen_norm]
 private theorem layerAt_output_column
     (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ : ℕ)
-    (wsib : ℕ → WitgenIR Fp 1)
-    (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
+    (wsib : ℕ → SupportedProgram Fp)
+    (wswap : ℕ → SupportedFunction Fp Bool)
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (region : RegionIndex) (i : ℕ) :
     ((layerAt G Q hQ l₀ wsib wswap i).output cfg input region).cell.column =
@@ -3550,7 +3706,7 @@ theorem pathNode_isSome_le (G : Generators) (Q : Point Fp) (l₀ : ℕ) (wit : �
 
 variable (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ d : ℕ)
   (hld : l₀ + d ≤ 2 ^ 10)
-  (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
+  (wsib : ℕ → SupportedProgram Fp) (wswap : ℕ → SupportedFunction Fp Bool)
 
 /-- The fold's region index entering layer `m`: 8 regions per layer. -/
 private theorem foldState_snd
@@ -3594,8 +3750,8 @@ private theorem input_eval_node_prover (env : Placed ProverEnvironment Fp)
 
 private def retargetSwapConfigured
     {cfg : CondSwap.Config}
-    {wb wb' : WitgenIR Fp 1}
-    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    {wb wb' : SupportedProgram Fp}
+    {swapWitness swapWitness' : SupportedFunction Fp Bool}
     (configured : (CondSwap.swap wb swapWitness).Configured cfg) :
     (CondSwap.swap wb' swapWitness').Configured cfg := by
   rcases configured with ⟨configInput, counts, configLawful, output_eq⟩
@@ -3622,8 +3778,8 @@ private def retargetHashLayerConfigured
 private def retargetLayerConfigured
     {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
     {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
-    {wb wb' : WitgenIR Fp 1}
-    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    {wb wb' : SupportedProgram Fp}
+    {swapWitness swapWitness' : SupportedFunction Fp Bool}
     (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
     (Layer.circuit G Q hQ l' hl' wb' swapWitness').Configured cfg := by
   rcases configured with ⟨configInput, counts, configLawful, output_eq⟩
@@ -3636,8 +3792,8 @@ private def retargetLayerConfigured
 private theorem retargetLayerConfigured_gates
     {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
     {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
-    {wb wb' : WitgenIR Fp 1}
-    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    {wb wb' : SupportedProgram Fp}
+    {swapWitness swapWitness' : SupportedFunction Fp Bool}
     (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
     (retargetLayerConfigured G Q hQ
       (l' := l') (hl' := hl') (wb' := wb')
@@ -3654,8 +3810,8 @@ private theorem retargetLayerConfigured_gates
 private theorem retargetLayerConfigured_lookups
     {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
     {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
-    {wb wb' : WitgenIR Fp 1}
-    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    {wb wb' : SupportedProgram Fp}
+    {swapWitness swapWitness' : SupportedFunction Fp Bool}
     (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
     (retargetLayerConfigured G Q hQ
       (l' := l') (hl' := hl') (wb' := wb')
@@ -3672,8 +3828,8 @@ private theorem retargetLayerConfigured_lookups
 private theorem retargetLayerConfigured_fixedColumns
     {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
     {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
-    {wb wb' : WitgenIR Fp 1}
-    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    {wb wb' : SupportedProgram Fp}
+    {swapWitness swapWitness' : SupportedFunction Fp Bool}
     (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
     (retargetLayerConfigured G Q hQ
       (l' := l') (hl' := hl') (wb' := wb')
@@ -3691,8 +3847,8 @@ private theorem retargetLayerConfigured_fixedColumns
 private theorem retargetLayerConfigured_permutationColumns
     {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
     {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
-    {wb wb' : WitgenIR Fp 1}
-    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    {wb wb' : SupportedProgram Fp}
+    {swapWitness swapWitness' : SupportedFunction Fp Bool}
     (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
     (retargetLayerConfigured G Q hQ
       (l' := l') (hl' := hl') (wb' := wb')
@@ -3720,6 +3876,9 @@ def keygenRequirements :
   fixedColumns _ configured := configured.fixedColumns
   permutationColumns _ configured := configured.permutationColumns
   inputCells _ _ input := [input.node.cell]
+  readCells _ _ _ :=
+    ((List.finRange d).flatMap fun i => (wsib i.val).reads ++ (wswap i.val).reads).map
+      AssignedCell.cell
 
 @[keygen_configured]
 private def layerAtConfigured
@@ -3824,8 +3983,8 @@ fold returns its input cell unchanged. -/
 @[keygen_norm]
 theorem foldState_node_column
     (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l₀ : ℕ)
-    (wsib : ℕ → WitgenIR Fp 1)
-    (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
+    (wsib : ℕ → SupportedProgram Fp)
+    (wswap : ℕ → SupportedFunction Fp Bool)
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (region : RegionIndex) (m : ℕ) :
     (FormalCircuit.foldState
@@ -3848,20 +4007,20 @@ def synthesize
 theorem synthesize_keygenRegistered :
     ∀ (configInput : CondSwap.Config × Config × LookupRangeCheck.Config 10)
       (counts : ConfigureCounts)
-      (hconfig : (keygenRequirements G Q hQ l₀ wsib wswap).configLawful configInput)
+      (hconfig : (keygenRequirements G Q hQ l₀ d wsib wswap).configLawful configInput)
       (input : Var Layer.Input Fp) (region : RegionIndex),
     let program := (pure configInput : Configure Fp _)
     ((synthesize G Q hQ l₀ d wsib wswap (program.output counts) input).operations
       region).KeygenRegistered
-      ((keygenRequirements G Q hQ l₀ wsib wswap).gates configInput hconfig ++
+      ((keygenRequirements G Q hQ l₀ d wsib wswap).gates configInput hconfig ++
         (program.delta counts).gates)
-      ((keygenRequirements G Q hQ l₀ wsib wswap).lookups configInput hconfig ++
+      ((keygenRequirements G Q hQ l₀ d wsib wswap).lookups configInput hconfig ++
         (program.delta counts).lookups)
-      ((keygenRequirements G Q hQ l₀ wsib wswap).fixedColumns configInput hconfig ++
+      ((keygenRequirements G Q hQ l₀ d wsib wswap).fixedColumns configInput hconfig ++
         program.fixedColumns counts)
-      ((keygenRequirements G Q hQ l₀ wsib wswap).permutationColumns configInput hconfig ++
+      ((keygenRequirements G Q hQ l₀ d wsib wswap).permutationColumns configInput hconfig ++
         (program.delta counts).permutationRequests ++
-        (keygenRequirements G Q hQ l₀ wsib wswap).inputPermutationColumns
+        (keygenRequirements G Q hQ l₀ d wsib wswap).inputPermutationColumns
           configInput hconfig input) := by
   intro configInput counts hconfig input region
   simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
@@ -3981,7 +4140,9 @@ def circuit :
   synthesize := synthesize G Q hQ l₀ d wsib wswap
 
   elaborated :=
-    { keygenRequirements := keygenRequirements G Q hQ l₀ wsib wswap
+    { keygenRequirements := keygenRequirements G Q hQ l₀ d wsib wswap
+      adviceColumnRequirements cfg :=
+        (layerAt G Q hQ l₀ wsib wswap 0).elaborated.adviceColumnRequirements cfg
       synthesisSummary cfg _ _ := synthesisSummary d cfg
       synthesisSummary_eq := synthesisSummary_eq G Q hQ l₀ d wsib wswap
       registered := synthesize_keygenRegistered G Q hQ l₀ d wsib wswap
@@ -4020,23 +4181,52 @@ def circuit :
         · simp only [Configure.output_pure]
           rw [← synthesisSummary_eq G Q hQ l₀ d wsib wswap cfg input region]
           exact synthesisSummary_tableRowExtent_eq d cfg
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro cfg counts hconfig input region
         simp only [synthesize, Configure.output_pure,
-          Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
-        apply FormalCircuit.foldCall_copyCellsAssignedFrom
+          Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+          Operations.ConsumedCellsAssigned, KeygenRequirements.readRelativeCellsAt]
+        apply FormalCircuit.foldCall_consumedCellsAssignedFrom
           (c := layerAt G Q hQ l₀ wsib wswap)
           (toInput := toInput) (config := cfg) (init := input)
           (i₀ := region) d
           (fun i => layerAtConfigured G Q hQ l₀ wsib wswap hconfig i)
         intro i cell hcell
         simp only [FormalCircuit.Configured.inputCells,
+          FormalCircuit.Configured.readCells,
+          FormalCircuit.Configured.readRelativeCellsAt,
           layerAt, Layer.circuit, FormalCircuit.keygenRequirements,
           ElaboratedCircuit.keygenRequirements, Layer.keygenRequirements,
-          List.mem_singleton] at hcell
-        subst cell
-        exact foldState_node_cell_mem (G := G) (Q := Q) (hQ := hQ)
-          (l₀ := l₀) (wsib := wsib) (wswap := wswap) cfg input region i
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+          List.mem_append] at hcell
+        rcases hcell with hnode | hread
+        · rw [List.mem_singleton] at hnode
+          subst hnode
+          have hmem := foldState_node_cell_mem (G := G) (Q := Q) (hQ := hQ)
+            (l₀ := l₀) (wsib := wsib) (wswap := wswap) cfg input region i.val
+          simp only [List.mem_append, List.mem_singleton] at hmem ⊢
+          rcases hmem with hnodeEq | hass
+          · rw [hnodeEq]
+            exact Or.inl (Or.inl (Or.inl (by simp [keygenRequirements])))
+          · exact Or.inr hass
+        · apply List.mem_append_left
+          apply List.mem_append_left
+          apply List.mem_append_right
+          simp only [keygenRequirements, List.mem_map] at hread ⊢
+          rcases hread with ⟨a, ha, rfl⟩ | ⟨a, ha, rfl⟩
+          · exact ⟨a, List.mem_flatMap.mpr ⟨i, List.mem_finRange i, List.mem_append_left _ ha⟩, rfl⟩
+          · exact ⟨a, List.mem_flatMap.mpr ⟨i, List.mem_finRange i, List.mem_append_right _ ha⟩, rfl⟩
+      adviceWritesConsistent := by
+        intro cfg counts hconfig hadvice input region
+        simp only [synthesize, Configure.output_pure, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil]
+        apply FormalCircuit.foldCall_adviceWritesConsistent
+          (c := layerAt G Q hQ l₀ wsib wswap)
+          (toInput := toInput) (config := cfg) (init := input)
+          (i₀ := region) d
+          (fun i => layerAtConfigured G Q hQ l₀ wsib wswap hconfig i)
+        intro i
+        exact hadvice
       lookupActivationsWellFormed := by
         intro cfg input region
         simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
@@ -4410,20 +4600,30 @@ theorem circuit_call_operations_eq
 
 /-- A calculate-root call only copies from its input node; every later node is
 assigned by an earlier layer. -/
-theorem circuit_call_copyCellsAssignedFrom
+theorem circuit_call_consumedCellsAssignedFrom
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (configured : (circuit G Q hQ l₀ d hld wsib wswap).Configured cfg)
     (input : Var Layer.Input Fp) (region : RegionIndex)
-    {available : List Cell} (hnode : input.node.cell ∈ available) :
+    {available : List Cell} (hnode : input.node.cell ∈ available)
+    (hreads : ∀ i : Fin d,
+      (∀ c ∈ (wsib i.val).reads, c.cell ∈ available) ∧
+      (∀ c ∈ (wswap i.val).reads, c.cell ∈ available)) :
     ((circuit G Q hQ l₀ d hld wsib wswap).call cfg input).operations region
-      |>.CopyCellsAssignedFrom region available := by
-  apply (circuit G Q hQ l₀ d hld wsib wswap).call_copyCellsAssignedFrom
+      |>.AssignedFrom RegionOperation.Consumes region available := by
+  apply (circuit G Q hQ l₀ d hld wsib wswap).call_consumedCellsAssignedFrom
     cfg configured input region
   intro cell hcell
-  simp only [FormalCircuit.Configured.inputCells, circuit,
+  simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+    FormalCircuit.Configured.readRelativeCellsAt, circuit,
     FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
-    keygenRequirements, List.mem_singleton] at hcell
-  simpa only [hcell] using hnode
+    keygenRequirements, KeygenRequirements.readRelativeCellsAt, List.map_nil,
+    List.append_nil, List.mem_append, List.mem_singleton, List.mem_map,
+    List.mem_flatMap] at hcell
+  rcases hcell with rfl | ⟨a, ⟨i, _, ha⟩, rfl⟩
+  · exact hnode
+  · rcases ha with h1 | h2
+    · exact (hreads i).1 a h1
+    · exact (hreads i).2 a h2
 
 /-- The final node of a calculate-root fold is either its original node or was
 assigned by one of the fold's layers. -/
@@ -4507,8 +4707,8 @@ def configurationCertificate
     exact layer.permutationColumns_of_configured required hrequired
 
 derive_contract_bridges circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-  (l₀ d : ℕ) (hld : l₀ + d ≤ 2 ^ 10) (wsib : ℕ → WitgenIR Fp 1)
-  (wswap : ℕ → Placed ProverEnvironment Fp → Bool) :=
+  (l₀ d : ℕ) (hld : l₀ + d ≤ 2 ^ 10) (wsib : ℕ → SupportedProgram Fp)
+  (wswap : ℕ → SupportedFunction Fp Bool) :=
   circuit G Q hQ l₀ d hld wsib wswap
 
 attribute [keygen_metadata_projection]

@@ -98,14 +98,14 @@ theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
   simp
 
 @[circuit_norm]
-def bundleSynthesize (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
+def bundleSynthesize (wb1 wd1 : SupportedProgram Fp) (cfg : Config)
     (offset : ℕ) (input : Var Inputs Fp) : RegionCircuit Fp Unit := do
   (gate cfg).enable offset
   let _ak ← copyAdvice input.ak (cfg.advices 0) offset
   let _a ← copyAdvice input.a (cfg.advices 1) offset
   let _b ← copyAdvice input.bWhole (cfg.advices 2) offset
   let _b0 ← copyAdvice input.b0 (cfg.advices 3) offset
-  let _b1 ← assignAdvice (cfg.advices 4) offset wb1
+  let _b1 ← assignAdvice (cfg.advices 4) offset wb1.program
   let _b2 ← copyAdvice input.b2 (cfg.advices 5) offset
   let _z13a ← copyAdvice input.z13A (cfg.advices 6) offset
   let _ap ← copyAdvice input.aPrime (cfg.advices 7) offset
@@ -114,14 +114,14 @@ def bundleSynthesize (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
   let _c ← copyAdvice input.c (cfg.advices 1) (offset + 1)
   let _d ← copyAdvice input.dWhole (cfg.advices 2) (offset + 1)
   let _d0 ← copyAdvice input.d0 (cfg.advices 3) (offset + 1)
-  let _d1 ← assignAdvice (cfg.advices 4) (offset + 1) wd1
+  let _d1 ← assignAdvice (cfg.advices 4) (offset + 1) wd1.program
   let _z13c ← copyAdvice input.z13C (cfg.advices 6) (offset + 1)
   let _b2cp ← copyAdvice input.b2CPrime (cfg.advices 7) (offset + 1)
   let _z14 ← copyAdvice input.z14B2CPrime (cfg.advices 8) (offset + 1)
   pure ()
 
 @[reducible]
-def bundleElaborated (wb1 wd1 : WitgenIR Fp 1) :
+def bundleElaborated (wb1 wd1 : SupportedProgram Fp) :
     ElaboratedRegionCircuit Fp Config Config Inputs unit pure
       (bundleSynthesize wb1 wd1) :=
   { keygenRequirements :=
@@ -132,7 +132,11 @@ def bundleElaborated (wb1 wd1 : WitgenIR Fp 1) :
             input.b2.cell, input.z13A.cell, input.aPrime.cell,
             input.z13APrime.cell, input.nk.cell, input.c.cell,
             input.dWhole.cell, input.d0.cell, input.z13C.cell,
-            input.b2CPrime.cell, input.z14B2CPrime.cell] }
+            input.b2CPrime.cell, input.z14B2CPrime.cell]
+        readCells _ _ _ := wb1.reads.map (·.cell) ++ wd1.reads.map (·.cell) }
+    adviceColumnRequirements cfg :=
+      ColumnsDistinct [cfg.advices 0, cfg.advices 1, cfg.advices 2, cfg.advices 3,
+        cfg.advices 4, cfg.advices 5, cfg.advices 6, cfg.advices 7, cfg.advices 8]
     synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
     synthesisSummary_eq := by
       intro _ _ _ _
@@ -150,13 +154,47 @@ def bundleElaborated (wb1 wd1 : WitgenIR Fp 1) :
           synthesis_summary_norm]
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
           synthesis_summary_norm]
-    copyCellsAssigned := by keygen_registration [bundleSynthesize] }
+    consumedCellsAssigned := by
+      intro configInput counts _hconfig offset input region
+      simp only [Configure.output_pure, bundleSynthesize, RegionCircuit.operations_bind,
+        RegionCircuit.operations_pure, operations_enable, operations_copyAdvice,
+        operations_assignAdvice, List.nil_append, List.append_nil, List.cons_append,
+        RegionOperations.ConsumedCellsAssigned, RegionOperations.assignedFrom_cons_iff,
+        RegionOperations.assignedFrom_nil_iff, RegionOperation.consumesFrom_consumes_iff,
+        RegionOperation.consumesFrom_copies_iff, RegionOperation.consumesFrom_reads_iff,
+        RegionOperation.copiedCells, RegionOperation.assignedCells,
+        List.not_mem_nil, false_implies, implies_true, true_and, and_true]
+      repeat' apply And.intro
+      all_goals
+        first
+        | exact ⟨_, wb1.support, fun c hc => by simp [List.mem_map_of_mem hc]⟩
+        | exact ⟨_, wd1.support, fun c hc => by simp [List.mem_map_of_mem hc]⟩
+        | exact ⟨_, witnessFunctionSupport_ofFExpr _, fun c hc => by
+            simp only [Witgen.fieldReads, List.mem_singleton] at hc; subst hc; simp⟩
+        | (intro c hc; simp only [List.mem_cons, List.not_mem_nil, or_false] at hc;
+           rcases hc with rfl | rfl <;> simp)
+    adviceWritesConsistent := by
+      intro configInput counts _hconfig hadvice offset input region
+      apply RegionOperations.AdviceWritesDistinct.toConsistent
+      simp only [Configure.output_pure, ColumnsDistinct, List.nodup_cons, List.mem_cons,
+        List.not_mem_nil, or_false, not_or, not_false_eq_true, and_true,
+        List.nodup_nil] at hadvice
+      simp only [Configure.output_pure, bundleSynthesize, circuit_norm,
+        RegionOperations.AdviceWritesDistinct, RegionOperations.adviceWrites,
+        RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+        List.nil_append, List.append_nil, List.cons_append, List.nodup_cons,
+        List.mem_cons, List.not_mem_nil, or_false, not_or,
+        RegionOperations.not_adviceWrite_eq_iff,
+        RegionOperations.adviceWrites_offset_eq_add,
+        Nat.one_ne_zero,
+        true_imp_iff, false_imp_iff, List.nodup_nil, not_false_eq_true, and_true, true_and]
+      simp only [hadvice, not_false_eq_true, and_self] }
 
 /-- Rust `CommitIvkChip` canonicity `assign` (`commit_ivk.rs:519-660`), parameterized by
 the `b_1`/`d_1` witness programs. The `(b1, d1)` readings are the extraction data;
 `Spec` is the donor `CommitIvk.Gate.Spec` at them, `Assumptions` the input-only donor
 rely-conditions (the two witnessed-bit implications move to `ProverAssumptions`). -/
-def bundle (wb1 wd1 : WitgenIR Fp 1) :
+def bundle (wb1 wd1 : SupportedProgram Fp) :
     FormalRegionCircuit Fp Config Config Inputs unit where
   configure := pure
   synthesize := bundleSynthesize wb1 wd1

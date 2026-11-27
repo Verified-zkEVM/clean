@@ -167,6 +167,9 @@ def keygenRequirements (G : Generators) (ns : List ℕ)
       configured.2.2.permutationColumns
   inputCells _ _ input :=
     input.pieces.toList.map (·.cell)
+  readCells _ _ input :=
+    ((Ecc.MulFixed.FullWidth.scalarWindows input.r).toList.flatMap
+      (Witgen.valueBuilderReads (value := field))).map (·.cell)
 
 def commitSynthesisSummary (ns : List ℕ)
     (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :
@@ -337,44 +340,69 @@ def commit (G : Generators) (ns : List ℕ)
               cfg.2.1 hconfig.2.1 _ (self + 2) anchor (by trivial)
         · exact Ecc.Add.addFormal.call_lookupSelectorsAnchoredBy
             cfg.2.2 hconfig.2.2 _ (self + 3) anchor (by trivial)
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        (Ecc.MulFixed.FullWidth.circuit R).elaborated.adviceColumnRequirements cfg.1 ∧
+        (HashToPoint.hashCircuit G ns Q hQ hns).elaborated.adviceColumnRequirements cfg.2.1 ∧
+        Ecc.Add.addFormal.elaborated.adviceColumnRequirements cfg.2.2
+      consumedCellsAssigned := by
         intro cfg counts configured input self
         simp only [synthesize, Circuit.operations_bind,
-          Configure.output_pure, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
+          Configure.output_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt]
+        apply Operations.AssignedFrom.append
         · apply (Ecc.MulFixed.FullWidth.circuit R)
-            |>.call_copyCellsAssignedFrom cfg.1 configured.1 input.r self
+            |>.call_consumedCellsAssignedFrom cfg.1 configured.1 input.r self
           intro cell hcell
-          rw [Ecc.MulFixed.FullWidth.circuit_inputCells_eq] at hcell
-          contradiction
-        · apply Operations.CopyCellsAssignedFrom.append
+          simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+            FormalCircuit.Configured.readRelativeCellsAt, Ecc.MulFixed.FullWidth.circuit,
+            FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+            KeygenRequirements.readRelativeCellsAt, List.nil_append, List.map_nil,
+            List.append_nil] at hcell
+          simp only [keygenRequirements, List.mem_append]
+          tauto
+        · apply Operations.AssignedFrom.append
           · rw [Ecc.MulFixed.FullWidth.circuit_call_regionCount]
             apply (HashToPoint.hashCircuit G ns Q hQ hns)
-              |>.call_copyCellsAssignedFrom cfg.2.1 configured.2.1 _ _
+              |>.call_consumedCellsAssignedFrom cfg.2.1 configured.2.1 _ _
             intro cell hcell
-            rw [HashToPoint.hashCircuit_inputCells] at hcell
-            simp only [keygenRequirements]
-            exact List.mem_append_left _ hcell
+            simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+              FormalCircuit.Configured.readRelativeCellsAt, HashToPoint.hashCircuit,
+              FormalRegionCircuit.toFormal_keygenRequirements, HashToPoint.hashRegion,
+              FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+              KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil] at hcell
+            simp only [keygenRequirements, List.mem_append]
+            tauto
           · simp only [circuit_norm, Nat.add_assoc]
-            apply Ecc.Add.addFormal.call_copyCellsAssignedFrom
+            apply Ecc.Add.addFormal.call_consumedCellsAssignedFrom
               cfg.2.2 configured.2.2 _ _
             intro cell hcell
-            rw [Ecc.Add.addFormal_inputCells] at hcell
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
-            simp only [keygenRequirements, List.mem_append] at ⊢
+            simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+              FormalCircuit.Configured.readRelativeCellsAt, Ecc.Add.addFormal,
+              FormalRegionCircuit.toFormal_keygenRequirements, Ecc.Add.add, Ecc.Add.addElaborated,
+              FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+              KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+              List.mem_cons, List.not_mem_nil, or_false] at hcell
+            have hhash := HashToPoint.hashCircuit_call_output_point_cells_assigned
+              G ns Q hQ hns cfg.2.1 { pieces := input.pieces } (self + 2)
+            have hmul := Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
+              R cfg.1 input.r self
+            simp only [keygenRequirements, List.mem_append]
             rcases hcell with rfl | rfl | rfl | rfl
-            · exact Or.inr (Or.inr
-                (HashToPoint.hashCircuit_call_output_point_cells_assigned
-                  G ns Q hQ hns cfg.2.1 _ _).1)
-            · exact Or.inr (Or.inr
-                (HashToPoint.hashCircuit_call_output_point_cells_assigned
-                  G ns Q hQ hns cfg.2.1 _ _).2)
-            · exact Or.inr (Or.inl
-                (Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
-                  R cfg.1 input.r self).1)
-            · exact Or.inr (Or.inl
-                (Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
-                  R cfg.1 input.r self).2)
+            · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hhash.1))))
+            · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hhash.2))))
+            · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hmul.1))))
+            · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hmul.2))))
+      adviceWritesConsistent := by
+        intro cfg counts configured hadvice input self
+        rcases hadvice with ⟨hmulAdv, hhashAdv, haddAdv⟩
+        simp only [synthesize, Configure.output_pure, Circuit.operations_bind,
+          Operations.adviceWritesConsistentFrom_append, circuit_norm, Nat.add_assoc]
+        refine ⟨(Ecc.MulFixed.FullWidth.circuit R).call_adviceWritesConsistent cfg.1
+            configured.1 hmulAdv input.r self,
+          (HashToPoint.hashCircuit G ns Q hQ hns).call_adviceWritesConsistent cfg.2.1
+            configured.2.1 hhashAdv _ (self + 2),
+          Ecc.Add.addFormal.call_adviceWritesConsistent cfg.2.2
+            configured.2.2 haddAdv _ (self + 3)⟩
       fixedWritesLawful := by
         intro cfg _ hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
@@ -431,7 +459,7 @@ def commit (G : Generators) (ns : List ℕ)
 
   Witness := fun F => Sinsemilla.Chain.ChainWit ns F × (Vector F 85 × Fq)
   extract := fun (bcfg, hcfg, _) _ i₀ env =>
-    (Sinsemilla.Chain.extract ns (fun _ => Q.y) hcfg 0 (i₀ + 2) env,
+    (Sinsemilla.Chain.extract ns (HashToPoint.constEnv Q.y) hcfg 0 (i₀ + 2) env,
      Ecc.MulFixed.FullWidth.fwExtract bcfg i₀ env)
 
   Spec input output wit :=

@@ -58,6 +58,16 @@ deriving ProvableStruct
 def aPrimeWit (a : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env a + ((2 ^ 130 : ℕ) : Fp) - tP]
 
+@[witness_support]
+theorem witnessFunctionSupport_aPrimeWit (a : AssignedCell Fp) :
+    WitnessFunctionSupport [a] (programFunction (aPrimeWit a)) := by
+  intro env₁ env₂ hagree
+  have ha : readCell env₁ a = readCell env₂ a := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues a List.mem_cons_self
+  unfold programFunction aPrimeWit
+  dsimp only [Witgen.WitgenIROver.eval]
+  exact congrArg (fun x : Fp => (#v[x + ((2 ^ 130 : ℕ) : Fp) - tP] : Vector Fp 1)[0]) ha
+
 @[circuit_norm]
 theorem aPrimeWit_eval (a : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -72,6 +82,20 @@ def b2CPrimeWit (b2 c : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env b2 + ((2 ^ 5 : ℕ) : Fp) * readCell env c
     + ((2 ^ 140 : ℕ) : Fp) - tP]
 
+@[witness_support]
+theorem witnessFunctionSupport_b2CPrimeWit (b2 c : AssignedCell Fp) :
+    WitnessFunctionSupport [b2, c] (programFunction (b2CPrimeWit b2 c)) := by
+  intro env₁ env₂ hagree
+  have hb2 : readCell env₁ b2 = readCell env₂ b2 := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues b2 (by simp)
+  have hc : readCell env₁ c = readCell env₂ c := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using hagree.cellValues c (by simp)
+  unfold programFunction b2CPrimeWit
+  dsimp only [Witgen.WitgenIROver.eval]
+  exact congrArg₂
+    (fun x y : Fp => (#v[x + ((2 ^ 5 : ℕ) : Fp) * y + ((2 ^ 140 : ℕ) : Fp) - tP] : Vector Fp 1)[0])
+    hb2 hc
+
 @[circuit_norm]
 theorem b2CPrimeWit_eval (b2 c : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
     (j : ℕ) (hj : j < 1) :
@@ -83,12 +107,12 @@ theorem b2CPrimeWit_eval (b2 c : AssignedCell Fp) (env : Placed ProverEnvironmen
   rfl
 
 /-- The gate child: the `CommitIvk` two-row bundle in its own layouter region. -/
-def gateChild (wb1 wd1 : WitgenIR Fp 1) :
+def gateChild (wb1 wd1 : SupportedProgram Fp) :
     FormalCircuit Fp Config Config CommitIvk.Inputs unit :=
   (bundle wb1 wd1).toFormal "Assign cells used in canonicity gate"
 
 @[keygen_norm]
-theorem gateChild_inputCells_eq (wb1 wd1 : WitgenIR Fp 1)
+theorem gateChild_inputCells_eq (wb1 wd1 : SupportedProgram Fp)
     (cfg : Config) (hcfg : (gateChild wb1 wd1).keygenRequirements.configLawful cfg)
     (input : Var CommitIvk.Inputs Fp) :
     (gateChild wb1 wd1).keygenRequirements.inputCells cfg hcfg input =
@@ -101,16 +125,16 @@ theorem gateChild_inputCells_eq (wb1 wd1 : WitgenIR Fp 1)
 
 /-- The lifted gate child exposes the gate bundle's reduced one-region footprint. -/
 @[synthesis_summary_norm]
-theorem gateChild_synthesisSummary (wb1 wd1 : WitgenIR Fp 1)
+theorem gateChild_synthesisSummary (wb1 wd1 : SupportedProgram Fp)
     (cfg : Config) (input : Var CommitIvk.Inputs Fp)
     (region : RegionIndex) :
     (gateChild wb1 wd1).elaborated.synthesisSummary cfg input region =
       FloorPlanner.SynthesisSummary.ofRegion
         (CommitIvk.synthesisSummary cfg 0) := rfl
 
-derive_contract_bridges gateChild (wb1 wd1 : WitgenIR Fp 1) := gateChild wb1 wd1
+derive_contract_bridges gateChild (wb1 wd1 : SupportedProgram Fp) := gateChild wb1 wd1
 
-def synth (wb1 wd1 : WitgenIR Fp 1) (gcfg : Config) (lcfg : LookupRangeCheck.Config 10)
+def synth (wb1 wd1 : SupportedProgram Fp) (gcfg : Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
   let aZs ← LookupRangeCheck.witnessCheck 10 13 false lcfg (aPrimeWit input.a)
   let bZs ← LookupRangeCheck.witnessCheck 10 14 false lcfg (b2CPrimeWit input.b2 input.c)
@@ -121,14 +145,14 @@ def synth (wb1 wd1 : WitgenIR Fp 1) (gcfg : Config) (lcfg : LookupRangeCheck.Con
       z13C := input.z13C, b2CPrime := bZs.z0, z14B2CPrime := bZs.zLast }
   pure ()
 
-theorem synth_regionCount (wb1 wd1 : WitgenIR Fp 1) (gcfg : Config)
+theorem synth_regionCount (wb1 wd1 : SupportedProgram Fp) (gcfg : Config)
     (lcfg : LookupRangeCheck.Config 10) (input : Inputs (AssignedCell Fp))
     (i : RegionIndex) :
     Operations.regionCount ((synth wb1 wd1 gcfg lcfg input).operations i) = 3 := by
   simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm, Circuit.operations_bind,
     operations_assignRegion, Operations.regionCount]
 
-private theorem gateChild_extract_cells (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
+private theorem gateChild_extract_cells (wb1 wd1 : SupportedProgram Fp) (cfg : Config)
     (inp : Var CommitIvk.Inputs Fp) (i : RegionIndex)
     (env : Placed Environment Fp) :
     (gateChild wb1 wd1).extract cfg inp i env
@@ -156,7 +180,7 @@ theorem circuitSynthesisSummary_lookupActivationCount
 `"Assign cells used in canonicity gate"` region. `Spec` is the donor composite payoff
 (`CommitIvk.Canonicity.Spec`): the canonical bit slices of `ak`/`nk` and
 the `b`/`d` sub-piece decompositions, at the witnessed `(b_1, d_1)` readings. -/
-def circuit (wb1 wd1 : WitgenIR Fp 1) :
+def circuit (wb1 wd1 : SupportedProgram Fp) :
     FormalCircuit Fp (Config × LookupRangeCheck.Config 10)
       (Config × LookupRangeCheck.Config 10) Inputs unit where
   name := "CommitIvk canonicity"
@@ -173,19 +197,34 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
           inputCells _ _ input :=
             [input.ak.cell, input.a.cell, input.bWhole.cell, input.b0.cell,
               input.b2.cell, input.z13A.cell, input.nk.cell, input.c.cell,
-              input.dWhole.cell, input.d0.cell, input.z13C.cell] }
+              input.dWhole.cell, input.d0.cell, input.z13C.cell]
+          readCells _ _ _ :=
+            wb1.reads.map (·.cell) ++ wd1.reads.map (·.cell) }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.1.advices 0, cfg.1.advices 1, cfg.1.advices 2, cfg.1.advices 3,
+          cfg.1.advices 4, cfg.1.advices 5, cfg.1.advices 6, cfg.1.advices 7, cfg.1.advices 8]
       output _ _ _ := ()
       regionCount _ := 3
       synthesisSummary cfg _ _ := circuitSynthesisSummary cfg.1 cfg.2
       registered := by keygen_registration
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
-        simp only [synth, Configure.output_pure, circuit_norm]
-        apply Operations.CopyCellsAssignedFrom.append
-        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
-        · apply Operations.CopyCellsAssignedFrom.append
-          · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
-          · apply (gateChild wb1 wd1).call_copyCellsAssignedFrom
+        simp only [synth, Configure.output_pure, circuit_norm, Operations.ConsumedCellsAssigned,
+          KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil]
+        apply Operations.AssignedFrom.append
+        · apply LookupRangeCheck.witnessCheck_consumedCellsAssignedFrom
+            (hsupport := witnessFunctionSupport_aPrimeWit input.a)
+          intro cell hc
+          simp only [List.mem_singleton] at hc
+          subst hc
+          simp
+        · apply Operations.AssignedFrom.append
+          · apply LookupRangeCheck.witnessCheck_consumedCellsAssignedFrom
+              (hsupport := witnessFunctionSupport_b2CPrimeWit input.b2 input.c)
+            intro cell hc
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+            rcases hc with rfl | rfl <;> simp
+          · apply (gateChild wb1 wd1).call_consumedCellsAssignedFrom
               (hconfigured := FormalCircuit.Configured.ofOutput
                 (gateChild wb1 wd1) configInput.1 {} (by keygen_registration))
             intro cell hcell
@@ -199,25 +238,28 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
             have hregion := LookupRangeCheck.witnessCheck_regionCount
               10 13 false (by simp) configInput.2 (aPrimeWit input.a) i
             dsimp only at ha hb
-            rw [FormalCircuit.Configured.inputCells,
-              gateChild_inputCells_eq] at hcell
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
-            simp only [List.mem_append]
-            rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-              rfl | rfl | rfl | rfl | rfl | rfl | rfl
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
+            simp only [FormalCircuit.Configured.inputCells, FormalCircuit.Configured.readCells,
+              FormalCircuit.Configured.readRelativeCellsAt, FormalCircuit.Configured.ofOutput,
+              gateChild, FormalRegionCircuit.toFormal_keygenRequirements, bundle, bundleElaborated,
+              FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+              KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+              List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hcell
+            simp only [List.mem_append, List.mem_cons]
+            rcases hcell with (rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+              rfl | rfl | rfl | rfl | rfl | rfl | rfl) | hwb1 | hwd1
+            · exact Or.inl (Or.inl (Or.inl rfl))
+            · exact Or.inl (Or.inl (Or.inr (Or.inl rfl)))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inl rfl))))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inl rfl)))))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl rfl))))))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl rfl)))))))
             · exact Or.inl (Or.inr ha.1)
             · exact Or.inl (Or.inr ha.2)
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
-            · exact Or.inl (Or.inl (by simp))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl rfl))))))))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl rfl)))))))))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl rfl))))))))))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl rfl)))))))))))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl rfl))))))))))))
             · rw [hregion]
               exact Or.inr (by
                 simpa only [LookupRangeCheck.witnessCheck_nextRegionIndex
@@ -228,6 +270,18 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
                 simpa only [LookupRangeCheck.witnessCheck_nextRegionIndex
                   10 13 false (by simp) configInput.2 (aPrimeWit input.a) i]
                   using hb.2)
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hwb1)))))))))))))
+            · exact Or.inl (Or.inl (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hwd1)))))))))))))
+      adviceWritesConsistent := by
+        intro configInput counts _hconfig hadvice input i
+        simp only [synth, Configure.output_pure, circuit_norm,
+          Operations.adviceWritesConsistentFrom_append]
+        refine ⟨LookupRangeCheck.witnessCheck_adviceWritesConsistent 10 13 false (by simp)
+            configInput.2 _ i,
+          LookupRangeCheck.witnessCheck_adviceWritesConsistent 10 14 false (by simp)
+            configInput.2 _ (i + 1),
+          (gateChild wb1 wd1).call_adviceWritesConsistent configInput.1
+            (FormalCircuit.Configured.ofPure _ configInput.1 () rfl) hadvice _ (i + 2)⟩
       lookupActivationsWellFormed := by
         intro cfg input i
         simp only [synth, circuit_norm, List.forall_append]
@@ -420,7 +474,7 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
         exact ⟨hpa1, hpa2, hpa3, hpa4, hpa5, hpa6, hpa7, hpa8, hpa9⟩
 
 @[keygen_norm]
-theorem circuit_inputCells (wb1 wd1 : WitgenIR Fp 1)
+theorem circuit_inputCells (wb1 wd1 : SupportedProgram Fp)
     {cfg : Config × LookupRangeCheck.Config 10}
     (configured : (circuit wb1 wd1).Configured cfg)
     (input : Var Inputs Fp) :
@@ -431,13 +485,13 @@ theorem circuit_inputCells (wb1 wd1 : WitgenIR Fp 1)
   rfl
 
 @[synthesis_summary_norm]
-theorem circuit_synthesisSummary_eq (wb1 wd1 : WitgenIR Fp 1)
+theorem circuit_synthesisSummary_eq (wb1 wd1 : SupportedProgram Fp)
     (cfg : Config × LookupRangeCheck.Config 10) (input : Var Inputs Fp)
     (region : RegionIndex) :
     (circuit wb1 wd1).elaborated.synthesisSummary cfg input region =
       circuitSynthesisSummary cfg.1 cfg.2 := rfl
 
-derive_contract_bridges circuit (wb1 wd1 : WitgenIR Fp 1) := circuit wb1 wd1
+derive_contract_bridges circuit (wb1 wd1 : SupportedProgram Fp) := circuit wb1 wd1
 
 end Canonicity
 

@@ -63,6 +63,7 @@ def parent :
     witnessPointR.call config input
   elaborated := {
     keygenRequirements := witnessPointL.keygenRequirements
+    adviceColumnRequirements := witnessPointL.elaborated.adviceColumnRequirements
     registered := by
       intro configInput counts hconfig input i
       simp only [Circuit.operations_bind,
@@ -76,18 +77,18 @@ def parent :
           ((witnessPointR.configure configInput).output counts)
           (FormalCircuit.Configured.ofOutput witnessPointR
             configInput counts hconfig) input _
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig input i
-      simp only [Circuit.operations_bind]
-      apply Operations.CopyCellsAssignedFrom.append
-      · apply witnessPointL.call_copyCellsAssignedFrom
+      simp only [Circuit.operations_bind, Operations.ConsumedCellsAssigned]
+      apply Operations.AssignedFrom.append
+      · apply witnessPointL.call_consumedCellsAssignedFrom
           ((witnessPointL.configure configInput).output counts)
           (FormalCircuit.Configured.ofOutput witnessPointL
             configInput counts hconfig) input i
         intro cell hcell
         exact hcell
       · rw [← FormalCircuit.nextRegionIndex_call]
-        apply witnessPointR.call_copyCellsAssignedFrom
+        apply witnessPointR.call_consumedCellsAssignedFrom
           ((witnessPointL.configure configInput).output counts)
           ((FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
             configInput counts hconfig).toFormal :
@@ -95,6 +96,21 @@ def parent :
                 ((witnessPointL.configure configInput).output counts)) input _
         intro cell hcell
         exact List.mem_append_left _ hcell
+    adviceWritesConsistent := by
+      intro configInput counts hconfig hadvice input i
+      simp only [Circuit.operations_bind, Operations.adviceWritesConsistentFrom_append,
+        FormalCircuit.nextRegionIndex_call, FormalCircuit.call_regionCount]
+      exact ⟨witnessPointL.call_adviceWritesConsistent
+          ((witnessPointL.configure configInput).output counts)
+          (FormalCircuit.Configured.ofOutput witnessPointL configInput counts hconfig)
+          hadvice input i,
+        witnessPointR.call_adviceWritesConsistent
+          ((witnessPointL.configure configInput).output counts)
+          ((FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+            configInput counts hconfig).toFormal :
+              witnessPointR.Configured
+                ((witnessPointL.configure configInput).output counts))
+          hadvice input _⟩
     fixedWritesLawful := by
       intro configInput counts hconfig input i
       apply Operations.HasNoFixedWrites.fixedWritesLawful

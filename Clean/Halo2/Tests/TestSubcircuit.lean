@@ -44,20 +44,27 @@ def parent :
   synthesize config offset input := WitnessPoint.point.call config offset input
   elaborated := {
     keygenRequirements := WitnessPoint.point.keygenRequirements
+    adviceColumnRequirements := WitnessPoint.point.elaborated.adviceColumnRequirements
     registered := by
       intro configInput counts hconfig offset input region
       exact WitnessPoint.point.call_keygenRegistered_exact
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
-      apply WitnessPoint.point.call_copyCellsAssignedFrom
+      apply WitnessPoint.point.call_consumedCellsAssignedFrom
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
       intro cell hcell
       exact hcell
+    adviceWritesConsistent := by
+      intro configInput counts hconfig hadvice offset input region
+      exact WitnessPoint.point.call_adviceWritesConsistent
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) hadvice offset input region
     fixedAssignmentsAgree := by
       intro configInput counts hconfig offset input region
       exact WitnessPoint.point.call_fixedAssignmentsAgree
@@ -115,6 +122,7 @@ def parentWithOp :
     WitnessPoint.point.call config offset input
   elaborated := {
     keygenRequirements := WitnessPoint.point.keygenRequirements
+    adviceColumnRequirements := WitnessPoint.point.elaborated.adviceColumnRequirements
     registered := by
       intro configInput counts hconfig offset input region
       simp only [keygen_spine]
@@ -122,15 +130,47 @@ def parentWithOp :
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
-      simp only [keygen_spine]
-      apply WitnessPoint.point.call_copyCellsAssignedFrom
-        ((WitnessPoint.point.configure configInput).output counts)
-        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
-          configInput counts hconfig) offset input region
-      intro cell hcell
-      exact List.mem_cons_of_mem _ hcell
+      simp only [RegionOperations.ConsumedCellsAssigned, RegionCircuit.operations_bind,
+        operations_assignAdvice, List.singleton_append]
+      apply RegionOperations.AssignedFrom.cons
+      · exact ⟨[], rfl, (Witgen.valueBuilderReads (value := field) (Point.x <$> input)).map (·.cell),
+          ⟨_, witnessFunctionSupport_scalarBuilder _, fun _ hc _ => List.mem_map_of_mem hc⟩, rfl⟩
+      · intro c hc
+        simp only [List.nil_append, List.mem_map] at hc
+        obtain ⟨a, ha, rfl⟩ := hc
+        have hsub : a ∈ Witgen.valueBuilderReads (value := Point) input := by
+          simp only [Witgen.valueBuilderReads, Functor.map, toElements,
+            Vector.toList_mk, List.toList_toArray, Witgen.fieldListReads, List.mem_append,
+            List.append_nil] at ha ⊢
+          rcases ha with h | h
+          · exact Or.inl h
+          · exact Or.inr (Or.inl h)
+        exact List.mem_append_left _ (List.mem_append_right _ (List.mem_map.mpr ⟨a, hsub, rfl⟩))
+      · apply WitnessPoint.point.call_consumedCellsAssignedFrom
+          ((WitnessPoint.point.configure configInput).output counts)
+          (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+            configInput counts hconfig) offset input region
+        intro cell hcell
+        exact List.mem_cons_of_mem _ hcell
+    adviceWritesConsistent := by
+      intro configInput counts hconfig hadvice offset input region
+      simp only [RegionCircuit.operations_bind, operations_assignAdvice, List.singleton_append]
+      apply RegionOperations.adviceWritesConsistent_assignAdvice_of_not_mem
+      · intro hmem
+        have hmem' := RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy region hmem
+        rw [FormalRegionCircuit.call_operations] at hmem'
+        simp only [WitnessPoint.point, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          operations_assignAdvice, operations_enable, List.append_nil,
+          RegionOperations.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+          RegionOperation.adviceWrites, List.singleton_append, List.nil_append,
+          List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem'
+        rcases hmem' with ⟨_, h⟩ | ⟨_, h⟩ <;> omega
+      · exact WitnessPoint.point.call_adviceWritesConsistent
+          ((WitnessPoint.point.configure configInput).output counts)
+          (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+            configInput counts hconfig) hadvice offset input region
     fixedAssignmentsAgree := by
       intro configInput counts hconfig offset input region
       simp only [RegionCircuit.operations_bind]

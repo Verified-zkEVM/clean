@@ -119,6 +119,30 @@ theorem pointSynthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ)
   intro index
   simp
 
+private theorem valueBuilderReads_pointX_subset (point : Var (Unconstrained Point) Fp) :
+    Witgen.valueBuilderReads (value := field) (Point.x <$> point) ⊆
+      Witgen.valueBuilderReads (value := Point) point := by
+  intro c hc
+  simp only [Witgen.valueBuilderReads, Witgen.M.map_def, List.mem_append] at hc ⊢
+  rcases hc with hsteps | hexpr
+  · exact Or.inl hsteps
+  · right
+    have hmem : c ∈ Witgen.fieldReads (point #[]).1.x := by
+      simpa [ProvableType.toElements, Witgen.fieldListReads] using hexpr
+    simpa [ProvableType.toElements, Witgen.fieldListReads, List.mem_append] using Or.inl hmem
+
+private theorem valueBuilderReads_pointY_subset (point : Var (Unconstrained Point) Fp) :
+    Witgen.valueBuilderReads (value := field) (Point.y <$> point) ⊆
+      Witgen.valueBuilderReads (value := Point) point := by
+  intro c hc
+  simp only [Witgen.valueBuilderReads, Witgen.M.map_def, List.mem_append] at hc ⊢
+  rcases hc with hsteps | hexpr
+  · exact Or.inl hsteps
+  · right
+    have hmem : c ∈ Witgen.fieldReads (point #[]).1.y := by
+      simpa [ProvableType.toElements, Witgen.fieldListReads] using hexpr
+    simpa [ProvableType.toElements, Witgen.fieldListReads, List.mem_append] using Or.inr hmem
+
 def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where
   configure | (x, y) => configure x y
@@ -132,7 +156,14 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     return ⟨ xVar, yVar ⟩
 
   elaborated :=
-    { registered := by keygen_registration
+    { keygenRequirements :=
+        { readCells _ _ point := (Witgen.valueBuilderReads point).map (·.cell) }
+      adviceColumnRequirements cfg := cfg.x ≠ cfg.y
+      registered := by keygen_registration
+      consumedCellsAssigned := by
+        keygen_registration
+        · exact ⟨_, valueBuilderReads_pointX_subset _ ‹_›, rfl⟩
+        · exact Or.inr ⟨_, valueBuilderReads_pointY_subset _ ‹_›, rfl⟩
       output config offset _ self :=
         { x := .of self offset config.x, y := .of self offset config.y }
       synthesisSummary config offset _ _ := pointSynthesisSummary config offset
@@ -201,7 +232,14 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     return ⟨ xVar, yVar ⟩
 
   elaborated :=
-    { registered := by keygen_registration
+    { keygenRequirements :=
+        { readCells _ _ point := (Witgen.valueBuilderReads point).map (·.cell) }
+      adviceColumnRequirements cfg := cfg.x ≠ cfg.y
+      registered := by keygen_registration
+      consumedCellsAssigned := by
+        keygen_registration
+        · exact ⟨_, valueBuilderReads_pointX_subset _ ‹_›, rfl⟩
+        · exact Or.inr ⟨_, valueBuilderReads_pointY_subset _ ‹_›, rfl⟩
       synthesisSummary config offset _ _ :=
         pointNonIdSynthesisSummary config offset
       synthesisSummary_eq := by

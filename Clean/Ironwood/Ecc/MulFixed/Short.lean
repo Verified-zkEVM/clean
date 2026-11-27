@@ -94,6 +94,14 @@ def yVarWit (sign yMag : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env =>
     #v[if readCell env sign = -1 then -(readCell env yMag) else readCell env yMag]
 
+@[witness_support]
+theorem witnessFunctionSupport_yVarWit (sign yMag : AssignedCell Fp) :
+    WitnessFunctionSupport [sign, yMag] (programFunction (yVarWit sign yMag)) := by
+  intro env₁ env₂ hagree
+  have hs : readCell env₁ sign = readCell env₂ sign := hagree.cellValues sign (by simp)
+  have hy : readCell env₁ yMag = readCell env₂ yMag := hagree.cellValues yMag (by simp)
+  simp only [programFunction, yVarWit, Witgen.WitgenIROver.eval, hs, hy]
+
 structure InnerOut (F : Type) where
   -- The exit accumulator after windows 0..20.
   acc : Point F
@@ -439,12 +447,12 @@ theorem innerRegion_keygenRegistered
   · exact innerWindowChain_keygenRegistered
       B cfg offset magnitude self configured
 
-theorem innerRegion_copyCellsAssignedFrom
+theorem innerRegion_consumedCellsAssignedFrom
     (B : FixedBaseData) (cfg : Config) (offset : ℕ)
     (magnitude : AssignedCell Fp) (self : RegionIndex)
     (configured : innerKeygenRequirements.configLawful cfg) :
     ((innerRegion B cfg offset magnitude).operations self)
-      |>.CopyCellsAssignedFrom self [magnitude.cell] := by
+      |>.AssignedFrom RegionOperation.Consumes self [magnitude.cell] := by
   let decomposeOps :=
     (((copyDecompose 3 22).call cfg.superConfig.runningSumConfig
       offset ⟨magnitude⟩).operations self)
@@ -455,8 +463,8 @@ theorem innerRegion_copyCellsAssignedFrom
     (windowChain cfg.superConfig
       (processWindow B (Ecc.MulFixed.Short.windowPoint B.point)
         cfg.superConfig magnitude) offset 22).operations self
-  have hdecompose : decomposeOps.CopyCellsAssignedFrom self [magnitude.cell] := by
-    apply (copyDecompose 3 22).call_copyCellsAssignedFrom
+  have hdecompose : decomposeOps.AssignedFrom RegionOperation.Consumes self [magnitude.cell] := by
+    apply (copyDecompose 3 22).call_consumedCellsAssignedFrom
       cfg.superConfig.runningSumConfig
       (@id ((copyDecompose 3 22).Configured cfg.superConfig.runningSumConfig)
         (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 22)
@@ -464,42 +472,186 @@ theorem innerRegion_copyCellsAssignedFrom
             cfg.superConfig.runningSumConfig.z) {} ()))
       offset ⟨magnitude⟩ self
     intro cell hcell
-    rw [DecomposeRunningSum.copyDecompose_configured_inputCells_eq] at hcell
-    simpa only [List.mem_singleton] using hcell
-  have hfixed : fixedOps.CopyCellsAssignedFrom self
+    simp only [FormalRegionCircuit.Configured.inputCells, FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt, FormalRegionCircuit.Configured.ofOutput,
+      DecomposeRunningSum.copyDecompose, DecomposeRunningSum.elaborated,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      List.mem_singleton] at hcell
+    exact List.mem_singleton.mpr hcell
+  have hfixed : fixedOps.AssignedFrom RegionOperation.Consumes self
       (decomposeOps.assignedCellsAfter self [magnitude.cell]) :=
-    MulFixed.fixedConstantsLoop_copyCellsAssignedFrom _ _ _ _ _ _ _
-  have hchainResult := MulFixed.windowChain_copyCellsAssignedFrom
+    MulFixed.fixedConstantsLoop_consumedCellsAssignedFrom _ _ _ _ _ _ _
+  have hchainResult := MulFixed.windowChain_consumedCellsAssignedFrom
     cfg.superConfig configured.1 self
     (processWindow B (Ecc.MulFixed.Short.windowPoint B.point)
       cfg.superConfig magnitude)
-    (fun w row available => MulFixed.processWindow_copyCellsAssignedFrom
+    ((decomposeOps ++ fixedOps).assignedCellsAfter self [magnitude.cell])
+    (fun w row avail havail => MulFixed.processWindow_consumedCellsAssignedFrom
       B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude
-        w row self available)
+        w row self avail
+        (havail _ (RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ List.mem_cons_self)))
     (fun w row available => MulFixed.processWindow_output_cells_assigned
       B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude
         w row self available)
     offset 22 (by norm_num)
-    ((decomposeOps ++ fixedOps).assignedCellsAfter self [magnitude.cell])
-  have hchain : chainOps.CopyCellsAssignedFrom self
+  have hchain : chainOps.AssignedFrom RegionOperation.Consumes self
       ((decomposeOps ++ fixedOps).assignedCellsAfter self [magnitude.cell]) := by
     exact hchainResult.1
-  have hprefix : (decomposeOps ++ fixedOps).CopyCellsAssignedFrom
+  have hprefix : (decomposeOps ++ fixedOps).AssignedFrom RegionOperation.Consumes
       self [magnitude.cell] := by
-    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    rw [RegionOperations.assignedFrom_append_iff]
     exact ⟨hdecompose, hfixed⟩
-  have hall : ((decomposeOps ++ fixedOps) ++ chainOps).CopyCellsAssignedFrom
+  have hall : ((decomposeOps ++ fixedOps) ++ chainOps).AssignedFrom RegionOperation.Consumes
       self [magnitude.cell] := by
-    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    rw [RegionOperations.assignedFrom_append_iff]
     exact ⟨hprefix, hchain⟩
   simpa only [innerRegion, RegionCircuit.operations_bind,
     RegionCircuit.operations_pure, List.append_nil, List.append_assoc] using hall
+
+/-- Advice-column preconditions for `Short.innerRegion`. -/
+def innerAdviceColumnRequirements (cfg : Config) : Prop :=
+  cfg.superConfig.addConfig.xP = cfg.superConfig.addIncompleteConfig.xP ∧
+  cfg.superConfig.addConfig.yP = cfg.superConfig.addIncompleteConfig.yP ∧
+  cfg.superConfig.runningSumConfig.z = cfg.superConfig.window ∧
+  ColumnsDistinct
+    [cfg.superConfig.window, cfg.superConfig.addIncompleteConfig.xP,
+      cfg.superConfig.addIncompleteConfig.yP, cfg.superConfig.addIncompleteConfig.xQR,
+      cfg.superConfig.addIncompleteConfig.yQR, cfg.superConfig.u]
+
+theorem innerRegion_adviceWritesConsistent
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg)
+    (hadvice : innerAdviceColumnRequirements cfg) :
+    ((innerRegion B cfg offset magnitude).operations self).AdviceWritesConsistent self := by
+  obtain ⟨hxP, hyP, hzEq, hdist⟩ := hadvice
+  have hdist5 : ColumnsDistinct
+      [cfg.superConfig.addIncompleteConfig.xP, cfg.superConfig.addIncompleteConfig.yP,
+        cfg.superConfig.addIncompleteConfig.xQR, cfg.superConfig.addIncompleteConfig.yQR,
+        cfg.superConfig.u] := (List.nodup_cons.mp hdist).2
+  simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+    List.nodup_nil, not_false_eq_true, and_true] at hdist
+  obtain ⟨⟨hwx, hwy, hwxq, hwyq, hwu⟩, ⟨hxy, _, _, hxu⟩, ⟨_, _, hyu⟩, _, _⟩ := hdist
+  have hpwDist : ColumnsDistinct
+      [cfg.superConfig.addConfig.xP, cfg.superConfig.addConfig.yP, cfg.superConfig.u] := by
+    rw [hxP, hyP]
+    simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+      List.nodup_nil, not_false_eq_true, and_true]
+    exact ⟨⟨hxy, hxu⟩, hyu⟩
+  have hchainCons := MulFixed.windowChain_adviceWritesConsistent cfg.superConfig configured.1 self
+    hdist5 (processWindow B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude)
+    (fun w row => MulFixed.processWindow_adviceWritesConsistent B _ cfg.superConfig magnitude w row self hpwDist)
+    (fun w row => by simp [MulFixed.processWindow, circuit_norm, hxP, hyP])
+    (fun w row col r hm => by
+      rw [MulFixed.processWindow_adviceWrites, hxP, hyP] at hm
+      simp only [List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hm
+      rcases hm with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> tauto)
+    offset 22 (by norm_num)
+  have hdecCol : ∀ col r,
+      (col, r) ∈ (((copyDecompose 3 22).call cfg.superConfig.runningSumConfig offset ⟨magnitude⟩).operations self).adviceWrites →
+      col = cfg.superConfig.window := by
+    intro col r hm
+    rw [FormalRegionCircuit.call_operations] at hm
+    simp only [DecomposeRunningSum.copyDecompose, DecomposeRunningSum.body,
+      RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_copyAdvice,
+      operations_cellAt, operations_cellVec, operations_constrainConstant,
+      List.nil_append, List.append_nil, List.cons_append,
+      RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+      RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_assignAdvice,
+      RegionOperation.adviceWrites_constrainEqual, RegionOperation.adviceWrites_constrainConstant,
+      DecomposeRunningSum.enableLoop_adviceWrites, List.mem_cons,
+      Prod.mk.injEq] at hm
+    rcases hm with ⟨rfl, _⟩ | hm
+    · exact hzEq
+    · unfold DecomposeRunningSum.assignLoop at hm
+      rw [RegionCircuit.mem_forRange'_adviceWrites_iff] at hm
+      obtain ⟨i, hi⟩ := hm
+      simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_assignAdvice,
+        List.append_nil, RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_nil,
+        RegionOperation.adviceWrites_assignAdvice, List.mem_cons, List.not_mem_nil, or_false,
+        Prod.mk.injEq] at hi
+      rw [hi.1]; exact hzEq
+  have hchainCol : ∀ col r,
+      (col, r) ∈ ((windowChain cfg.superConfig
+        (processWindow B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude) offset 22).operations self).adviceWrites →
+      col ≠ cfg.superConfig.window := by
+    intro col r hm hcol
+    subst hcol
+    simp only [windowChain, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      operations_cellAt, List.append_nil,
+      RegionOperations.adviceWrites_append, List.mem_append, MulFixed.processWindow_adviceWrites,
+      hxP, hyP, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hm
+    rcases hm with (⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩) | (⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩) | hadd | hloop |
+        (⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩)
+    · exact hwx h
+    · exact hwy h
+    · exact hwu h
+    · exact hwx h
+    · exact hwy h
+    · exact hwu h
+    · rw [FormalRegionCircuit.call_operations] at hadd
+      simp only [AddIncomplete.add, circuit_norm, RegionOperations.adviceWrites,
+        RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+        List.nil_append, List.append_nil, List.mem_cons, List.not_mem_nil, or_false,
+        Prod.mk.injEq] at hadd
+      rcases hadd with ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩
+      · exact hwx h
+      · exact hwy h
+      · exact hwxq h
+      · exact hwyq h
+      · exact hwxq h
+      · exact hwyq h
+    · rw [RegionCircuit.mem_forRange'_adviceWrites_iff] at hloop
+      obtain ⟨i, hi⟩ := hloop
+      simp only [windowChainStep, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+        operations_cellAt, List.nil_append, List.append_nil,
+        RegionOperations.adviceWrites_append, List.mem_append, MulFixed.processWindow_adviceWrites,
+        hxP, hyP, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hi
+      rcases hi with (⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩) | hadd
+      · exact hwx h
+      · exact hwy h
+      · exact hwu h
+      · rw [FormalRegionCircuit.call_operations] at hadd
+        simp only [AddIncomplete.add, circuit_norm, RegionOperations.adviceWrites,
+          RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+          List.nil_append, List.append_nil, List.mem_cons, List.not_mem_nil, or_false,
+          Prod.mk.injEq] at hadd
+        rcases hadd with ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩ | ⟨h, _⟩
+        · exact hwx h
+        · exact hwy h
+        · exact hwxq h
+        · exact hwyq h
+        · exact hwxq h
+        · exact hwyq h
+    · exact hwx h
+    · exact hwy h
+    · exact hwu h
+  simp only [innerRegion, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    List.append_nil]
+  apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+    ((copyDecompose 3 22).call_adviceWritesConsistent cfg.superConfig.runningSumConfig
+      (@id ((copyDecompose 3 22).Configured cfg.superConfig.runningSumConfig)
+        (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 22)
+          (cfg.superConfig.runningSumConfig.qRangeCheck,
+            cfg.superConfig.runningSumConfig.z) {} ()))
+      trivial offset ⟨magnitude⟩ self)
+    (RegionOperations.adviceWritesConsistent_append_of_disjoint self
+      (MulFixed.fixedConstantsLoop_adviceWritesConsistent _ B cfg.superConfig offset 22 self)
+      hchainCons (by simp [MulFixed.fixedConstantsLoop_adviceWrites_eq_nil]))
+  rw [List.disjoint_left]
+  rintro ⟨col, r⟩ hl hr
+  have hw := hdecCol col r hl
+  have hr' := RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hr
+  simp only [RegionOperations.adviceWrites_append, MulFixed.fixedConstantsLoop_adviceWrites_eq_nil,
+    List.nil_append] at hr'
+  exact hchainCol col r hr' hw
 
 theorem innerRegion_msw_inputs_assigned
     (B : FixedBaseData) (cfg : Config) (offset : ℕ)
     (magnitude : AssignedCell Fp) (self : RegionIndex)
     (configured : innerKeygenRequirements.configLawful cfg)
-    (available : List Cell) :
+    (available : List Cell) (hmagnitude : magnitude.cell ∈ available) :
     let output := (innerRegion B cfg offset magnitude).output self
     output.acc.x.cell ∈
         ((innerRegion B cfg offset magnitude).operations self
@@ -522,18 +674,19 @@ theorem innerRegion_msw_inputs_assigned
   let fixedOps :=
     (fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig
       offset 22).operations self
-  have hchain := MulFixed.windowChain_copyCellsAssignedFrom
+  have hchain := MulFixed.windowChain_consumedCellsAssignedFrom
     cfg.superConfig configured.1 self
     (processWindow B (Ecc.MulFixed.Short.windowPoint B.point)
       cfg.superConfig magnitude)
-    (fun w row current => MulFixed.processWindow_copyCellsAssignedFrom
+    ((decomposeOps ++ fixedOps).assignedCellsAfter self available)
+    (fun w row avail havail => MulFixed.processWindow_consumedCellsAssignedFrom
       B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude
-        w row self current)
+        w row self avail
+        (havail _ (RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hmagnitude)))
     (fun w row current => MulFixed.processWindow_output_cells_assigned
       B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude
         w row self current)
     offset 22 (by norm_num)
-    ((decomposeOps ++ fixedOps).assignedCellsAfter self available)
   have chainOutput :
       (MulFixed.windowChain cfg.superConfig
         (processWindow B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude)
@@ -642,6 +795,7 @@ instance innerElab (B : FixedBaseData) :
       (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
         innerRegion B config offset input.alpha) where
   keygenRequirements := innerKeygenRequirements
+  adviceColumnRequirements := innerAdviceColumnRequirements
   registered configInput _ configured offset input region := by
     rcases input with ⟨alpha⟩
     simpa using innerRegion_keygenRegistered
@@ -674,10 +828,14 @@ instance innerElab (B : FixedBaseData) :
     intro configInput _ configured offset input self
     exact innerRegion_fixedAssignmentsAgree B configInput offset input.alpha self
       configured.2
-  copyCellsAssigned := by
+  consumedCellsAssigned := by
     intro configInput _ configured offset input self
-    exact innerRegion_copyCellsAssignedFrom
-      B configInput offset input.alpha self configured
+    simpa only [Configure.output_pure, RegionOperations.ConsumedCellsAssigned,
+      innerKeygenRequirements, KeygenRequirements.readRelativeCellsAt, List.map_nil,
+      List.append_nil] using
+      innerRegion_consumedCellsAssignedFrom B configInput offset input.alpha self configured
+  adviceWritesConsistent configInput _ configured hadvice offset input self :=
+    innerRegion_adviceWritesConsistent B configInput offset input.alpha self configured hadvice
 @[synthesis_summary_norm]
 theorem innerRegion_synthesisSummary_constantSiteCount
     (B : FixedBaseData) (cfg : Config) (offset : ℕ)
@@ -1544,7 +1702,7 @@ theorem mswRegion_keygenRegistered
         (List.mem_map_of_mem hcell)
   · keygen_registration
 
-theorem mswRegion_copyCellsAssignedFrom
+theorem mswRegion_consumedCellsAssignedFrom
     (cfg : Config) (acc mulB : Point (AssignedCell Fp))
     (sign z21 : AssignedCell Fp) (self : RegionIndex)
     (configured : Add.add.Configured cfg.superConfig.addConfig)
@@ -1553,52 +1711,121 @@ theorem mswRegion_copyCellsAssignedFrom
     (hmulBX : mulB.x.cell ∈ available) (hmulBY : mulB.y.cell ∈ available)
     (hsign : sign.cell ∈ available) (hz21 : z21.cell ∈ available) :
     ((mswRegion cfg acc mulB sign z21).operations self)
-      |>.CopyCellsAssignedFrom self available := by
+      |>.AssignedFrom RegionOperation.Consumes self available := by
   simp only [mswRegion, circuit_norm]
-  rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+  rw [RegionOperations.assignedFrom_append_iff]
   constructor
-  · apply Add.add.call_copyCellsAssignedFrom
+  · apply Add.add.call_consumedCellsAssignedFrom
       cfg.superConfig.addConfig configured 0 ⟨mulB, acc⟩ self
     intro cell hcell
-    rw [Add.add_inputCells] at hcell
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    simp only [FormalRegionCircuit.Configured.inputCells, FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt, Add.add, Add.addElaborated,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hcell
     rcases hcell with rfl | rfl | rfl | rfl
     · exact hmulBX
     · exact hmulBY
     · exact haccX
     · exact haccY
-  · keygen_registration
-    · exact Or.inr <| RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hsign
-    · exact Or.inr <| Or.inr <|
-        RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hz21
+  · have haddOut := Add.add_output_cells_assigned cfg.superConfig.addConfig 0 ⟨mulB, acc⟩ self
+      available
+    simp only [RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+      RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+      RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+      List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
+      false_implies, implies_true,
+      RegionOperation.assignedCells,
+      List.nil_append, List.singleton_append, true_and, and_true]
+    refine ⟨⟨[sign], witnessFunctionSupport_ofFExpr (.expr sign), fun c hc _ => by
+        simp only [List.mem_singleton] at hc; subst hc
+        exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hsign⟩,
+      ⟨Or.inl trivial, Or.inr (RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hsign)⟩,
+      ⟨[z21], witnessFunctionSupport_ofFExpr (.expr z21), fun c hc _ => by
+        simp only [List.mem_singleton] at hc; subst hc
+        exact Or.inr (RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hz21)⟩,
+      ⟨Or.inl trivial, Or.inr (Or.inr (RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hz21))⟩,
+      ⟨[sign, (Add.add.output cfg.superConfig.addConfig 0 ⟨mulB, acc⟩ self).y],
+        witnessFunctionSupport_yVarWit sign
+          (Add.add.output cfg.superConfig.addConfig 0 ⟨mulB, acc⟩ self).y,
+        fun c hc _ => by
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+          rcases hc with rfl | rfl
+          · exact Or.inr (Or.inr (RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hsign))
+          · exact Or.inr (Or.inr haddOut.2)⟩⟩
 
-theorem synthesize_copyCellsAssignedFrom
+theorem mswRegion_adviceWritesConsistent
+    (cfg : Config) (acc mulB : Point (AssignedCell Fp))
+    (sign z21 : AssignedCell Fp) (self : RegionIndex)
+    (configured : Add.add.Configured cfg.superConfig.addConfig)
+    (haddAdv : Add.add.elaborated.adviceColumnRequirements cfg.superConfig.addConfig)
+    (hrow1 : ColumnsDistinct
+      [cfg.superConfig.window, cfg.superConfig.u, cfg.superConfig.addConfig.yP,
+        cfg.superConfig.addConfig.xQR, cfg.superConfig.addConfig.yQR]) :
+    ((mswRegion cfg acc mulB sign z21).operations self).AdviceWritesConsistent self := by
+  simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+    List.nodup_nil, not_false_eq_true, and_true] at hrow1
+  obtain ⟨⟨hwu, hwy, hwxq, hwyq⟩, ⟨huy, huxq, huyq⟩, ⟨hyxq, hyyq⟩, _⟩ := hrow1
+  unfold mswRegion
+  rw [RegionCircuit.operations_bind]
+  apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+    (Add.add.call_adviceWritesConsistent cfg.superConfig.addConfig configured haddAdv 0 _ self)
+  · apply RegionOperations.AdviceWritesDistinct.toConsistent
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+      operations_copyAdvice, operations_enable, operations_assignAdvice,
+      List.nil_append, List.cons_append, RegionOperations.AdviceWritesDistinct,
+      RegionOperations.adviceWrites, RegionOperation.adviceWrites, List.flatMap_cons,
+      List.flatMap_nil, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+      Prod.mk.injEq, List.nodup_nil, not_false_eq_true, and_true]
+    exact ⟨⟨hwu, hwy⟩, huy⟩
+  · rw [List.disjoint_left]
+    rintro ⟨col, r⟩ hl hr
+    have hr' := RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hr
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+      operations_copyAdvice, operations_enable, operations_assignAdvice,
+      List.nil_append, List.cons_append, RegionOperations.adviceWrites,
+      RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil, List.mem_cons,
+      List.not_mem_nil, or_false, Prod.mk.injEq] at hr'
+    rw [FormalRegionCircuit.call_operations] at hl
+    simp only [Add.add, Add.addSynthesize, circuit_norm, RegionOperations.adviceWrites,
+      RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil, List.nil_append,
+      List.append_nil, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hl
+    rcases hr' with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
+      rcases hl with ⟨h, hr0⟩ | ⟨h, hr0⟩ | ⟨h, hr0⟩ | ⟨h, hr0⟩ | ⟨h, hr0⟩ | ⟨h, hr0⟩ |
+        ⟨h, hr0⟩ | ⟨h, hr0⟩ | ⟨h, hr0⟩ | ⟨h, hr0⟩ | ⟨h, hr0⟩
+    all_goals first
+      | omega
+      | exact hwxq h | exact hwyq h
+      | exact huxq h | exact huyq h
+      | exact hyxq h | exact hyyq h
+
+theorem synthesize_consumedCellsAssignedFrom
     (B : FixedBaseData) (cfg : Config) (input : Var Inputs Fp)
     (i : RegionIndex)
     (configuredIncomplete : AddIncomplete.add.Configured
       cfg.superConfig.addIncompleteConfig)
     (configuredAdd : Add.add.Configured cfg.superConfig.addConfig)
     (fixedColumnsLawful : cfg.superConfig.FixedColumnsLawful) :
-    ((synthesize B cfg input).operations i).CopyCellsAssigned
+    ((synthesize B cfg input).operations i).ConsumedCellsAssigned
       i [input.magnitude.cell, input.sign.cell] := by
   let innerBody := (innerRegion B cfg 0 input.magnitude).operations i
   let innerOutput := (innerRegion B cfg 0 input.magnitude).output i
   let afterInner := innerBody.assignedCellsAfter i
     [input.magnitude.cell, input.sign.cell]
-  have hinner : innerBody.CopyCellsAssignedFrom i
+  have hinner : innerBody.AssignedFrom RegionOperation.Consumes i
       [input.magnitude.cell, input.sign.cell] := by
-    apply (innerRegion_copyCellsAssignedFrom B cfg 0 input.magnitude i
+    apply (innerRegion_consumedCellsAssignedFrom B cfg 0 input.magnitude i
       ⟨configuredIncomplete, fixedColumnsLawful⟩).mono
     intro cell hcell
     simp only [List.mem_singleton] at hcell
     simp only [hcell, List.mem_cons, true_or]
   have hinputs := innerRegion_msw_inputs_assigned B cfg 0 input.magnitude i
     ⟨configuredIncomplete, fixedColumnsLawful⟩
-    [input.magnitude.cell, input.sign.cell]
+    [input.magnitude.cell, input.sign.cell] List.mem_cons_self
   have hmsw : ((mswRegion cfg innerOutput.acc innerOutput.mulB
       input.sign innerOutput.zs[21]).operations (i + 1))
-      |>.CopyCellsAssignedFrom (i + 1) afterInner := by
-    apply mswRegion_copyCellsAssignedFrom cfg innerOutput.acc innerOutput.mulB
+      |>.AssignedFrom RegionOperation.Consumes (i + 1) afterInner := by
+    apply mswRegion_consumedCellsAssignedFrom cfg innerOutput.acc innerOutput.mulB
       input.sign innerOutput.zs[21] (i + 1) configuredAdd afterInner
     · exact hinputs.1
     · exact hinputs.2.1
@@ -1608,12 +1835,12 @@ theorem synthesize_copyCellsAssignedFrom
         (by simp)
     · exact hinputs.2.2.2.2
   simp only [synthesize, Circuit.operations_bind, operations_assignRegion,
-    output_assignRegion, nextRegionIndex_assignRegion, List.singleton_append]
-  apply Operations.CopyCellsAssignedFrom.region
-  · exact hinner
-  apply Operations.CopyCellsAssignedFrom.region
-  · exact hmsw
-  · exact .nil (i + 2) _
+    output_assignRegion, nextRegionIndex_assignRegion, List.singleton_append,
+    Operations.ConsumedCellsAssigned]
+  rw [Operations.assignedFrom_region_iff]
+  refine ⟨hinner, ?_⟩
+  rw [Operations.assignedFrom_region_iff]
+  exact ⟨hmsw, .nil (i + 2) _⟩
 
 seal innerRegion in
 set_option linter.constructorNameAsVariable false in
@@ -1701,13 +1928,33 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
             Operations.loadedTableColumns]
         · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
             Operations.loadedTableColumns]
-      copyCellsAssigned := by
+      adviceColumnRequirements cfg :=
+        innerAdviceColumnRequirements cfg ∧
+        Add.add.elaborated.adviceColumnRequirements cfg.superConfig.addConfig ∧
+        ColumnsDistinct
+          [cfg.superConfig.window, cfg.superConfig.u, cfg.superConfig.addConfig.yP,
+            cfg.superConfig.addConfig.xQR, cfg.superConfig.addConfig.yQR]
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
         rcases hconfig with
           ⟨configuredIncomplete, configuredAdd, fixedColumnsLawful⟩
-        exact synthesize_copyCellsAssignedFrom B.toData
-          ((configure configInput).output counts) input i
-          configuredIncomplete configuredAdd fixedColumnsLawful }
+        simpa only [KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil] using
+          synthesize_consumedCellsAssignedFrom B.toData
+            ((configure configInput).output counts) input i
+            configuredIncomplete configuredAdd fixedColumnsLawful
+      adviceWritesConsistent := by
+        intro configInput counts hconfig hadvice input i
+        rcases hconfig with ⟨configuredIncomplete, configuredAdd, fixedColumnsLawful⟩
+        rcases hadvice with ⟨hinnerAdv, haddAdv, hrow1⟩
+        let cfg := (configure configInput).output counts
+        simp only [synthesize, Circuit.operations_bind, operations_assignRegion,
+          output_assignRegion, nextRegionIndex_assignRegion, List.singleton_append,
+          Operations.adviceWritesConsistentFrom_region_cons,
+          Operations.adviceWritesConsistentFrom_nil, and_true]
+        exact ⟨innerRegion_adviceWritesConsistent B.toData cfg 0 input.magnitude i
+            ⟨configuredIncomplete, fixedColumnsLawful⟩ hinnerAdv,
+          mswRegion_adviceWritesConsistent cfg _ _ input.sign _ (i + 1)
+            configuredAdd haddAdv hrow1⟩ }
 
   EnvAssumptions := EnvAssumptions
 
@@ -1773,8 +2020,7 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         = { x := AssignedCell.of (i₀ + 1) 1 cfg.superConfig.addConfig.xQR,
             y := AssignedCell.of (i₀ + 1) 1 cfg.superConfig.addConfig.yQR }
       from rfl] at hOutEq
-    simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-      Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hOutEq
+    simp only [circuit_norm, AssignedCell.eval_of_advice] at hOutEq
     -- the circuit's output cells
     obtain ⟨hOx, hOy⟩ := output_eq
     -- ── V is a 64-bit magnitude (the last-window bool check) ──

@@ -321,6 +321,30 @@ def uWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) : WitgenIR Fp 1
   .native fun env =>
     #v[((Vector.ofFn fun k : Fin 8 => B.u w k.val)[windowVal env alpha w]!)]
 
+@[witness_support]
+theorem witnessFunctionSupport_xPWit (tbl : ℕ → ℕ → Point Fp) (alpha : AssignedCell Fp) (w : ℕ) :
+    WitnessFunctionSupport [alpha] (programFunction (xPWit tbl alpha w)) := by
+  intro env₁ env₂ hagree
+  have hcell : readCell env₁ alpha = readCell env₂ alpha :=
+    hagree.cellValues alpha List.mem_cons_self
+  simp only [programFunction, xPWit, Witgen.WitgenIROver.eval, windowVal, hcell]
+
+@[witness_support]
+theorem witnessFunctionSupport_yPWit (tbl : ℕ → ℕ → Point Fp) (alpha : AssignedCell Fp) (w : ℕ) :
+    WitnessFunctionSupport [alpha] (programFunction (yPWit tbl alpha w)) := by
+  intro env₁ env₂ hagree
+  have hcell : readCell env₁ alpha = readCell env₂ alpha :=
+    hagree.cellValues alpha List.mem_cons_self
+  simp only [programFunction, yPWit, Witgen.WitgenIROver.eval, windowVal, hcell]
+
+@[witness_support]
+theorem witnessFunctionSupport_uWit (B : FixedBaseData) (alpha : AssignedCell Fp) (w : ℕ) :
+    WitnessFunctionSupport [alpha] (programFunction (uWit B alpha w)) := by
+  intro env₁ env₂ hagree
+  have hcell : readCell env₁ alpha = readCell env₂ alpha :=
+    hagree.cellValues alpha List.mem_cons_self
+  simp only [programFunction, uWit, Witgen.WitgenIROver.eval, windowVal, hcell]
+
 /-- One window row: enable the coords-check toggle gate (the coords gate for the running-sum
 wrappers, the full-width gate for `full_width`), then the 8 Lagrange coefficients and the `z`
 value into the fixed columns. -/
@@ -554,17 +578,48 @@ theorem fixedConstantsLoop_keygenRegistered
   unfold fixedConstantsWindow
   keygen_registration
 
+/-- Fixed-table loading assigns fixed cells and selectors and consumes no advice cells. -/
+@[keygen_norm, keygen_helper]
+theorem fixedConstantsLoop_consumedCellsAssignedFrom
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (offset numWindows : ℕ) (self : RegionIndex) (available : List Cell) :
+    ((fixedConstantsLoop toggle B cfg offset numWindows).operations self)
+      |>.AssignedFrom RegionOperation.Consumes self available := by
+  apply RegionCircuit.forRange'_assignedFrom_of_forall
+  intro i
+  unfold fixedConstantsWindow
+  keygen_registration
+
 /-- Fixed-table loading assigns cells and selectors but introduces no copy endpoints. -/
 @[keygen_norm, keygen_helper]
 theorem fixedConstantsLoop_copyCellsAssignedFrom
     (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
     (offset numWindows : ℕ) (self : RegionIndex) (available : List Cell) :
     ((fixedConstantsLoop toggle B cfg offset numWindows).operations self)
-      |>.CopyCellsAssignedFrom self available := by
-  apply RegionCircuit.forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-  intro i
-  unfold fixedConstantsWindow
-  keygen_registration
+      |>.CopyCellsAssignedFrom self available :=
+  ((RegionOperations.assignedFrom_consumes_iff self _ _).mp
+    (fixedConstantsLoop_consumedCellsAssignedFrom toggle B cfg offset numWindows self available)).1
+
+/-- Fixed-table loading performs no advice writes. -/
+@[keygen_norm, keygen_helper]
+theorem fixedConstantsLoop_adviceWrites_eq_nil
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (offset numWindows : ℕ) (self : RegionIndex) :
+    ((fixedConstantsLoop toggle B cfg offset numWindows).operations self).adviceWrites = [] := by
+  rw [List.eq_nil_iff_forall_not_mem]
+  rintro ⟨col, row⟩ hmem
+  obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRange'_adviceWrites_iff offset 1 numWindows _ self col row).mp hmem
+  simp [fixedConstantsWindow, circuit_norm, RegionOperations.adviceWrites,
+    RegionOperation.adviceWrites] at hi
+
+@[keygen_norm, keygen_helper]
+theorem fixedConstantsLoop_adviceWritesConsistent
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (offset numWindows : ℕ) (self : RegionIndex) :
+    ((fixedConstantsLoop toggle B cfg offset numWindows).operations self).AdviceWritesConsistent
+      self := by
+  apply RegionOperations.AdviceWritesDistinct.toConsistent
+  simp [RegionOperations.AdviceWritesDistinct, fixedConstantsLoop_adviceWrites_eq_nil]
 
 /-- Assigning the per-window fixed data requests no deferred constants. -/
 @[synthesis_summary_norm]
@@ -715,6 +770,35 @@ theorem processWindow_copyCellsAssignedFrom (B : FixedBaseData)
       |>.CopyCellsAssignedFrom self available := by
   simp only [processWindow, circuit_norm, keygen_norm, keygen_spine]
 
+/-- A window witness reads only `alpha`. -/
+@[keygen_norm, keygen_helper]
+theorem processWindow_consumedCellsAssignedFrom (B : FixedBaseData)
+    (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
+    (w row : ℕ) (self : RegionIndex) (available : List Cell)
+    (halpha : alpha.cell ∈ available) :
+    ((processWindow B table cfg alpha w row).operations self)
+      |>.AssignedFrom RegionOperation.Consumes self available := by
+  unfold processWindow
+  keygen_registration
+
+theorem processWindow_adviceWrites (B : FixedBaseData)
+    (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
+    (w row : ℕ) (self : RegionIndex) :
+    ((processWindow B table cfg alpha w row).operations self).adviceWrites =
+      [(cfg.addConfig.xP, row), (cfg.addConfig.yP, row), (cfg.u, row)] := by
+  simp [processWindow, circuit_norm, RegionOperations.adviceWrites, RegionOperation.adviceWrites]
+
+theorem processWindow_adviceWritesConsistent (B : FixedBaseData)
+    (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
+    (w row : ℕ) (self : RegionIndex)
+    (hdistinct : ColumnsDistinct [cfg.addConfig.xP, cfg.addConfig.yP, cfg.u]) :
+    ((processWindow B table cfg alpha w row).operations self).AdviceWritesConsistent self := by
+  apply RegionOperations.AdviceWritesDistinct.toConsistent
+  rw [RegionOperations.AdviceWritesDistinct, processWindow_adviceWrites]
+  simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+    List.nodup_nil, not_false_eq_true, and_true] at hdistinct
+  simp [List.nodup_cons, hdistinct]
+
 /-- Both coordinates returned by a window witness were assigned by that witness. -/
 theorem processWindow_output_cells_assigned (B : FixedBaseData)
     (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
@@ -764,27 +848,30 @@ def windowChain (cfg : Config)
   let accY ← cellAt cfg.addIncompleteConfig.yQR (offset + (numWindows - 1))
   return ({ x := accX, y := accY }, mulB)
 
-private theorem windowChainStep_copyCellsAssignedFrom
+private theorem windowChainStep_consumedCellsAssignedFrom
     (cfg : Config) (hconfigured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
     (self : RegionIndex)
     (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
-    (hprocess : ∀ w row available,
-      ((processW w row).operations self).CopyCellsAssignedFrom self available)
-    (hprocessOutput : ∀ w row available,
+    (available : List Cell)
+    (hprocess : ∀ w row avail,
+      (∀ c ∈ available, c ∈ avail) →
+      ((processW w row).operations self).AssignedFrom RegionOperation.Consumes self avail)
+    (hprocessOutput : ∀ w row avail,
       let output := (processW w row).output self
       output.x.cell ∈
-          ((processW w row).operations self).assignedCellsAfter self available ∧
+          ((processW w row).operations self).assignedCellsAfter self avail ∧
         output.y.cell ∈
-          ((processW w row).operations self).assignedCellsAfter self available)
-    (i row : ℕ) (available : List Cell)
-    (haccX : Cell.of self row cfg.addIncompleteConfig.xQR ∈ available)
-    (haccY : Cell.of self row cfg.addIncompleteConfig.yQR ∈ available) :
+          ((processW w row).operations self).assignedCellsAfter self avail)
+    (i row : ℕ) (avail : List Cell)
+    (havail : ∀ c ∈ available, c ∈ avail)
+    (haccX : Cell.of self row cfg.addIncompleteConfig.xQR ∈ avail)
+    (haccY : Cell.of self row cfg.addIncompleteConfig.yQR ∈ avail) :
     let operations := (windowChainStep cfg processW i row).operations self
-    operations.CopyCellsAssignedFrom self available ∧
+    operations.AssignedFrom RegionOperation.Consumes self avail ∧
       Cell.of self (row + 1) cfg.addIncompleteConfig.xQR ∈
-        operations.assignedCellsAfter self available ∧
+        operations.assignedCellsAfter self avail ∧
       Cell.of self (row + 1) cfg.addIncompleteConfig.yQR ∈
-        operations.assignedCellsAfter self available := by
+        operations.assignedCellsAfter self avail := by
   simp only [windowChainStep, circuit_norm]
   let processOperations := (processW (i + 2) row).operations self
   let processOutput := (processW (i + 2) row).output self
@@ -794,15 +881,18 @@ private theorem windowChainStep_copyCellsAssignedFrom
         AssignedCell.of self row cfg.addIncompleteConfig.yQR⟩⟩
   let addOperations :=
     (AddIncomplete.add.call cfg.addIncompleteConfig row addInput).operations self
-  have hprocessLaw := hprocess (i + 2) row available
-  have hout := hprocessOutput (i + 2) row available
-  have haddLaw : addOperations.CopyCellsAssignedFrom self
-      (processOperations.assignedCellsAfter self available) := by
-    apply AddIncomplete.add.call_copyCellsAssignedFrom
+  have hprocessLaw := hprocess (i + 2) row avail havail
+  have hout := hprocessOutput (i + 2) row avail
+  have haddLaw : addOperations.AssignedFrom RegionOperation.Consumes self
+      (processOperations.assignedCellsAfter self avail) := by
+    apply AddIncomplete.add.call_consumedCellsAssignedFrom
       cfg.addIncompleteConfig hconfigured row _ self
     intro cell hcell
-    rw [AddIncomplete.Configured.inputCells_eq] at hcell
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    simp only [FormalRegionCircuit.Configured.inputCells, FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt, AddIncomplete.add,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hcell
     rcases hcell with rfl | rfl | rfl | rfl
     · exact hout.1
     · exact hout.2
@@ -810,58 +900,61 @@ private theorem windowChainStep_copyCellsAssignedFrom
     · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ haccY
   have haddOutput := AddIncomplete.add_output_cells_assigned
     cfg.addIncompleteConfig row addInput
-      self (processOperations.assignedCellsAfter self available)
+      self (processOperations.assignedCellsAfter self avail)
   refine ⟨?_, ?_, ?_⟩
-  · rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+  · rw [RegionOperations.assignedFrom_append_iff]
     exact ⟨hprocessLaw, haddLaw⟩
   · rw [RegionOperations.assignedCellsAfter_append]
     exact haddOutput.1
   · rw [RegionOperations.assignedCellsAfter_append]
     exact haddOutput.2
 
-private theorem windowChainLoop_copyCellsAssignedFrom
+private theorem windowChainLoop_consumedCellsAssignedFrom
     (cfg : Config) (hconfigured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
     (self : RegionIndex)
     (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
-    (hprocess : ∀ w row available,
-      ((processW w row).operations self).CopyCellsAssignedFrom self available)
-    (hprocessOutput : ∀ w row available,
+    (available : List Cell)
+    (hprocess : ∀ w row avail,
+      (∀ c ∈ available, c ∈ avail) →
+      ((processW w row).operations self).AssignedFrom RegionOperation.Consumes self avail)
+    (hprocessOutput : ∀ w row avail,
       let output := (processW w row).output self
       output.x.cell ∈
-          ((processW w row).operations self).assignedCellsAfter self available ∧
+          ((processW w row).operations self).assignedCellsAfter self avail ∧
         output.y.cell ∈
-          ((processW w row).operations self).assignedCellsAfter self available)
-    (offset k : ℕ) (available : List Cell)
-    (haccX : Cell.of self (offset + 2) cfg.addIncompleteConfig.xQR ∈ available)
-    (haccY : Cell.of self (offset + 2) cfg.addIncompleteConfig.yQR ∈ available) :
-    RegionOperations.CopyCellsAssignedFrom self available
+          ((processW w row).operations self).assignedCellsAfter self avail)
+    (offset k : ℕ) (avail : List Cell)
+    (havail : ∀ c ∈ available, c ∈ avail)
+    (haccX : Cell.of self (offset + 2) cfg.addIncompleteConfig.xQR ∈ avail)
+    (haccY : Cell.of self (offset + 2) cfg.addIncompleteConfig.yQR ∈ avail) :
+    RegionOperations.AssignedFrom RegionOperation.Consumes self avail
         ((RegionCircuit.loopAux (fun i => offset + 2 + i * 1)
           (windowChainStep cfg processW) k).operations self) ∧
       Cell.of self (offset + 2 + k) cfg.addIncompleteConfig.xQR ∈
-        RegionOperations.assignedCellsAfter self available
+        RegionOperations.assignedCellsAfter self avail
           ((RegionCircuit.loopAux (fun i => offset + 2 + i * 1)
             (windowChainStep cfg processW) k).operations self) ∧
       Cell.of self (offset + 2 + k) cfg.addIncompleteConfig.yQR ∈
-        RegionOperations.assignedCellsAfter self available
+        RegionOperations.assignedCellsAfter self avail
           ((RegionCircuit.loopAux (fun i => offset + 2 + i * 1)
             (windowChainStep cfg processW) k).operations self) := by
   induction k with
   | zero =>
       simp only [RegionCircuit.loopAux, circuit_norm, Nat.add_zero]
-      exact ⟨RegionOperations.CopyCellsAssignedFrom.nil available,
-        haccX, haccY⟩
-  | succ k inductionHypothesis =>
-      have hstep := windowChainStep_copyCellsAssignedFrom cfg hconfigured self
-        processW hprocess hprocessOutput k (offset + 2 + k * 1)
-        (RegionOperations.assignedCellsAfter self available
+      exact ⟨RegionOperations.AssignedFrom.nil avail, haccX, haccY⟩
+  | succ k ih =>
+      have hstep := windowChainStep_consumedCellsAssignedFrom cfg hconfigured self
+        processW available hprocess hprocessOutput k (offset + 2 + k * 1)
+        (RegionOperations.assignedCellsAfter self avail
           ((RegionCircuit.loopAux (fun i => offset + 2 + i * 1)
             (windowChainStep cfg processW) k).operations self))
-        (by simpa only [Nat.mul_one] using inductionHypothesis.2.1)
-        (by simpa only [Nat.mul_one] using inductionHypothesis.2.2)
+        (fun c hc => RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (havail c hc))
+        (by simpa only [Nat.mul_one] using ih.2.1)
+        (by simpa only [Nat.mul_one] using ih.2.2)
       rw [RegionCircuit.loopAux_operations_succ]
       refine ⟨?_, ?_, ?_⟩
-      · rw [RegionOperations.copyCellsAssignedFrom_append_iff]
-        exact ⟨inductionHypothesis.1, hstep.1⟩
+      · rw [RegionOperations.assignedFrom_append_iff]
+        exact ⟨ih.1, hstep.1⟩
       · rw [RegionOperations.assignedCellsAfter_append]
         simpa only [Nat.mul_one, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm]
           using hstep.2.1
@@ -869,24 +962,25 @@ private theorem windowChainLoop_copyCellsAssignedFrom
         simpa only [Nat.mul_one, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm]
           using hstep.2.2
 
-/-- Copy endpoints in the shared window chain are assigned by the chain itself or
-provided as input to its per-window witness program. -/
-theorem windowChain_copyCellsAssignedFrom
+/-- Consumed (copied and read) cells in the shared window chain are assigned before use whenever
+the per-window witness program consumes only `available`. -/
+theorem windowChain_consumedCellsAssignedFrom
     (cfg : Config) (hconfigured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
     (self : RegionIndex)
     (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
-    (hprocess : ∀ w row available,
-      ((processW w row).operations self).CopyCellsAssignedFrom self available)
-    (hprocessOutput : ∀ w row available,
+    (available : List Cell)
+    (hprocess : ∀ w row avail,
+      (∀ c ∈ available, c ∈ avail) →
+      ((processW w row).operations self).AssignedFrom RegionOperation.Consumes self avail)
+    (hprocessOutput : ∀ w row avail,
       let output := (processW w row).output self
       output.x.cell ∈
-          ((processW w row).operations self).assignedCellsAfter self available ∧
+          ((processW w row).operations self).assignedCellsAfter self avail ∧
         output.y.cell ∈
-          ((processW w row).operations self).assignedCellsAfter self available)
-    (offset numWindows : ℕ) (hnumWindows : 3 ≤ numWindows)
-    (available : List Cell) :
+          ((processW w row).operations self).assignedCellsAfter self avail)
+    (offset numWindows : ℕ) (hnumWindows : 3 ≤ numWindows) :
     let chain := windowChain cfg processW offset numWindows
-    (chain.operations self).CopyCellsAssignedFrom self available ∧
+    (chain.operations self).AssignedFrom RegionOperation.Consumes self available ∧
       (chain.output self).1.x.cell ∈
         (chain.operations self).assignedCellsAfter self available ∧
       (chain.output self).1.y.cell ∈
@@ -907,32 +1001,33 @@ theorem windowChain_copyCellsAssignedFrom
       (windowChainStep cfg processW)).operations self
   let lastOps :=
     (processW (numWindows - 1) (offset + (numWindows - 1))).operations self
-  have h0 := hprocess 0 offset available
+  have h0 := hprocess 0 offset available (fun _ h => h)
   have hout0 := hprocessOutput 0 offset available
   have h1 := hprocess 1 (offset + 1) (op0.assignedCellsAfter self available)
-  have hout1 := hprocessOutput 1 (offset + 1)
-    (op0.assignedCellsAfter self available)
-  have h01 : (op0 ++ op1).CopyCellsAssignedFrom self available := by
-    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    (fun c hc => RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hc)
+  have hout1 := hprocessOutput 1 (offset + 1) (op0.assignedCellsAfter self available)
+  have h01 : (op0 ++ op1).AssignedFrom RegionOperation.Consumes self available := by
+    rw [RegionOperations.assignedFrom_append_iff]
     exact ⟨h0, h1⟩
-  have hadd : addOps.CopyCellsAssignedFrom self
+  have hadd : addOps.AssignedFrom RegionOperation.Consumes self
       ((op0 ++ op1).assignedCellsAfter self available) := by
-    apply AddIncomplete.add.call_copyCellsAssignedFrom
+    apply AddIncomplete.add.call_consumedCellsAssignedFrom
       cfg.addIncompleteConfig hconfigured (offset + 1) input self
     intro cell hcell
-    rw [AddIncomplete.Configured.inputCells_eq] at hcell
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    simp only [FormalRegionCircuit.Configured.inputCells, FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt, AddIncomplete.add,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hcell
     rcases hcell with rfl | rfl | rfl | rfl
-    · rw [RegionOperations.assignedCellsAfter_append]
-      exact hout1.1
-    · rw [RegionOperations.assignedCellsAfter_append]
-      exact hout1.2
+    · rw [RegionOperations.assignedCellsAfter_append]; exact hout1.1
+    · rw [RegionOperations.assignedCellsAfter_append]; exact hout1.2
     · rw [RegionOperations.assignedCellsAfter_append]
       exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hout0.1
     · rw [RegionOperations.assignedCellsAfter_append]
       exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hout0.2
-  have h01add : ((op0 ++ op1) ++ addOps).CopyCellsAssignedFrom self available := by
-    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+  have h01add : ((op0 ++ op1) ++ addOps).AssignedFrom RegionOperation.Consumes self available := by
+    rw [RegionOperations.assignedFrom_append_iff]
     exact ⟨h01, hadd⟩
   have haddOutput := AddIncomplete.add_output_cells_assigned
     cfg.addIncompleteConfig (offset + 1) input self
@@ -945,9 +1040,10 @@ theorem windowChain_copyCellsAssignedFrom
     rw [AddIncomplete.add.elaborated.output_eq]
     simp only [AddIncomplete.add, circuit_norm]
   rw [outputEq] at haddOutput
-  have hloop := windowChainLoop_copyCellsAssignedFrom cfg hconfigured self
-    processW hprocess hprocessOutput offset (numWindows - 3)
+  have hloop := windowChainLoop_consumedCellsAssignedFrom cfg hconfigured self
+    processW available hprocess hprocessOutput offset (numWindows - 3)
     (((op0 ++ op1) ++ addOps).assignedCellsAfter self available)
+    (fun c hc => RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hc)
     (by
       rw [RegionOperations.assignedCellsAfter_append]
       simpa only [addOps, AssignedCell.of_cell] using haddOutput.1)
@@ -955,17 +1051,18 @@ theorem windowChain_copyCellsAssignedFrom
       rw [RegionOperations.assignedCellsAfter_append]
       simpa only [addOps, AssignedCell.of_cell] using haddOutput.2)
   have hprefix : (((op0 ++ op1) ++ addOps) ++ loopOps)
-      |>.CopyCellsAssignedFrom self available := by
-    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+      |>.AssignedFrom RegionOperation.Consumes self available := by
+    rw [RegionOperations.assignedFrom_append_iff]
     exact ⟨h01add, hloop.1⟩
   have hlast := hprocess (numWindows - 1) (offset + (numWindows - 1))
     ((((op0 ++ op1) ++ addOps) ++ loopOps).assignedCellsAfter self available)
+    (fun c hc => RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hc)
   have hlastOutput := hprocessOutput
     (numWindows - 1) (offset + (numWindows - 1))
     ((((op0 ++ op1) ++ addOps) ++ loopOps).assignedCellsAfter self available)
   have hall : ((((op0 ++ op1) ++ addOps) ++ loopOps) ++ lastOps)
-      |>.CopyCellsAssignedFrom self available := by
-    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+      |>.AssignedFrom RegionOperation.Consumes self available := by
+    rw [RegionOperations.assignedFrom_append_iff]
     exact ⟨hprefix, hlast⟩
   have hlastRow : offset + 2 + (numWindows - 3) =
       offset + (numWindows - 1) := by omega
@@ -989,6 +1086,269 @@ theorem windowChain_copyCellsAssignedFrom
       RegionOperations.assignedCellsAfter_append] using hlastOutput.1
   · simpa only [windowChain, circuit_norm,
       RegionOperations.assignedCellsAfter_append] using hlastOutput.2
+
+private theorem addIncomplete_adviceWrites (cfg : AddIncomplete.Config)
+    (row : ℕ) (input : Var AddIncomplete.Inputs Fp) (self : RegionIndex) :
+    ((AddIncomplete.add.call cfg row input).operations self).adviceWrites =
+      [(cfg.xP, row), (cfg.yP, row), (cfg.xQR, row), (cfg.yQR, row),
+        (cfg.xQR, row + 1), (cfg.yQR, row + 1)] := by
+  rw [FormalRegionCircuit.call_operations]
+  simp [AddIncomplete.add, circuit_norm, RegionOperations.adviceWrites,
+    RegionOperation.adviceWrites]
+
+private theorem addIncomplete_nonSelfCopyAdviceWrites_selfP (cfg : AddIncomplete.Config)
+    (row : ℕ) (q : Point (AssignedCell Fp)) (self : RegionIndex) :
+    ∀ col r,
+      (col, r) ∈
+        (((AddIncomplete.add.call cfg row
+          ⟨{ x := AssignedCell.of self row cfg.xP, y := AssignedCell.of self row cfg.yP }, q⟩).operations self).nonSelfCopyAdviceWrites self) →
+      (col = cfg.xQR ∧ r = row) ∨ (col = cfg.yQR ∧ r = row) ∨
+      (col = cfg.xQR ∧ r = row + 1) ∨ (col = cfg.yQR ∧ r = row + 1) := by
+  intro col r hmem
+  rw [FormalRegionCircuit.call_operations] at hmem
+  simp only [AddIncomplete.add, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_enable, operations_copyAdvice, operations_assignAdvice,
+    List.nil_append, List.append_nil, List.cons_append,
+    RegionOperations.nonSelfCopyAdviceWrites_cons, RegionOperations.nonSelfCopyAdviceWrites_nil,
+    RegionOperation.nonSelfCopyAdviceWrites_enableGate,
+    RegionOperation.nonSelfCopyAdviceWrites_constrainEqual,
+    List.mem_append] at hmem
+  have hscX : RegionOperation.isSelfCopy (F := Fp) self
+      (.assignAdvice cfg.xP row (.ofFExpr (.expr (AssignedCell.of self row cfg.xP)))) = true := by
+    simp [RegionOperation.isSelfCopy, Witgen.WitgenIROver.ofFExpr, AssignedCell.of_cell]
+  have hscY : RegionOperation.isSelfCopy (F := Fp) self
+      (.assignAdvice cfg.yP row (.ofFExpr (.expr (AssignedCell.of self row cfg.yP)))) = true := by
+    simp [RegionOperation.isSelfCopy, Witgen.WitgenIROver.ofFExpr, AssignedCell.of_cell]
+  simp only [RegionOperation.nonSelfCopyAdviceWrites, hscX, hscY, ↓reduceIte,
+    List.not_mem_nil, false_or] at hmem
+  rcases hmem with h1 | h2 | h3 | h4
+  · split at h1 <;> simp_all
+  · split at h2 <;> simp_all
+  · split at h3 <;> simp_all
+  · split at h4 <;> simp_all
+
+private theorem addIncomplete_nonSelfCopyAdviceWrites_selfPQ (cfg : AddIncomplete.Config)
+    (row : ℕ) (self : RegionIndex) :
+    ∀ col r,
+      (col, r) ∈
+        (((AddIncomplete.add.call cfg row
+          ⟨{ x := AssignedCell.of self row cfg.xP, y := AssignedCell.of self row cfg.yP },
+            { x := AssignedCell.of self row cfg.xQR, y := AssignedCell.of self row cfg.yQR }⟩).operations self).nonSelfCopyAdviceWrites self) →
+      (col = cfg.xQR ∧ r = row + 1) ∨ (col = cfg.yQR ∧ r = row + 1) := by
+  intro col r hmem
+  rw [FormalRegionCircuit.call_operations] at hmem
+  simp only [AddIncomplete.add, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_enable, operations_copyAdvice, operations_assignAdvice,
+    List.nil_append, List.append_nil, List.cons_append,
+    RegionOperations.nonSelfCopyAdviceWrites_cons, RegionOperations.nonSelfCopyAdviceWrites_nil,
+    RegionOperation.nonSelfCopyAdviceWrites_enableGate,
+    RegionOperation.nonSelfCopyAdviceWrites_constrainEqual,
+    List.mem_append] at hmem
+  have hscX : RegionOperation.isSelfCopy (F := Fp) self
+      (.assignAdvice cfg.xP row (.ofFExpr (.expr (AssignedCell.of self row cfg.xP)))) = true := by
+    simp [RegionOperation.isSelfCopy, Witgen.WitgenIROver.ofFExpr, AssignedCell.of_cell]
+  have hscY : RegionOperation.isSelfCopy (F := Fp) self
+      (.assignAdvice cfg.yP row (.ofFExpr (.expr (AssignedCell.of self row cfg.yP)))) = true := by
+    simp [RegionOperation.isSelfCopy, Witgen.WitgenIROver.ofFExpr, AssignedCell.of_cell]
+  have hscQX : RegionOperation.isSelfCopy (F := Fp) self
+      (.assignAdvice cfg.xQR row (.ofFExpr (.expr (AssignedCell.of self row cfg.xQR)))) = true := by
+    simp [RegionOperation.isSelfCopy, Witgen.WitgenIROver.ofFExpr, AssignedCell.of_cell]
+  have hscQY : RegionOperation.isSelfCopy (F := Fp) self
+      (.assignAdvice cfg.yQR row (.ofFExpr (.expr (AssignedCell.of self row cfg.yQR)))) = true := by
+    simp [RegionOperation.isSelfCopy, Witgen.WitgenIROver.ofFExpr, AssignedCell.of_cell]
+  simp only [RegionOperation.nonSelfCopyAdviceWrites, hscX, hscY, hscQX, hscQY, ↓reduceIte,
+    List.not_mem_nil, false_or] at hmem
+  rcases hmem with h1 | h2
+  · split at h1 <;> simp_all
+  · split at h2 <;> simp_all
+
+/-- Self-copy-consistent advice writes for `windowChain`, handling both the per-window `xP`/`yP`
+self-copies into `AddIncomplete.add` and the chained `xQR`/`yQR` accumulator self-copies. -/
+theorem windowChain_adviceWritesConsistent
+    (cfg : Config) (hconfigured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
+    (self : RegionIndex)
+    (hdistinct : ColumnsDistinct
+      [cfg.addIncompleteConfig.xP, cfg.addIncompleteConfig.yP,
+        cfg.addIncompleteConfig.xQR, cfg.addIncompleteConfig.yQR, cfg.u])
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (hprocessCons : ∀ w row, ((processW w row).operations self).AdviceWritesConsistent self)
+    (hprocessOut : ∀ w row, (processW w row).output self =
+      { x := AssignedCell.of self row cfg.addIncompleteConfig.xP,
+        y := AssignedCell.of self row cfg.addIncompleteConfig.yP })
+    (hprocessWrites : ∀ w row col r,
+      (col, r) ∈ ((processW w row).operations self).adviceWrites →
+      r = row ∧ (col = cfg.addIncompleteConfig.xP ∨ col = cfg.addIncompleteConfig.yP ∨ col = cfg.u))
+    (offset numWindows : ℕ) (hnumWindows : 3 ≤ numWindows) :
+    ((windowChain cfg processW offset numWindows).operations self).AdviceWritesConsistent self := by
+  simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false, not_or,
+    List.nodup_nil, not_false_eq_true, and_true] at hdistinct
+  obtain ⟨⟨hxy, hxxq, hxyq, hxu⟩, ⟨hyxq, hyyq, hyu⟩, ⟨hxqyq, hxqu⟩, hyqu⟩ := hdistinct
+  have haddReq : AddIncomplete.add.elaborated.adviceColumnRequirements cfg.addIncompleteConfig :=
+    ⟨hxy, hxxq, hxyq, hyxq, hyyq, hxqyq⟩
+  have hstepCons : ∀ i row,
+      ((windowChainStep cfg processW i row).operations self).AdviceWritesConsistent self := by
+    intro i row
+    simp only [windowChainStep, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      operations_cellAt, output_cellAt, List.nil_append, List.append_nil]
+    apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+      (hprocessCons (i + 2) row)
+      (AddIncomplete.add.call_adviceWritesConsistent cfg.addIncompleteConfig hconfigured haddReq
+        row _ self)
+    rw [List.disjoint_left]
+    rintro ⟨col, r⟩ hl hr
+    have hpw := hprocessWrites (i + 2) row col r hl
+    rw [hprocessOut (i + 2) row] at hr
+    have hadd := addIncomplete_nonSelfCopyAdviceWrites_selfPQ cfg.addIncompleteConfig row self
+      col r hr
+    rcases hadd with ⟨_, hr'⟩ | ⟨_, hr'⟩ <;> omega
+  have hstepWrites : ∀ i row col r,
+      (col, r) ∈ ((windowChainStep cfg processW i row).operations self).adviceWrites →
+      (r = row ∧ (col = cfg.addIncompleteConfig.xP ∨ col = cfg.addIncompleteConfig.yP ∨
+          col = cfg.u ∨ col = cfg.addIncompleteConfig.xQR ∨ col = cfg.addIncompleteConfig.yQR)) ∨
+      (r = row + 1 ∧ (col = cfg.addIncompleteConfig.xQR ∨ col = cfg.addIncompleteConfig.yQR)) := by
+    intro i row col r hm
+    simp only [windowChainStep, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      operations_cellAt, List.nil_append, List.append_nil,
+      RegionOperations.adviceWrites_append, List.mem_append, addIncomplete_adviceWrites,
+      List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hm
+    rcases hm with hpw | (⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩)
+    · obtain ⟨hr, hc⟩ := hprocessWrites (i + 2) row col r hpw
+      exact Or.inl ⟨hr, by tauto⟩
+    · exact Or.inl ⟨rfl, Or.inl rfl⟩
+    · exact Or.inl ⟨rfl, Or.inr (Or.inl rfl)⟩
+    · exact Or.inl ⟨rfl, Or.inr (Or.inr (Or.inr (Or.inl rfl)))⟩
+    · exact Or.inl ⟨rfl, Or.inr (Or.inr (Or.inr (Or.inr rfl)))⟩
+    · exact Or.inr ⟨rfl, Or.inl rfl⟩
+    · exact Or.inr ⟨rfl, Or.inr rfl⟩
+  have hstepNSC : ∀ i row col r,
+      (col, r) ∈ ((windowChainStep cfg processW i row).operations self).nonSelfCopyAdviceWrites self →
+      (r = row ∧ (col = cfg.addIncompleteConfig.xP ∨ col = cfg.addIncompleteConfig.yP ∨
+          col = cfg.u)) ∨
+      (r = row + 1 ∧ (col = cfg.addIncompleteConfig.xQR ∨ col = cfg.addIncompleteConfig.yQR)) := by
+    intro i row col r hm
+    simp only [windowChainStep, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      operations_cellAt, List.nil_append, List.append_nil,
+      RegionOperations.nonSelfCopyAdviceWrites_append, List.mem_append] at hm
+    rcases hm with hpw | hadd
+    · exact Or.inl (hprocessWrites (i + 2) row col r
+        (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hpw))
+    · rw [hprocessOut (i + 2) row] at hadd
+      rcases addIncomplete_nonSelfCopyAdviceWrites_selfPQ cfg.addIncompleteConfig row self
+        col r hadd with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+      · exact Or.inr ⟨rfl, Or.inl rfl⟩
+      · exact Or.inr ⟨rfl, Or.inr rfl⟩
+  have hloopCons :
+      ((RegionCircuit.forRange' (offset + 2) 1 (numWindows - 3)
+        (windowChainStep cfg processW)).operations self).AdviceWritesConsistent self := by
+    apply RegionCircuit.forRange'_adviceWritesConsistent_of_disjoint
+    · intro i
+      exact hstepCons i.val (offset + 2 + i.val * 1)
+    · intro i j hij
+      rw [List.disjoint_left]
+      rintro ⟨col, r⟩ hi hj
+      have hbi := hstepWrites i.val (offset + 2 + i.val * 1) col r hi
+      have hbj := hstepNSC j.val (offset + 2 + j.val * 1) col r hj
+      rcases hbi with ⟨hri, _⟩ | ⟨hri, hci⟩ <;> rcases hbj with ⟨hrj, hcj⟩ | ⟨hrj, _⟩
+      · omega
+      · omega
+      · rcases hci with rfl | rfl <;> rcases hcj with h | h | h
+        · exact hxxq h.symm
+        · exact hyxq h.symm
+        · exact hxqu h
+        · exact hxyq h.symm
+        · exact hyyq h.symm
+        · exact hyqu h
+      · omega
+  simp only [windowChain, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_cellAt, List.append_nil]
+  apply RegionOperations.adviceWritesConsistent_append_of_disjoint self (hprocessCons 0 offset)
+  · apply RegionOperations.adviceWritesConsistent_append_of_disjoint self (hprocessCons 1 (offset + 1))
+    · apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+        (AddIncomplete.add.call_adviceWritesConsistent cfg.addIncompleteConfig hconfigured haddReq
+          (offset + 1) _ self)
+      · apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+          hloopCons (hprocessCons (numWindows - 1) (offset + (numWindows - 1)))
+        rw [List.disjoint_left]
+        rintro ⟨col, r⟩ hl hr
+        obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRange'_adviceWrites_iff (offset + 2) 1 (numWindows - 3)
+          (windowChainStep cfg processW) self col r).mp hl
+        have hbi := hstepWrites i.val (offset + 2 + i.val * 1) col r hi
+        have hlast := hprocessWrites (numWindows - 1) (offset + (numWindows - 1)) col r
+          (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hr)
+        rcases hbi with ⟨hri, _⟩ | ⟨hri, hci⟩
+        · omega
+        · rcases hci with rfl | rfl <;> rcases hlast.2 with h | h | h
+          · exact hxxq h.symm
+          · exact hyxq h.symm
+          · exact hxqu h
+          · exact hxyq h.symm
+          · exact hyyq h.symm
+          · exact hyqu h
+      · rw [List.disjoint_left]
+        rintro ⟨col, r⟩ hl hr
+        rw [addIncomplete_adviceWrites] at hl
+        simp only [RegionOperations.nonSelfCopyAdviceWrites_append, List.mem_append] at hr
+        simp only [List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hl
+        rcases hr with hloop | hlast
+        · obtain ⟨j, hj⟩ := (RegionCircuit.mem_forRange'_nonSelfCopyAdviceWrites_iff (offset + 2) 1
+            (numWindows - 3) (windowChainStep cfg processW) self col r).mp hloop
+          have hbj := hstepNSC j.val (offset + 2 + j.val * 1) col r hj
+          rcases hl with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
+            rcases hbj with ⟨hrj, hcj⟩ | ⟨hrj, _⟩
+          all_goals first | omega | (rcases hcj with h | h | h <;> first
+            | exact hxxq h.symm | exact hyxq h.symm | exact hxqu h
+            | exact hxyq h.symm | exact hyyq h.symm | exact hyqu h)
+        · have hlw := hprocessWrites (numWindows - 1) (offset + (numWindows - 1)) col r
+            (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hlast)
+          rcases hl with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+          all_goals first | omega | (rcases hlw.2 with h | h | h <;> first
+            | exact hxxq h.symm | exact hyxq h.symm | exact hxqu h
+            | exact hxyq h.symm | exact hyyq h.symm | exact hyqu h)
+    · rw [List.disjoint_left]
+      rintro ⟨col, r⟩ hl hr
+      have h1 := hprocessWrites 1 (offset + 1) col r hl
+      simp only [RegionOperations.nonSelfCopyAdviceWrites_append, List.mem_append] at hr
+      rcases hr with hadd | hloop | hlast
+      · rw [hprocessOut 1 (offset + 1)] at hadd
+        have ha := addIncomplete_nonSelfCopyAdviceWrites_selfP cfg.addIncompleteConfig (offset + 1)
+          ((processW 0 offset).output self) self col r hadd
+        rcases ha with ⟨rfl, _⟩ | ⟨rfl, _⟩ | ⟨_, hr'⟩ | ⟨_, hr'⟩
+        · rcases h1.2 with h | h | h
+          · exact hxxq h.symm
+          · exact hyxq h.symm
+          · exact hxqu h
+        · rcases h1.2 with h | h | h
+          · exact hxyq h.symm
+          · exact hyyq h.symm
+          · exact hyqu h
+        · omega
+        · omega
+      · obtain ⟨j, hj⟩ := (RegionCircuit.mem_forRange'_nonSelfCopyAdviceWrites_iff (offset + 2) 1
+          (numWindows - 3) (windowChainStep cfg processW) self col r).mp hloop
+        have hbj := hstepNSC j.val (offset + 2 + j.val * 1) col r hj
+        rcases hbj with ⟨hrj, _⟩ | ⟨hrj, _⟩ <;> omega
+      · have hlw := hprocessWrites (numWindows - 1) (offset + (numWindows - 1)) col r
+          (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hlast)
+        omega
+  · rw [List.disjoint_left]
+    rintro ⟨col, r⟩ hl hr
+    have h0 := hprocessWrites 0 offset col r hl
+    simp only [RegionOperations.nonSelfCopyAdviceWrites_append, List.mem_append] at hr
+    rcases hr with h1 | hadd | hloop | hlast
+    · have h1w := hprocessWrites 1 (offset + 1) col r
+        (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self h1)
+      omega
+    · rw [hprocessOut 1 (offset + 1)] at hadd
+      have ha := addIncomplete_nonSelfCopyAdviceWrites_selfP cfg.addIncompleteConfig (offset + 1)
+        ((processW 0 offset).output self) self col r hadd
+      rcases ha with ⟨_, hr'⟩ | ⟨_, hr'⟩ | ⟨_, hr'⟩ | ⟨_, hr'⟩ <;> omega
+    · obtain ⟨j, hj⟩ := (RegionCircuit.mem_forRange'_nonSelfCopyAdviceWrites_iff (offset + 2) 1
+        (numWindows - 3) (windowChainStep cfg processW) self col r).mp hloop
+      have hbj := hstepNSC j.val (offset + 2 + j.val * 1) col r hj
+      rcases hbj with ⟨hrj, _⟩ | ⟨hrj, _⟩ <;> omega
+    · have hlw := hprocessWrites (numWindows - 1) (offset + (numWindows - 1)) col r
+        (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hlast)
+      omega
 
 @[synthesis_summary_norm]
 theorem windowChainStep_synthesisSummary_eq

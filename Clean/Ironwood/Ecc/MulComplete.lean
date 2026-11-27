@@ -328,6 +328,40 @@ theorem zWit_eval (z : AssignedCell Fp)
   rw [hbv]
   simp only [readCell, AssignedCell.eval]
 
+@[witness_support]
+theorem witnessFunctionSupport_yPWit (baseY : AssignedCell Fp)
+    (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (w iter : ℕ) :
+    WitnessFunctionSupport (baseY :: Witgen.valueBuilderReads (value := field) alpha)
+      (programFunction (yPWit baseY (kBitWindowProg alpha w) iter)) := by
+  intro env₁ env₂ hagree
+  simp only [programFunction, yPWit_eval _ _ _ _ (by omega), ebitsVal_kBitWindowProg]
+  have hby : readCell env₁ baseY = readCell env₂ baseY := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using
+      hagree.cellValues baseY List.mem_cons_self
+  have ha : Witgen.MOver.eval (value := field) env₁ alpha =
+      Witgen.MOver.eval (value := field) env₂ alpha :=
+    Witgen.valueBuilderReads_eval (value := field) alpha env₁ env₂
+      (fun v hv => hagree.cellValues v (List.mem_cons_of_mem _ hv))
+      rfl rfl hagree.hints
+  rw [hby, ha]
+
+@[witness_support]
+theorem witnessFunctionSupport_zWit (z : AssignedCell Fp)
+    (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) (w iter : ℕ) :
+    WitnessFunctionSupport (z :: Witgen.valueBuilderReads (value := field) alpha)
+      (programFunction (zWit z (kBitWindowProg alpha w) iter)) := by
+  intro env₁ env₂ hagree
+  simp only [programFunction, zWit_eval _ _ _ _ (by omega), ebitsVal_kBitWindowProg]
+  have hz : readCell env₁ z = readCell env₂ z := by
+    simpa only [readCell, Witgen.WitgenEnv.readVar] using
+      hagree.cellValues z List.mem_cons_self
+  have ha : Witgen.MOver.eval (value := field) env₁ alpha =
+      Witgen.MOver.eval (value := field) env₂ alpha :=
+    Witgen.valueBuilderReads_eval (value := field) alpha env₁ env₂
+      (fun v hv => hagree.cellValues v (List.mem_cons_of_mem _ hv))
+      rfl rfl hagree.hints
+  rw [hz, ha]
+
 /-- The honest running-sum step, in the `RoundInvariant` shape. -/
 private theorem zRunValue_step (z : Fp) (bits : BitsHint) (j : ℕ) :
     zRunValue z bits j
@@ -433,43 +467,275 @@ theorem roundSynthesize_lookupSelectorsAnchoredBy
     | (apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
        simp only [circuit_norm, RegionOperation.IsNotLookup])
 
-theorem roundSynthesize_copyCellsAssigned
+theorem roundSynthesize_consumedCellsAssigned
     (w iter : ℕ) (cfg : Config) (configured : Add.add.Configured cfg.addConfig)
     (offset : ℕ) (input : Var RoundInputs Fp) (region : RegionIndex) :
     ((roundSynthesize w iter cfg offset input).operations region)
-      |>.CopyCellsAssigned region
-        [input.base.x.cell, input.base.y.cell,
-          input.acc.x.cell, input.acc.y.cell] := by
+      |>.ConsumedCellsAssigned region
+        (([input.base.x.cell, input.base.y.cell, input.acc.x.cell, input.acc.y.cell] ++
+          (input.z.cell ::
+            (Witgen.valueBuilderReads (value := field) input.alpha).map AssignedCell.cell)) ++
+          []) := by
   simp only [roundSynthesize, RegionCircuit.operations_bind,
-    RegionCircuit.operations_pure, RegionOperations.CopyCellsAssigned,
-    RegionOperations.copyCellsAssignedFrom_append_iff]
-  repeat' apply And.intro
-  all_goals first
-    | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]; done)
-    | keygen_registration
-  all_goals
-    apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom (self := Add.add)
-      (hconfigured := configured)
-  all_goals intro cell hcell
-  all_goals simp only [Add.add_inputCells, List.mem_cons,
-    List.not_mem_nil, or_false] at hcell
-  · have hOutputCellsAssigned := Add.add_output_cells_assigned cfg.addConfig offset
-      { p := { x := input.base.x, y := AssignedCell.of region offset cfg.addConfig.yP },
-        q := input.acc } region
-      [Cell.of region offset cfg.addConfig.yP,
-        Cell.of region (offset + 1) cfg.zComplete,
-        Cell.of region (offset + 2) cfg.zComplete,
-        input.base.x.cell, input.base.y.cell, input.acc.x.cell, input.acc.y.cell]
+    RegionCircuit.operations_pure, RegionOperations.ConsumedCellsAssigned,
+    RegionOperations.assignedFrom_append_iff, List.append_nil]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · apply Add.add.call_consumedCellsAssignedFrom cfg.addConfig configured offset _ region
+    intro cell hcell
+    simp only [FormalRegionCircuit.Configured.inputCells, FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt, Add.add, Add.addElaborated,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl | rfl | rfl <;>
+      simp [circuit_norm, RegionOperations.assignedCellsAfter, RegionOperation.assignedCells]
+  · apply Add.add.call_consumedCellsAssignedFrom cfg.addConfig configured (offset + 1) _ region
+    intro cell hcell
+    simp only [FormalRegionCircuit.Configured.inputCells, FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt, Add.add, Add.addElaborated,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hcell
     rcases hcell with rfl | rfl | rfl | rfl
-    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
-    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
-    · simpa only [RegionCircuit.operations, FormalRegionCircuit.call, Add.add_output_cells,
-        AssignedCell.of_cell, RegionOperations.assignedCellsAfter,
-        RegionOperation.assignedCells] using hOutputCellsAssigned.1
-    · simpa only [RegionCircuit.operations, FormalRegionCircuit.call, Add.add_output_cells,
-        AssignedCell.of_cell, RegionOperations.assignedCellsAfter,
-        RegionOperation.assignedCells] using hOutputCellsAssigned.2
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by
+        simp [circuit_norm, RegionOperations.assignedCellsAfter, RegionOperation.assignedCells])
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by
+        simp [circuit_norm, RegionOperations.assignedCellsAfter, RegionOperation.assignedCells])
+    · rw [FormalRegionCircuit.output_call]
+      exact (Add.add_output_cells_assigned cfg.addConfig offset _ region _).1
+    · rw [FormalRegionCircuit.output_call]
+      exact (Add.add_output_cells_assigned cfg.addConfig offset _ region _).2
+  · simp only [operations_cellAt, RegionOperations.assignedFrom_nil_iff]
+
+/-- Advice-column preconditions for complete-multiplication rounds. -/
+def adviceColumnRequirements (cfg : Config) : Prop :=
+  ColumnsDistinct
+    [cfg.zComplete, cfg.addConfig.xP, cfg.addConfig.yP, cfg.addConfig.xQR, cfg.addConfig.yQR,
+      cfg.addConfig.alpha, cfg.addConfig.beta, cfg.addConfig.gamma, cfg.addConfig.delta,
+      cfg.addConfig.lambda]
+
+private theorem add_adviceWrites_mem (addCfg : Add.Config) (offset : ℕ)
+    (input : Var Add.Inputs Fp) (self : RegionIndex) (col : Column .advice) (r : ℕ)
+    (hm : (col, r) ∈ ((Add.add.call addCfg offset input).operations self).adviceWrites) :
+    (r = offset ∧ (col = addCfg.xP ∨ col = addCfg.yP ∨ col = addCfg.xQR ∨ col = addCfg.yQR ∨
+      col = addCfg.alpha ∨ col = addCfg.beta ∨ col = addCfg.gamma ∨ col = addCfg.delta ∨
+      col = addCfg.lambda)) ∨
+    (r = offset + 1 ∧ (col = addCfg.xQR ∨ col = addCfg.yQR)) := by
+  rw [FormalRegionCircuit.call_operations] at hm
+  simp only [Add.add, Add.addSynthesize, circuit_norm, RegionOperations.adviceWrites,
+    RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+    List.nil_append, List.append_nil, List.mem_cons, List.not_mem_nil, or_false,
+    Prod.mk.injEq] at hm
+  rcases hm with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+    ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+  all_goals tauto
+
+private theorem add_nonSelfCopyAdviceWrites_selfYP (addCfg : Add.Config) (offset : ℕ)
+    (px : AssignedCell Fp) (q : Point (AssignedCell Fp)) (self : RegionIndex)
+    (col : Column .advice) (r : ℕ)
+    (hm : (col, r) ∈ (((Add.add.call addCfg offset
+      { p := { x := px, y := AssignedCell.of self offset addCfg.yP }, q := q }).operations self).nonSelfCopyAdviceWrites self)) :
+    (r = offset ∧ (col = addCfg.xP ∨ col = addCfg.xQR ∨ col = addCfg.yQR ∨
+      col = addCfg.alpha ∨ col = addCfg.beta ∨ col = addCfg.gamma ∨ col = addCfg.delta ∨
+      col = addCfg.lambda)) ∨
+    (r = offset + 1 ∧ (col = addCfg.xQR ∨ col = addCfg.yQR)) := by
+  rw [FormalRegionCircuit.call_operations, RegionOperations.mem_nonSelfCopyAdviceWrites_iff] at hm
+  obtain ⟨prog, hop, hns⟩ := hm
+  simp only [Add.add, Add.addSynthesize, circuit_norm, List.mem_cons, List.not_mem_nil, or_false] at hop
+  rcases hop with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
+  all_goals try (cases h; done)
+  all_goals (cases h; first
+    | (simp; done)
+    | (exfalso; apply hns; simp [RegionOperation.isSelfCopy_assignAdvice_expr, AssignedCell.of_cell]))
+
+private theorem add_nonSelfCopyAdviceWrites_selfYP_Q (addCfg : Add.Config) (offset : ℕ)
+    (px : AssignedCell Fp) (self : RegionIndex) (col : Column .advice) (r : ℕ)
+    (hm : (col, r) ∈ (((Add.add.call addCfg offset
+      { p := { x := px, y := AssignedCell.of self offset addCfg.yP },
+        q := { x := AssignedCell.of self offset addCfg.xQR,
+               y := AssignedCell.of self offset addCfg.yQR } }).operations self).nonSelfCopyAdviceWrites self)) :
+    (r = offset ∧ (col = addCfg.xP ∨ col = addCfg.alpha ∨ col = addCfg.beta ∨
+      col = addCfg.gamma ∨ col = addCfg.delta ∨ col = addCfg.lambda)) ∨
+    (r = offset + 1 ∧ (col = addCfg.xQR ∨ col = addCfg.yQR)) := by
+  rw [FormalRegionCircuit.call_operations, RegionOperations.mem_nonSelfCopyAdviceWrites_iff] at hm
+  obtain ⟨prog, hop, hns⟩ := hm
+  simp only [Add.add, Add.addSynthesize, circuit_norm, List.mem_cons, List.not_mem_nil, or_false] at hop
+  rcases hop with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
+  all_goals try (cases h; done)
+  all_goals (cases h; first
+    | (simp; done)
+    | (exfalso; apply hns; simp [RegionOperation.isSelfCopy_assignAdvice_expr, AssignedCell.of_cell]))
+
+private theorem add_nonSelfCopyAdviceWrites_selfQ (addCfg : Add.Config) (offset : ℕ)
+    (p : Point (AssignedCell Fp)) (self : RegionIndex) (col : Column .advice) (r : ℕ)
+    (hm : (col, r) ∈ (((Add.add.call addCfg offset
+      { p := p,
+        q := { x := AssignedCell.of self offset addCfg.xQR,
+               y := AssignedCell.of self offset addCfg.yQR } }).operations self).nonSelfCopyAdviceWrites self)) :
+    (r = offset ∧ (col = addCfg.xP ∨ col = addCfg.yP ∨ col = addCfg.alpha ∨
+      col = addCfg.beta ∨ col = addCfg.gamma ∨ col = addCfg.delta ∨ col = addCfg.lambda)) ∨
+    (r = offset + 1 ∧ (col = addCfg.xQR ∨ col = addCfg.yQR)) := by
+  rw [FormalRegionCircuit.call_operations, RegionOperations.mem_nonSelfCopyAdviceWrites_iff] at hm
+  obtain ⟨prog, hop, hns⟩ := hm
+  simp only [Add.add, Add.addSynthesize, circuit_norm, List.mem_cons, List.not_mem_nil, or_false] at hop
+  rcases hop with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
+  all_goals try (cases h; done)
+  all_goals (cases h; first
+    | (simp; done)
+    | (exfalso; apply hns; simp [RegionOperation.isSelfCopy_assignAdvice_expr, AssignedCell.of_cell]))
+
+theorem roundSynthesize_adviceWritesConsistent
+    (w iter : ℕ) (cfg : Config) (configured : Add.add.Configured cfg.addConfig)
+    (hadvice : adviceColumnRequirements cfg)
+    (offset : ℕ) (input : Var RoundInputs Fp) (region : RegionIndex) :
+    ((roundSynthesize w iter cfg offset input).operations region).AdviceWritesConsistent region := by
+  have haddAdv : Add.add.elaborated.adviceColumnRequirements cfg.addConfig :=
+    (List.nodup_cons.mp hadvice).2
+  have hdist := hadvice
+  simp only [adviceColumnRequirements, ColumnsDistinct, List.nodup_cons, List.mem_cons,
+    List.not_mem_nil, or_false, not_or, List.nodup_nil, not_false_eq_true, and_true] at hdist
+  have hadd1 := Add.add.call_adviceWritesConsistent cfg.addConfig configured haddAdv offset
+    { p := { x := input.base.x, y := AssignedCell.of region offset cfg.addConfig.yP },
+      q := input.acc } region
+  have hadd2 := Add.add.call_adviceWritesConsistent cfg.addConfig configured haddAdv (offset + 1)
+    { p := input.acc,
+      q := { x := AssignedCell.of region (offset + 1) cfg.addConfig.xQR,
+             y := AssignedCell.of region (offset + 1) cfg.addConfig.yQR } } region
+  have h12 :
+      (((Add.add.call cfg.addConfig offset
+          { p := { x := input.base.x, y := AssignedCell.of region offset cfg.addConfig.yP },
+            q := input.acc }).operations region) ++
+       ((Add.add.call cfg.addConfig (offset + 1)
+          { p := input.acc,
+            q := { x := AssignedCell.of region (offset + 1) cfg.addConfig.xQR,
+                   y := AssignedCell.of region (offset + 1) cfg.addConfig.yQR } }).operations region))
+        |>.AdviceWritesConsistent region := by
+    apply RegionOperations.adviceWritesConsistent_append_of_disjoint region hadd1 hadd2
+    rw [List.disjoint_left]
+    rintro ⟨col, r⟩ hl hr
+    have h1 := add_adviceWrites_mem cfg.addConfig offset _ region col r hl
+    have h2 := add_nonSelfCopyAdviceWrites_selfQ cfg.addConfig (offset + 1) input.acc region col r hr
+    rcases h1 with ⟨rfl, _⟩ | ⟨rfl, hcol1⟩ <;> rcases h2 with ⟨hr2, hcol2⟩ | ⟨hr2, _⟩
+    · omega
+    · omega
+    · grind
+    · omega
+  unfold roundSynthesize
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_assignAdvice, operations_copyAdvice, operations_enable, operations_cellAt,
+    output_assignAdvice, FormalRegionCircuit.output_call, Add.add_output_cells,
+    List.nil_append, List.append_nil, List.cons_append]
+  apply RegionOperations.adviceWritesConsistent_assignAdvice_of_not_mem region
+  · intro hmem
+    have hmem' := RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy region hmem
+    simp only [RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_append,
+      RegionOperation.adviceWrites, List.nil_append, List.mem_append, List.mem_cons,
+      List.not_mem_nil, or_false, Prod.mk.injEq] at hmem'
+    rcases hmem' with ⟨_, hr⟩ | ⟨_, hr⟩ | h3 | h4
+    · omega
+    · omega
+    · rcases add_adviceWrites_mem cfg.addConfig offset _ region _ _ h3 with
+        ⟨_, hcol⟩ | ⟨_, hcol⟩ <;> grind
+    · rcases add_adviceWrites_mem cfg.addConfig (offset + 1) _ region _ _ h4 with
+        ⟨_, hcol⟩ | ⟨_, hcol⟩ <;> grind
+  · apply RegionOperations.adviceWritesConsistent_assignAdvice_of_not_mem region
+    · intro hmem
+      have hmem' := RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy region hmem
+      simp only [RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_append,
+        RegionOperation.adviceWrites, List.nil_append, List.mem_append, List.mem_cons,
+        List.not_mem_nil, or_false, Prod.mk.injEq] at hmem'
+      rcases hmem' with ⟨_, hr⟩ | h2 | h3
+      · omega
+      · rcases add_adviceWrites_mem cfg.addConfig offset _ region _ _ h2 with
+          ⟨_, hcol⟩ | ⟨_, hcol⟩ <;> grind
+      · rcases add_adviceWrites_mem cfg.addConfig (offset + 1) _ region _ _ h3 with
+          ⟨_, hcol⟩ | ⟨_, hcol⟩ <;> grind
+    · rw [RegionOperations.adviceWritesConsistent_constrainEqual_cons]
+      apply RegionOperations.adviceWritesConsistent_assignAdvice_of_not_mem region
+      · intro hmem
+        simp only [RegionOperations.nonSelfCopyAdviceWrites_cons,
+          RegionOperations.nonSelfCopyAdviceWrites_append,
+          RegionOperation.nonSelfCopyAdviceWrites, List.nil_append, List.mem_append] at hmem
+        rcases hmem with h1 | h2
+        · rcases add_nonSelfCopyAdviceWrites_selfYP cfg.addConfig offset input.base.x input.acc
+            region _ _ h1 with ⟨_, hcol⟩ | ⟨hr, _⟩ <;> grind
+        · rcases add_adviceWrites_mem cfg.addConfig (offset + 1) _ region _ _
+            (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy region h2) with
+            ⟨hr, _⟩ | ⟨hr, _⟩ <;> omega
+      · rw [RegionOperations.adviceWritesConsistent_enableGate_cons]
+        exact h12
+
+private theorem roundSynthesize_adviceWrites_bounds
+    (w iter : ℕ) (cfg : Config) (offset : ℕ) (input : Var RoundInputs Fp)
+    (region : RegionIndex) (col : Column .advice) (r : ℕ)
+    (hm : (col, r) ∈ ((roundSynthesize w iter cfg offset input).operations region).adviceWrites) :
+    (r = offset ∧ (col = cfg.addConfig.xP ∨ col = cfg.addConfig.yP ∨
+      col = cfg.addConfig.xQR ∨ col = cfg.addConfig.yQR ∨ col = cfg.addConfig.alpha ∨
+      col = cfg.addConfig.beta ∨ col = cfg.addConfig.gamma ∨ col = cfg.addConfig.delta ∨
+      col = cfg.addConfig.lambda)) ∨
+    r = offset + 1 ∨
+    (r = offset + 2 ∧ (col = cfg.zComplete ∨ col = cfg.addConfig.xQR ∨ col = cfg.addConfig.yQR)) := by
+  unfold roundSynthesize at hm
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_assignAdvice, operations_copyAdvice, operations_enable, operations_cellAt,
+    List.nil_append, List.append_nil, List.cons_append,
+    RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_append,
+    RegionOperation.adviceWrites, List.mem_append, List.mem_cons,
+    Prod.mk.injEq] at hm
+  rcases hm with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | h1 | h2
+  · exact Or.inr (Or.inr ⟨rfl, Or.inl rfl⟩)
+  · exact Or.inr (Or.inl rfl)
+  · exact Or.inl ⟨rfl, Or.inr (Or.inl rfl)⟩
+  · rcases add_adviceWrites_mem cfg.addConfig offset _ region col r h1 with ⟨rfl, hc⟩ | ⟨rfl, _⟩
+    · exact Or.inl ⟨rfl, hc⟩
+    · exact Or.inr (Or.inl rfl)
+  · rcases add_adviceWrites_mem cfg.addConfig (offset + 1) _ region col r h2 with ⟨rfl, _⟩ | ⟨rfl, hc⟩
+    · exact Or.inr (Or.inl rfl)
+    · exact Or.inr (Or.inr ⟨by omega, by tauto⟩)
+
+private theorem roundSynthesize_nonSelfCopyAdviceWrites_selfAcc
+    (w iter : ℕ) (cfg : Config) (offset : ℕ) (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
+    (base : Point (AssignedCell Fp)) (z : AssignedCell Fp)
+    (region : RegionIndex) (col : Column .advice) (r : ℕ)
+    (hm : (col, r) ∈ (((roundSynthesize w iter cfg offset
+      { alpha := alpha, base := base, z := z,
+        acc := { x := AssignedCell.of region offset cfg.addConfig.xQR,
+                 y := AssignedCell.of region offset cfg.addConfig.yQR } }).operations region).nonSelfCopyAdviceWrites region)) :
+    (r = offset ∧ (col = cfg.addConfig.yP ∨ col = cfg.addConfig.xP ∨
+      col = cfg.addConfig.alpha ∨ col = cfg.addConfig.beta ∨ col = cfg.addConfig.gamma ∨
+      col = cfg.addConfig.delta ∨ col = cfg.addConfig.lambda)) ∨
+    r = offset + 1 ∨ r = offset + 2 := by
+  unfold roundSynthesize at hm
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_assignAdvice, operations_copyAdvice, operations_enable, operations_cellAt,
+    output_assignAdvice, FormalRegionCircuit.output_call, Add.add_output_cells,
+    List.nil_append, List.append_nil, List.cons_append,
+    RegionOperations.nonSelfCopyAdviceWrites_cons,
+    RegionOperations.nonSelfCopyAdviceWrites_append,
+    RegionOperation.nonSelfCopyAdviceWrites, List.mem_append] at hm
+  rcases hm with h1 | h2 | h3 | h4 | h5
+  · split at h1
+    · cases h1
+    · simp only [List.mem_singleton, Prod.mk.injEq] at h1; exact Or.inr (Or.inr h1.2)
+  · split at h2
+    · cases h2
+    · simp only [List.mem_singleton, Prod.mk.injEq] at h2; exact Or.inr (Or.inl h2.2)
+  · split at h3
+    · cases h3
+    · simp only [List.mem_singleton, Prod.mk.injEq] at h3
+      exact Or.inl ⟨h3.2, Or.inl h3.1⟩
+  · rcases add_nonSelfCopyAdviceWrites_selfYP_Q cfg.addConfig offset base.x region col r h4 with
+      ⟨hr, hc⟩ | ⟨hr, _⟩
+    · exact Or.inl ⟨hr, by tauto⟩
+    · exact Or.inr (Or.inl hr)
+  · rcases add_adviceWrites_mem cfg.addConfig (offset + 1) _ region col r
+      (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy region h5) with ⟨hr, _⟩ | ⟨hr, _⟩
+    · exact Or.inr (Or.inl hr)
+    · exact Or.inr (Or.inr (by omega))
 
 def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs RoundOutput where
   configure := pure
@@ -487,7 +753,11 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
             cfg.zComplete :: configured.permutationColumns
           inputCells _ _ input :=
             [input.base.x.cell, input.base.y.cell,
-              input.acc.x.cell, input.acc.y.cell] }
+              input.acc.x.cell, input.acc.y.cell]
+          readCells _ _ input :=
+            input.z.cell ::
+              (Witgen.valueBuilderReads (value := field) input.alpha).map AssignedCell.cell }
+      adviceColumnRequirements cfg := adviceColumnRequirements cfg
       output cfg offset input self :=
         { acc :=
             { x := .of self (offset + 2) cfg.addConfig.xQR
@@ -518,10 +788,14 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
         intro configInput counts configured offset input region anchor _ _
         exact roundSynthesize_lookupSelectorsAnchoredBy
           w iter configInput configured offset input region anchor
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig offset input region
-        exact roundSynthesize_copyCellsAssigned
+        exact roundSynthesize_consumedCellsAssigned
           w iter configInput hconfig offset input region
+      adviceWritesConsistent := by
+        intro configInput counts hconfig hadvice offset input region
+        exact roundSynthesize_adviceWritesConsistent
+          w iter configInput hconfig hadvice offset input region
         }
 
   -- acc, base are valid Pallas points (complete addition is exceptional-case-free).
@@ -1007,7 +1281,10 @@ def assign_region (numBits : ℕ) (w : ℕ) :
           permutationColumns _ configured := configured.permutationColumns
           inputCells _ _ input :=
             [input.base.x.cell, input.base.y.cell, input.xA.cell,
-              input.yA.cell, input.z.cell] }
+              input.yA.cell, input.z.cell]
+          readCells _ _ input :=
+            (Witgen.valueBuilderReads (value := field) input.alpha).map AssignedCell.cell }
+      adviceColumnRequirements cfg := adviceColumnRequirements cfg
       registered := by
         intro configInput counts hconfig offset input region
         dsimp only
@@ -1064,50 +1341,63 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         exact (assignRegionSynthesize_hasNoFixedAssignments numBits w
           ((configure configInput.1 configInput.2).output counts)
           offset input region).fixedAssignmentsAgree
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig offset input region
         let cfg := (configure configInput.1 configInput.2).output counts
-        let initial := [input.base.x.cell, input.base.y.cell, input.xA.cell,
-          input.yA.cell, input.z.cell]
+        let initial :=
+          [input.base.x.cell, input.base.y.cell, input.xA.cell,
+            input.yA.cell, input.z.cell] ++
+          (Witgen.valueBuilderReads (value := field) input.alpha).map AssignedCell.cell
         let afterStart :=
           (startCopy cfg input offset).operations region
             |>.assignedCellsAfter region initial
-        let body := fun i r acc => do
-          let out ← (round w i).call cfg r
-            { alpha := input.alpha, base := input.base, z := input.z, acc }
-          pure out.acc
         dsimp only
         rw [assignRegionSynthesize_operations]
-        unfold RegionOperations.CopyCellsAssigned
-        rw [RegionOperations.copyCellsAssignedFrom_append_iff,
-          RegionOperations.copyCellsAssignedFrom_append_iff]
+        unfold RegionOperations.ConsumedCellsAssigned
+        simp only [KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil]
+        rw [RegionOperations.assignedFrom_append_iff,
+          RegionOperations.assignedFrom_append_iff]
         constructor
         · constructor
           · keygen_registration
-          · apply RegionCircuit.foldRange_copyCellsAssignedFrom
+          · apply RegionCircuit.foldRange_assignedFrom
+              (consumption := RegionOperation.Consumes)
               (invariant := fun cells acc =>
                 input.base.x.cell ∈ cells ∧ input.base.y.cell ∈ cells ∧
+                  input.z.cell ∈ cells ∧
+                  (∀ c ∈ (Witgen.valueBuilderReads (value := field) input.alpha).map AssignedCell.cell,
+                    c ∈ cells) ∧
                   acc.x.cell ∈ cells ∧ acc.y.cell ∈ cells)
               (available := afterStart)
-            · repeat' apply And.intro
-              all_goals
-                apply RegionOperations.mem_assignedCellsAfter_of_mem
-                simp [initial]
+            · refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+              · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp [initial])
+              · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp [initial])
+              · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp [initial])
+              · intro c hc
+                exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp [initial, hc])
+              · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp [initial])
+              · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp [initial])
             · intro i cells acc hacc
               simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
                 List.append_nil]
-              have hround : (round w i).Configured cfg := by
-                exact .ofPure _ _ hconfig rfl
-              apply FormalRegionCircuit.call_copyCellsAssignedFrom
+              have hround : (round w i).Configured cfg := .ofPure _ _ hconfig rfl
+              apply FormalRegionCircuit.call_consumedCellsAssignedFrom
                 (self := round w i) (hconfigured := hround)
               intro cell hcell
-              rw [round_inputCells] at hcell
-              simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
-              rcases hcell with rfl | rfl | rfl | rfl
+              simp only [FormalRegionCircuit.Configured.inputCells,
+                FormalRegionCircuit.Configured.readCells,
+                FormalRegionCircuit.Configured.readRelativeCellsAt,
+                FormalRegionCircuit.keygenRequirements,
+                ElaboratedRegionCircuit.keygenRequirements, round,
+                KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+                List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hcell
+              rcases hcell with (rfl | rfl | rfl | rfl) | (rfl | halpha)
               · exact hacc.1
               · exact hacc.2.1
+              · exact hacc.2.2.2.2.1
+              · exact hacc.2.2.2.2.2
               · exact hacc.2.2.1
-              · exact hacc.2.2.2
+              · exact hacc.2.2.2.1 cell halpha
             · intro i cells acc hacc
               have hout := round_output_cells_assigned w i cfg (offset + i * 2)
                 { alpha := input.alpha, base := input.base, z := input.z, acc }
@@ -1118,8 +1408,78 @@ def assign_region (numBits : ℕ) (w : ℕ) :
                 List.append_nil]
               exact ⟨RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hacc.1,
                 RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hacc.2.1,
+                RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hacc.2.2.1,
+                fun c hc => RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _
+                  (hacc.2.2.2.1 c hc),
                 hout.1, hout.2⟩
-        · exact .nil _ }
+        · exact .nil _
+      adviceWritesConsistent := by
+        intro configInput counts hconfig hadvice offset input region
+        let cfg := (configure configInput.1 configInput.2).output counts
+        have hdist := hadvice
+        simp only [adviceColumnRequirements, ColumnsDistinct, List.nodup_cons, List.mem_cons,
+          List.not_mem_nil, or_false, not_or, List.nodup_nil, not_false_eq_true, and_true] at hdist
+        dsimp only
+        rw [assignRegionSynthesize_operations]
+        simp only [operations_zsCells, List.append_nil]
+        have hfold :
+            ((RegionCircuit.foldRange offset 2 numBits
+              ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+              (fun i r acc => do
+                let out ← (round w i).call cfg r
+                  { alpha := input.alpha, base := input.base, z := input.z, acc }
+                pure out.acc)).operations region).AdviceWritesConsistent region := by
+          apply RegionCircuit.foldRange_adviceWritesConsistent
+          · intro i
+            simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil]
+            exact (round w i.val).call_adviceWritesConsistent cfg (.ofPure _ _ hconfig rfl)
+              hadvice (offset + i.val * 2) _ region
+          · intro i j hij
+            rw [List.disjoint_left]
+            rintro ⟨col, r⟩ hi hj
+            simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              List.append_nil, FormalRegionCircuit.call_operations] at hi hj
+            have hbi := roundSynthesize_adviceWrites_bounds w i.val cfg (offset + i.val * 2)
+              _ region col r hi
+            cases hjeq : j.val with
+            | zero => omega
+            | succ k =>
+              rw [hjeq, roundFoldAcc_eq] at hj
+              simp only [show offset + 2 * k + 2 = offset + (k + 1) * 2 by omega] at hj
+              have hbj := roundSynthesize_nonSelfCopyAdviceWrites_selfAcc w (k + 1) cfg
+                (offset + (k + 1) * 2) input.alpha input.base input.z region col r hj
+              rcases hbi with ⟨rfl, _⟩ | rfl | ⟨rfl, hci⟩ <;>
+                rcases hbj with ⟨hrj, hcj⟩ | hrj | hrj
+              all_goals first | omega | grind
+        apply RegionOperations.adviceWritesConsistent_append_of_disjoint region
+        · apply RegionOperations.AdviceWritesDistinct.toConsistent
+          simp [startCopy, circuit_norm, RegionOperations.AdviceWritesDistinct,
+            RegionOperations.adviceWrites, RegionOperation.adviceWrites]
+        · exact hfold
+        · rw [List.disjoint_left]
+          rintro ⟨col, r⟩ hl hr
+          simp only [startCopy, circuit_norm, RegionOperations.adviceWrites,
+            RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+            List.append_nil, List.mem_singleton, Prod.mk.injEq] at hl
+          rcases hl with ⟨hcol, hr0⟩
+          rw [hcol, hr0] at hr
+          have hr' := RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy region hr
+          unfold RegionOperations.adviceWrites at hr'
+          rw [RegionCircuit.foldRange, RegionCircuit.foldRangeVar,
+            RegionCircuit.foldRangeVarAux_operations, List.mem_flatMap] at hr'
+          obtain ⟨op, hop, hcolr⟩ := hr'
+          rw [List.mem_flatten] at hop
+          obtain ⟨ops, hops, hop⟩ := hop
+          rw [List.mem_ofFn] at hops
+          obtain ⟨i, rfl⟩ := hops
+          simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+            List.append_nil, FormalRegionCircuit.call_operations] at hop
+          have hmem : (cfg.zComplete, offset) ∈
+              ((roundSynthesize w i.val cfg (offset + i.val * 2) _).operations region).adviceWrites :=
+            List.mem_flatMap.mpr ⟨op, hop, hcolr⟩
+          rcases roundSynthesize_adviceWrites_bounds w i.val cfg (offset + i.val * 2)
+              _ region cfg.zComplete offset hmem with ⟨_, hc⟩ | h | ⟨h, _⟩ <;>
+            first | omega | grind }
 
   synthesize := assignRegionSynthesize numBits w
 

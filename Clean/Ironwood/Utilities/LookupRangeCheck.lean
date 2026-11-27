@@ -637,7 +637,8 @@ def shortRangeCheck (K numBits : ℕ) :
     { keygenRequirements :=
         { gates cfg _ := [bitshiftGate K cfg]
           lookups cfg _ := [rangeCheckLookup K cfg]
-          permutationColumns cfg _ := [cfg.runningSum] }
+          permutationColumns cfg _ := [cfg.runningSum]
+          readRelativeCells cfg _ _ := [(cfg.runningSum, 0)] }
       synthesisSummary cfg offset _ _ :=
         shortRangeCheckSynthesisSummary cfg offset
       synthesisSummary_eq := by
@@ -1035,6 +1036,17 @@ deriving ProvableStruct
 def zWitness (K idx : ℕ) (element : AssignedCell Fp) : WitgenIR Fp 1 :=
   .ofFExpr ((Witgen.FExprOver.expr element).runningSum K idx)
 
+@[witness_support]
+theorem witnessFunctionSupport_zWitness (K idx : ℕ) (element : AssignedCell Fp) :
+    WitnessFunctionSupport [element] (programFunction (zWitness K idx element)) := by
+  intro left right agreement
+  have he : Witgen.FExprOver.eval { env := left } (.expr element) =
+      Witgen.FExprOver.eval { env := right } (.expr element) :=
+    agreement.cellValues element (List.mem_singleton_self _)
+  dsimp only [programFunction, zWitness]
+  rw [Witgen.WitgenIROver.getElem_eval_ofFExpr, Witgen.WitgenIROver.getElem_eval_ofFExpr,
+    Witgen.FExprOver.eval_runningSum, Witgen.FExprOver.eval_runningSum, he]
+
 /-- One round of the running sum (Rust loop body, `lookup_range_check.rs:211-233`), at
 word `idx` inside the ambient region starting at base row `row` (`= offset + idx`): enable
 `q_lookup` AND `q_running` at `row` — so the lookup input is the running word
@@ -1127,16 +1139,50 @@ theorem rangeCheckLoop_enablesLookupAuxiliarySelectors
   exact rangeCheckRound_enablesLookupAuxiliarySelectors
     K cfg element i (offset + i * 1) self
 
-@[keygen_norm]
-theorem rangeCheckLoop_copyCellsAssignedFrom (K : ℕ) (cfg : Config K)
+theorem rangeCheckLoop_consumedCellsAssignedFrom (K : ℕ) (cfg : Config K)
     (element : AssignedCell Fp) (offset numWords : ℕ) (self : RegionIndex)
-    (available : List Cell) :
+    (available : List Cell) (helement : element.cell ∈ available) :
     ((rangeCheckLoop K cfg element offset numWords).operations self)
-      |>.CopyCellsAssignedFrom self available := by
+      |>.AssignedFrom RegionOperation.Consumes self available := by
   unfold rangeCheckLoop
-  apply RegionCircuit.forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  apply RegionCircuit.forRange'_assignedFrom_of_forall
   intro i
-  simp only [rangeCheckRound, circuit_norm, RegionOperation.copiedCells, List.Forall]
+  simp only [rangeCheckRound, circuit_norm, keygen_norm]
+  refine ⟨[element], witnessFunctionSupport_zWitness K (i + 1) element, ?_⟩
+  intro cell hcell _
+  simp only [List.mem_singleton] at hcell
+  subst hcell
+  exact helement
+
+theorem rangeCheckLoop_adviceWritesDistinct (K : ℕ) (cfg : Config K)
+    (element : AssignedCell Fp) (offset numWords : ℕ) (self : RegionIndex) :
+    ((rangeCheckLoop K cfg element offset numWords).operations self).AdviceWritesDistinct := by
+  unfold rangeCheckLoop
+  apply RegionCircuit.forRange'_adviceWritesDistinct_of_disjoint
+  · intro i
+    simp [rangeCheckRound, circuit_norm, RegionOperations.AdviceWritesDistinct,
+      RegionOperations.adviceWrites, RegionOperation.adviceWrites]
+  · intro i j hij
+    rw [List.disjoint_left]
+    rintro ⟨col, row⟩ hi hj
+    simp only [rangeCheckRound, circuit_norm, RegionOperations.adviceWrites, List.flatMap_cons,
+      List.flatMap_nil, RegionOperation.adviceWrites, List.nil_append, List.append_nil,
+      List.mem_singleton, Prod.mk.injEq] at hi hj
+    have hlt : i.val < j.val := hij
+    omega
+
+theorem rangeCheckLoop_adviceWrites_gt (K : ℕ) (cfg : Config K)
+    (element : AssignedCell Fp) (offset numWords : ℕ) (self : RegionIndex)
+    (col : Column .advice) (row : ℕ)
+    (hmem : (col, row) ∈
+      ((rangeCheckLoop K cfg element offset numWords).operations self).adviceWrites) :
+    offset < row := by
+  unfold rangeCheckLoop at hmem
+  obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRange'_adviceWrites_iff offset 1 numWords _ self col row).mp hmem
+  simp only [rangeCheckRound, circuit_norm, RegionOperations.adviceWrites, List.flatMap_cons,
+    List.flatMap_nil, RegionOperation.adviceWrites, List.nil_append, List.append_nil,
+    List.mem_singleton, Prod.mk.injEq] at hi
+  omega
 
 @[keygen_norm]
 theorem finalCell_mem_rangeCheckLoop_assignedCellsAfter (K : ℕ) (cfg : Config K)
@@ -1457,36 +1503,71 @@ def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
       intro _hregistered
       exact rangeCheckBody_lookupSelectorAssignmentsAgree
         K numWords strict configInput offset input region
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
       cases strict with
       | false =>
-          keygen_registration [rangeCheckBody]
-          simp only [Bool.false_eq_true, ite_false,
-            RegionOperations.copyCellsAssignedFrom_nil_iff]
+          simp only [rangeCheckBody, Bool.false_eq_true, ite_false, Configure.output_pure,
+            RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_copyAdvice,
+            operations_cellAt, KeygenRequirements.readRelativeCellsAt, List.map_nil,
+            List.append_nil,
+            RegionOperations.ConsumedCellsAssigned, RegionOperations.assignedFrom_append_iff]
+          refine ⟨?_, ?_⟩
+          · keygen_registration
+          · exact rangeCheckLoop_consumedCellsAssignedFrom K configInput input.element
+              offset numWords region _ (by simp [RegionOperations.assignedCellsAfter,
+                RegionOperation.assignedCells, List.foldl_cons, List.foldl_nil])
       | true =>
-          simp only [rangeCheckBody, ite_true, RegionCircuit.operations_bind,
-            RegionCircuit.operations_pure, operations_copyAdvice, operations_cellAt,
-            operations_constrainConstant, RegionOperations.CopyCellsAssigned,
-            RegionOperations.copyCellsAssignedFrom_append_iff,
-            RegionOperations.copyCellsAssignedFrom_assignAdvice_iff,
-            RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
-            RegionOperations.copyCellsAssignedFrom_constrainConstant_iff,
-            RegionOperations.copyCellsAssignedFrom_nil_iff,
-            Configure.output_pure, RegionOperations.assignedCellsAfter,
-            List.foldl_cons, List.foldl_nil, RegionOperation.assignedCells,
-            List.nil_append]
-          refine ⟨⟨by simp, by simp, trivial⟩, ?_, ⟨?_, trivial⟩, trivial⟩
-          · simpa only [List.singleton_append] using
-              rangeCheckLoop_copyCellsAssignedFrom K configInput input.element
-                offset numWords region
-                  [Cell.of region offset configInput.runningSum, input.element.cell]
-          · simpa only [output_cellAt, AssignedCell.of_cell, List.singleton_append,
-              RegionOperations.assignedCellsAfter, RegionOperation.assignedCells]
+          simp only [rangeCheckBody, ite_true, Configure.output_pure,
+            RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_copyAdvice,
+            operations_cellAt, operations_constrainConstant,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil,
+            RegionOperations.ConsumedCellsAssigned, RegionOperations.assignedFrom_append_iff,
+            List.nil_append, List.append_nil]
+          refine ⟨?_, ?_, ?_⟩
+          · keygen_registration
+          · exact rangeCheckLoop_consumedCellsAssignedFrom K configInput input.element
+              offset numWords region _ (by simp [RegionOperations.assignedCellsAfter,
+                RegionOperation.assignedCells, List.foldl_cons, List.foldl_nil])
+          · simp only [RegionOperations.assignedFrom_cons_iff,
+              RegionOperations.assignedFrom_nil_iff, and_true,
+              RegionOperation.consumesFrom_consumes_iff,
+              RegionOperation.consumesFrom_copies_iff,
+              RegionOperation.consumesFrom_reads_iff,
+              RegionOperation.copiedCells, List.mem_singleton, forall_eq]
+            simpa only [output_cellAt, AssignedCell.of_cell, List.singleton_append,
+              RegionOperations.assignedCellsAfter, RegionOperation.assignedCells,
+              List.foldl_cons, List.foldl_nil, List.nil_append]
               using finalCell_mem_rangeCheckLoop_assignedCellsAfter K configInput
                 input.element offset numWords region
                 [Cell.of region offset configInput.runningSum, input.element.cell]
-                (by intro hzero; subst numWords; simp) }
+                (by intro hzero; subst numWords; simp)
+    adviceWritesConsistent := by
+      intro configInput counts hconfig _hadvice offset input region
+      apply RegionOperations.AdviceWritesDistinct.toConsistent
+      cases strict <;>
+        simp only [rangeCheckBody, Bool.false_eq_true, ite_false, ite_true, Configure.output_pure,
+          RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_copyAdvice,
+          operations_cellAt, operations_constrainConstant,
+          List.nil_append, List.append_nil, List.cons_append,
+          RegionOperations.adviceWritesDistinct_assignAdvice_cons,
+          RegionOperations.adviceWritesDistinct_constrainEqual_cons,
+          RegionOperations.adviceWritesDistinct_constrainConstant_cons,
+          RegionOperations.adviceWritesDistinct_append_iff,
+          RegionOperations.adviceWritesDistinct_nil,
+          RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+          RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_constrainConstant,
+          List.disjoint_nil_right, and_true]
+      · refine ⟨fun hmem => ?_,
+          rangeCheckLoop_adviceWritesDistinct K configInput input.element offset numWords region⟩
+        have hgt := rangeCheckLoop_adviceWrites_gt K configInput input.element offset numWords
+          region _ _ hmem
+        omega
+      · refine ⟨fun hmem => ?_,
+          rangeCheckLoop_adviceWritesDistinct K configInput input.element offset numWords region⟩
+        have hgt := rangeCheckLoop_adviceWrites_gt K configInput input.element offset numWords
+          region _ _ hmem
+        omega }
 
 @[circuit_norm]
 theorem rangeCheckElaborated_output (K numWords : ℕ) (strict : Bool)
@@ -1604,8 +1685,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     -- the element cell value (`input_var_element`'s eval); by `h_input` it is `input_element`, and
     -- `input_element.val` is the decomposed nat `a`. The prefix's `provable_type_simp` already
     -- destructured `input_var` to `input_var_element`, so we work with the cell spelling directly.
-    set eCell := env.get input_var_element.cell.column
-      ↑(place input_var_element.cell.regionIndex + input_var_element.cell.rowOffset) with heCell
+    set eCell := AssignedCell.eval place env.toEnvironment input_var_element with heCell
     have heInput : eCell = input_element := h_input
     -- z_0 = element cell (from the copy's assignAdvice witness)
     have hz0 : zChain K cfg place self env.toEnvironment offset 0 = eCell := by
@@ -1736,7 +1816,8 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
   elaborated :=
     { keygenRequirements :=
         { lookups cfg _ := [rangeCheckLookup K cfg]
-          permutationColumns cfg _ := [cfg.runningSum] }
+          permutationColumns cfg _ := [cfg.runningSum]
+          readRelativeCells cfg _ _ := [(cfg.runningSum, 0)] }
       synthesisSummary cfg offset _ _ :=
         rangeCheckAtSynthesisSummary K numWords strict cfg offset
       synthesisSummary_eq := by
@@ -1784,42 +1865,56 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
         intro _hregistered
         exact rangeCheckAtBody_lookupSelectorAssignmentsAgree
           K numWords strict configInput offset input region
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig offset input region
         cases hb : strict with
         | false =>
-            simp only [rangeCheckAtBody, Bool.false_eq_true, ite_false,
-              Configure.output_pure, RegionCircuit.operations_bind,
-              RegionCircuit.operations_pure, operations_cellAt,
-              RegionOperations.CopyCellsAssigned,
-              RegionOperations.copyCellsAssignedFrom_append_iff,
-              RegionOperations.copyCellsAssignedFrom_nil_iff,
-              RegionOperations.assignedCellsAfter, List.foldl_nil,
-              true_and, and_true]
-            exact rangeCheckLoop_copyCellsAssignedFrom K configInput
+            simp only [rangeCheckAtBody, Bool.false_eq_true, ite_false, Configure.output_pure,
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_cellAt,
+              KeygenRequirements.readRelativeCellsAt, List.nil_append, List.append_nil,
+              List.map_cons, List.map_nil, Nat.add_zero, RegionOperations.ConsumedCellsAssigned]
+            exact rangeCheckLoop_consumedCellsAssignedFrom K configInput
               (AssignedCell.of region offset configInput.runningSum)
-              offset numWords region []
+              offset numWords region _ (by simp [AssignedCell.of_cell, Cell.of])
         | true =>
             simp only [rangeCheckAtBody, ite_true, Configure.output_pure,
-              RegionCircuit.operations_bind, RegionCircuit.operations_pure,
-              operations_cellAt, operations_constrainConstant,
-              RegionOperations.CopyCellsAssigned,
-              RegionOperations.copyCellsAssignedFrom_append_iff,
-              RegionOperations.copyCellsAssignedFrom_constrainConstant_iff,
-              RegionOperations.copyCellsAssignedFrom_nil_iff,
-              RegionOperations.assignedCellsAfter, List.foldl_nil,
-              true_and, and_true]
-            refine ⟨rangeCheckLoop_copyCellsAssignedFrom K configInput
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_cellAt,
+              operations_constrainConstant, KeygenRequirements.readRelativeCellsAt,
+              List.nil_append, List.append_nil, List.map_cons, List.map_nil, Nat.add_zero,
+              RegionOperations.ConsumedCellsAssigned, RegionOperations.assignedFrom_append_iff]
+            refine ⟨rangeCheckLoop_consumedCellsAssignedFrom K configInput
               (AssignedCell.of region offset configInput.runningSum)
-              offset numWords region [], ?_⟩
-            simpa only [output_cellAt, AssignedCell.of_cell,
+              offset numWords region _ (by simp [AssignedCell.of_cell, Cell.of]), ?_⟩
+            simp only [RegionOperations.assignedFrom_cons_iff,
+              RegionOperations.assignedFrom_nil_iff, and_true,
+              RegionOperation.consumesFrom_consumes_iff,
+              RegionOperation.consumesFrom_copies_iff,
+              RegionOperation.consumesFrom_reads_iff,
+              RegionOperation.copiedCells, List.mem_singleton, forall_eq]
+            simpa only [Cell.of, output_cellAt, AssignedCell.of_cell,
               RegionOperations.assignedCellsAfter, RegionOperation.assignedCells] using
               finalCell_mem_rangeCheckLoop_assignedCellsAfter K configInput
                 (AssignedCell.of region offset configInput.runningSum)
-                offset numWords region [] (by
+                offset numWords region [Cell.of region offset configInput.runningSum] (by
                   intro hzero
                   have := hstrict hb
-                  omega) }
+                  omega)
+      adviceWritesConsistent := by
+        intro configInput counts hconfig _hadvice offset input region
+        apply RegionOperations.AdviceWritesDistinct.toConsistent
+        cases strict <;>
+          simp only [rangeCheckAtBody, Bool.false_eq_true, ite_false, ite_true,
+            Configure.output_pure, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+            operations_cellAt, operations_constrainConstant,
+            List.nil_append, List.append_nil,
+            RegionOperations.adviceWritesDistinct_append_iff,
+            RegionOperations.adviceWritesDistinct_constrainConstant_cons,
+            RegionOperations.adviceWritesDistinct_nil,
+            RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_nil,
+            RegionOperation.adviceWrites_constrainConstant,
+            List.disjoint_nil_right, and_true]
+        · exact rangeCheckLoop_adviceWritesDistinct K configInput _ offset numWords region
+        · exact rangeCheckLoop_adviceWritesDistinct K configInput _ offset numWords region }
 
   EnvAssumptions cfg env :=
     TableLoaded K cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
@@ -1888,8 +1983,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
           (AssignedCell.of self offset cfg.runningSum) place self env offset
           numWords hLoopWit j hjpos hj
         rw [hv]
-        simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-          Cell.of_rowOffset, Cell.of_column, Environment.get_advice, heCell]
+        simp only [AssignedCell.eval_of_advice, heCell]
     refine ⟨⟨?_, ?_⟩, ?_, ?_⟩
     · exact rangeCheck_loop_constraints_complete K cfg
         (AssignedCell.of self offset cfg.runningSum) place self
@@ -2033,7 +2127,8 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
   elaborated :=
     { keygenRequirements :=
         { lookups cfg _ := [rangeCheckLookup 10 cfg]
-          permutationColumns cfg _ := [cfg.runningSum] }
+          permutationColumns cfg _ := [cfg.runningSum]
+          readRelativeCells cfg _ _ := [(cfg.runningSum, 0)] }
       synthesisSummary cfg offset _ _ :=
         rangeCheckAtDecomposedSynthesisSummary numWords cfg offset
       synthesisSummary_eq := by
@@ -2067,24 +2162,43 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
         intro _hregistered
         exact rangeCheckAtDecomposedBody_lookupSelectorAssignmentsAgree
           numWords configInput offset input region
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig offset input region
         simp only [rangeCheckAtDecomposedBody, Configure.output_pure,
           RegionCircuit.operations_bind, RegionCircuit.operations_pure,
           operations_cellAt, operations_constrainConstant,
-          RegionOperations.CopyCellsAssigned,
-          RegionOperations.copyCellsAssignedFrom_append_iff,
-          RegionOperations.copyCellsAssignedFrom_constrainConstant_iff,
-          RegionOperations.copyCellsAssignedFrom_nil_iff,
-          RegionOperations.assignedCellsAfter, List.foldl_nil]
-        simp only [true_and, and_true]
-        refine ⟨rangeCheckLoop_copyCellsAssignedFrom 10 configInput
-          (AssignedCell.of region offset configInput.runningSum) offset numWords region [], ?_⟩
-        simpa only [output_cellAt, AssignedCell.of_cell,
-              RegionOperations.assignedCellsAfter, RegionOperation.assignedCells] using
+          KeygenRequirements.readRelativeCellsAt, List.nil_append, List.append_nil,
+          List.map_cons, List.map_nil, Nat.add_zero,
+          RegionOperations.ConsumedCellsAssigned,
+          RegionOperations.assignedFrom_append_iff]
+        refine ⟨rangeCheckLoop_consumedCellsAssignedFrom 10 configInput
+          (AssignedCell.of region offset configInput.runningSum) offset numWords region _
+          (by simp [AssignedCell.of_cell, Cell.of]), ?_⟩
+        simp only [RegionOperations.assignedFrom_cons_iff,
+          RegionOperations.assignedFrom_nil_iff, and_true,
+          RegionOperation.consumesFrom_consumes_iff,
+          RegionOperation.consumesFrom_copies_iff,
+          RegionOperation.consumesFrom_reads_iff,
+          RegionOperation.copiedCells, List.mem_singleton, forall_eq]
+        simpa only [Cell.of, output_cellAt, AssignedCell.of_cell,
+          RegionOperations.assignedCellsAfter, RegionOperation.assignedCells] using
           finalCell_mem_rangeCheckLoop_assignedCellsAfter 10 configInput
-            (AssignedCell.of region offset configInput.runningSum) offset numWords region []
-            (by intro hzero; omega) }
+            (AssignedCell.of region offset configInput.runningSum) offset numWords region
+            [Cell.of region offset configInput.runningSum] (by intro hzero; omega)
+      adviceWritesConsistent := by
+        intro configInput counts _hconfig _hadvice offset input region
+        apply RegionOperations.AdviceWritesDistinct.toConsistent
+        simp only [rangeCheckAtDecomposedBody, Configure.output_pure,
+          RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          operations_cellAt, operations_constrainConstant,
+          List.nil_append, List.append_nil,
+          RegionOperations.adviceWritesDistinct_append_iff,
+          RegionOperations.adviceWritesDistinct_constrainConstant_cons,
+          RegionOperations.adviceWritesDistinct_nil,
+          RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_nil,
+          RegionOperation.adviceWrites_constrainConstant,
+          List.disjoint_nil_right, and_true]
+        exact rangeCheckLoop_adviceWritesDistinct 10 configInput _ offset numWords region }
 
   EnvAssumptions cfg env :=
     TableLoaded 10 cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
@@ -2146,8 +2260,7 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
           (AssignedCell.of self offset cfg.runningSum) place self env offset
           numWords hwit j hjpos hj
         rw [hv]
-        simp only [AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
-          Cell.of_rowOffset, Cell.of_column, Environment.get_advice, heCell]
+        simp only [AssignedCell.eval_of_advice, heCell]
     have heInputLt : eCell.val < 2 ^ (10 * numWords) := hPA
     refine ⟨⟨?_, ?_⟩, ?_, ?_, ?_⟩
     · exact rangeCheck_loop_constraints_complete 10 cfg
@@ -2272,7 +2385,76 @@ theorem witnessCheckDecomposed_copyCellsAssignedFrom
     (available : List Cell) :
     ((witnessCheckDecomposed cfg w).operations i)
       |>.CopyCellsAssignedFrom i available := by
-  simp only [witnessCheckDecomposed, circuit_norm, keygen_norm, keygen_spine]
+  simp only [witnessCheckDecomposed, operations_assignRegion, RegionCircuit.operations_bind,
+    operations_assignAdvice, Operations.CopyCellsAssignedFrom, Operations.assignedFrom_region_iff,
+    Operations.assignedFrom_nil_iff, RegionOperations.assignedFrom_cons_iff,
+    RegionOperation.consumesFrom_copies_iff, RegionOperation.copiedCells,
+    List.not_mem_nil, false_implies, implies_true, RegionOperations.assignedCellsAfter_cons,
+    RegionOperation.assignedCells, List.singleton_append, true_and, and_true]
+  exact ((RegionOperations.assignedFrom_consumes_iff i _ _).mp
+    ((rangeCheckAtDecomposed 25 (by omega) (by omega)).call_consumedCellsAssignedFrom cfg
+      (FormalRegionCircuit.Configured.ofPure _ cfg () rfl) 0 () i
+      (by intro c hc; simp [FormalRegionCircuit.Configured.inputCells,
+        FormalRegionCircuit.Configured.readCells,
+        FormalRegionCircuit.Configured.readRelativeCellsAt,
+        FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, rangeCheckAtDecomposed,
+        KeygenRequirements.readRelativeCellsAt] at hc; subst hc; simp [Cell.of]))).1
+
+/-- A decomposed witness check consumes only the support of its witness program. -/
+@[keygen_norm]
+theorem witnessCheckDecomposed_consumedCellsAssignedFrom
+    (cfg : Config 10) (w : WitgenIR Fp 1) (reads : List (AssignedCell Fp))
+    (hsupport : WitnessFunctionSupport reads (programFunction w))
+    (i : RegionIndex) (available : List Cell)
+    (hreads : ∀ cell ∈ reads, cell.cell ∈ available) :
+    ((witnessCheckDecomposed cfg w).operations i)
+      |>.AssignedFrom RegionOperation.Consumes i available := by
+  simp only [witnessCheckDecomposed, operations_assignRegion, RegionCircuit.operations_bind,
+    operations_assignAdvice, Operations.assignedFrom_region_iff,
+    Operations.assignedFrom_nil_iff, RegionOperations.assignedFrom_cons_iff,
+    RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+    RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+    List.not_mem_nil, false_implies, implies_true, RegionOperations.assignedCellsAfter_cons,
+    RegionOperation.assignedCells, List.singleton_append, true_and, and_true]
+  refine ⟨⟨reads, hsupport, fun c hc _ => hreads c hc⟩, ?_⟩
+  exact (rangeCheckAtDecomposed 25 (by omega) (by omega)).call_consumedCellsAssignedFrom cfg
+    (FormalRegionCircuit.Configured.ofPure _ cfg () rfl) 0 () i
+    (by intro c hc; simp [FormalRegionCircuit.Configured.inputCells,
+      FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt,
+      FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, rangeCheckAtDecomposed,
+      KeygenRequirements.readRelativeCellsAt] at hc; subst hc; simp [Cell.of])
+
+@[keygen_norm]
+theorem witnessCheckDecomposed_adviceWritesConsistent
+    (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheckDecomposed cfg w).operations i).AdviceWritesConsistentFrom i := by
+  apply Operations.AdviceWritesDistinct.toConsistent
+  simp only [witnessCheckDecomposed, operations_assignRegion, RegionCircuit.operations_bind,
+    operations_assignAdvice, Operations.adviceWritesDistinct_region_cons,
+    Operations.adviceWritesDistinct_nil, List.singleton_append,
+    RegionOperations.adviceWritesDistinct_assignAdvice_cons, FormalRegionCircuit.call_operations,
+    and_true]
+  refine ⟨fun hmem => ?_, ?_⟩
+  · simp only [rangeCheckAtDecomposed, rangeCheckAtDecomposedBody, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, operations_cellAt, operations_constrainConstant,
+      List.nil_append, List.append_nil, RegionOperations.adviceWrites_append,
+      RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_nil,
+      RegionOperation.adviceWrites_constrainConstant] at hmem
+    have hgt := rangeCheckLoop_adviceWrites_gt 10 cfg _ 0 25 i _ _ hmem
+    omega
+  · simp only [rangeCheckAtDecomposed, rangeCheckAtDecomposedBody, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, operations_cellAt, operations_constrainConstant,
+      List.nil_append, List.append_nil,
+      RegionOperations.adviceWritesDistinct_append_iff,
+      RegionOperations.adviceWritesDistinct_constrainConstant_cons,
+      RegionOperations.adviceWritesDistinct_nil,
+      RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_nil,
+      RegionOperation.adviceWrites_constrainConstant,
+      List.disjoint_nil_right, and_true]
+    exact rangeCheckLoop_adviceWritesDistinct 10 cfg _ 0 25 i
 
 /-- The decomposed witness wrapper preserves its child's lookup activation law. -/
 theorem witnessCheckDecomposed_lookupActivationsWellFormed
@@ -2504,7 +2686,66 @@ theorem witnessShortCheck_copyCellsAssignedFrom
     (i : RegionIndex) (available : List Cell) :
     ((witnessShortCheck K numBits cfg w).operations i)
       |>.CopyCellsAssignedFrom i available := by
-  simp only [witnessShortCheck, circuit_norm, keygen_norm, keygen_spine]
+  simp only [witnessShortCheck, operations_assignRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, operations_assignAdvice, List.append_nil,
+    Operations.CopyCellsAssignedFrom, Operations.assignedFrom_region_iff,
+    Operations.assignedFrom_nil_iff, RegionOperations.assignedFrom_cons_iff,
+    RegionOperation.consumesFrom_copies_iff, RegionOperation.copiedCells,
+    List.not_mem_nil, false_implies, implies_true, RegionOperations.assignedCellsAfter_cons,
+    RegionOperation.assignedCells, List.singleton_append, true_and, and_true]
+  exact ((RegionOperations.assignedFrom_consumes_iff i _ _).mp
+    ((shortRangeCheck K numBits).call_consumedCellsAssignedFrom cfg
+      (FormalRegionCircuit.Configured.ofPure _ cfg () rfl) 0 () i
+      (by intro c hc; simp [FormalRegionCircuit.Configured.inputCells,
+        FormalRegionCircuit.Configured.readCells,
+        FormalRegionCircuit.Configured.readRelativeCellsAt,
+        FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, shortRangeCheck,
+        KeygenRequirements.readRelativeCellsAt] at hc; subst hc; simp [Cell.of]))).1
+
+/-- A short witness check consumes only the support of its witness program. -/
+@[keygen_norm]
+theorem witnessShortCheck_consumedCellsAssignedFrom
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1) (reads : List (AssignedCell Fp))
+    (hsupport : WitnessFunctionSupport reads (programFunction w))
+    (i : RegionIndex) (available : List Cell)
+    (hreads : ∀ cell ∈ reads, cell.cell ∈ available) :
+    ((witnessShortCheck K numBits cfg w).operations i)
+      |>.AssignedFrom RegionOperation.Consumes i available := by
+  simp only [witnessShortCheck, operations_assignRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, operations_assignAdvice, List.append_nil,
+    Operations.assignedFrom_region_iff,
+    Operations.assignedFrom_nil_iff, RegionOperations.assignedFrom_cons_iff,
+    RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+    RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+    List.not_mem_nil, false_implies, implies_true, RegionOperations.assignedCellsAfter_cons,
+    RegionOperation.assignedCells, List.singleton_append, true_and, and_true]
+  refine ⟨⟨reads, hsupport, fun c hc _ => hreads c hc⟩, ?_⟩
+  exact (shortRangeCheck K numBits).call_consumedCellsAssignedFrom cfg
+    (FormalRegionCircuit.Configured.ofPure _ cfg () rfl) 0 () i
+    (by intro c hc; simp [FormalRegionCircuit.Configured.inputCells,
+      FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt,
+      FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, shortRangeCheck,
+      KeygenRequirements.readRelativeCellsAt] at hc; subst hc; simp [Cell.of])
+
+@[keygen_norm]
+theorem witnessShortCheck_adviceWritesConsistent
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessShortCheck K numBits cfg w).operations i).AdviceWritesConsistentFrom i := by
+  apply Operations.AdviceWritesDistinct.toConsistent
+  simp only [witnessShortCheck, operations_assignRegion, RegionCircuit.operations_bind,
+    operations_assignAdvice, Operations.adviceWritesDistinct_region_cons,
+    Operations.adviceWritesDistinct_nil, List.singleton_append,
+    FormalRegionCircuit.call_operations,
+    shortRangeCheck, RegionCircuit.operations_pure, operations_cellAt, operations_enableLookup,
+    operations_constrainConstant, operations_enable, RegionOperations.adviceWrites,
+    List.flatMap_cons, List.flatMap_nil, RegionOperation.adviceWrites,
+    List.nil_append, List.append_nil, List.mem_cons, List.not_mem_nil, or_false, not_or,
+    Prod.mk.injEq, RegionOperations.AdviceWritesDistinct, List.nodup_cons, List.nodup_nil,
+    not_false_eq_true, and_true]
+  exact ⟨⟨fun h => by omega, fun h => by omega⟩, fun h => by omega⟩
 
 /-- The short witness wrapper preserves its child's lookup activation law. -/
 theorem witnessShortCheck_lookupActivationsWellFormed
@@ -2796,7 +3037,83 @@ theorem witnessCheck_copyCellsAssignedFrom
     (w : WitgenIR Fp 1) (i : RegionIndex) (available : List Cell) :
     ((witnessCheck K numWords strict cfg w hstrict).operations i)
       |>.CopyCellsAssignedFrom i available := by
-  simp only [witnessCheck, circuit_norm, keygen_norm, keygen_spine]
+  simp only [witnessCheck, operations_assignRegion, RegionCircuit.operations_bind,
+    operations_assignAdvice, Operations.CopyCellsAssignedFrom, Operations.assignedFrom_region_iff,
+    Operations.assignedFrom_nil_iff, RegionOperations.assignedFrom_cons_iff,
+    RegionOperation.consumesFrom_copies_iff, RegionOperation.copiedCells,
+    List.not_mem_nil, false_implies, implies_true, RegionOperations.assignedCellsAfter_cons,
+    RegionOperation.assignedCells, List.singleton_append, true_and, and_true]
+  exact ((RegionOperations.assignedFrom_consumes_iff i _ _).mp
+    ((rangeCheckAt K numWords strict hstrict).call_consumedCellsAssignedFrom cfg
+      (FormalRegionCircuit.Configured.ofPure _ cfg () rfl) 0 () i
+      (by intro c hc; simp [FormalRegionCircuit.Configured.inputCells,
+        FormalRegionCircuit.Configured.readCells,
+        FormalRegionCircuit.Configured.readRelativeCellsAt,
+        FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, rangeCheckAt,
+        KeygenRequirements.readRelativeCellsAt] at hc; subst hc; simp [Cell.of]))).1
+
+/-- A witness check consumes only the support of its witness program. -/
+@[keygen_norm]
+theorem witnessCheck_consumedCellsAssignedFrom
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (reads : List (AssignedCell Fp))
+    (hsupport : WitnessFunctionSupport reads (programFunction w))
+    (i : RegionIndex) (available : List Cell)
+    (hreads : ∀ cell ∈ reads, cell.cell ∈ available) :
+    ((witnessCheck K numWords strict cfg w hstrict).operations i)
+      |>.AssignedFrom RegionOperation.Consumes i available := by
+  simp only [witnessCheck, operations_assignRegion, RegionCircuit.operations_bind,
+    operations_assignAdvice, Operations.assignedFrom_region_iff,
+    Operations.assignedFrom_nil_iff, RegionOperations.assignedFrom_cons_iff,
+    RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+    RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+    List.not_mem_nil, false_implies, implies_true, RegionOperations.assignedCellsAfter_cons,
+    RegionOperation.assignedCells, List.singleton_append, true_and, and_true]
+  refine ⟨⟨reads, hsupport, fun c hc _ => hreads c hc⟩, ?_⟩
+  exact (rangeCheckAt K numWords strict hstrict).call_consumedCellsAssignedFrom cfg
+    (FormalRegionCircuit.Configured.ofPure _ cfg () rfl) 0 () i
+    (by intro c hc; simp [FormalRegionCircuit.Configured.inputCells,
+      FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt,
+      FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, rangeCheckAt,
+      KeygenRequirements.readRelativeCellsAt] at hc; subst hc; simp [Cell.of])
+
+@[keygen_norm]
+theorem witnessCheck_adviceWritesConsistent
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheck K numWords strict cfg w hstrict).operations i).AdviceWritesConsistentFrom i := by
+  apply Operations.AdviceWritesDistinct.toConsistent
+  simp only [witnessCheck, operations_assignRegion, RegionCircuit.operations_bind,
+    operations_assignAdvice, Operations.adviceWritesDistinct_region_cons,
+    Operations.adviceWritesDistinct_nil, List.singleton_append,
+    RegionOperations.adviceWritesDistinct_assignAdvice_cons, FormalRegionCircuit.call_operations,
+    and_true]
+  refine ⟨fun hmem => ?_, ?_⟩
+  · cases strict <;>
+      simp only [rangeCheckAt, rangeCheckAtBody, Bool.false_eq_true, ite_false, ite_true,
+        RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_cellAt,
+        operations_constrainConstant, List.nil_append, List.append_nil,
+        RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+        RegionOperations.adviceWrites_nil, RegionOperation.adviceWrites_constrainConstant] at hmem
+    · have hgt := rangeCheckLoop_adviceWrites_gt K cfg _ 0 numWords i _ _ hmem; omega
+    · have hgt := rangeCheckLoop_adviceWrites_gt K cfg _ 0 numWords i _ _ hmem; omega
+  · cases strict <;>
+      simp only [rangeCheckAt, rangeCheckAtBody, Bool.false_eq_true, ite_false, ite_true,
+        RegionCircuit.operations_bind, RegionCircuit.operations_pure, operations_cellAt,
+        operations_constrainConstant, List.nil_append, List.append_nil,
+        RegionOperations.adviceWritesDistinct_append_iff,
+        RegionOperations.adviceWritesDistinct_constrainConstant_cons,
+        RegionOperations.adviceWritesDistinct_nil,
+        RegionOperations.adviceWrites_cons, RegionOperations.adviceWrites_nil,
+        RegionOperation.adviceWrites_constrainConstant,
+        List.disjoint_nil_right, and_true]
+    · exact rangeCheckLoop_adviceWritesDistinct K cfg _ 0 numWords i
+    · exact rangeCheckLoop_adviceWritesDistinct K cfg _ 0 numWords i
 
 /-- The lookup activation inside a witness check inherits the packaged law of its
 positional range-check child. -/

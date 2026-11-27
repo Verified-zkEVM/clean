@@ -90,6 +90,138 @@ def permuteSynthesize (cfg : Config) (offset : ℕ) (input : Var State Fp) :
     pure ())
   readStateRow cfg (offset + 36)
 
+private theorem fullRound_state_mem_assignedCells (r : ℕ) (cfg : Config) (o : ℕ)
+    (self : RegionIndex) (k : Fin 3) :
+    Cell.of self (o + 1) (cfg.state k) ∈
+      (((fullRound r).call cfg o ()).operations self).assignedCells self := by
+  rw [FormalRegionCircuit.call_operations]
+  fin_cases k <;>
+    simp [fullRound, fullRoundSynthesize, circuit_norm, RegionOperations.assignedCells,
+      RegionOperation.assignedCells]
+
+private theorem partialRound_state_mem_assignedCells (r : ℕ) (cfg : Config) (o : ℕ)
+    (self : RegionIndex) (k : Fin 3) :
+    Cell.of self (o + 1) (cfg.state k) ∈
+      (((partialRound r).call cfg o ()).operations self).assignedCells self := by
+  rw [FormalRegionCircuit.call_operations]
+  fin_cases k <;>
+    simp [partialRound, partialRoundSynthesize, circuit_norm, RegionOperations.assignedCells,
+      RegionOperation.assignedCells]
+
+private theorem fullRound_adviceWrites_eq (r : ℕ) (cfg : Config) (o : ℕ) (self : RegionIndex) :
+    (((fullRound r).call cfg o ()).operations self).adviceWrites =
+      [(cfg.state 0, o + 1), (cfg.state 1, o + 1), (cfg.state 2, o + 1)] := by
+  rw [FormalRegionCircuit.call_operations]
+  simp [fullRound, fullRoundSynthesize, circuit_norm, RegionOperations.adviceWrites,
+    RegionOperation.adviceWrites]
+
+private theorem partialRound_adviceWrites_eq (r : ℕ) (cfg : Config) (o : ℕ) (self : RegionIndex) :
+    (((partialRound r).call cfg o ()).operations self).adviceWrites =
+      [(cfg.partialSbox, o), (cfg.state 0, o + 1), (cfg.state 1, o + 1), (cfg.state 2, o + 1)] := by
+  rw [FormalRegionCircuit.call_operations]
+  simp [partialRound, partialRoundSynthesize, circuit_norm, RegionOperations.adviceWrites,
+    RegionOperation.adviceWrites]
+
+private theorem fullRoundLoop_consumedCellsAssignedFrom
+    (cfg : Config) (hconfig : cfg.FixedColumnsLawful) (base offset count : ℕ)
+    (self : RegionIndex) (available : List Cell)
+    (hinit : ∀ k : Fin 3, Cell.of self offset (cfg.state k) ∈ available) :
+    ((RegionCircuit.forRange' offset 1 count (fun r o => do
+      let _ ← (fullRound (base + r)).call cfg o ()
+      pure ())).operations self).AssignedFrom RegionOperation.Consumes self available := by
+  apply RegionCircuit.forRange'_assignedFrom_of_earlier_rounds
+  · intro _
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil]
+    apply (fullRound (base + 0)).call_consumedCellsAssignedFrom cfg
+      (FormalRegionCircuit.Configured.ofPure (fullRound (base + 0)) cfg hconfig rfl)
+    intro cell hcell
+    simp only [FormalRegionCircuit.Configured.inputCells,
+      FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt,
+      FormalRegionCircuit.Configured.ofPure,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      fullRound, fullRoundElaborated, KeygenRequirements.readRelativeCellsAt,
+      List.nil_append, List.append_nil, List.map_cons, List.map_nil, List.mem_cons,
+      List.not_mem_nil, or_false, Nat.add_zero] at hcell
+    rcases hcell with rfl | rfl | rfl
+    · exact hinit 0
+    · exact hinit 1
+    · exact hinit 2
+  · intro i _
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+      Nat.mul_one]
+    apply (fullRound (base + (i + 1))).call_consumedCellsAssignedFrom cfg
+      (FormalRegionCircuit.Configured.ofPure (fullRound (base + (i + 1))) cfg hconfig rfl)
+    intro cell hcell
+    simp only [FormalRegionCircuit.Configured.inputCells,
+      FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt,
+      FormalRegionCircuit.Configured.ofPure,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      fullRound, fullRoundElaborated, KeygenRequirements.readRelativeCellsAt,
+      List.nil_append, List.append_nil, List.map_cons, List.map_nil, List.mem_cons,
+      List.not_mem_nil, or_false, Nat.add_zero] at hcell
+    rcases hcell with rfl | rfl | rfl
+    · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i self available _
+        (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one] using
+          fullRound_state_mem_assignedCells (base + i) cfg (offset + i) self 0)
+    · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i self available _
+        (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one] using
+          fullRound_state_mem_assignedCells (base + i) cfg (offset + i) self 1)
+    · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i self available _
+        (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one] using
+          fullRound_state_mem_assignedCells (base + i) cfg (offset + i) self 2)
+
+private theorem partialRoundLoop_consumedCellsAssignedFrom
+    (cfg : Config) (hconfig : cfg.FixedColumnsLawful) (base offset count : ℕ)
+    (self : RegionIndex) (available : List Cell)
+    (hinit : ∀ k : Fin 3, Cell.of self offset (cfg.state k) ∈ available) :
+    ((RegionCircuit.forRange' offset 1 count (fun r o => do
+      let _ ← (partialRound (base + 2 * r)).call cfg o ()
+      pure ())).operations self).AssignedFrom RegionOperation.Consumes self available := by
+  apply RegionCircuit.forRange'_assignedFrom_of_earlier_rounds
+  · intro _
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil]
+    apply (partialRound (base + 2 * 0)).call_consumedCellsAssignedFrom cfg
+      (FormalRegionCircuit.Configured.ofPure (partialRound (base + 2 * 0)) cfg hconfig rfl)
+    intro cell hcell
+    simp only [FormalRegionCircuit.Configured.inputCells,
+      FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt,
+      FormalRegionCircuit.Configured.ofPure,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      partialRound, partialRoundElaborated, KeygenRequirements.readRelativeCellsAt,
+      List.nil_append, List.append_nil, List.map_cons, List.map_nil, List.mem_cons,
+      List.not_mem_nil, or_false, Nat.add_zero] at hcell
+    rcases hcell with rfl | rfl | rfl
+    · exact hinit 0
+    · exact hinit 1
+    · exact hinit 2
+  · intro i _
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+      Nat.mul_one]
+    apply (partialRound (base + 2 * (i + 1))).call_consumedCellsAssignedFrom cfg
+      (FormalRegionCircuit.Configured.ofPure (partialRound (base + 2 * (i + 1))) cfg hconfig rfl)
+    intro cell hcell
+    simp only [FormalRegionCircuit.Configured.inputCells,
+      FormalRegionCircuit.Configured.readCells,
+      FormalRegionCircuit.Configured.readRelativeCellsAt,
+      FormalRegionCircuit.Configured.ofPure,
+      FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+      partialRound, partialRoundElaborated, KeygenRequirements.readRelativeCellsAt,
+      List.nil_append, List.append_nil, List.map_cons, List.map_nil, List.mem_cons,
+      List.not_mem_nil, or_false, Nat.add_zero] at hcell
+    rcases hcell with rfl | rfl | rfl
+    · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i self available _
+        (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one] using
+          partialRound_state_mem_assignedCells (base + 2 * i) cfg (offset + i) self 0)
+    · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i self available _
+        (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one] using
+          partialRound_state_mem_assignedCells (base + 2 * i) cfg (offset + i) self 1)
+    · exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ i self available _
+        (by simpa [Cell.of, RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one] using
+          partialRound_state_mem_assignedCells (base + 2 * i) cfg (offset + i) self 2)
+
 @[reducible]
 def permuteElaborated :
     ElaboratedRegionCircuit Fp Config Config State State pure
@@ -102,6 +234,8 @@ def permuteElaborated :
           [cfg.state 0, cfg.state 1, cfg.state 2]
         inputCells _ _ input :=
           [input.x0.cell, input.x1.cell, input.x2.cell] }
+    adviceColumnRequirements cfg :=
+      ColumnsDistinct [cfg.state 0, cfg.state 1, cfg.state 2, cfg.partialSbox]
     output cfg offset _ self := stateRow cfg (offset + 36) self
     synthesisSummary cfg offset _ _ :=
       permuteSynthesisSummary cfg offset
@@ -258,16 +392,158 @@ def permuteElaborated :
         have hrightBounds := hpartialBounds column row right hright
         omega
       · exact hlast column row left right hleft hright
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
-      simp only [permuteSynthesize, RegionCircuit.operations_bind,
-        RegionOperations.CopyCellsAssigned,
-        RegionOperations.copyCellsAssignedFrom_append_iff]
-      repeat' apply And.intro
-      all_goals first
-        | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-           simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]; done)
-        | keygen_registration }
+      have hreadOps : ∀ o, @RegionCircuit.operations Fp _ (Var State Fp)
+          (readStateRow configInput o) region = [] := fun _ => rfl
+      simp only [Configure.output_pure, permuteSynthesize, RegionCircuit.operations_bind,
+        operations_copyAdvice, hreadOps,
+        RegionOperations.ConsumedCellsAssigned,
+        RegionOperations.assignedFrom_append_iff, List.append_nil]
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
+      · keygen_registration
+      · keygen_registration
+      · keygen_registration
+      · simpa only [Nat.zero_add] using
+          fullRoundLoop_consumedCellsAssignedFrom configInput hconfig 0 offset 4 region _ (by
+            intro k
+            fin_cases k <;> simp [RegionOperations.assignedCellsAfter, RegionOperation.assignedCells])
+      · apply partialRoundLoop_consumedCellsAssignedFrom configInput hconfig 4 (offset + 4) 28 region
+        intro k
+        exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ 3 region _ _ (by
+          simpa [RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+            Nat.add_assoc] using fullRound_state_mem_assignedCells 3 configInput (offset + 3) region k)
+      · apply fullRoundLoop_consumedCellsAssignedFrom configInput hconfig 60 (offset + 32) 4 region
+        intro k
+        exact RegionCircuit.mem_assignedCellsAfter_loopAux_succ_of_mem_round _ _ 27 region _ _ (by
+          simpa [RegionCircuit.operations_bind, RegionCircuit.operations_pure, Nat.mul_one,
+            Nat.add_assoc] using
+            partialRound_state_mem_assignedCells (4 + 2 * 27) configInput (offset + 4 + 27) region k)
+    adviceWritesConsistent := by
+      intro configInput counts hconfig hadvice offset input region
+      apply RegionOperations.AdviceWritesDistinct.toConsistent
+      have hreadOps : ∀ o, @RegionCircuit.operations Fp _ (Var State Fp)
+          (readStateRow configInput o) region = [] := fun _ => rfl
+      simp only [Configure.output_pure, ColumnsDistinct, List.nodup_cons, List.mem_cons,
+        List.not_mem_nil, or_false, not_or, not_false_eq_true, and_true,
+        List.nodup_nil] at hadvice
+      obtain ⟨⟨h01, h02, h0p⟩, ⟨h12, h1p⟩, h2p⟩ := hadvice
+      have hfullLoop : ∀ base baseOff cnt,
+          ((RegionCircuit.forRange' baseOff 1 cnt (fun r o => do
+            let _ ← (fullRound (base + r)).call configInput o ()
+            pure ())).operations region).AdviceWritesDistinct := by
+        intro base baseOff cnt
+        apply RegionCircuit.forRange'_adviceWritesDistinct_of_disjoint
+        · intro i
+          simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+            RegionOperations.AdviceWritesDistinct, fullRound_adviceWrites_eq, List.nodup_cons,
+            List.mem_cons, List.not_mem_nil, Prod.mk.injEq, not_or, List.nodup_nil,
+            and_true, not_false_eq_true, or_false]
+          exact ⟨⟨h01, h02⟩, h12⟩
+        · intro i j hij
+          rw [List.disjoint_left]
+          intro entry hi hj
+          simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+            fullRound_adviceWrites_eq, List.mem_cons, List.not_mem_nil, or_false] at hi hj
+          rcases hi with rfl | rfl | rfl <;> rcases hj with h | h | h <;>
+            simp only [Prod.mk.injEq] at h <;> omega
+      have hfullBounds : ∀ base baseOff cnt col row,
+          (col, row) ∈ ((RegionCircuit.forRange' baseOff 1 cnt (fun r o => do
+            let _ ← (fullRound (base + r)).call configInput o ()
+            pure ())).operations region).adviceWrites →
+            baseOff + 1 ≤ row ∧ row ≤ baseOff + cnt ∧ col ≠ configInput.partialSbox := by
+        intro base baseOff cnt col row hmem
+        obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRange'_adviceWrites_iff baseOff 1 cnt _
+          region col row).mp hmem
+        have hi_lt := i.isLt
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+          fullRound_adviceWrites_eq, List.mem_cons, List.not_mem_nil, or_false,
+          Prod.mk.injEq] at hi
+        rcases hi with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+        · exact ⟨by omega, by omega, h0p⟩
+        · exact ⟨by omega, by omega, h1p⟩
+        · exact ⟨by omega, by omega, h2p⟩
+      have hpartLoop :
+          ((RegionCircuit.forRange' (offset + 4) 1 28 (fun r o => do
+            let _ ← (partialRound (4 + 2 * r)).call configInput o ()
+            pure ())).operations region).AdviceWritesDistinct := by
+        apply RegionCircuit.forRange'_adviceWritesDistinct_of_disjoint
+        · intro i
+          simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+            RegionOperations.AdviceWritesDistinct, partialRound_adviceWrites_eq, List.nodup_cons,
+            List.mem_cons, List.not_mem_nil, Prod.mk.injEq, not_or, not_and, List.nodup_nil,
+            and_true, not_false_eq_true, or_false]
+          refine ⟨⟨fun _ h => by omega, fun _ h => by omega, fun _ h => by omega⟩,
+            ⟨h01, h02⟩, h12⟩
+        · intro i j hij
+          rw [List.disjoint_left]
+          intro entry hi hj
+          simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+            partialRound_adviceWrites_eq, List.mem_cons, List.not_mem_nil, or_false] at hi hj
+          rcases hi with rfl | rfl | rfl | rfl <;> rcases hj with h | h | h | h <;>
+            simp only [Prod.mk.injEq] at h
+          all_goals
+            first
+            | omega
+            | exact h0p h.1
+            | exact h1p h.1
+            | exact h2p h.1
+      have hpartBounds : ∀ col row,
+          (col, row) ∈ ((RegionCircuit.forRange' (offset + 4) 1 28 (fun r o => do
+            let _ ← (partialRound (4 + 2 * r)).call configInput o ()
+            pure ())).operations region).adviceWrites →
+            (col = configInput.partialSbox ∧ offset + 4 ≤ row ∧ row ≤ offset + 31) ∨
+            (col ≠ configInput.partialSbox ∧ offset + 5 ≤ row ∧ row ≤ offset + 32) := by
+        intro col row hmem
+        obtain ⟨i, hi⟩ := (RegionCircuit.mem_forRange'_adviceWrites_iff (offset + 4) 1 28 _
+          region col row).mp hmem
+        have hi_lt := i.isLt
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure, List.append_nil,
+          partialRound_adviceWrites_eq, List.mem_cons, List.not_mem_nil, or_false,
+          Prod.mk.injEq] at hi
+        rcases hi with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+        · exact Or.inl ⟨rfl, by omega, by omega⟩
+        · exact Or.inr ⟨h0p, by omega, by omega⟩
+        · exact Or.inr ⟨h1p, by omega, by omega⟩
+        · exact Or.inr ⟨h2p, by omega, by omega⟩
+      simp only [Configure.output_pure, permuteSynthesize, RegionCircuit.operations_bind,
+        operations_copyAdvice, hreadOps,
+        List.nil_append, List.append_nil, List.cons_append,
+        RegionOperations.adviceWritesDistinct_assignAdvice_cons,
+        RegionOperations.adviceWritesDistinct_constrainEqual_cons,
+        RegionOperations.adviceWritesDistinct_append_iff,
+        RegionOperations.adviceWrites_append, RegionOperations.adviceWrites_cons,
+        RegionOperation.adviceWrites_assignAdvice,
+        RegionOperation.adviceWrites_constrainEqual, List.mem_append, List.mem_cons,
+        not_or, Prod.mk.injEq, and_true]
+      refine ⟨⟨h01, h02, fun hm => ?_, fun hm => ?_, fun hm => ?_⟩,
+        ⟨h12, fun hm => ?_, fun hm => ?_, fun hm => ?_⟩,
+        ⟨fun hm => ?_, fun hm => ?_, fun hm => ?_⟩,
+        by simpa only [Nat.zero_add] using hfullLoop 0 offset 4,
+        ⟨hpartLoop, hfullLoop 60 (offset + 32) 4, ?_⟩, ?_⟩
+      · have hb := hfullBounds 0 offset 4 _ _ (by simpa only [Nat.zero_add] using hm); omega
+      · rcases hpartBounds _ _ hm with ⟨_, h1, _⟩ | ⟨_, h1, _⟩ <;> omega
+      · have hb := hfullBounds 60 (offset + 32) 4 _ _ hm; omega
+      · have hb := hfullBounds 0 offset 4 _ _ (by simpa only [Nat.zero_add] using hm); omega
+      · rcases hpartBounds _ _ hm with ⟨_, h1, _⟩ | ⟨_, h1, _⟩ <;> omega
+      · have hb := hfullBounds 60 (offset + 32) 4 _ _ hm; omega
+      · have hb := hfullBounds 0 offset 4 _ _ (by simpa only [Nat.zero_add] using hm); omega
+      · rcases hpartBounds _ _ hm with ⟨_, h1, _⟩ | ⟨_, h1, _⟩ <;> omega
+      · have hb := hfullBounds 60 (offset + 32) 4 _ _ hm; omega
+      · rw [List.disjoint_left]
+        rintro ⟨col, row⟩ hp hf
+        have hfb := hfullBounds 60 (offset + 32) 4 col row hf
+        rcases hpartBounds col row hp with ⟨_, _, h2⟩ | ⟨_, _, h2⟩ <;> omega
+      · rw [List.disjoint_left]
+        rintro ⟨col, row⟩ hf1 hrest
+        have hb1 := hfullBounds 0 offset 4 col row (by simpa only [Nat.zero_add] using hf1)
+        rw [List.mem_append] at hrest
+        rcases hrest with hp | hf2
+        · rcases hpartBounds col row hp with ⟨heq, _, _⟩ | ⟨_, hlo, _⟩
+          · exact hb1.2.2 heq
+          · omega
+        · have hb2 := hfullBounds 60 (offset + 32) 4 col row hf2
+          omega }
 
 /-- Chain a per-row step family into a `Fin.foldl` (the donor `Permute.value` shape). -/
 private theorem foldl_of_steps (f : ℕ → State Fp → State Fp) (st : ℕ → State Fp)

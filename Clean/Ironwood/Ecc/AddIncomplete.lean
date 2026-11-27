@@ -109,6 +109,10 @@ def add : FormalRegionCircuit Fp
     { keygenRequirements :=
         { inputCells _ _ input :=
             [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] }
+      adviceColumnRequirements cfg :=
+        cfg.xP ≠ cfg.yP ∧ cfg.xP ≠ cfg.xQR ∧ cfg.xP ≠ cfg.yQR ∧
+        cfg.yP ≠ cfg.xQR ∧ cfg.yP ≠ cfg.yQR ∧ cfg.xQR ≠ cfg.yQR
+      consumedCellsAssigned := by keygen_registration [Point.nondegenerateAdd]
       synthesisSummary config offset _ _ := synthesisSummary config offset
       synthesisSummary_eq := by
         intro _ _ _ _

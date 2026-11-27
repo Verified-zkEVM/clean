@@ -106,7 +106,7 @@ def SwapSpec (a : Fp) (output : Output Fp) (wit : Fp × Fp) : Prop :=
 /-- Rust `CondSwapChip::swap`'s region body as a formal circuit: input `a` (copied in),
 parameterized by the `b` witness program and the `Bool`-valued `swap` program. Output
 `(a_swapped, b_swapped)`. -/
-def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
+def swap (wb : SupportedProgram Fp) (wswap : SupportedFunction Fp Bool) :
     FormalRegionCircuit Fp Config Config Input Output where
   configure := pure
   elaborated :=
@@ -114,7 +114,10 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
       { gates cfg _ := [swapGate cfg]
         permutationColumns input _ :=
           [input.a, input.aSwapped, input.bSwapped]
-        inputCells _ _ input := [input.a.cell] }
+        inputCells _ _ input := [input.a.cell]
+        readCells _ _ _ := wb.reads.map (·.cell) ++ wswap.reads.map (·.cell) }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.a, cfg.b, cfg.swap, cfg.aSwapped, cfg.bSwapped]
       output := fun cfg offset _ self =>
         { aSwapped := AssignedCell.of self offset cfg.aSwapped
           bSwapped := AssignedCell.of self offset cfg.bSwapped }
@@ -149,9 +152,9 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
     -- cond_swap.rs:97 — q_swap first
     (swapGate cfg).enable offset
     let aC ← copyAdvice input.a cfg.a offset
-    let b ← assignAdvice cfg.b offset wb
+    let b ← assignAdvice cfg.b offset wb.program
     let sw ← assignAdvice cfg.swap offset
-      (.native fun env => #v[if wswap env then (1 : Fp) else 0])
+      (.native fun env => #v[if wswap.compute env then (1 : Fp) else 0])
     let aS ← assignAdvice cfg.aSwapped offset
       (.ofFExpr ((.expr sw) * (.expr b) + ((.const (1 : Fp)) - (.expr sw)) * (.expr aC)))
     let bS ← assignAdvice cfg.bSwapped offset
@@ -197,7 +200,7 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
   completeness := by
     circuit_proof_start [swapGate]
     obtain ⟨hOA, hOB⟩ := h_output
-    rcases Bool.eq_false_or_eq_true (wswap { place := place, env := env }) with hs | hs <;>
+    rcases Bool.eq_false_or_eq_true (wswap.compute { place := place, env := env }) with hs | hs <;>
       simp only [hs, Bool.false_eq_true, ite_false, ite_true] at hOA hOB ⊢
     · refine ⟨⟨by ring, by ring, by norm_num⟩, ?_, ?_⟩
       · linear_combination -hOA
@@ -210,7 +213,7 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
 
 @[synthesis_summary_norm]
 theorem swap_synthesisSummary_eq
-    (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (wb : SupportedProgram Fp) (wswap : SupportedFunction Fp Bool)
     (cfg : Config) (offset : ℕ) (input : Var Input Fp)
     (region : RegionIndex) :
     (swap wb wswap).elaborated.synthesisSummary cfg offset input region =
@@ -225,8 +228,8 @@ theorem swap_synthesisSummary_eq
 
 /-- The first swap output stays in its configured advice column. -/
 @[keygen_norm, keygen_output_norm]
-theorem swap_output_aSwapped_column (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+theorem swap_output_aSwapped_column (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) (cfg : Config)
     (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
     ((swap wb wswap).output cfg offset input self).aSwapped.cell.column = cfg.aSwapped := by
   unfold FormalRegionCircuit.output swap
@@ -234,8 +237,8 @@ theorem swap_output_aSwapped_column (wb : WitgenIR Fp 1)
 
 /-- The second swap output stays in its configured advice column. -/
 @[keygen_norm, keygen_output_norm]
-theorem swap_output_bSwapped_column (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+theorem swap_output_bSwapped_column (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) (cfg : Config)
     (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
     ((swap wb wswap).output cfg offset input self).bSwapped.cell.column = cfg.bSwapped := by
   unfold FormalRegionCircuit.output swap
@@ -243,8 +246,8 @@ theorem swap_output_bSwapped_column (wb : WitgenIR Fp 1)
 
 /-- The two cells returned by a swap, in their configured columns. -/
 @[keygen_output_norm]
-theorem swap_output_eq (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+theorem swap_output_eq (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) (cfg : Config)
     (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
     (swap wb wswap).output cfg offset input self =
       { aSwapped := AssignedCell.of self offset cfg.aSwapped
@@ -254,8 +257,8 @@ theorem swap_output_eq (wb : WitgenIR Fp 1)
 
 /-- The extracted swap flag is the value of the flag cell assigned by the
 conditional-swap region. -/
-theorem swap_extract_snd_eq (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+theorem swap_extract_snd_eq (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) (cfg : Config)
     (offset : ℕ) (input : Var Input Fp) (self : RegionIndex)
     (env : Placed Environment Fp) :
     ((swap wb wswap).extract cfg offset input self env).2 =
@@ -268,8 +271,8 @@ theorem swap_extract_snd_eq (wb : WitgenIR Fp 1)
     AssignedCell.eval_of_advice env.place env.env self offset cfg.swap
 
 /-- Both cells returned by a conditional swap are assigned by its region. -/
-theorem swap_call_output_cells_assigned (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+theorem swap_call_output_cells_assigned (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) (cfg : Config)
     (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
     let output := (swap wb wswap).output cfg offset input self
     output.aSwapped.cell ∈
@@ -282,8 +285,8 @@ theorem swap_call_output_cells_assigned (wb : WitgenIR Fp 1)
 
 /-- A configured swap exposes its input and both output columns for equality. -/
 @[keygen_norm]
-theorem swap_configured_permutationColumns_eq (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) {cfg : Config}
+theorem swap_configured_permutationColumns_eq (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) {cfg : Config}
     (configured : (swap wb wswap).Configured cfg) :
     configured.permutationColumns =
       [cfg.a.toAny, cfg.aSwapped.toAny, cfg.bSwapped.toAny] := by
@@ -296,7 +299,7 @@ theorem swap_configured_permutationColumns_eq (wb : WitgenIR Fp 1)
 /-- Conditional swapping requests no deferred constants. -/
 @[synthesis_summary_norm]
 theorem swap_synthesisSummary_constantSiteCount
-    (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (wb : SupportedProgram Fp) (wswap : SupportedFunction Fp Bool)
     (config : Config) (offset : ℕ) (input : Var Input Fp)
     (region : RegionIndex) :
     ((swap wb wswap).elaborated.synthesisSummary
@@ -307,8 +310,8 @@ theorem swap_synthesisSummary_constantSiteCount
 /-- A conditional-swap capability exported by its producing configure run. -/
 def swapConfigureCertificate
     (a b aSwapped bSwapped swapColumn : Column .advice)
-    (counts : ConfigureCounts) (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool) :
+    (counts : ConfigureCounts) (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool) :
     (swap wb wswap).ConfigurationCertificate
       ((configure a b aSwapped bSwapped swapColumn).output counts)
       { gates := ((configure a b aSwapped bSwapped swapColumn).delta counts).gates

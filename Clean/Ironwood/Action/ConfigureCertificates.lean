@@ -384,8 +384,8 @@ private theorem sinsemilla1_generatorTable_fixedQuery_mem_actionConfigure
 /-- Action-facing view of the two capabilities produced by a Merkle configure. -/
 structure MerkleCapabilities (config : Sinsemilla.Merkle.Config)
     (context : KeygenContext Fp) where
-  condSwap : ∀ (wb : WitgenIR Fp 1)
-    (wswap : Placed ProverEnvironment Fp → Bool),
+  condSwap : ∀ (wb : SupportedProgram Fp)
+    (wswap : SupportedFunction Fp Bool),
     (CondSwap.swap wb wswap).ConfigurationCertificate config.condSwap context
   gate : ∀ l : Fp,
     (Sinsemilla.Merkle.Gate.circuit l).ConfigurationCertificate config.gate context

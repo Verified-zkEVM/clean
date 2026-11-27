@@ -379,14 +379,13 @@ theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
   intro index
   simp
 
-def add : FormalRegionCircuit Fp
-    (Column .advice × Column .advice × Column .advice × Column .advice ×
-      Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
-    Config Inputs Point where
-  /- Rust `Config::configure`: enable equality on the four point advice columns, allocate
-  the simple selector, register the gate. The five auxiliary hint columns are *not*
-  equality-enabled (they carry only prover hints). -/
-  configure | (xP, yP, xQR, yQR, lambda, alpha, beta, gamma, delta) => do
+@[reducible]
+def addConfigure
+    (input : Column .advice × Column .advice × Column .advice × Column .advice ×
+      Column .advice × Column .advice × Column .advice × Column .advice × Column .advice) :
+    Configure Fp Config :=
+  match input with
+  | (xP, yP, xQR, yQR, lambda, alpha, beta, gamma, delta) => do
     enableEquality xP
     enableEquality yP
     enableEquality xQR
@@ -395,65 +394,121 @@ def add : FormalRegionCircuit Fp
     createGate (gate qAdd lambda xP yP xQR yQR alpha beta gamma delta)
     return { qAdd, lambda, xP, yP, xQR, yQR, alpha, beta, gamma, delta }
 
-  elaborated :=
-    { keygenRequirements :=
-        { inputCells _ _ input :=
-            [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] }
-      output config offset _ self :=
-        { x := .of self (offset + 1) config.xQR,
-          y := .of self (offset + 1) config.yQR }
-      synthesisSummary config offset _ _ := synthesisSummary config offset
-      output_eq := by
-        intro _ _ _ _
-        rfl
-      synthesisSummary_eq := by
-        intro _ _ _ _
-        apply FloorPlanner.RegionSynthesisSummary.ext
-        · simp only [synthesisSummary]
-          rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
-          simp only [circuit_norm, gate, List.flatMap_cons,
-            List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
-            List.append_nil, List.nil_append, List.singleton_append]
-        · simp only [synthesisSummary, circuit_norm, gate]
-          omega
-        · simp only [synthesisSummary, circuit_norm, gate]
-        · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm]
-        · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm]
-        · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm] }
+@[reducible]
+def addSynthesize (config : Config) (offset : ℕ)
+    (input : Inputs (AssignedCell Fp)) : RegionCircuit Fp (Point (AssignedCell Fp)) := do
+  -- enable `q_add` selector at `offset`
+  (gate config.qAdd config.lambda config.xP config.yP config.xQR config.yQR
+    config.alpha config.beta config.gamma config.delta).enable offset
+  -- copy P into `(x_p, y_p)` at `offset`
+  let _xP ← copyAdvice input.p.x config.xP offset
+  let _yP ← copyAdvice input.p.y config.yP offset
+  -- copy Q into `(x_qr, y_qr)` at `offset`
+  let _xQ ← copyAdvice input.q.x config.xQR offset
+  let _yQ ← copyAdvice input.q.y config.yQR offset
+  -- the copied input coordinates as witness-IR reads
+  let px : FExpr Fp := .expr input.p.x
+  let py : FExpr Fp := .expr input.p.y
+  let qx : FExpr Fp := .expr input.q.x
+  let qy : FExpr Fp := .expr input.q.y
+  -- witness the auxiliary `inv0` hints at `offset` (Rust `assign_advice` closures)
+  let _alpha ← assignAdvice config.alpha offset (.ofFExpr ((qx - px)⁻¹))
+  let _beta ← assignAdvice config.beta offset (.ofFExpr (px⁻¹))
+  let _gamma ← assignAdvice config.gamma offset (.ofFExpr (qx⁻¹))
+  let _delta ← assignAdvice config.delta offset
+    (.ofFExpr (.ite (qx =? px) ((qy + py)⁻¹) 0))
+  let _lambda ← assignAdvice config.lambda offset (.ofFExpr (lambdaProgram px py qx qy))
+  -- witness the result R at `offset + 1` on `(x_qr, y_qr)`
+  let xR ← assignAdvice config.xQR (offset + 1) (.ofFExpr (rXProgram px py qx qy))
+  let yR ← assignAdvice config.yQR (offset + 1) (.ofFExpr (rYProgram px py qx qy))
+  return ⟨xR, yR⟩
 
-  synthesize config offset (input : Inputs (AssignedCell Fp)) := do
-    -- enable `q_add` selector at `offset`
-    (gate config.qAdd config.lambda config.xP config.yP config.xQR config.yQR
-      config.alpha config.beta config.gamma config.delta).enable offset
-    -- copy P into `(x_p, y_p)` at `offset`
-    let _xP ← copyAdvice input.p.x config.xP offset
-    let _yP ← copyAdvice input.p.y config.yP offset
-    -- copy Q into `(x_qr, y_qr)` at `offset`
-    let _xQ ← copyAdvice input.q.x config.xQR offset
-    let _yQ ← copyAdvice input.q.y config.yQR offset
-    -- the copied input coordinates as witness-IR reads
-    let px : FExpr Fp := .expr input.p.x
-    let py : FExpr Fp := .expr input.p.y
-    let qx : FExpr Fp := .expr input.q.x
-    let qy : FExpr Fp := .expr input.q.y
-    -- witness the auxiliary `inv0` hints at `offset` (Rust `assign_advice` closures)
-    let _alpha ← assignAdvice config.alpha offset (.ofFExpr ((qx - px)⁻¹))
-    let _beta ← assignAdvice config.beta offset (.ofFExpr (px⁻¹))
-    let _gamma ← assignAdvice config.gamma offset (.ofFExpr (qx⁻¹))
-    let _delta ← assignAdvice config.delta offset
-      (.ofFExpr (.ite (qx =? px) ((qy + py)⁻¹) 0))
-    let _lambda ← assignAdvice config.lambda offset (.ofFExpr (lambdaProgram px py qx qy))
-    -- witness the result R at `offset + 1` on `(x_qr, y_qr)`
-    let xR ← assignAdvice config.xQR (offset + 1) (.ofFExpr (rXProgram px py qx qy))
-    let yR ← assignAdvice config.yQR (offset + 1) (.ofFExpr (rYProgram px py qx qy))
-    return ⟨xR, yR⟩
+@[reducible]
+def addElaborated : ElaboratedRegionCircuit Fp
+    (Column .advice × Column .advice × Column .advice × Column .advice ×
+      Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
+    Config Inputs Point addConfigure addSynthesize :=
+  { keygenRequirements :=
+      { inputCells _ _ input :=
+          [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] }
+    adviceColumnRequirements cfg :=
+      ColumnsDistinct [cfg.xP, cfg.yP, cfg.xQR, cfg.yQR,
+        cfg.alpha, cfg.beta, cfg.gamma, cfg.delta, cfg.lambda]
+    consumedCellsAssigned := by
+      keygen_registration [addConfigure, addSynthesize, lambdaProgram, rXProgram, rYProgram]
+    adviceWritesConsistent := by
+      intro configInput counts _hconfig hadvice offset input region
+      apply RegionOperations.AdviceWritesDistinct.toConsistent
+      rcases configInput with ⟨xP, yP, xQR, yQR, lambda, alpha, beta, gamma, delta⟩
+      simp only [addConfigure, Configure.output_bind, Configure.output_pure,
+        Configure.finalCounts_enableEquality, Configure.output_selector,
+        Configure.finalCounts_selector,
+        ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil,
+        or_false, not_or, not_false_eq_true, and_true, List.nodup_nil] at hadvice
+      simp only [addConfigure, addSynthesize, Configure.output_bind, Configure.output_pure,
+        Configure.finalCounts_enableEquality, Configure.output_selector,
+        Configure.finalCounts_selector,
+        circuit_norm, RegionOperations.AdviceWritesDistinct, RegionOperations.adviceWrites,
+        RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+        List.nil_append, List.append_nil, List.cons_append, List.nodup_cons,
+        List.mem_cons, List.not_mem_nil, or_false, not_or,
+        RegionOperations.not_adviceWrite_eq_iff,
+        RegionOperations.adviceWrites_offset_eq_add,
+        Nat.one_ne_zero,
+        true_imp_iff, false_imp_iff, List.nodup_nil, not_false_eq_true, and_true, true_and]
+      simp only [hadvice, not_false_eq_true, and_self]
+    fixedAssignmentsAgree := by
+      intro _ _ _ _ _ _ _ _ _ _ h
+      simp [addSynthesize, circuit_norm] at h
+    lookupSelectorAssignmentsAgree_of_registered := by
+      intro _ _ _ _ _ _ _ _ hregistered
+      exact RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
+        hregistered
+    lookupSelectorsAnchoredBy_of_registered := by
+      intro _ _ _ _ _ _ _ _ _
+      apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+      simp only [addSynthesize, circuit_norm, List.forall_cons,
+        RegionOperation.IsNotLookup, and_self]
+    registered := by
+      keygen_registration [addConfigure, addSynthesize]
+    lookupActivationsWellFormed := by
+      keygen_registration [addSynthesize]
+    output config offset _ self :=
+      { x := .of self (offset + 1) config.xQR,
+        y := .of self (offset + 1) config.yQR }
+    synthesisSummary config offset _ _ := synthesisSummary config offset
+    output_eq := by
+      intro _ _ _ _
+      rfl
+    synthesisSummary_eq := by
+      intro _ _ _ _
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · simp only [synthesisSummary, addSynthesize]
+        rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+        simp only [circuit_norm, gate, List.flatMap_cons,
+          List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+          List.append_nil, List.nil_append, List.singleton_append]
+      · simp only [synthesisSummary, addSynthesize, circuit_norm, gate]
+        omega
+      · simp only [synthesisSummary, addSynthesize, circuit_norm, gate]
+      · simp only [synthesisSummary, addSynthesize, circuit_norm, gate, synthesis_summary_norm]
+      · simp only [synthesisSummary, addSynthesize, circuit_norm, gate, synthesis_summary_norm]
+      · simp only [synthesisSummary, addSynthesize, circuit_norm, gate, synthesis_summary_norm] }
+
+def add : FormalRegionCircuit Fp
+    (Column .advice × Column .advice × Column .advice × Column .advice ×
+      Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
+    Config Inputs Point where
+  configure := addConfigure
+  elaborated := addElaborated
+  synthesize := addSynthesize
 
   -- P, Q are valid Pallas points (complete addition has no exceptional cases).
   Assumptions input := input.p.Valid ∧ input.q.Valid
   Spec input output _ := output.Valid ∧ output = input.p + input.q
 
   soundness := by
-    circuit_proof_start2 [gate]
+    circuit_proof_start2 [addSynthesize, gate]
     -- land the copied P/Q cells on the input coordinates in the gate polynomials
     simp only [region_1, region_2, region_3, region_4] at region_0
     obtain ⟨h1, h2, h3a, h3b, h3c, h3d, h4a, h4b, h5a, h5b, h6a, h6b⟩ := region_0
@@ -465,7 +520,7 @@ def add : FormalRegionCircuit Fp
     rw [add_eq_add_of_spec hpValid hqValid hspec]
     use Point.valid_add hpValid hqValid
   completeness := by
-    circuit_proof_start2 [gate, lambdaProgram, rXProgram, rYProgram]
+    circuit_proof_start2 [addSynthesize, gate, lambdaProgram, rXProgram, rYProgram]
     obtain ⟨hpValid, hqValid⟩ := assumptions
     -- Normalize witness conditions and substitute the bound input cells first.
     simp_all only [and_true,

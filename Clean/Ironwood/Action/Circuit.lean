@@ -119,6 +119,12 @@ def configureAdvices : Configure Fp (Fin 10 → Column .advice) := do
   let a9 ← adviceColumn
   return ![a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]
 
+@[keygen_norm]
+theorem configureAdvices_output_index (counts : ConfigureCounts) (index : Fin 10) :
+    (configureAdvices.output counts index).index =
+      counts.numAdviceColumns + index := by
+  fin_cases index <;> simp [configureAdvices]
+
 @[configure_selector_norm, keygen_norm]
 theorem configureAdvices_delta_gates (counts) :
     (configureAdvices.delta counts).gates = [] := by
@@ -849,6 +855,21 @@ def configure (G : Generators) : Configure Fp Config := do
       (configureBase.output counts).advices := by
   simp [configure, configureChips]
 
+@[keygen_norm] theorem configure_output_advices_index (G : Generators)
+    (counts : ConfigureCounts) (index : Fin 10) :
+    (((configure G).output counts).advices index).index =
+      counts.numAdviceColumns + index := by
+  simpa [configure, configureBase, configureChips, configureShared] using
+    configureAdvices_output_index counts index
+
+theorem configure_output_advices_injective (G : Generators)
+    (counts : ConfigureCounts) :
+    Function.Injective ((configure G).output counts).advices := by
+  intro i j h
+  have hi := congrArg Column.index h
+  rw [configure_output_advices_index, configure_output_advices_index] at hi
+  exact Fin.ext (by omega)
+
 @[keygen_norm] theorem configure_output_lookupConfig (G : Generators)
     (counts : ConfigureCounts) :
     ((configure G).output counts).lookupConfig =
@@ -1310,31 +1331,32 @@ structure Bases where
   noteQ : Point Fp
   noteQ_onCurve : noteQ.OnCurve
 
-/-- Prover-only ℕ-indexed family of Merkle sibling witness programs (one per layer). -/
+/-- Prover-only ℕ-indexed family of Merkle sibling witness programs (one per layer),
+specialized to Pallas `Fp` so each program carries its `SupportedProgram` read certificate. -/
 structure UnconstrainedSibs (F : Type) where
-  programs : ℕ → WitgenIR F 1
+  programs : ℕ → SupportedProgram Fp
 
 @[reducible] instance : CircuitType UnconstrainedSibs where
-  Var F := ℕ → WitgenIR F 1
+  Var _ := ℕ → SupportedProgram Fp
   Value := unit
-  ProverValue F := ℕ → F
+  ProverValue _ := ℕ → Fp
   evalVerifier _ _ := ()
-  evalProver pe f := fun i => ((f i).eval pe)[0]
+  evalProver _ _ := fun _ => 0
 
 instance : ProvableType (Value UnconstrainedSibs) :=
   (inferInstance : ProvableType unit)
 
-/-- Prover-only ℕ-indexed family of Merkle swap flags (native closures — the cond-swap
-choice is a `Bool` the prover computes from its environment). -/
+/-- Prover-only ℕ-indexed family of Merkle swap flags (native closures with certified read
+sets — the cond-swap choice is a `Bool` the prover computes from its environment). -/
 structure UnconstrainedSwaps (F : Type) where
-  flags : ℕ → Placed ProverEnvironment F → Bool
+  flags : ℕ → SupportedFunction Fp Bool
 
 @[reducible] instance : CircuitType UnconstrainedSwaps where
-  Var F := ℕ → Placed ProverEnvironment F → Bool
+  Var _ := ℕ → SupportedFunction Fp Bool
   Value := unit
   ProverValue _ := ℕ → Bool
   evalVerifier _ _ := ()
-  evalProver pe f := fun i => f i pe
+  evalProver _ _ := fun _ => false
 
 instance : ProvableType (Value UnconstrainedSwaps) :=
   (inferInstance : ProvableType unit)
@@ -1404,19 +1426,24 @@ def natHint (key : String) :
   pure (.ofField (.hintGet key 1 (.const 0) 0) 4)
 
 /-- A Merkle sibling hint at layer `i`. -/
-def merkleSiblingHint (i : ℕ) : WitgenIR Fp 1 :=
-  .ofFExpr (.hintGet "orchard.action.merkle_sibling" 1 (.const i.toUInt64) 0)
+def merkleSiblingHint (i : ℕ) : SupportedProgram Fp :=
+  { program := .ofFExpr (.hintGet "orchard.action.merkle_sibling" 1 (.const i.toUInt64) 0)
+    reads := []
+    support := witnessFunctionSupport_ofFExpr
+      (.hintGet "orchard.action.merkle_sibling" 1 (.const i.toUInt64) 0) }
 
 /--
 A Merkle swap hint at layer `i`.  This remains the existing native escape hatch for
 now, but reads the same `ProverHint` store as structured `hintGet`; it can later become
 `UnconstrainedBool` without changing the top-level circuit interface.
 -/
-def merkleSwapHint (i : ℕ) :
-    Placed ProverEnvironment Fp → Bool := fun env =>
-  Witgen.FExprOver.eval
-      ({ env := env } : Witgen.CtxOver Fp (Placed ProverEnvironment Fp))
-      ((.hintGet "orchard.action.merkle_swap" 1 (.const i.toUInt64) 0) : FExpr Fp) == 1
+def merkleSwapHint (i : ℕ) : SupportedFunction Fp Bool :=
+  { compute := fun env =>
+      programFunction
+        (.ofFExpr (.hintGet "orchard.action.merkle_swap" 1 (.const i.toUInt64) 0)) env == 1
+    reads := []
+    support := (witnessFunctionSupport_ofFExpr
+      (.hintGet "orchard.action.merkle_swap" 1 (.const i.toUInt64) 0)).map (· == 1) }
 
 /--
 The one fixed private-witness program of the top-level Action circuit.  All actual
@@ -1453,14 +1480,33 @@ def loadPrivate (col : Column .advice) (w : WitgenIR Fp 1) :
     Circuit Fp (AssignedCell Fp) :=
   assignRegion "load private" (assignAdvice col 0 w)
 
-/-- A private-witness load copies no pre-existing cells. -/
-theorem loadPrivate_copyCellsAssignedFrom
-    (col : Column .advice) (w : WitgenIR Fp 1) (region : RegionIndex)
-    (available : List Cell) :
-    ((loadPrivate col w).operations region).CopyCellsAssignedFrom
+/-- A private-witness load copies no pre-existing cells and reads only its supported cells. -/
+theorem loadPrivate_consumedCellsAssignedFrom
+    (col : Column .advice) (w : WitgenIR Fp 1) (reads : List (AssignedCell Fp))
+    (hsup : WitnessFunctionSupport reads (programFunction w))
+    (region : RegionIndex) (available : List Cell)
+    (hreads : ∀ c ∈ reads, c.cell ∈ available) :
+    ((loadPrivate col w).operations region).AssignedFrom RegionOperation.Consumes
       region available := by
   unfold loadPrivate
-  keygen_registration
+  simp only [operations_assignRegion, Operations.assignedFrom_region_iff,
+    Operations.assignedFrom_nil_iff, operations_assignAdvice,
+    RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+    RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+    RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+    List.not_mem_nil, false_implies, implies_true, true_and, and_true]
+  exact ⟨reads, hsup, fun c hc _ => hreads c hc⟩
+
+/-- A private-witness load writes a single advice cell, so its writes are consistent. -/
+theorem loadPrivate_adviceWritesConsistent
+    (col : Column .advice) (w : WitgenIR Fp 1) (region : RegionIndex) :
+    ((loadPrivate col w).operations region).AdviceWritesConsistentFrom region := by
+  simp only [loadPrivate, operations_assignRegion, operations_assignAdvice,
+    Operations.adviceWritesConsistentFrom_region_cons,
+    Operations.adviceWritesConsistentFrom_nil,
+    RegionOperations.adviceWritesConsistent_assignAdvice_cons,
+    RegionOperations.adviceWritesConsistent_nil, List.not_mem_nil, false_implies,
+    implies_true, and_true]
 
 /-- The cell returned by a private-witness load is assigned in its region. -/
 theorem loadPrivate_output_cell_assigned
@@ -1648,6 +1694,31 @@ theorem synthOrchardChecks_fixedAssignmentsAgree (cfg : Config)
   rw [orchardChecksRegionSynthesisSummary]
   rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
+
+theorem synthOrchardChecks_adviceWritesConsistent (cfg : Config)
+    (hadvices : Function.Injective cfg.advices)
+    (witnessCells : WitnessCells) (checkCells : CheckCells)
+    (region : RegionIndex) :
+    (synthOrchardChecks cfg witnessCells checkCells).operations region
+      |>.AdviceWritesConsistent region := by
+  apply RegionOperations.AdviceWritesDistinct.toConsistent
+  have hne : ∀ i j : Fin 10, i ≠ j → cfg.advices i ≠ cfg.advices j :=
+    fun i j hij h => hij (hadvices h)
+  simp only [synthOrchardChecks, circuit_norm, RegionOperations.AdviceWritesDistinct,
+    RegionOperations.adviceWrites, RegionOperation.adviceWrites,
+    List.flatMap_cons, List.flatMap_nil, List.nil_append, List.append_nil,
+    List.cons_append, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false,
+    Prod.mk.injEq, not_or, List.nodup_nil, not_false_eq_true, and_true]
+  refine ⟨⟨hne 0 1 (by decide), hne 0 2 (by decide), hne 0 3 (by decide),
+      hne 0 4 (by decide), hne 0 5 (by decide), hne 0 6 (by decide), hne 0 7 (by decide)⟩,
+    ⟨hne 1 2 (by decide), hne 1 3 (by decide), hne 1 4 (by decide),
+      hne 1 5 (by decide), hne 1 6 (by decide), hne 1 7 (by decide)⟩,
+    ⟨hne 2 3 (by decide), hne 2 4 (by decide), hne 2 5 (by decide),
+      hne 2 6 (by decide), hne 2 7 (by decide)⟩,
+    ⟨hne 3 4 (by decide), hne 3 5 (by decide), hne 3 6 (by decide), hne 3 7 (by decide)⟩,
+    ⟨hne 4 5 (by decide), hne 4 6 (by decide), hne 4 7 (by decide)⟩,
+    ⟨hne 5 6 (by decide), hne 5 7 (by decide)⟩,
+    hne 6 7 (by decide)⟩
 
 /-- Stage C (91 regions): old/new note-commitment integrity and the final
 `"Orchard circuit checks"` region (`circuit.rs:696-826`). -/
@@ -2280,18 +2351,90 @@ theorem synthCrossAddressChecks_keygenRegistered
   simp only [synthCrossAddressChecks, keygen_spine]
   keygen_registration
 
+private theorem synthCrossAddressRow_consumedCellsAssigned
+    (cfg : Config) (oldCell newCell : AssignedCell Fp) (row : ℕ)
+    (region : RegionIndex) (available : List Cell)
+    (hold : oldCell.cell ∈ available) (hnew : newCell.cell ∈ available) :
+    ((synthCrossAddressRow cfg oldCell newCell row).operations region)
+      |>.AssignedFrom RegionOperation.Consumes region available := by
+  simp only [synthCrossAddressRow, Poseidon.constWit, circuit_norm,
+    RegionOperations.assignedFrom_cons_iff, RegionOperations.assignedFrom_nil_iff,
+    RegionOperation.consumesFrom_consumes_iff, RegionOperation.consumesFrom_copies_iff,
+    RegionOperation.consumesFrom_reads_iff, RegionOperation.copiedCells,
+    RegionOperation.assignedCells, List.nil_append, List.singleton_append,
+    List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
+    false_implies, implies_true, true_and, and_true]
+  refine ⟨⟨[], witnessFunctionSupport_instanceGet _ _, by simp⟩,
+    ⟨[], fun _ _ _ => rfl, by simp⟩,
+    ⟨[AssignedCell.of region row (cfg.advices 0)], witnessFunctionSupport_ofFExpr (.expr _),
+      by simp [AssignedCell.of_cell]⟩,
+    ⟨[], fun _ _ _ => rfl, by simp⟩,
+    ⟨[oldCell], witnessFunctionSupport_ofFExpr (.expr oldCell), by simp [hold]⟩,
+    by simp [hold],
+    ⟨[newCell], witnessFunctionSupport_ofFExpr (.expr newCell), by simp [hnew]⟩,
+    by simp [hnew],
+    ⟨[], fun _ _ _ => rfl, by simp⟩,
+    ⟨[], fun _ _ _ => rfl, by simp⟩,
+    ⟨[AssignedCell.of region row (cfg.advices 0)], witnessFunctionSupport_ofFExpr (.expr _),
+      by simp [AssignedCell.of_cell]⟩,
+    ⟨[AssignedCell.of region row (cfg.advices 0)], witnessFunctionSupport_ofFExpr (.expr _),
+      by simp [AssignedCell.of_cell]⟩⟩
+
 @[keygen_helper]
-theorem synthCrossAddressChecks_copyCellsAssigned
+theorem synthCrossAddressChecks_consumedCellsAssigned
     (cfg : Config) (points : Var AddressPoints Fp) (region : RegionIndex) :
     ((synthCrossAddressChecks cfg points).operations region)
-      |>.CopyCellsAssignedFrom region points.copyInputCells := by
+      |>.AssignedFrom RegionOperation.Consumes region points.copyInputCells := by
   unfold synthCrossAddressChecks
-  simp only [operations_assignRegion, keygen_spine]
-  apply RegionCircuit.forRange'_copyCellsAssignedFrom
+  simp only [operations_assignRegion, Operations.assignedFrom_region_iff,
+    Operations.assignedFrom_nil_iff, and_true]
+  apply RegionCircuit.forRange'_assignedFrom_of_forall RegionOperation.Consumes
   intro index
   fin_cases index <;>
-    simp only [AddressPoints.copyInputCells, synthCrossAddressRow, keygen_spine] <;>
-    keygen_registration
+    exact synthCrossAddressRow_consumedCellsAssigned cfg _ _ _ region _
+      (by simp [AddressPoints.copyInputCells]) (by simp [AddressPoints.copyInputCells])
+
+theorem synthCrossAddressChecks_adviceWritesConsistent
+    (cfg : Config) (hadvices : Function.Injective cfg.advices)
+    (points : Var AddressPoints Fp) (region : RegionIndex) :
+    ((synthCrossAddressChecks cfg points).operations region)
+      |>.AdviceWritesConsistentFrom region := by
+  unfold synthCrossAddressChecks
+  simp only [operations_assignRegion, Operations.adviceWritesConsistentFrom_region_cons,
+    Operations.adviceWritesConsistentFrom_nil, and_true]
+  apply RegionOperations.AdviceWritesDistinct.toConsistent
+  apply RegionCircuit.forRange'_adviceWritesDistinct
+  · intro index
+    have hne : ∀ i j : Fin 10, i ≠ j → cfg.advices i ≠ cfg.advices j :=
+      fun i j hij h => hij (hadvices h)
+    simp only [synthCrossAddressRow, circuit_norm, RegionOperations.AdviceWritesDistinct,
+      RegionOperations.adviceWrites, RegionOperation.adviceWrites,
+      List.flatMap_cons, List.flatMap_nil, List.nil_append, List.append_nil,
+      List.cons_append, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false,
+      Prod.mk.injEq, not_or, List.nodup_nil, not_false_eq_true, and_true]
+    refine ⟨⟨hne 0 1 (by decide), hne 0 2 (by decide), hne 0 3 (by decide),
+        hne 0 4 (by decide), hne 0 5 (by decide), hne 0 6 (by decide),
+        hne 0 7 (by decide), hne 0 8 (by decide), hne 0 9 (by decide)⟩,
+      ⟨hne 1 2 (by decide), hne 1 3 (by decide), hne 1 4 (by decide),
+        hne 1 5 (by decide), hne 1 6 (by decide), hne 1 7 (by decide),
+        hne 1 8 (by decide), hne 1 9 (by decide)⟩,
+      ⟨hne 2 3 (by decide), hne 2 4 (by decide), hne 2 5 (by decide),
+        hne 2 6 (by decide), hne 2 7 (by decide), hne 2 8 (by decide), hne 2 9 (by decide)⟩,
+      ⟨hne 3 4 (by decide), hne 3 5 (by decide), hne 3 6 (by decide),
+        hne 3 7 (by decide), hne 3 8 (by decide), hne 3 9 (by decide)⟩,
+      ⟨hne 4 5 (by decide), hne 4 6 (by decide), hne 4 7 (by decide),
+        hne 4 8 (by decide), hne 4 9 (by decide)⟩,
+      ⟨hne 5 6 (by decide), hne 5 7 (by decide), hne 5 8 (by decide), hne 5 9 (by decide)⟩,
+      ⟨hne 6 7 (by decide), hne 6 8 (by decide), hne 6 9 (by decide)⟩,
+      ⟨hne 7 8 (by decide), hne 7 9 (by decide)⟩,
+      hne 8 9 (by decide)⟩
+  · intro index col row hmem
+    simp only [synthCrossAddressRow, circuit_norm, RegionOperations.adviceWrites,
+      RegionOperation.adviceWrites, List.flatMap_cons, List.flatMap_nil,
+      List.nil_append, List.append_nil, List.cons_append, List.mem_cons,
+      List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+    rcases hmem with ⟨_, rfl⟩ | ⟨_, rfl⟩ | ⟨_, rfl⟩ | ⟨_, rfl⟩ | ⟨_, rfl⟩ |
+      ⟨_, rfl⟩ | ⟨_, rfl⟩ | ⟨_, rfl⟩ | ⟨_, rfl⟩ | ⟨_, rfl⟩ <;> omega
 
 /-- Rust `Circuit::synthesize_base` (`circuit.rs:461-828`): the staged witness /
 integrity-check / note-commitment composition, returning the `AddressPoints` the

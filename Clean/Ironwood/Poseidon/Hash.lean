@@ -34,6 +34,12 @@ open Poseidon.Permute.P128Pow5T3 (roundConstants)
 /-- A constant witness program. -/
 def constWit (c : Fp) : WitgenIR Fp 1 := .native fun _ => #v[c]
 
+@[witness_support]
+theorem witnessFunctionSupport_constWit (c : Fp) :
+    WitnessFunctionSupport [] (programFunction (constWit c)) := by
+  intro _ _ _
+  rfl
+
 @[circuit_norm]
 theorem constWit_eval (c : Fp) (env : Placed ProverEnvironment Fp) (j : ℕ) (hj : j < 1) :
     ((constWit c).eval env)[j] = c := by
@@ -45,6 +51,15 @@ theorem constWit_eval (c : Fp) (env : Placed ProverEnvironment Fp) (j : ℕ) (hj
 /-- The sum of two read cells. -/
 def addWit (a b : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env a + readCell env b]
+
+@[witness_support]
+theorem witnessFunctionSupport_addWit (a b : AssignedCell Fp) :
+    WitnessFunctionSupport [a, b] (programFunction (addWit a b)) := by
+  intro left right agreement
+  have ha : readCell left a = readCell right a := agreement.cellValues a (by simp)
+  have hb : readCell left b = readCell right b := agreement.cellValues b (by simp)
+  change readCell left a + readCell left b = readCell right a + readCell right b
+  rw [ha, hb]
 
 @[circuit_norm]
 theorem addWit_eval (a b : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
@@ -58,6 +73,12 @@ theorem addWit_eval (a b : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
 /-- A copy of one read cell. -/
 def readCellWit (a : AssignedCell Fp) : WitgenIR Fp 1 :=
   .native fun env => #v[readCell env a]
+
+@[witness_support]
+theorem witnessFunctionSupport_readCellWit (a : AssignedCell Fp) :
+    WitnessFunctionSupport [a] (programFunction (readCellWit a)) := by
+  intro left right agreement
+  exact agreement.cellValues a (by simp)
 
 @[circuit_norm]
 theorem readCellWit_eval (a : AssignedCell Fp) (env : Placed ProverEnvironment Fp)
@@ -85,6 +106,8 @@ def initRegion (capacity : Fp) : FormalRegionCircuit Fp Config Config unit State
     { keygenRequirements :=
         { permutationColumns cfg _ :=
             [cfg.state 0, cfg.state 1, cfg.state 2] }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.state 0, cfg.state 1, cfg.state 2]
       output cfg offset _ self :=
         { x0 := .of self offset (cfg.state 0)
           x1 := .of self offset (cfg.state 1)
@@ -173,13 +196,17 @@ def addInputRegionElaborated : ElaboratedRegionCircuit Fp Config Config
         [input.initialState.x0.cell, input.initialState.x1.cell,
           input.initialState.x2.cell, input.input.x0.cell,
           input.input.x1.cell] }
+  adviceColumnRequirements cfg :=
+    ColumnsDistinct [cfg.state 0, cfg.state 1, cfg.state 2]
   output cfg offset _ self :=
     { x0 := .of self (offset + 2) (cfg.state 0)
       x1 := .of self (offset + 2) (cfg.state 1)
       x2 := .of self (offset + 2) (cfg.state 2) }
   synthesisSummary cfg offset _ _ :=
     addInputRegionSynthesisSummary cfg offset
-  copyCellsAssigned := by
+  consumedCellsAssigned := by
+    keygen_registration [addInputRegionSynthesize]
+  adviceWritesConsistent := by
     keygen_registration [addInputRegionSynthesize]
   lookupActivationsWellFormed := by
     keygen_registration [addInputRegionSynthesize]
@@ -376,6 +403,8 @@ def hash (capacity : Fp) :
             [cfg.state 0, cfg.state 1, cfg.state 2]
           inputCells _ _ input :=
             [input.x0.cell, input.x1.cell] }
+      adviceColumnRequirements cfg :=
+        ColumnsDistinct [cfg.state 0, cfg.state 1, cfg.state 2, cfg.partialSbox]
       output cfg _ i := .of (i + 2) 36 (cfg.state 0)
       regionCount _ := 3
       synthesisSummary cfg _ _ := hashSynthesisSummary cfg
@@ -432,44 +461,71 @@ def hash (capacity : Fp) :
               output_assignRegion, FormalRegionCircuit.output_call,
               initRegion_output, addInputRegion_output, AssignedCell.of_cell,
               Cell.of_column, KeygenRequirements.inputPermutationColumns]
-      copyCellsAssigned := by
+      consumedCellsAssigned := by
         intro configInput counts hconfig input i
-        keygen_registration [synthesize]
-        case left =>
-          apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom
+        simp only [Configure.output_pure, synthesize, Circuit.operations_bind,
+          operations_assignRegion, Circuit.operations_pure, Operations.ConsumedCellsAssigned,
+          List.singleton_append, List.append_nil, Operations.assignedFrom_region_iff,
+          Operations.assignedFrom_nil_iff, and_true,
+          nextRegionIndex_assignRegion, KeygenRequirements.readRelativeCellsAt, List.map_nil]
+        refine ⟨?_, ?_, ?_⟩
+        · apply FormalRegionCircuit.callPacked_consumedCellsAssignedFrom
+            (self := initRegion capacity) (hconfigured := by
+              apply FormalRegionCircuit.Configured.ofPure
+              · exact ()
+              · rfl)
+          intro cell hcell
+          simp [FormalRegionCircuit.Configured.inputCells,
+            FormalRegionCircuit.Configured.readCells,
+            FormalRegionCircuit.Configured.readRelativeCellsAt,
+            FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+            ElaboratedRegionCircuit.keygenRequirements, initRegion,
+            KeygenRequirements.readRelativeCellsAt] at hcell
+        · apply FormalRegionCircuit.callPacked_consumedCellsAssignedFrom
             (self := addInputRegion) (hconfigured := by
               apply FormalRegionCircuit.Configured.ofPure
               · exact ()
               · rfl)
           intro cell hcell
-          rw [addInputRegion_inputCells] at hcell
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          simp only [FormalRegionCircuit.Configured.inputCells,
+            FormalRegionCircuit.Configured.readCells,
+            FormalRegionCircuit.Configured.readRelativeCellsAt,
+            FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+            ElaboratedRegionCircuit.keygenRequirements, addInputRegion, addInputRegionElaborated,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_cons, List.not_mem_nil, or_false] at hcell
           have hinit := initRegion_output_cells_assigned capacity configInput 0 i
             [input.x0.cell, input.x1.cell]
           rcases hcell with rfl | rfl | rfl | rfl | rfl
           · simpa only [FormalRegionCircuit.callPacked_operations, FormalRegionCircuit.call,
               RegionCircuit.operations, RegionOperations.assignedCellsAfter,
-              RegionOperation.assignedCells, initRegion_output] using hinit.1
+              RegionOperation.assignedCells, initRegion_output, output_assignRegion,
+              FormalRegionCircuit.output_call] using hinit.1
           · simpa only [FormalRegionCircuit.callPacked_operations, FormalRegionCircuit.call,
               RegionCircuit.operations, RegionOperations.assignedCellsAfter,
-              RegionOperation.assignedCells, initRegion_output] using hinit.2.1
+              RegionOperation.assignedCells, initRegion_output, output_assignRegion,
+              FormalRegionCircuit.output_call] using hinit.2.1
           · simpa only [FormalRegionCircuit.callPacked_operations, FormalRegionCircuit.call,
               RegionCircuit.operations, RegionOperations.assignedCellsAfter,
-              RegionOperation.assignedCells, initRegion_output] using hinit.2.2
+              RegionOperation.assignedCells, initRegion_output, output_assignRegion,
+              FormalRegionCircuit.output_call] using hinit.2.2
           · apply RegionOperations.mem_assignedCellsAfter_of_mem
             simp
           · apply RegionOperations.mem_assignedCellsAfter_of_mem
             simp
-        case right =>
-          simp only [nextRegionIndex_assignRegion]
-          apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom
+        · apply FormalRegionCircuit.callPacked_consumedCellsAssignedFrom
             (self := permuteRegion) (hconfigured := by
               apply FormalRegionCircuit.Configured.ofPure
               · assumption
               · rfl)
           intro cell hcell
-          rw [permuteRegion_inputCells] at hcell
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          simp only [FormalRegionCircuit.Configured.inputCells,
+            FormalRegionCircuit.Configured.readCells,
+            FormalRegionCircuit.Configured.readRelativeCellsAt,
+            FormalRegionCircuit.Configured.ofPure, FormalRegionCircuit.keygenRequirements,
+            ElaboratedRegionCircuit.keygenRequirements, permuteRegion, permuteElaborated,
+            KeygenRequirements.readRelativeCellsAt, List.map_nil, List.append_nil,
+            List.mem_cons, List.not_mem_nil, or_false] at hcell
           let initial := [input.x0.cell, input.x1.cell]
           let initOutput := (initRegion capacity).output configInput 0 () i
           let afterInit :=
@@ -481,15 +537,43 @@ def hash (capacity : Fp) :
           · simpa only [afterInit, initial, initOutput,
               FormalRegionCircuit.callPacked_operations, FormalRegionCircuit.call,
               RegionCircuit.operations, RegionOperations.assignedCellsAfter,
-              RegionOperation.assignedCells, initRegion_output, addInputRegion_output] using hadd.1
+              RegionOperation.assignedCells, initRegion_output, addInputRegion_output,
+              output_assignRegion, FormalRegionCircuit.output_call] using hadd.1
           · simpa only [afterInit, initial, initOutput,
               FormalRegionCircuit.callPacked_operations, FormalRegionCircuit.call,
               RegionCircuit.operations, RegionOperations.assignedCellsAfter,
-              RegionOperation.assignedCells, initRegion_output, addInputRegion_output] using hadd.2.1
+              RegionOperation.assignedCells, initRegion_output, addInputRegion_output,
+              output_assignRegion, FormalRegionCircuit.output_call] using hadd.2.1
           · simpa only [afterInit, initial, initOutput,
               FormalRegionCircuit.callPacked_operations, FormalRegionCircuit.call,
               RegionCircuit.operations, RegionOperations.assignedCellsAfter,
-              RegionOperation.assignedCells, initRegion_output, addInputRegion_output] using hadd.2.2
+              RegionOperation.assignedCells, initRegion_output, addInputRegion_output,
+              output_assignRegion, FormalRegionCircuit.output_call] using hadd.2.2
+      adviceWritesConsistent := by
+        intro configInput counts hconfig hadvice input i
+        simp only [Configure.output_pure, ColumnsDistinct, List.nodup_cons, List.mem_cons,
+          List.not_mem_nil, or_false, not_or, not_false_eq_true, and_true,
+          List.nodup_nil] at hadvice
+        obtain ⟨⟨h01, h02, h0p⟩, ⟨h12, h1p⟩, h2p⟩ := hadvice
+        have h3 : ColumnsDistinct [configInput.state 0, configInput.state 1, configInput.state 2] := by
+          simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false,
+            not_or, not_false_eq_true, and_true, List.nodup_nil]
+          exact ⟨⟨h01, h02⟩, h12⟩
+        have h4 : ColumnsDistinct [configInput.state 0, configInput.state 1, configInput.state 2,
+            configInput.partialSbox] := by
+          simp only [ColumnsDistinct, List.nodup_cons, List.mem_cons, List.not_mem_nil, or_false,
+            not_or, not_false_eq_true, and_true, List.nodup_nil]
+          exact ⟨⟨h01, h02, h0p⟩, ⟨h12, h1p⟩, h2p⟩
+        simp only [Configure.output_pure, synthesize, Circuit.operations_bind,
+          operations_assignRegion, Circuit.operations_pure, List.singleton_append,
+          List.append_nil, Operations.adviceWritesConsistentFrom_region_cons,
+          Operations.adviceWritesConsistentFrom_nil, and_true]
+        exact ⟨(initRegion capacity).callPacked_adviceWritesConsistent configInput
+            (FormalRegionCircuit.Configured.ofPure _ configInput () rfl) h3 0 () i,
+          addInputRegion.callPacked_adviceWritesConsistent configInput
+            (FormalRegionCircuit.Configured.ofPure _ configInput () rfl) h3 0 _ (i + 1),
+          permuteRegion.callPacked_adviceWritesConsistent configInput
+            (FormalRegionCircuit.Configured.ofPure _ configInput hconfig rfl) h4 0 _ (i + 2)⟩
       fixedWritesLawful := by
         intro cfg _ hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
