@@ -61,10 +61,11 @@ lemma eval_ofFExpr_zero [FiniteField F] (e : FExpr F) (env : Placed ProverEnviro
 `instCol` at absolute row `instRow`. The witgen half of the `assign_advice_from_instance`
 sugar (`Basic.lean`) — the paired `assignAdvice` witnesses the public input this program
 returns, and the region's `constrainInstance` then copies the advice cell against it.
-Instance columns are absolute, so this cannot be a cell atom (`.expr`); it reads the
-placed prover environment directly via a `.native` closure. -/
+Because `Cell.row` treats `.instance` columns as absolute rows (ignoring region placement),
+this is a structured `.ofFExpr (.expr …)` program rather than a `.native` closure, so
+syntactic read checkers (`Fast.ordered*`) accept it at any placement. -/
 def instanceGet (instCol : Column .instance) (instRow : ℕ) : WitgenIR F 1 :=
-  .native fun pe => #v[pe.env.get instCol (instRow : ℤ)]
+  .ofFExpr (.expr (.of 0 instRow instCol))
 
 /-- The `instanceGet` witness reduces to the instance read `env.get instCol instRow` (which
 `Environment.get_inst` further normalizes to `env.inst`), so a paired `assignAdvice`'s

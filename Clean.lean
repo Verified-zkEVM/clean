@@ -2,6 +2,7 @@ module
 
 public import Clean.Circuit
 public import Clean.Circuit.WitnessIRLimbs
+public import Clean.Circuit.WitnessReads
 public import Clean.Examples.WitnessExport
 public import Clean.Utils.FiniteField
 public import Clean.Utils.BinaryField

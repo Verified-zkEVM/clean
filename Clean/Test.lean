@@ -21,5 +21,6 @@ public import Clean.Halo2.Tests.TestCircuitTypeDeriving
 public import Clean.Halo2.Tests.TestSelectorFree
 public import Clean.Halo2.Tests.TestPdqsortCertify
 public import Clean.Halo2.Tests.TestSelectorBitsets
+public import Clean.Halo2.Tests.TestComputableWitnesses
 
 @[expose] public section

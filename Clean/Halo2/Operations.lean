@@ -141,7 +141,7 @@ mirroring `AssignedCell.eval`): abstract cell reads stay folded; known-kind cell
 reduce to the typed accessors via the `eval_of_*` rules below, so copy constraints
 line up with the query/assigned-cell paths at the `env.advice` spelling. -/
 def Cell.eval (place : RegionIndex → ℕ) (env : Environment F) (c : Cell) : F :=
-  env.get c.column ((place c.regionIndex + c.rowOffset : ℕ) : ℤ)
+  env.get c.column (c.row place : ℤ)
 
 omit [FiniteField F] in
 /-- An assigned cell's `Cell.eval` is its `AssignedCell.eval` — ONE canonical folded
@@ -172,7 +172,7 @@ omit [FiniteField F] in
 lemma Cell.eval_of_inst (place : RegionIndex → ℕ) (env : Environment F)
     (self : RegionIndex) (row : ℕ) (col : Column .instance) :
     Cell.eval place env (.of self row col)
-      = env.inst col ((place self + row : ℕ) : ℤ) := rfl
+      = env.inst col (row : ℤ) := rfl
 
 /-- Constraints of one region operation, for a region with index `self`. A subcircuit
 call's constraints are the *opaque chunk* `RegionOperations.Constraints … <folded child

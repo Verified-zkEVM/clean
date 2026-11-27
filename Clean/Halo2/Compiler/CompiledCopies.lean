@@ -327,6 +327,13 @@ theorem resolveDeclared_columns_lt (cs : ConstraintSystem F) (starts : List ℕ)
   all_goals constructor <;> apply permIndex_lt_length_of_mem <;> rw [permColsOf_map_toAny]
   all_goals first | exact hColumns.1 | exact hColumns.2
 
+private theorem resolveCell_snd_le (columns : List ColRef) (starts : List ℕ) (c : Cell) :
+    (resolveCell columns starts c).2 ≤ starts.getD c.regionIndex 0 + c.rowOffset := by
+  simp only [resolveCell, Cell.row, place]
+  cases c.column.kind with
+  | «instance» => exact Nat.le_add_left _ _
+  | advice | fixed => exact Nat.le_refl _
+
 /-- Address resolution preserves the row bounds of source endpoints. -/
 theorem resolveDeclared_rows_lt (columns : List ColRef) (starts : List ℕ)
     (bound : ℕ) (copy : DeclaredCopy F) (tuple : ℕ × ℕ × ℕ × ℕ)
@@ -336,7 +343,9 @@ theorem resolveDeclared_rows_lt (columns : List ColRef) (starts : List ℕ)
   rcases copy with ⟨left, right⟩
   cases left <;> cases right <;> simp only [resolveDeclared, reduceCtorEq] at hResolve
   all_goals obtain rfl := Option.some.inj hResolve
-  all_goals simpa only [CopyEndpoint.WithinRows, resolveCell, place] using hRows
+  · exact ⟨Nat.lt_of_le_of_lt (resolveCell_snd_le columns starts _) hRows.1,
+      Nat.lt_of_le_of_lt (resolveCell_snd_le columns starts _) hRows.2⟩
+  · exact ⟨Nat.lt_of_le_of_lt (resolveCell_snd_le columns starts _) hRows.1, hRows.2⟩
 
 /-- **Every resolvable declared copy is in the V1 copy list**: region-local copies land
 in their region's extracted stream, layouter-level instance copies inline, and the
@@ -590,7 +599,8 @@ theorem V1_copyList_rows_lt_usedRows
       (List.of_mem_zip hallocation).2
     obtain rfl := htuple
     exact ⟨hconstantRows entry hentry,
-      constantSite_row_lt_usedRows operations cell value hsite⟩
+      Nat.lt_of_le_of_lt (resolveCell_snd_le permCols (FloorPlanner.V1.starts operations) cell)
+        (constantSite_row_lt_usedRows operations cell value hsite)⟩
 
 /-- Every tuple in V1's copy list uses in-range permutation columns whenever synthesis
 is keygen-lawful and the planner's constants allocation uses configured constant
@@ -680,10 +690,11 @@ theorem rawCopyValue_resolveCell
     (hColumn : cell.column ∈ cs.permutationColumns) :
     rawCopyValue (permColsOf cs) env (resolveCell (permColsOf cs) starts cell) =
       cell.eval (fun region => starts.getD region 0) env := by
-  simpa only [resolveCell, place, Cell.eval] using
-    rawCopyValue_permIndex (permColsOf cs) env cell.column
-      (starts.getD cell.regionIndex 0 + cell.rowOffset)
-      (by simpa only [permColsOf_map_toAny] using hColumn)
+  have hplace : place starts = fun region => starts.getD region 0 := rfl
+  rw [resolveCell, Cell.eval, hplace]
+  exact rawCopyValue_permIndex (permColsOf cs) env cell.column
+    (cell.row (fun region => starts.getD region 0))
+    (by simpa only [permColsOf_map_toAny] using hColumn)
 
 /-- Resolution changes only coordinates, not the equality denoted by a copy. -/
 theorem resolveDeclared_satisfied_iff
