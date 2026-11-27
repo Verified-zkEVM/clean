@@ -573,20 +573,30 @@ partial def closeCallSideCondition
   closeCallSideCondition (unfolded.insert head)
 
 /-- Try one helper certificate: apply it and close its side conditions with the call-routing
-closer, then, when `fallback` is set, with the whole tactic. -/
+closer, then, when `fallback` is set, with the whole tactic. Returns `(done, applied, closed)`
+where `applied` indicates the certificate matched and was applied, and `closed` counts how many
+side conditions closed via the fast call-routing closer. -/
 def tryHelperCertificate (candidate : Name) (targetHead : Name) (fallback : Bool) :
-    TacticM (Bool × Nat) := do
+    TacticM (Bool × Bool × Nat) := do
   let state ← saveState
   try
+    let origTarget ← instantiateMVars (← getMainTarget)
     let certificateLemma ← mkConstWithFreshMVarLevels candidate
     let some candidateHead :=
         circuitHead? (← liftMetaM <| inferType certificateLemma).getForallBody
       | state.restore
-        return (false, 0)
+        return (false, false, 0)
     if candidateHead != targetHead then
       state.restore
-      return (false, 0)
+      return (false, false, 0)
     let sideConditions ← (← getMainGoal).apply certificateLemma
+    -- Guard against self-looping certificates that regenerate the identical target.
+    for sideCondition in sideConditions do
+      if !(← liftMetaM sideCondition.isAssigned) then
+        let sideTarget ← instantiateMVars (← sideCondition.getType)
+        if sideTarget == origTarget then
+          state.restore
+          return (false, false, 0)
     let mut remaining := []
     let mut closed := 0
     for sideCondition in sideConditions.reverse do
@@ -605,12 +615,12 @@ def tryHelperCertificate (candidate : Name) (targetHead : Name) (fallback : Bool
       remaining := remaining ++ (← getGoals)
     setGoals remaining
     if (← getGoals).isEmpty then
-      return (true, closed)
+      return (true, true, closed)
     state.restore
-    return (false, closed)
+    return (false, true, closed)
   catch _ =>
     state.restore
-    return (false, 0)
+    return (false, false, 0)
 
 /-- Apply a registered certificate for a raw circuit helper. -/
 def applyHelperCertificate : TacticM Bool := withMainContext do
@@ -618,14 +628,21 @@ def applyHelperCertificate : TacticM Bool := withMainContext do
   let some targetHead := circuitHead? target
     | return false
   let mut progressed : Array Name := #[]
+  let mut matched : Array Name := #[]
   for candidate in keygenHelperAttr.getDecls (← getEnv) do
-    let (done, closed) ← tryHelperCertificate candidate targetHead false
+    let (done, applied, closed) ← tryHelperCertificate candidate targetHead false
     if done then
       return true
     if closed > 0 then
       progressed := progressed.push candidate
+    else if applied then
+      matched := matched.push candidate
   for candidate in progressed do
-    let (done, _) ← tryHelperCertificate candidate targetHead true
+    let (done, _, _) ← tryHelperCertificate candidate targetHead true
+    if done then
+      return true
+  for candidate in matched do
+    let (done, _, _) ← tryHelperCertificate candidate targetHead true
     if done then
       return true
   return false
@@ -1568,6 +1585,104 @@ macro "open_witness_support" : tactic =>
              case support => solve_witness_support
              keygen_guard_closed))
 
+/-- Backtracking search over `@[witness_support]` rules for a `WitnessFunctionSupport` goal,
+invoking `onSolved` on each complete derivation so the caller can check availability of the
+resulting read set before committing (making read-support resolution independent of rule
+declaration order). -/
+partial def searchWitnessSupport (decls : Array Name) (depth : Nat)
+    (supportGoals : List MVarId) (onSolved : TacticM Bool) : TacticM Bool := do
+  match supportGoals with
+  | [] => onSolved
+  | g :: gs =>
+    if depth == 0 then
+      return false
+    let state ← saveState
+    setGoals [g]
+    let mut closedByLocal := false
+    try
+      evalTactic (← `(tactic| assumption))
+      if (← getGoals).isEmpty then
+        closedByLocal := true
+    catch _ =>
+      pure ()
+    if closedByLocal then
+      if ← searchWitnessSupport decls (depth - 1) gs onSolved then
+        return true
+    state.restore
+    for decl in decls do
+      let ruleState ← saveState
+      try
+        let lemmaTerm ← mkConstWithFreshMVarLevels decl
+        let newGoals ← withTransparency .reducible <| g.apply lemmaTerm
+        if ← searchWitnessSupport decls (depth - 1) (newGoals ++ gs) onSolved then
+          return true
+        ruleState.restore
+      catch _ =>
+        ruleState.restore
+    return false
+
+mutual
+
+/-- Open a read-support obligation `∃ reads, WitnessFunctionSupport reads compute ∧ property reads`.
+First tries the indexed `open_witness_support` fast path; if that leaves an unclosed availability
+obligation (for instance, when another `@[witness_support]` rule supplies a smaller or available
+read set), backtracks across all `@[witness_support]` derivations regardless of declaration order
+before falling back to the fast path's residual goal for manual proof. -/
+partial def openWitnessSupport (unfolded : Std.HashSet Name) : TacticM Bool := do
+  let initState ← saveState
+  let mut fastResidual : Option Tactic.SavedState := none
+  if ← tryTactic (evalTactic (← `(tactic| open_witness_support))) then
+    if (← getGoals).isEmpty then
+      return true
+    close unfolded
+    if (← getGoals).isEmpty then
+      return true
+    fastResidual := some (← saveState)
+  initState.restore
+  let applied ← tryTactic (evalTactic (← `(tactic| apply Halo2.exists_witnessFunctionSupport_of)))
+  if applied then
+    if let supportGoal :: propGoal :: restGoals ← getGoals then
+      let decls := ← Lean.labelled `witness_support
+      let solved ← searchWitnessSupport decls 8 [supportGoal] do
+        for rest in restGoals do
+          unless ← rest.isAssigned do
+            return false
+        setGoals [propGoal]
+        let target ← instantiateMVars (← getMainTarget)
+        if target.hasExprMVar then
+          return false
+        close unfolded
+        return (← getGoals).isEmpty
+      if solved then
+        return true
+  if let some residual := fastResidual then
+    residual.restore
+    return true
+  initState.restore
+  return false
+
+/-- Try applying a same-region composition lemma to `left ++ right`, committing only if all
+generated subgoals close. -/
+partial def tryCloseAppendWith (unfolded : Std.HashSet Name) (tactic : TSyntax `tactic) :
+    TacticM Bool := do
+  let state ← saveState
+  try
+    evalTactic tactic
+    let branches ← getGoals
+    let mut remaining := []
+    for branch in branches do
+      setGoals [branch]
+      close unfolded
+      remaining := remaining ++ (← getGoals)
+    setGoals remaining
+    if (← getGoals).isEmpty then
+      return true
+    state.restore
+    return false
+  catch _ =>
+    state.restore
+    return false
+
 /-- Recursively normalize operation spines and conjunctions. -/
 partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
   withMainContext do
@@ -1593,13 +1708,8 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
     return
   if ← applyHelperCertificate then
     return
-  let state ← saveState
-  if ← tryTactic (evalTactic (← `(tactic| open_witness_support))) then
-    if (← getGoals).isEmpty then
-      return
-    close unfolded
+  if ← openWitnessSupport unfolded then
     return
-  state.restore
 
   withMainContext do
     let target ← instantiateMVars (← getMainTarget)
@@ -1629,7 +1739,8 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
       return
 
     if target.isAppOf ``List.Forall then
-      if target.getAppArgs.back!.isAppOf ``List.append then
+      let ops := target.getAppArgs.back!
+      if ops.isAppOf ``List.append || ops.isAppOf ``HAppend.hAppend then
         evalTactic (← `(tactic| apply List.forall_append.mpr))
         close unfolded
         return
@@ -1643,6 +1754,24 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
         return
       close (unfolded.insert head)
       return
+
+    if target.isAppOf ``RegionOperations.AdviceWritesConsistent then
+      let ops := target.getAppArgs.back!
+      if ops.isAppOf ``List.append || ops.isAppOf ``HAppend.hAppend then
+        if ← tryCloseAppendWith unfolded
+            (← `(tactic| apply Halo2.RegionOperations.adviceWritesConsistent_append_of_disjoint)) then
+          return
+        if ← tryCloseAppendWith unfolded
+            (← `(tactic|
+              apply Halo2.RegionOperations.adviceWritesConsistent_append_of_adviceWrites_disjoint)) then
+          return
+
+    if target.isAppOf ``RegionOperations.AdviceWritesDistinct then
+      let ops := target.getAppArgs.back!
+      if ops.isAppOf ``List.append || ops.isAppOf ``HAppend.hAppend then
+        if ← tryCloseAppendWith unfolded
+            (← `(tactic| apply Halo2.RegionOperations.adviceWritesDistinct_append_of_disjoint)) then
+          return
 
     if target.isAppOf ``List.Forall then
       let operations ← whnf target.getAppArgs.back!
@@ -1661,6 +1790,15 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
       evalTactic (← `(tactic| grind))
     catch _ =>
       state.restore
+    if (← getGoals).isEmpty then
+      return
+    let state ← saveState
+    try
+      evalTactic (← `(tactic| omega))
+    catch _ =>
+      state.restore
+
+end
 
 /--
 Normalize all configure output/delta projections before opening the synthesis bind

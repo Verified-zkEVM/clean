@@ -19,13 +19,14 @@ namespace Halo2
 
 variable {F : Type} [FiniteField F]
 
-/-- An advice assignment reads a certified support of its witness program; the other
+/-- An advice assignment reads the advice cells of a certified support of its witness program
+(non-advice fixed and instance cells are supplied by `Determined.nonAdvice`); the other
 operations do not read any cells. -/
 def RegionOperation.Reads : RegionOperation F → Language Cell
   | .assignAdvice _ _ program =>
       {cells | ∃ reads : List (AssignedCell F),
         WitnessFunctionSupport reads (programFunction program) ∧
-          cells = reads.map (·.cell)}
+          ∀ cell ∈ reads, cell.cell.column.kind = .advice → cell.cell ∈ cells}
   | _ => 1
 
 /-- Copies and reads together: everything an operation needs to find already assigned. -/
@@ -41,8 +42,54 @@ theorem mem_reads_assignAdvice_iff (column : Column .advice) (row : ℕ) (progra
     cells ∈ Reads (.assignAdvice column row program) ↔
       ∃ reads : List (AssignedCell F),
         WitnessFunctionSupport reads (programFunction program) ∧
-          cells = reads.map (·.cell) :=
+          ∀ cell ∈ reads, cell.cell.column.kind = .advice → cell.cell ∈ cells :=
   Iff.rfl
+
+omit [FiniteField F] in
+@[keygen_norm]
+theorem assignedCell_of_column_kind (self : RegionIndex) (row : ℕ)
+    {kind : ColumnKind} (column : Column kind) :
+    (AssignedCell.of (F := F) self row column).cell.column.kind = kind := rfl
+
+@[keygen_norm]
+theorem column_toAny_kind {kind : ColumnKind} (column : Column kind) :
+    column.toAny.kind = kind := rfl
+
+@[keygen_norm]
+theorem columnKind_fixed_eq_advice : (ColumnKind.fixed = ColumnKind.advice) ↔ False := by
+  simp
+
+@[keygen_norm]
+theorem columnKind_instance_eq_advice : (ColumnKind.instance = ColumnKind.advice) ↔ False := by
+  simp
+
+@[keygen_norm]
+theorem columnKind_advice_eq_advice : (ColumnKind.advice = ColumnKind.advice) ↔ True := by
+  simp
+
+omit [FiniteField F] in
+@[keygen_norm ↓]
+theorem forall_advice_mem_nil {P : Cell → Prop} :
+    (∀ cell ∈ ([] : List (AssignedCell F)), cell.cell.column.kind = .advice → P cell.cell) ↔
+      True := by
+  simp
+
+omit [FiniteField F] in
+@[keygen_norm ↓]
+theorem forall_advice_mem_cons {P : Cell → Prop} (head : AssignedCell F)
+    (tail : List (AssignedCell F)) :
+    (∀ cell ∈ head :: tail, cell.cell.column.kind = .advice → P cell.cell) ↔
+      (head.cell.column.kind = .advice → P head.cell) ∧
+        ∀ cell ∈ tail, cell.cell.column.kind = .advice → P cell.cell := by
+  simp
+
+omit [FiniteField F] in
+@[keygen_norm ↓]
+theorem forall_advice_mem_append {P : Cell → Prop} (left right : List (AssignedCell F)) :
+    (∀ cell ∈ left ++ right, cell.cell.column.kind = .advice → P cell.cell) ↔
+      (∀ cell ∈ left, cell.cell.column.kind = .advice → P cell.cell) ∧
+        ∀ cell ∈ right, cell.cell.column.kind = .advice → P cell.cell := by
+  simp [or_imp, forall_and]
 
 @[keygen_norm]
 theorem reads_assignFixed (column : Column .fixed) (row : ℕ) (value : F) :
@@ -68,8 +115,9 @@ theorem reads_constrainConstant (cell : Cell) (value : F) :
 theorem reads_constrainInstance (cell : Cell) (column : Column .instance) (row : ℕ) :
     Reads (F := F) (.constrainInstance cell column row) = 1 := rfl
 
-/-- Reading from a cell state: a certified support of the program within it for an advice
-assignment, nothing for the other operations. -/
+/-- Reading from a cell state: a certified support of the program whose advice cells are within
+`available` for an advice assignment (fixed and instance reads are already determined), and nothing
+for the other operations. -/
 @[keygen_norm, keygen_spine]
 theorem consumesFrom_reads_iff (operation : RegionOperation F) :
     ConsumesFrom Reads available operation ↔
@@ -77,19 +125,16 @@ theorem consumesFrom_reads_iff (operation : RegionOperation F) :
       | .assignAdvice _ _ program =>
           ∃ reads : List (AssignedCell F),
             WitnessFunctionSupport reads (programFunction program) ∧
-              ∀ cell ∈ reads, cell.cell ∈ available
+              ∀ cell ∈ reads, cell.cell.column.kind = .advice → cell.cell ∈ available
       | _ => True := by
   cases operation
   case assignAdvice column row program =>
     simp only [ConsumesFrom, mem_reads_assignAdvice_iff]
     constructor
-    · rintro ⟨_, ⟨reads, hsupport, rfl⟩, havailable⟩
-      exact ⟨reads, hsupport, fun cell hcell => havailable _ (List.mem_map_of_mem hcell)⟩
+    · rintro ⟨cs, ⟨reads, hsupport, hcover⟩, havailable⟩
+      exact ⟨reads, hsupport, fun cell hcell hadv => havailable _ (hcover cell hcell hadv)⟩
     · rintro ⟨reads, hsupport, havailable⟩
-      refine ⟨reads.map (·.cell), ⟨reads, hsupport, rfl⟩, ?_⟩
-      intro cell hcell
-      obtain ⟨read, hread, rfl⟩ := List.mem_map.mp hcell
-      exact havailable read hread
+      exact ⟨available, ⟨reads, hsupport, havailable⟩, fun _ h => h⟩
   all_goals exact ⟨fun _ => trivial, fun _ => ⟨[], Language.nil_mem_one, fun _ h => nomatch h⟩⟩
 
 /-- Consuming from a cell state is copying from it and reading from it. -/

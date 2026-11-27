@@ -209,7 +209,7 @@ private theorem clobber_fast_rejected :
 private theorem clobber_not_writesConsistent :
     ¬ Operations.WritesConsistent testPlace Determined.empty clobberOps 0 := by
   intro hcons
-  have hpair := List.pairwise_cons.mp hcons.adviceUnique
+  have hpair := List.pairwise_cons.mp hcons.pairwiseConsistent
   rcases hpair.1 ⟨(colA, (testPlace 0 + 0 : ℕ)), .ofFExpr (.const 1)⟩
       List.mem_cons_self rfl with hval | hself
   · let zeroEnv : ProverEnvironment TestField :=

@@ -399,7 +399,7 @@ def Assignments.ComputableWitnesses (place : RegionIndex → ℕ)
 structure Assignments.WritesConsistent (place : RegionIndex → ℕ)
     (S₀ : Address → Prop) (assignments : List (Assignment F)) : Prop where
   initialDisjoint : ∀ a ∈ assignments, S₀ a.destination → a.destination.1.kind = .fixed
-  adviceUnique : assignments.Pairwise fun a b =>
+  pairwiseConsistent : assignments.Pairwise fun a b =>
     a.destination = b.destination →
       (∀ env : ProverEnvironment F,
         (a.program.eval ⟨place, env⟩)[0] = (b.program.eval ⟨place, env⟩)[0]) ∨
@@ -450,7 +450,7 @@ theorem Assignments.WritesConsistent.of_disjoint_nodup (place : RegionIndex → 
     (hnodup : (assignments.map Assignment.destination).Nodup) :
     Assignments.WritesConsistent place S₀ assignments where
   initialDisjoint := fun a hmem hS => False.elim (hdisjoint a hmem hS)
-  adviceUnique := by
+  pairwiseConsistent := by
     rw [List.Nodup, List.pairwise_map] at hnodup
     exact hnodup.imp fun hne heq => False.elim (hne heq)
 
@@ -587,7 +587,7 @@ theorem run_agreesOn_and_satisfies (place : RegionIndex → ℕ) (assignments : 
         (a.program.eval ⟨place, env⟩)[0] = initial.read a.destination) :
     AgreesOn S initial (run place assignments initial) ∧
       Assignments.Satisfies place (run place assignments initial) assignments :=
-  run_agreesOn_and_satisfies_aux place assignments S initial hcomp hcons.adviceUnique hinit
+  run_agreesOn_and_satisfies_aux place assignments S initial hcomp hcons.pairwiseConsistent hinit
 
 /-- Specialized soundness when no assignment targets an initially determined cell in `S₀`. -/
 theorem run_agreesOn_and_satisfies_of_disjoint (place : RegionIndex → ℕ)

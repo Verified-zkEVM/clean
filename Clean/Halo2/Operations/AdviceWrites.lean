@@ -237,6 +237,13 @@ theorem adviceWritesDistinct_append_iff (left right : RegionOperations F) :
     subst hab
     exact List.disjoint_left.mp hdisj ha hb
 
+theorem adviceWritesDistinct_append_of_disjoint {left right : RegionOperations F}
+    (hleft : left.AdviceWritesDistinct)
+    (hright : right.AdviceWritesDistinct)
+    (hdisj : left.adviceWrites.Disjoint right.adviceWrites) :
+    (left ++ right).AdviceWritesDistinct :=
+  (adviceWritesDistinct_append_iff left right).mpr ⟨hleft, hright, hdisj⟩
+
 /-- Disjoint row intervals imply disjoint advice writes. -/
 theorem adviceWrites_disjoint_of_row_sep {left right : RegionOperations F} (mid : ℕ)
     (hleft : ∀ col row, (col, row) ∈ left.adviceWrites → row < mid)
@@ -669,6 +676,16 @@ theorem adviceWritesConsistent_append_of_disjoint (self : RegionIndex)
   exact List.disjoint_left.mp hdisj
     (mem_adviceWrites_iff.mpr ⟨prog₁, hl⟩)
     ((right.mem_nonSelfCopyAdviceWrites_iff self).mpr ⟨prog₂, hr, hns⟩)
+
+theorem adviceWritesConsistent_append_of_adviceWrites_disjoint (self : RegionIndex)
+    {left right : RegionOperations F}
+    (hleft : left.AdviceWritesConsistent self)
+    (hright : right.AdviceWritesConsistent self)
+    (hdisj : left.adviceWrites.Disjoint right.adviceWrites) :
+    (left ++ right).AdviceWritesConsistent self :=
+  adviceWritesConsistent_append_of_disjoint self hleft hright
+    (List.disjoint_left.mpr fun _ hl hr =>
+      List.disjoint_left.mp hdisj hl (mem_adviceWrites_of_mem_nonSelfCopy self hr))
 
 end Consistent
 

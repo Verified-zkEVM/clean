@@ -24,11 +24,14 @@ open Witgen
 section
 variable {F : Type} [FiniteField F]
 
-/-- Declared cell values and the immutable public/fixed environment agree. -/
+/-- Declared cell values and the immutable placement, usable-row bound, and public/fixed
+environment agree. -/
 structure WitnessFunctionAgreement
     (reads : List (AssignedCell F)) (left right : Placed ProverEnvironment F) : Prop extends
     ContextAgreement (F := F) (Env := Placed ProverEnvironment F) (V := AssignedCell F)
       reads ({ env := left } : CtxOver F (Placed ProverEnvironment F)) { env := right } where
+  place : left.place = right.place
+  usableRows : left.env.usableRows = right.env.usableRows
   nonAdvice : ∀ column row, column.kind ≠ .advice →
     left.env.get column row = right.env.get column row
 
@@ -37,7 +40,8 @@ theorem WitnessFunctionAgreement.mono
     {reads smaller : List (AssignedCell F)} {left right : Placed ProverEnvironment F}
     (agreement : WitnessFunctionAgreement reads left right) (hsubset : smaller ⊆ reads) :
     WitnessFunctionAgreement smaller left right :=
-  ⟨agreement.toContextAgreement.mono hsubset, agreement.nonAdvice⟩
+  ⟨agreement.toContextAgreement.mono hsubset, agreement.place, agreement.usableRows,
+    agreement.nonAdvice⟩
 
 /-- Restrict a concatenated support to its first component. -/
 theorem WitnessFunctionAgreement.left
@@ -279,7 +283,7 @@ theorem fieldReads_neg [Field F] {V : Type} (e : Witgen.FExprOver F V) :
 theorem fieldReads_sub [Field F] {V : Type} (l r : Witgen.FExprOver F V) :
     Witgen.fieldReads (l - r) = Witgen.fieldReads l ++ Witgen.fieldReads r := rfl
 theorem fieldReads_ofNat {V : Type} {n : ℕ} [OfNat F n] :
-    Witgen.fieldReads (OfNat.ofNat n : Witgen.FExprOver F V) = [] := rfl
+    Witgen.fieldReads (no_index (OfNat.ofNat n) : Witgen.FExprOver F V) = [] := rfl
 theorem fieldReads_ofU64 {V : Type} (e : Witgen.U64ExprOver F V) :
     Witgen.fieldReads (.ofU64 e) = Witgen.u64Reads e := rfl
 theorem fieldReads_ite {V : Type} (c : Witgen.BExprOver F V) (y n : Witgen.FExprOver F V) :
@@ -304,7 +308,7 @@ theorem fieldListReads_cons {V : Type} (e : Witgen.FExprOver F V)
 theorem u64Reads_const {V : Type} (n : UInt64) :
     Witgen.u64Reads (F := F) (V := V) (.const n) = [] := rfl
 theorem u64Reads_ofNat {V : Type} {n : ℕ} :
-    Witgen.u64Reads (F := F) (V := V) (OfNat.ofNat n) = [] := rfl
+    Witgen.u64Reads (F := F) (V := V) (no_index (OfNat.ofNat n)) = [] := rfl
 theorem u64Reads_idx {V : Type} :
     Witgen.u64Reads (F := F) (V := V) .idx = [] := rfl
 theorem u64Reads_localVar {V : Type} (i : ℕ) :

@@ -17,9 +17,9 @@ Connects the compositional keygen/elaboration invariants to the execution-level 
   (`ConsumedCellsAssigned 0 []`) implies `Operations.ComputableWitnesses place Determined.nonAdvice 0`
   for every placement `place`, covering both structured `WitgenIR` and `.native` callbacks certified
   via `WitnessSupport`.
-- `Operations.writesConsistent_of_adviceWritesDistinct`: per-region `AdviceWritesDistinct` combined
-  with floor-planner `SharedColumnIntervalsDisjoint` (and agreement of repeated fixed writes)
-  implies `Operations.WritesConsistent (fun r => starts.getD r 0) Determined.nonAdvice 0`.
+- `Operations.writesConsistent_of_adviceWritesConsistent`: per-region `AdviceWritesConsistent`
+  combined with floor-planner `SharedColumnIntervalsDisjoint` (and agreement of repeated fixed
+  writes) implies `Operations.WritesConsistent (fun r => starts.getD r 0) Determined.nonAdvice 0`.
 -/
 
 namespace Halo2
@@ -110,21 +110,27 @@ private theorem witnessFunctionAgreement_of_agreesOn
     (available : List Cell)
     (hsub : ∀ addr, determinedFrom place S₀ available addr → S addr)
     (reads : List (AssignedCell F))
-    (hreads : ∀ c ∈ reads, c.cell ∈ available)
+    (hreads : ∀ c ∈ reads, c.cell.column.kind = .advice → c.cell ∈ available)
     {left right : ProverEnvironment F}
     (hagree : AgreesOn S left right) :
     WitnessFunctionAgreement reads ⟨place, left⟩ ⟨place, right⟩ where
   cellValues := by
     intro cell hcell
-    have hmem : cell.cell ∈ available := hreads cell hcell
-    have hS : S (AssignedCell.address place cell) :=
-      hsub _ (Or.inr ⟨cell.cell, hmem, rfl⟩)
-    exact hagree.2.2 (AssignedCell.address place cell) hS
+    by_cases hadv : cell.cell.column.kind = .advice
+    · have hmem : cell.cell ∈ available := hreads cell hcell hadv
+      have hS : S (AssignedCell.address place cell) :=
+        hsub _ (Or.inr ⟨cell.cell, hmem, rfl⟩)
+      exact hagree.2.2 (AssignedCell.address place cell) hS
+    · have hS : S (AssignedCell.address place cell) :=
+        hsub _ (Or.inl (hnonAdvice (AssignedCell.address place cell) hadv))
+      exact hagree.2.2 (AssignedCell.address place cell) hS
   indexed := rfl
   data := rfl
   hints := hagree.1
   locals := rfl
   index := rfl
+  place := rfl
+  usableRows := hagree.2.1
   nonAdvice := by
     intro col row hkind
     exact hagree.2.2 (col, row) (hsub (col, row) (Or.inl (hnonAdvice (col, row) hkind)))
@@ -144,14 +150,11 @@ theorem RegionOperations.computableWitnesses_of_readsAssigned
     rcases hreads with ⟨⟨cs, hcs_mem, hcs_avail⟩, hrest⟩
     cases op with
     | assignAdvice column row prog =>
-      obtain ⟨reads, hsupport, hmap⟩ := hcs_mem
+      obtain ⟨reads, hsupport, hcover⟩ := hcs_mem
       refine ⟨?_, ?_⟩
       · intro left right hagree
-        have hreads_avail : ∀ c ∈ reads, c.cell ∈ available := by
-          intro c hc
-          apply hcs_avail c.cell
-          rw [hmap]
-          exact List.mem_map_of_mem hc
+        have hreads_avail : ∀ c ∈ reads, c.cell.column.kind = .advice → c.cell ∈ available :=
+          fun c hc hadv => hcs_avail c.cell (hcover c hc hadv)
         exact hsupport ⟨place, left⟩ ⟨place, right⟩
           (witnessFunctionAgreement_of_agreesOn place S₀ S hnonAdvice available hsub reads
             hreads_avail hagree)
@@ -240,39 +243,6 @@ end ComputableBridge
 
 section WritesConsistentBridge
 
-private theorem mem_adviceWrites_of_mem_regionAssignments
-    (place : RegionIndex → ℕ) (self : RegionIndex) (body : RegionOperations F)
-    {a : Assignment F} (ha : a ∈ body.assignments place self)
-    (hadvice : a.destination.1.kind = .advice) :
-    ∃ (col : Column .advice) (localRow : ℕ),
-      a.destination = (col.toAny, ((place self + localRow : ℕ) : ℤ)) ∧
-      (col, localRow) ∈ body.adviceWrites := by
-  induction body with
-  | nil => simp [RegionOperations.assignments] at ha
-  | cons op rest ih =>
-    cases op with
-    | assignAdvice col localRow prog =>
-      rcases List.mem_cons.mp ha with rfl | htail
-      · exact ⟨col, localRow, rfl, by
-          simp [RegionOperations.adviceWrites_cons, RegionOperation.adviceWrites]⟩
-      · obtain ⟨c, r, hdest, hmem⟩ := ih htail
-        exact ⟨c, r, hdest, by
-          rw [RegionOperations.adviceWrites_cons, List.mem_append]
-          exact Or.inr hmem⟩
-    | assignFixed col localRow val =>
-      rcases List.mem_cons.mp ha with rfl | htail
-      · cases hadvice
-      · obtain ⟨c, r, hdest, hmem⟩ := ih htail
-        exact ⟨c, r, hdest, by
-          rw [RegionOperations.adviceWrites_cons, List.mem_append]
-          exact Or.inr hmem⟩
-    | enableGate _ _ | enableLookup _ _ _ | constrainEqual _ _
-    | constrainConstant _ _ | constrainInstance _ _ _ =>
-      obtain ⟨c, r, hdest, hmem⟩ := ih ha
-      exact ⟨c, r, hdest, by
-        rw [RegionOperations.adviceWrites_cons, List.mem_append]
-        exact Or.inr hmem⟩
-
 private theorem exists_assignAdvice_of_mem_regionAssignments
     (place : RegionIndex → ℕ) (self : RegionIndex) (body : RegionOperations F)
     {a : Assignment F} (ha : a ∈ body.assignments place self)
@@ -298,6 +268,17 @@ private theorem exists_assignAdvice_of_mem_regionAssignments
     | constrainConstant _ _ | constrainInstance _ _ _ =>
       obtain ⟨c, r, hdest, hmem⟩ := ih ha
       exact ⟨c, r, hdest, List.mem_cons_of_mem _ hmem⟩
+
+private theorem mem_adviceWrites_of_mem_regionAssignments
+    (place : RegionIndex → ℕ) (self : RegionIndex) (body : RegionOperations F)
+    {a : Assignment F} (ha : a ∈ body.assignments place self)
+    (hadvice : a.destination.1.kind = .advice) :
+    ∃ (col : Column .advice) (localRow : ℕ),
+      a.destination = (col.toAny, ((place self + localRow : ℕ) : ℤ)) ∧
+      (col, localRow) ∈ body.adviceWrites := by
+  obtain ⟨col, localRow, hdest, hmem⟩ :=
+    exists_assignAdvice_of_mem_regionAssignments place self body ha hadvice
+  exact ⟨col, localRow, hdest, RegionOperations.mem_adviceWrites_iff.mpr ⟨a.program, hmem⟩⟩
 
 private theorem eval_of_isSelfCopy [FiniteField F]
     (place : RegionIndex → ℕ) (self : RegionIndex) (col : Column .advice) (row : ℕ)
@@ -431,23 +412,6 @@ private theorem indexedRegions_pairwise_lt
     | constrainInstance _ _ _ | loadTable _ _ =>
       exact ih i₀
 
-private theorem pairwise_flatMap_of {α β : Type} (R : β → β → Prop) (f : α → List β)
-    (xs : List α)
-    (hinner : ∀ x ∈ xs, (f x).Pairwise R)
-    (hcross : xs.Pairwise fun x y => ∀ a ∈ f x, ∀ b ∈ f y, R a b) :
-    (xs.flatMap f).Pairwise R := by
-  induction xs with
-  | nil => exact List.Pairwise.nil
-  | cons x rest ih =>
-    rw [List.flatMap_cons, List.pairwise_append]
-    rw [List.pairwise_cons] at hcross
-    refine ⟨hinner x List.mem_cons_self,
-      ih (fun y hy => hinner y (List.mem_cons_of_mem _ hy)) hcross.2, ?_⟩
-    intro a ha b hb
-    rw [List.mem_flatMap] at hb
-    obtain ⟨y, hy, hby⟩ := hb
-    exact hcross.1 y hy a ha b hby
-
 /-- Per-region `AdviceWritesConsistent` + floor-planner `SharedColumnIntervalsDisjoint` guarantees
 that any two assignments targeting the same physical address target a fixed column, compute the
 same value in every environment, or the later assignment is an idempotent self-copy. -/
@@ -468,7 +432,8 @@ theorem Operations.assignments_pairwise_consistent_of_adviceWritesConsistent [Fi
   have hallCons := List.forall_iff_forall_mem.mp
     (indexedRegions_forall_adviceWritesConsistent ops 0 hcons)
   have hlt := indexedRegions_pairwise_lt ops 0
-  apply pairwise_flatMap_of
+  apply List.pairwise_flatMap.mpr
+  refine ⟨?_, ?_⟩
   · intro p hp
     exact regionAssignments_advice_consistent place p.1 p.2 (hallCons p hp)
   · refine hlt.imp_of_mem ?_
@@ -531,7 +496,7 @@ theorem Operations.writesConsistent_of_adviceWritesConsistent [FiniteField F]
     | fixed => rfl
     | advice => exact False.elim (hnonAdv hkind)
     | «instance» => exact False.elim (hnotInst hkind)
-  adviceUnique := by
+  pairwiseConsistent := by
     have hpair := Operations.assignments_pairwise_consistent_of_adviceWritesConsistent
       starts ops hcons hdisjoint
     refine hpair.imp_of_mem ?_

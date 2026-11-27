@@ -181,8 +181,8 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
   /-- Optional column-distinctness preconditions on caller-supplied advice columns
   needed to guarantee `adviceWritesConsistent`. Defaults to `True`. -/
   adviceColumnRequirements : Config → Prop := fun _ => True
-  /-- Every region in synthesis writes advice cells consistently (distinct writes or idempotent
-  self-copies). -/
+  /-- Every region in synthesis writes advice cells consistently (distinct writes, equal-valued
+  repeated writes, or idempotent self-copies). -/
   adviceWritesConsistent :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
       (_hconfig : keygenRequirements.configLawful configInput)
@@ -489,7 +489,8 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
   /-- Optional column-distinctness preconditions on caller-supplied advice columns
   needed to guarantee `adviceWritesConsistent`. Defaults to `True`. -/
   adviceColumnRequirements : Config → Prop := fun _ => True
-  /-- Every region-local advice assignment is consistent (distinct or idempotent self-copy). -/
+  /-- Every region-local advice assignment is consistent (distinct writes, equal-valued repeated
+  writes, or idempotent self-copies). -/
   adviceWritesConsistent :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
       (_hconfig : keygenRequirements.configLawful configInput)

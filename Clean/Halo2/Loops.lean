@@ -350,6 +350,7 @@ theorem mem_forRange'_adviceWrites_iff
 /-- Advice writes from a constant-stride loop are pairwise distinct when each round is
 internally distinct and writes only in its half-open row window `[offset + i * stride,
 offset + (i + 1) * stride)`. -/
+@[keygen_helper]
 theorem forRange'_adviceWritesDistinct
     (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex)
@@ -427,6 +428,29 @@ theorem forRange'_adviceWritesConsistent_of_disjoint
       exact List.disjoint_left.mp
         (hdisj ⟨i.val, Nat.lt_of_lt_of_le i.isLt (Nat.le_of_succ_le hk)⟩ ⟨k, hk⟩ i.isLt) hi hcur
   exact haux m le_rfl
+
+/-- Advice writes from a constant-stride loop are consistent when each round is internally
+consistent and writes only in its half-open row window `[offset + i * stride,
+offset + (i + 1) * stride)`. -/
+@[keygen_helper]
+theorem forRange'_adviceWritesConsistent
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hcons : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self).AdviceWritesConsistent self)
+    (hrow : ∀ (i : Fin m) column row,
+      (column, row) ∈ ((body i.val (offset + i.val * stride)).operations self).adviceWrites →
+      offset + i.val * stride ≤ row ∧ row < offset + (i.val + 1) * stride) :
+    ((forRange' offset stride m body).operations self).AdviceWritesConsistent self := by
+  apply forRange'_adviceWritesConsistent_of_disjoint offset stride m body self hcons
+  intro i j hij
+  rw [List.disjoint_left]
+  rintro ⟨col, row⟩ hi hj
+  have hbi := hrow i col row hi
+  have hbj := hrow j col row (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hj)
+  have hstep : (i.val + 1) * stride ≤ j.val * stride :=
+    Nat.mul_le_mul_right stride (Nat.succ_le_of_lt hij)
+  omega
 
 /-- Advice writes from a constant-stride loop lie in `[offset, offset + m * stride)`. -/
 theorem forRange'_adviceWrites_row_bounds
@@ -860,6 +884,7 @@ theorem mem_forRangeVar'_adviceWrites_iff
 
 /-- Advice writes from a variable-stride loop are pairwise distinct when each round is
 internally distinct and writes only in `[rows i, rows (i + 1))` with monotone `rows`. -/
+@[keygen_helper]
 theorem forRangeVar'_adviceWritesDistinct
     (rows : ℕ → ℕ) (count : ℕ)
     (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
@@ -889,6 +914,44 @@ theorem forRangeVar'_adviceWritesDistinct
     have hbj := hrow j col row hj
     have hstep := hordered i j hij
     omega
+
+/-- Advice writes from a variable-stride loop are consistent when each round is internally
+consistent and writes only in `[rows i, rows (i + 1))` with monotone `rows`. -/
+@[keygen_helper]
+theorem forRangeVar'_adviceWritesConsistent
+    (rows : ℕ → ℕ) (count : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hcons : ∀ i : Fin count,
+      ((body i.val (rows i.val)).operations self).AdviceWritesConsistent self)
+    (hrow : ∀ (i : Fin count) column row,
+      (column, row) ∈ ((body i.val (rows i.val)).operations self).adviceWrites →
+      rows i.val ≤ row ∧ row < rows (i.val + 1))
+    (hordered : ∀ i j : Fin count, i.val < j.val →
+      rows (i.val + 1) ≤ rows j.val) :
+    ((forRangeVar' rows count body).operations self).AdviceWritesConsistent self := by
+  have haux : ∀ k (hk : k ≤ count),
+      ((loopAux rows body k).operations self).AdviceWritesConsistent self := by
+    intro k hk
+    induction k with
+    | zero =>
+      simp [loopAux, RegionCircuit.operations_pure, RegionOperations.adviceWritesConsistent_nil]
+    | succ k ih =>
+      rw [loopAux_operations_succ]
+      apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+        (ih (Nat.le_of_succ_le hk)) (hcons ⟨k, hk⟩)
+      rw [List.disjoint_left]
+      rintro ⟨col, row⟩ hprev hcur
+      have hprevMem :
+          (col, row) ∈ ((forRangeVar' rows k body).operations self).adviceWrites := hprev
+      obtain ⟨i, hi⟩ := (mem_forRangeVar'_adviceWrites_iff rows k body self col row).mp hprevMem
+      have hbi := hrow ⟨i.val, Nat.lt_of_lt_of_le i.isLt (Nat.le_of_succ_le hk)⟩ col row hi
+      have hbj := hrow ⟨k, hk⟩ col row
+        (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hcur)
+      have hstep := hordered ⟨i.val, Nat.lt_of_lt_of_le i.isLt (Nat.le_of_succ_le hk)⟩
+        ⟨k, hk⟩ i.isLt
+      omega
+  exact haux count le_rfl
 
 /-- Advice writes from a variable-stride loop lie in `[rows 0, rows count)`. -/
 theorem forRangeVar'_adviceWrites_row_bounds
