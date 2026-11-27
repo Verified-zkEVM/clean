@@ -463,19 +463,19 @@ theorem constantSite_row_lt_usedRows
 `constrainConstant` values, in the same order. -/
 theorem constSites_map_snd (body : RegionOperations F) :
     (constSites body).map Prod.snd =
-      FloorPlanner.V1.regionConstantValues body := by
+      FloorPlanner.regionConstantValues body := by
   induction body with
   | nil => rfl
   | cons operation rest ih =>
       cases operation <;>
-        simp [constSites, FloorPlanner.V1.regionConstantValues, ih]
+        simp [constSites, FloorPlanner.regionConstantValues, ih]
 
 /-- Walking indexed regions and walking the operation stream directly collect the
 same constant values in the same order. Region indices do not affect this stream. -/
 theorem indexedRegions_constantValues
     (ops : Operations F) (nextRegion : ℕ) :
     ((indexedRegions ops nextRegion).1.flatMap fun (_, body) =>
-      FloorPlanner.V1.regionConstantValues body) =
+      FloorPlanner.regionConstantValues body) =
       (operationConstSites ops).map Prod.snd := by
   induction ops generalizing nextRegion with
   | nil => rfl

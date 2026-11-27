@@ -109,25 +109,22 @@ private theorem starts_getD_of_pair_mem
   rw [hlength, ← hzip]
   exact hsortedPair
 
-/-- V1's actual first-fit candidate separates every pair of shared columns. -/
-theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
-    (operations : Operations F) :
-    SharedColumnIntervalsDisjoint
-      (measureRegions operations)
-      (planCandidate (measureRegions operations)).1 := by
-  let shapes := measureRegions operations
-  let sortedArray :=
-    (Pdqsort.quicksort shapes.toArray
-      (fun left right => left.key < right.key)).reverse
-  let sortedShapes := sortedArray.toList
-  have hsorted : sortedShapes.Perm shapes := by
-    have hquick := Pdqsort.quicksort_perm shapes.toArray
-      (fun left right => left.key < right.key)
-    exact (by
-      simpa [sortedShapes, sortedArray] using
-        (List.reverse_perm
-          (Pdqsort.quicksort shapes.toArray
-            (fun left right => left.key < right.key)).toList).trans hquick)
+/-- Restoring source-index order preserves every slotted region's start.
+The slotting order may be chosen by a downstream planner. -/
+theorem restoredStarts_getD (pairs : List (ℕ × ℕ)) (count : ℕ)
+    (indices : (pairs.map Prod.fst).Perm (List.range count))
+    {index start : ℕ} (member : (index, start) ∈ pairs) :
+    ((sortPairsByIndex pairs).map Prod.snd).getD index 0 = start :=
+  starts_getD_of_pair_mem pairs count
+    (sortPairsByIndex_fst_eq_range pairs count indices) member
+
+/-- First-fit safety depends on the measured shapes, independently of the
+ordering policy used before slotting. -/
+theorem slotIn_measureRegions_sharedColumnIntervalsDisjoint
+    (operations : Operations F) (sortedShapes : List RegionShape)
+    (hsorted : sortedShapes.Perm (measureRegions operations)) :
+    SharedColumnIntervalsDisjoint (measureRegions operations)
+      ((sortPairsByIndex (slotIn sortedShapes).1).map Prod.snd) := by
   have hwellFormed : sortedShapes.Forall RegionShape.WellFormed := by
     rw [List.forall_iff_forall_mem]
     intro shape hshape
@@ -153,10 +150,6 @@ theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
         List.range operations.regionCount :=
     sortPairsByIndex_fst_eq_range pairs operations.regionCount
       hpairsRange
-  have hplanStarts :
-      (planCandidate (measureRegions operations)).1 =
-        (sortPairsByIndex pairs).map (·.2) := by
-    rfl
   intro left right hleft hright hindices column
     hleftColumn hrightColumn
   have hleftSorted : left ∈ sortedShapes := hsorted.mem_iff.mpr hleft
@@ -185,11 +178,23 @@ theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
     exact congrArg (fun placed : RegionShape × ℕ => placed.1.index) heq
   rcases rel_or_reverse_of_pairwise_of_mem hslot.disjoint
       hleftPlaced hrightPlaced hplacedNe with hforward | hreverse
-  · rw [hplanStarts, hleftStart, hrightStart]
+  · rw [hleftStart, hrightStart]
     exact hforward column hleftColumn hrightColumn
   · have hdisjoint := hreverse column hrightColumn hleftColumn
-    rw [hplanStarts, hleftStart, hrightStart]
+    rw [hleftStart, hrightStart]
     exact hdisjoint.elim Or.inr Or.inl
+
+/-- V1's actual first-fit candidate separates every pair of shared columns. -/
+theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
+    (operations : Operations F) :
+    SharedColumnIntervalsDisjoint (measureRegions operations)
+      (planCandidate (measureRegions operations)).1 := by
+  apply slotIn_measureRegions_sharedColumnIntervalsDisjoint
+  simpa using (List.reverse_perm
+    (Pdqsort.quicksort (measureRegions operations).toArray
+      (fun left right => left.key < right.key)).toList).trans
+    (Pdqsort.quicksort_perm (measureRegions operations).toArray
+      (fun left right => left.key < right.key))
 def placementEndFrom (shapes : List RegionShape) (regionStarts : List ℕ) : ℕ :=
   shapes.map (fun shape =>
     regionStarts.getD shape.index 0 + shape.rowCount)

@@ -494,14 +494,14 @@ def ConfigureDelta.fixedQueriesOfCells
     List (Column .fixed × Rotation) :=
   cells.flatMap fun cell =>
     match cell with
-    | .var (.fixed column _) => [(column, 0)]
+    | .var (.fixed column rotation) => [(column, rotation)]
     | _ => []
 
 @[simp] theorem ConfigureDelta.queriedCell_fixedQueries
     (cell : Expression F Query) :
     (ConfigureDelta.queriedCell cell).fixedQueries =
       match cell with
-      | .var (.fixed column _) => [(column, 0)]
+      | .var (.fixed column rotation) => [(column, rotation)]
       | _ => [] := by
   cases cell with
   | var query =>

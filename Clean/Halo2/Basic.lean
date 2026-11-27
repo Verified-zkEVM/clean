@@ -114,6 +114,16 @@ def assignAdviceFromInstance (instCol : Column .instance) (instRow : ℕ)
       [.assignAdvice col row (instanceGet instCol instRow),
        .constrainInstance (Cell.of self row col) instCol instRow])
 
+/-- Assign a constant to an advice cell and constrain it to the constants column. Rust:
+`region.assign_advice_from_constant(col, offset, value)`, which is `assign_advice` followed by
+`constrain_constant` (`single_pass.rs:394-406`). -/
+def assignAdviceFromConstant (col : Column .advice) (row : ℕ) (value : F) :
+    RegionCircuit F (AssignedCell F) :=
+  fun self =>
+    (.of self row col,
+      [.assignAdvice col row (.ofFExpr (.const value)),
+       .constrainConstant (Cell.of self row col) value])
+
 /-- Read the assigned cell at a known region-local row/column (no op emitted). Lets
 `synthesize` name output cells that live at fixed rows rather than being threaded through
 loop return values. (Promoted from the per-gadget copies in `MulIncomplete`/

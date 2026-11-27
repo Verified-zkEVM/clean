@@ -109,11 +109,7 @@ def Constraints (family : CircuitConstraintFamily)
         | _ => True
        else True) ∧ Constraints family place env rest i
   | .loadTable table values :: rest, i =>
-      (if family = .fixed then
-        (∀ r : ℕ, r < values.length →
-          env.fixed table.inner (r : ℤ) = values[r]!) ∧
-        (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
-          env.fixed table.inner (r : ℤ) = values[0]!)
+      (if family = .fixed then TableLoaded env table values
        else True) ∧ Constraints family place env rest i
 
 /-- The four layouter-level family projections are exactly `Halo2.Constraints`. -/
@@ -139,7 +135,7 @@ theorem constraints_iff_families
           tauto
       | loadTable table values =>
           rw [Halo2.Constraints, ih]
-          simp [Constraints]
+          simp [Constraints, TableLoaded]
           tauto
 
 end CircuitConstraintFamily

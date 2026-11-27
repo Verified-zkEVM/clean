@@ -104,7 +104,7 @@ attribute [keygen_spine]
   operations_assignRegion operations_assignAdvice operations_assignFixed
   operations_copyAdvice operations_enable operations_enableLookup
   operations_constrainEqual operations_constrainInstance operations_loadTable
-  operations_constrainConstant operations_assignAdviceFromInstance
+  operations_constrainConstant operations_assignAdviceFromInstance operations_assignAdviceFromConstant
   operations_cellAt operations_cellVec
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
   KeygenRequirements.inputPermutationColumns

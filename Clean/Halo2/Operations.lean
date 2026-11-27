@@ -198,13 +198,13 @@ def RegionOperation.Constraints (place : RegionIndex → ℕ) (self : RegionInde
       -- ℕ-with-cast spelling: table rows share the `(↑(n : ℕ) : ℤ)` row normal form of
       -- all other reads. Inputs are evaluated under the local activation valuation
       -- `enabled ↦ 1, rest ↦ 0` — which selectors are on at this row decides *which* word
-      -- the gated input expression reduces to (running-sum vs short row, §1.4); the table
-      -- side is a rotation-0 fixed query, unaffected by the valuation.
+      -- the gated input expression reduces to (running-sum vs short row, §1.4). The table
+      -- side is selector-free (`tablesFree`) and read under no activation: this row's
+      -- enables say nothing about the selectors at `tableRow`.
       ∃ tableRow : ℕ, tableRow < env.usableRows ∧
         arg.inputs.map (Expression.eval (Query.eval env
           (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (place self + row : ℕ)))
-        = arg.tables.map (Expression.eval (Query.eval env
-          (fun i => if i ∈ enabled.map Selector.index then 1 else 0) (tableRow : ℤ)))
+        = arg.tables.map (Expression.eval (Query.eval env (fun _ => 0) (tableRow : ℤ)))
   | .constrainEqual a b => a.eval place env = b.eval place env
   | .constrainConstant a v => a.eval place env = v
   | .constrainInstance cell instCol instRow =>
@@ -216,6 +216,14 @@ def RegionOperations.Constraints (place : RegionIndex → ℕ) (self : RegionInd
   | [] => True
   | op :: ops =>
       op.Constraints place self env ∧ RegionOperations.Constraints place self env ops
+
+/-- A loaded lookup-table column: rows `[0, values.length)` hold the values and, for a nonempty
+load, every further usable row holds the row-0 value. The `loadTable` arm of `Constraints` is
+exactly this (`constraints_loadTable_iff`). -/
+abbrev TableLoaded (env : Environment F) (tbl : TableColumn) (values : List F) : Prop :=
+  (∀ r : ℕ, r < values.length → env.fixed tbl.inner (r : ℤ) = values[r]!) ∧
+  (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
+    env.fixed tbl.inner (r : ℤ) = values[0]!)
 
 /--
 Ground truth: what it means that "constraints hold" on a sequence of operations,
@@ -279,6 +287,13 @@ def ExtendsWitnesses (place : RegionIndex → ℕ) (env : ProverEnvironment F) :
       (values ≠ [] → ∀ r : ℕ, values.length ≤ r → r < env.usableRows →
         env.fixed tbl.inner (r : ℤ) = values[0]!) ∧
       ExtendsWitnesses place env ops i
+
+theorem constraints_loadTable_iff (place : RegionIndex → ℕ) (env : Environment F)
+    (tbl : TableColumn) (values : List F) (ops : Operations F) (i : RegionIndex) :
+    Constraints place env (.loadTable tbl values :: ops) i ↔
+      TableLoaded env tbl values ∧ Constraints place env ops i := by
+  simp only [Constraints, TableLoaded, and_assoc]
+
 end Semantics
 
 end Halo2

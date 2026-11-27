@@ -272,8 +272,8 @@ def ConfigureDelta.queriedCell :
     Expression F Query → ConfigureDelta F
   | .var (.advice column rotation) =>
       { adviceQueries := [(column, rotation)] }
-  | .var (.fixed column _) =>
-      { fixedQueries := [(column, 0)] }
+  | .var (.fixed column rotation) =>
+      { fixedQueries := [(column, rotation)] }
   | .var (.instance column rotation) =>
       { instanceQueries := [(column, rotation)] }
   | _ => {}
@@ -293,15 +293,11 @@ def ConfigureDelta.fixedQueriesOfColumns
 
 theorem ConfigureDelta.queriedCell_registersQuery
     {query : Query}
-    (hvalid : (Expression.var query : Expression F Query).QueryAtom) :
+    (_hvalid : (Expression.var query : Expression F Query).QueryAtom) :
     (ConfigureDelta.queriedCell (F := F) (.var query)).RegistersQuery query := by
   cases query with
   | selector => trivial
-  | advice | «instance» =>
-      simp [ConfigureDelta.queriedCell, ConfigureDelta.RegistersQuery]
-  | fixed column rotation =>
-      simp only [Expression.QueryAtom] at hvalid
-      subst rotation
+  | advice | fixed | «instance» =>
       simp [ConfigureDelta.queriedCell, ConfigureDelta.RegistersQuery]
 
 /-- Every valid query declaration is registered by the delta produced from the full
@@ -351,12 +347,7 @@ theorem ConfigureDelta.queriedCells_queriesRegistered
   | var query =>
       cases query with
       | selector => simp [Expression.QueryAtom] at hatom
-      | advice | «instance» =>
-          exact ConfigureDelta.queriedCells_registersQuery_of_mem
-            hvalid hcell
-      | fixed column rotation =>
-          simp only [Expression.QueryAtom] at hatom
-          subst rotation
+      | advice | fixed | «instance» =>
           exact ConfigureDelta.queriedCells_registersQuery_of_mem
             hvalid hcell
   | const | add | mul => simp [Expression.QueryAtom] at hatom

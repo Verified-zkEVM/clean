@@ -37,11 +37,7 @@ def Satisfied (place : RegionIndex → ℕ) (env : Environment F) :
     FixedRequirement F → Prop
   | .assignment region column row value =>
       env.fixed column (place region + row : ℕ) = value
-  | .table column values =>
-      (∀ row : ℕ, row < values.length →
-        env.fixed column.inner (row : ℤ) = values[row]!) ∧
-      (values ≠ [] → ∀ row : ℕ, values.length ≤ row → row < env.usableRows →
-        env.fixed column.inner (row : ℤ) = values[0]!)
+  | .table column values => TableLoaded env column values
 
 end FixedRequirement
 

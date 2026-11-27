@@ -740,4 +740,13 @@ def RegionShapeSummary.key (summary : RegionShapeSummary) : ℕ :=
 theorem RegionShape.toSummary_key (shape : RegionShape) :
     shape.toSummary.key = shape.key := rfl
 
+/-- A region's `constrain_constant` values in body order, as both planners collect them
+(`single_pass.rs:198-222`, `v1.rs:122`). -/
+def regionConstantValues (body : RegionOperations F) : List F :=
+  match body with
+  | [] => []
+  | .constrainConstant _ value :: rest =>
+      value :: regionConstantValues rest
+  | _ :: rest => regionConstantValues rest
+
 end Halo2.FloorPlanner

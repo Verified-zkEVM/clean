@@ -192,16 +192,8 @@ rows in `[0, first_unassigned_row)` of that column's allocations (`v1.rs:102-108
 zipped with `plan.constants` — the `constrain_constant` `(value, cell)` list collected in
 region-then-body order during the assignment pass (`v1.rs:122`). -/
 
-/-- `plan.constants` values in collection order (`assign_advice_from_constant` /
-`constrain_constant` push `(constant, cell)`; we keep the constant), region-index order then
-body order (`v1.rs` `AssignmentPass` runs regions in order). -/
-def regionConstantValues (body : RegionOperations F) : List F :=
-  match body with
-  | [] => []
-  | .constrainConstant _ value :: rest =>
-      value :: regionConstantValues rest
-  | _ :: rest => regionConstantValues rest
-
+/-- `plan.constants` values in region-index order then body order (`v1.rs` `AssignmentPass`
+runs regions in order). -/
 def constantValues (ops : Operations F) : List F :=
   (indexedRegions ops 0).1.flatMap fun (_, body) =>
     regionConstantValues body

@@ -622,7 +622,7 @@ def regionAssignments (starts : List ℕ)
           some (column.index, place starts index + row, value)
       | _ => none
 
-private theorem mem_regionAssignments
+theorem mem_regionAssignments
     (starts : List ℕ) (regions : List (ℕ × RegionOperations F))
     {assignment : FixedAssignment F}
     (hassignment : assignment ∈ regionAssignments starts regions) :
