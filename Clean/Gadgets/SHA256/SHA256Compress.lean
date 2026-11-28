@@ -65,37 +65,7 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
     Specs.SHA256.sha256Compress (input.state.map valueBits) (input.schedule.map valueBits)
   ∧ ∀ i : Fin 8, Normalized out[i]
 
-omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 33)] in
-/-- Generic version of `output_eq`: for any bound `k`, the `Fin.foldl k` over our round body
-    equals `stateVar i₀ input_var_state k`. -/
-private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
-    Fin.foldl k
-      (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
-        #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
-           acc[0], acc[1], acc[2],
-           Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 422 + i_1 },
-           acc[4], acc[5], acc[6]]) input_var_state =
-      stateVar i₀ input_var_state k := by
-  induction k with
-  | zero => simp [stateVar, Fin.foldl_zero]
-  | succ k ih =>
-    rw [Fin.foldl_succ_last]
-    simp only [Fin.val_last]
-    rw [stateVar]
-    rw [show Fin.foldl k
-        (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
-          #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.castSucc.val * 455 + 389 + i_1 },
-             acc[0], acc[1], acc[2],
-             Vector.mapRange 32 fun i_1 => var { index := i₀ + i.castSucc.val * 455 + 422 + i_1 },
-             acc[4], acc[5], acc[6]]) input_var_state =
-        Fin.foldl k
-          (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
-            #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
-               acc[0], acc[1], acc[2],
-               Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 422 + i_1 },
-               acc[4], acc[5], acc[6]]) input_var_state from rfl, ih]
-
-/-- `Circuit.FoldlM.foldlAcc` at index `⟨k, h⟩ : Fin 64` equals `stateVar i₀ input_var_state k`.
+/-- `Circuit.FoldlM.foldlAcc` at index `i : Fin 64` equals `stateVar i₀ input_var_state i`.
 
     Uses `SHA256State (Expression (F p))` for the accumulator type (not the
     `Var SHA256State (F p)` alias) so the lemma's pattern matches `h_holds`
@@ -103,17 +73,20 @@ private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256St
 private lemma foldlAcc_eq_stateVar (i₀ : ℕ)
     (input_var_state : SHA256State (Expression (F p)))
     (input_var_schedule : SHA256Schedule (Expression (F p)))
-    (k : ℕ) (h : k < 64) :
+    (i : Fin 64) :
     Circuit.FoldlM.foldlAcc (β := SHA256State (Expression (F p)))
       i₀ (Vector.finRange 64)
       (fun s (i : Fin 64) => subcircuit SHA256Round.circuit
         { state := s,
           k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
           w := input_var_schedule[i.val]'i.isLt })
-      input_var_state ⟨k, h⟩ =
-        stateVar i₀ input_var_state k := by
-  simp only [Circuit.FoldlM.foldlAcc, Vector.getElem_finRange]
-  exact fin_foldl_eq_stateVar _ _ _
+      input_var_state i =
+        stateVar i₀ input_var_state i := by
+  refine Circuit.FoldlM.foldlAcc_finRange_eq_of_output_eq (acc:=stateVar i₀ input_var_state)
+    ?_ ?_ i
+  · rw [stateVar]
+  · intro j
+    simp only [circuit_norm, SHA256Round.circuit, stateVar]
 
 omit [Fact (p > 2 ^ 33)] in
 /-- Helper: `constWord32 n` evaluated is always normalized (bits are 0 or 1). -/
@@ -220,8 +193,11 @@ instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
     output input i₀ := stateVar i₀ input.state 64
   } using by
     simp only [circuit_norm]
-    intros
-    apply fin_foldl_eq_stateVar
+    intro input i₀
+    refine Fin.foldl_eq_of_succ (acc:=stateVar i₀ input.state) ?_ ?_
+    · rw [stateVar]
+    · intro i
+      simp only [stateVar, add_assoc, Nat.reduceAdd]
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [SHA256Round.Spec, SHA256Round.Assumptions]
@@ -251,7 +227,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       have hk'' : k < 64 := by omega
       obtain ⟨ih_val, ih_norm⟩ := ih hk'
       specialize h_holds ⟨k, hk''⟩
-      rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_holds
+      rw [foldlAcc_eq_stateVar] at h_holds
       simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
         SHA256Round.Spec, SHA256Round.Assumptions] at h_holds
       have h2 : Normalized (eval env (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) :=
@@ -307,7 +283,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
       have hk' : k ≤ 64 := by omega
       have hk'' : k < 64 := by omega
       specialize h_env ⟨k, hk''⟩
-      rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_env
+      rw [foldlAcc_eq_stateVar] at h_env
       simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
         SHA256Round.Spec, SHA256Round.Assumptions] at h_env
       have h2 : Normalized (eval env.toEnvironment (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) :=
@@ -329,10 +305,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   refine ⟨?_, ?_, ?_⟩
   · intro j
     have h := h_inv i.val (le_of_lt i.isLt) j.val j.isLt
-    rw [← foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule i.val i.isLt] at h
     rw [getElem_eval_vector] at h
-    have heq : (⟨i.val, i.isLt⟩ : Fin 64) = i := Fin.ext rfl
-    rw [heq] at h
+    rw [foldlAcc_eq_stateVar]
     exact h
   · exact normalized_constWord32 _ _
   · exact h_sched_norm i

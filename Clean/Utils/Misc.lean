@@ -54,3 +54,17 @@ theorem Fin.foldl_const (n : ℕ) (f : Fin n → α) (init : α) :
     | 0 => init
     | n + 1 => f (.last n) := by
   split <;> simp [foldl_const_succ]
+
+/-- Closed form of a fold: if `acc` starts at `init` and follows `f` step by step,
+then the fold over `Fin n` ends at `acc n`. -/
+theorem Fin.foldl_eq_of_succ {n : ℕ} {f : α → Fin n → α} {init : α} {acc : ℕ → α}
+    (h_init : acc 0 = init) (h_succ : ∀ i : Fin n, f (acc i) i = acc (i + 1)) :
+    Fin.foldl n f init = acc n := by
+  induction n with
+  | zero => rw [Fin.foldl_zero, h_init]
+  | succ n ih =>
+    have h_castSucc := fun i : Fin n => h_succ i.castSucc
+    have h_last := h_succ (Fin.last n)
+    simp only [Fin.val_castSucc] at h_castSucc
+    rw [Fin.val_last] at h_last
+    rw [Fin.foldl_succ_last, ih h_castSucc, h_last]

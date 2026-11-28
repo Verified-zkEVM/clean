@@ -153,76 +153,19 @@ private lemma scheduleStep_localLength (w : SHA256Schedule (Expression (F p))) (
     (scheduleStep w i).localLength n = 227 := by
   simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
 
-/-- `Circuit.FoldlM.foldlAcc` at index `⟨k, h⟩ : Fin 48` equals `varSchedule i₀ input_var k`. -/
+/-- `Circuit.FoldlM.foldlAcc` at index `i : Fin 48` equals `varSchedule i₀ input_var i`. -/
 private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p)))
-    (k : ℕ) (h : k < 48) :
+    (i : Fin 48) :
     Circuit.FoldlM.foldlAcc i₀ (Vector.finRange 48)
       (fun w (i : Fin 48) => scheduleStep w i)
       (Vector.append input_var_block (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p)))))
-      ⟨k, h⟩ =
-        varSchedule i₀ input_var_block k := by
-  simp only [Circuit.FoldlM.foldlAcc, Vector.getElem_finRange]
-  induction k with
-  | zero => simp [varSchedule, Fin.foldl_zero]
-  | succ k ih =>
-    have hk : k < 48 := by omega
-    specialize ih hk
-    rw [Fin.foldl_succ_last, varSchedule, dite_eq_left hk]
-    rw [show Fin.foldl k
-          (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin k) =>
-            (scheduleStep acc ⟨i.castSucc.val, by have := i.isLt; omega⟩).output
-              (i₀ + i.castSucc.val *
-                (scheduleStep acc ⟨i.castSucc.val, by have := i.isLt; omega⟩).localLength))
-            _ =
-        Fin.foldl k
-          (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin k) =>
-            (scheduleStep acc ⟨i.val, by have := i.isLt; omega⟩).output
-              (i₀ + i.val *
-                (scheduleStep acc ⟨i.val, by have := i.isLt; omega⟩).localLength))
-            _ from rfl, ih]
-    simp only [Fin.val_last]
-    rw [scheduleStep_output, scheduleStep_localLength]
-
-/-- The 48-step `Fin.foldl` of the variable-level schedule body equals `varSchedule 48`. -/
-private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) :
-    Fin.foldl 48
-      (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin 48) =>
-        (scheduleStep acc i (i₀ + i.val * 227)).1)
-      (Vector.append input_var_block
-        (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))) =
-      varSchedule i₀ input_var_block 48 := by
-  -- Prove a more general statement by induction on `k ≤ 48`, where we cast Fin k to Fin 48.
-  suffices h : ∀ k (hk : k ≤ 48),
-      Fin.foldl k
-        (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin k) =>
-          (scheduleStep acc ⟨i.val, by have := i.isLt; omega⟩ (i₀ + i.val * 227)).1)
-        (Vector.append input_var_block
-          (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))) =
-        (show Vector (fields 32 (Expression (F p))) (16 + 48) from
-          varSchedule i₀ input_var_block k) by
-    have := h 48 (le_refl 48)
-    convert this using 2
-  intro k hk
-  induction k with
-  | zero => simp [varSchedule, Fin.foldl_zero]
-  | succ k ih =>
-    have hk' : k ≤ 48 := by omega
-    have hk'' : k < 48 := by omega
-    specialize ih hk'
-    rw [Fin.foldl_succ_last]
-    rw [show Fin.foldl k
-          (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin k) =>
-            (scheduleStep acc ⟨i.castSucc.val, by have := i.isLt; omega⟩ (i₀ + i.castSucc.val * 227)).1)
-            _ =
-        Fin.foldl k
-          (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin k) =>
-            (scheduleStep acc ⟨i.val, by have := i.isLt; omega⟩ (i₀ + i.val * 227)).1)
-            _ from rfl, ih]
-    simp only [Fin.val_last]
-    rw [varSchedule, dite_eq_left hk'']
-    -- (scheduleStep w i).output n = (scheduleStep w i n).1
-    change (scheduleStep _ ⟨k, hk''⟩).output (i₀ + k * 227) = _
-    rw [scheduleStep_output]
+      i =
+        varSchedule i₀ input_var_block i := by
+  refine Circuit.FoldlM.foldlAcc_finRange_eq_of_output_eq (acc:=varSchedule i₀ input_var_block)
+    ?_ ?_ i
+  · rw [varSchedule]
+  · intro j
+    rw [scheduleStep_output, scheduleStep_localLength, varSchedule, dite_eq_left j.isLt]
 
 /-- The soundness inductive invariant. Given the constraints `h_holds` hold for every step,
     the variable-level schedule at step `k` matches the value-level schedule and is normalized. -/
@@ -317,7 +260,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
     have hk'' : k < 48 := by omega
     obtain ⟨ih_val, ih_norm⟩ := ih hk'
     have h_step := h_holds ⟨k, hk''⟩
-    rw [foldlAcc_eq_varSchedule i₀ input_var k hk''] at h_step
+    rw [foldlAcc_eq_varSchedule] at h_step
     -- Unfold scheduleStep at h_step.
     simp only [scheduleStep, circuit_norm, LowerSigma1.circuit, LowerSigma0.circuit,
       Add32.circuit, LowerSigma1.Assumptions, LowerSigma1.Spec,
@@ -382,9 +325,13 @@ instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule main :=
   elaborate_circuit_with {
     output input i₀ := varSchedule i₀ input 48
   } using by
-    simp only [circuit_norm, ← finFoldl_eq_varSchedule_48]
-    intros
-    congr
+    simp only [circuit_norm]
+    intro input i₀
+    refine Fin.foldl_eq_of_succ (acc:=varSchedule i₀ input) ?_ ?_
+    · rw [varSchedule]
+    · intro i
+      rw [varSchedule, dite_eq_left i.isLt]
+      simp only [circuit_norm]
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [messageSchedule]
@@ -456,7 +403,7 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
       have hk'' : k < 48 := by omega
       specialize ih hk'
       have h_step := h_env ⟨k, hk''⟩
-      rw [foldlAcc_eq_varSchedule i₀ input_var k hk''] at h_step
+      rw [foldlAcc_eq_varSchedule] at h_step
       -- Simplify h_step to get the chain.
       simp only [scheduleStep, circuit_norm, LowerSigma1.circuit, LowerSigma0.circuit,
         Add32.circuit, LowerSigma1.Assumptions, LowerSigma1.Spec,
@@ -498,14 +445,14 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
   have ih := h_inv i.val hk'
   -- Apply h_env at step i and unfold.
   have h_env_i := h_env i
-  rw [foldlAcc_eq_varSchedule i₀ input_var i.val hk] at h_env_i
+  rw [foldlAcc_eq_varSchedule] at h_env_i
   -- Unfold scheduleStep & subcircuit Assumptions / Spec / and_imp at h_env_i.
   simp only [scheduleStep, circuit_norm, LowerSigma1.circuit, LowerSigma0.circuit,
     Add32.circuit, LowerSigma1.Assumptions, LowerSigma1.Spec,
     LowerSigma0.Assumptions, LowerSigma0.Spec, Add32.Assumptions, Add32.Spec, and_imp]
     at h_env_i
   -- The goal is also structured this way.
-  rw [foldlAcc_eq_varSchedule i₀ input_var i.val hk]
+  rw [foldlAcc_eq_varSchedule]
   simp only [scheduleStep, circuit_norm, LowerSigma1.circuit, LowerSigma0.circuit,
     Add32.circuit, LowerSigma1.Assumptions,
     LowerSigma0.Assumptions, Add32.Assumptions]
