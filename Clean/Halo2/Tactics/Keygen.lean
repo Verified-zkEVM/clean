@@ -360,6 +360,28 @@ def circuitHead? (target : Expr) : Option Name := do
   guard (arguments.size ≥ 2)
   arguments[arguments.size - 2]!.headBeta.getAppFn.constName?
 
+/-- Find an unfoldable synthesis-body head inside a local membership hypothesis (for example, a
+named loop body in `(col, row) ∈ ((roundBody ...).operations self).adviceWrites`). -/
+def localCircuitHead? (unfolded : Std.HashSet Name) : TacticM (Option Name) := do
+  let env ← getEnv
+  let bundleProjections := keygenBundleProjectionAttr.getDecls env
+  let lctx ← getLCtx
+  for fvarId in lctx.getFVarIds.reverse do
+    let decl := lctx.get! fvarId
+    if decl.isImplementationDetail then
+      continue
+    let type ← instantiateMVars decl.type
+    if (type.find? (·.isConstOf ``Membership.mem)).isNone then
+      continue
+    if let some head := circuitHead? type then
+      if !unfolded.contains head && head != ``Nat.rec &&
+          head != `Halo2.FormalCircuit.call && head != `Halo2.FormalRegionCircuit.call &&
+          !bundleProjections.contains head && !env.isProjectionFn head then
+        match env.find? head with
+        | some (.defnInfo _) => return some head
+        | _ => pure ()
+  return none
+
 /-- Reduce registered bundle projections after their concrete bundle head has been
 unfolded. Keeping this out of the general normalization set prevents opaque child
 bundles from being expanded to their inferred elaboration instances prematurely. -/
@@ -1643,7 +1665,7 @@ partial def openWitnessSupport (unfolded : Std.HashSet Name) : TacticM Bool := d
   if applied then
     if let supportGoal :: propGoal :: restGoals ← getGoals then
       let decls := ← Lean.labelled `witness_support
-      let solved ← searchWitnessSupport decls 8 [supportGoal] do
+      let solved ← searchWitnessSupport decls 16 [supportGoal] do
         for rest in restGoals do
           unless ← rest.isAssigned do
             return false
@@ -1662,23 +1684,21 @@ partial def openWitnessSupport (unfolded : Std.HashSet Name) : TacticM Bool := d
   return false
 
 /-- Try applying a same-region composition lemma to `left ++ right`, committing only if all
-generated subgoals close. -/
+generated subgoals close. Checks the disjointness subgoal first so non-matching appends fail
+immediately. -/
 partial def tryCloseAppendWith (unfolded : Std.HashSet Name) (tactic : TSyntax `tactic) :
     TacticM Bool := do
   let state ← saveState
   try
     evalTactic tactic
     let branches ← getGoals
-    let mut remaining := []
-    for branch in branches do
+    for branch in branches.reverse do
       setGoals [branch]
       close unfolded
-      remaining := remaining ++ (← getGoals)
-    setGoals remaining
-    if (← getGoals).isEmpty then
-      return true
-    state.restore
-    return false
+      if !(← getGoals).isEmpty then
+        state.restore
+        return false
+    return true
   catch _ =>
     state.restore
     return false
@@ -1745,16 +1765,6 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
         close unfolded
         return
 
-    if let some head := circuitHead? target then
-      if unfolded.contains head || head == ``Nat.rec then
-        return
-      try
-        evalTactic (← `(tactic| unfold $(mkIdent head)))
-      catch _ =>
-        return
-      close (unfolded.insert head)
-      return
-
     if target.isAppOf ``RegionOperations.AdviceWritesConsistent then
       let ops := target.getAppArgs.back!
       if ops.isAppOf ``List.append || ops.isAppOf ``HAppend.hAppend then
@@ -1772,6 +1782,24 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
         if ← tryCloseAppendWith unfolded
             (← `(tactic| apply Halo2.RegionOperations.adviceWritesDistinct_append_of_disjoint)) then
           return
+
+    if let some head := circuitHead? target then
+      if unfolded.contains head || head == ``Nat.rec then
+        return
+      try
+        evalTactic (← `(tactic| unfold $(mkIdent head)))
+      catch _ =>
+        return
+      close (unfolded.insert head)
+      return
+
+    if let some head ← localCircuitHead? unfolded then
+      try
+        evalTactic (← `(tactic| unfold $(mkIdent head) at *))
+      catch _ =>
+        return
+      close (unfolded.insert head)
+      return
 
     if target.isAppOf ``List.Forall then
       let operations ← whnf target.getAppArgs.back!

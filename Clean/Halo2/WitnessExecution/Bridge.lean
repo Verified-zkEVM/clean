@@ -239,7 +239,7 @@ theorem Operations.computableWitnesses_of_consumedCellsAssigned
 
 end ComputableBridge
 
-/-! ## Bridge from `AdviceWritesDistinct` + `SharedColumnIntervalsDisjoint` to `WritesConsistent` -/
+/-! ## Bridge from `AdviceWritesConsistent` + `SharedColumnIntervalsDisjoint` to `WritesConsistent` -/
 
 section WritesConsistentBridge
 
