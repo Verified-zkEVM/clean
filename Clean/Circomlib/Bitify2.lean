@@ -48,8 +48,6 @@ def main (input : Expression (F p)) := do
 
   return bits
 
-set_option linter.constructorNameAsVariable false
-
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
 
@@ -120,8 +118,6 @@ def main (input : Vector (Expression (F p)) 254) := do
 
   -- Convert bits to number
   Bits2Num.circuit 254 input
-
-set_option linter.constructorNameAsVariable false
 
 def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   main
