@@ -148,7 +148,7 @@ theorem FormalCircuit.operationsKeygenCoherent
       ((c.synthesize (c.configure ci {}).1 input).operations) := by
   rcases hrequirements with
     ⟨hconfig, hgates, hlookups, hfixedColumns, hconstantColumns,
-      hpermutationColumns, hinputCells⟩
+      hpermutationColumns, hinputCells, _, _⟩
   let program := c.configure ci
   let counts :=
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
@@ -166,6 +166,26 @@ theorem FormalCircuit.operationsKeygenCoherent
   simpa only [program, counts, Configure.run, Configure.output, Configure.delta, Configure.finalCounts, Configure.countDelta, OperationsKeygenCoherent,
     ConfigureCounts.ofConstraintSystem] using happlied
 
+/-- A circuit with no caller requirements assigns every consumed (copied or read) cell before use. -/
+theorem FormalCircuit.operationsConsumedCellsAssigned
+    (c : FormalCircuit F ConfigInput Config Input Output)
+    (ci : ConfigInput) (input : Var Input F)
+    (hrequirements : KeygenRequirements.EmptyAt
+      (self := FormalCircuit.keygenRequirements
+        (Input := Input) (Output := Output) c) ci) :
+    ((c.synthesize (c.configure ci {}).1 input).operations).ConsumedCellsAssigned 0 [] := by
+  rcases hrequirements with
+    ⟨hconfig, _, _, _, _, _, hinputCells, hreadCells, hreadRelativeCells, hreadOffsetCells⟩
+  let counts :=
+    ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
+  have hassigned :=
+    c.elaborated.consumedCellsAssigned ci counts hconfig input 0
+  simpa only [counts, Configure.run, Configure.output, Configure.delta, Configure.finalCounts,
+    Configure.countDelta, OperationsKeygenCoherent, ConfigureCounts.ofConstraintSystem,
+    KeygenRequirements.readRelativeCellsAt, hinputCells input, hreadCells input,
+    hreadRelativeCells input, hreadOffsetCells 0 0 input, List.map_nil,
+    List.append_nil] using hassigned
+
 /-- A circuit with no caller requirements assigns every copied cell before use. -/
 theorem FormalCircuit.operationsCopyCellsAssigned
     (c : FormalCircuit F ConfigInput Config Input Output)
@@ -173,15 +193,25 @@ theorem FormalCircuit.operationsCopyCellsAssigned
     (hrequirements : KeygenRequirements.EmptyAt
       (self := FormalCircuit.keygenRequirements
         (Input := Input) (Output := Output) c) ci) :
-    ((c.synthesize (c.configure ci {}).1 input).operations).CopyCellsAssigned 0 [] := by
-  rcases hrequirements with
-    ⟨hconfig, _, _, _, _, _, hinputCells⟩
+    ((c.synthesize (c.configure ci {}).1 input).operations).CopyCellsAssigned 0 [] :=
+  Operations.copyCellsAssigned_of_consumed _ 0 []
+    (c.operationsConsumedCellsAssigned ci input hrequirements)
+
+/-- A circuit satisfying its advice-column requirements writes advice cells consistently in every
+region. -/
+theorem FormalCircuit.operationsAdviceWritesConsistent
+    (c : FormalCircuit F ConfigInput Config Input Output)
+    (ci : ConfigInput) (input : Var Input F)
+    (hconfig : (FormalCircuit.keygenRequirements
+      (Input := Input) (Output := Output) c).configLawful ci)
+    (hadvice : c.elaborated.adviceColumnRequirements (c.configure ci {}).1) :
+    ((c.synthesize (c.configure ci {}).1 input).operations).AdviceWritesConsistent := by
   let counts :=
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
-  have hassigned :=
-    c.elaborated.copyCellsAssigned ci counts hconfig input 0
-  simpa only [counts, Configure.run, Configure.output, Configure.delta, Configure.finalCounts, Configure.countDelta, OperationsKeygenCoherent, ConfigureCounts.ofConstraintSystem,
-    hinputCells input] using hassigned
+  have hconsistent :=
+    c.elaborated.adviceWritesConsistent ci counts hconfig hadvice input 0
+  simpa only [counts, Configure.run, Configure.output, ConfigureCounts.ofConstraintSystem] using
+    hconsistent
 
 /-- A circuit meeting its configure requirements allocates every lookup-input selector. -/
 theorem FormalCircuit.lookupSelectorsAllocated

@@ -3,6 +3,7 @@ module
 public import Clean.Halo2.Lemmas
 public import Clean.Halo2.Operations.Copy
 public import Clean.Halo2.Operations.FixedWrites
+public import Clean.Halo2.Operations.AdviceWrites
 public import Clean.Halo2.SynthesisSummary.Operations
 
 @[expose] public section
@@ -69,6 +70,19 @@ theorem Vector.map_getElem!_mem_toList {n : ℕ} [Inhabited α]
     f values[i.val]! ∈ values.toList.map f := by
   rw [getElem!_pos values i.val i.isLt]
   exact Vector.map_getElem_mem_toList values f i
+
+/-- The same in the form that the keygen sets give a membership in a map, after
+`List.mem_map`: some element of the vector maps to the element at `i`'s image. -/
+theorem Vector.exists_mem_toList_map_getElem! {n : ℕ} [Inhabited α]
+    (values : Vector α n) (f : α → β) (i : Fin n) :
+    (∃ a ∈ values.toList, f a = f values[i.val]!) ↔ True :=
+  iff_true_intro (List.mem_map.mp (Vector.map_getElem!_mem_toList values f i))
+
+/-- The same at a natural-number index with its bound as a premiss. -/
+theorem Vector.exists_mem_toList_map_getElem!_of_lt {n : ℕ} [Inhabited α]
+    (values : Vector α n) (f : α → β) (i : ℕ) (hi : i < n) :
+    (∃ a ∈ values.toList, f a = f values[i]!) ↔ True :=
+  Vector.exists_mem_toList_map_getElem! values f ⟨i, hi⟩
 
 /-! ## Generic per-round splits on the `List.ofFn`-flatten form
 
@@ -283,52 +297,300 @@ theorem forRange'_assignFixed_row_bounds
   rw [hrow i column row value hassignment]
   omega
 
-/-- A copy-free loop is lawful for every incoming cell state. This packages the
-operation-local `copiedCells = []` proof through the loop decomposition without
-expanding the loop's operation list. -/
+private theorem flatMap_flatten {α β : Type} (f : α → List β) (xss : List (List α)) :
+    xss.flatten.flatMap f = (xss.map (List.flatMap f)).flatten := by
+  induction xss with
+  | nil => rfl
+  | cons xs rest ih => simp [List.flatMap_append, ih]
+
+/-- Advice writes from a constant-stride loop are pairwise distinct when each round is
+internally distinct and distinct rounds have disjoint advice writes. -/
+theorem forRange'_adviceWritesDistinct_of_disjoint
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hdistinct : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self).AdviceWritesDistinct)
+    (hdisj : ∀ i j : Fin m, i < j →
+      (((body i.val (offset + i.val * stride)).operations self).adviceWrites).Disjoint
+        (((body j.val (offset + j.val * stride)).operations self).adviceWrites)) :
+    ((forRange' offset stride m body).operations self).AdviceWritesDistinct := by
+  unfold RegionOperations.AdviceWritesDistinct RegionOperations.adviceWrites
+  rw [forRange'_operations, flatMap_flatten, List.nodup_flatten]
+  refine ⟨?_, ?_⟩
+  · intro l hl
+    rw [List.mem_map] at hl
+    obtain ⟨ops, hops, rfl⟩ := hl
+    rw [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    exact hdistinct i
+  · rw [List.pairwise_map, List.pairwise_ofFn]
+    exact hdisj
+
+/-- Membership in a constant-stride loop's advice writes reduces to membership in some round. -/
+theorem mem_forRange'_adviceWrites_iff
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (column : Column .advice) (row : ℕ) :
+    (column, row) ∈ ((forRange' offset stride m body).operations self).adviceWrites ↔
+      ∃ i : Fin m,
+        (column, row) ∈ ((body i.val (offset + i.val * stride)).operations self).adviceWrites := by
+  unfold RegionOperations.adviceWrites
+  rw [forRange'_operations, flatMap_flatten, List.mem_flatten]
+  constructor
+  · rintro ⟨writes, hwrites, hmem⟩
+    rw [List.mem_map] at hwrites
+    obtain ⟨ops, hops, rfl⟩ := hwrites
+    rw [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    exact ⟨i, hmem⟩
+  · rintro ⟨i, hi⟩
+    refine ⟨((body i.val (offset + i.val * stride)).operations self).adviceWrites, ?_, hi⟩
+    rw [List.mem_map]
+    exact ⟨_, List.mem_ofFn.mpr ⟨i, rfl⟩, rfl⟩
+
+/-- Advice writes from a constant-stride loop are pairwise distinct when each round is
+internally distinct and writes only in its half-open row window `[offset + i * stride,
+offset + (i + 1) * stride)`. -/
 @[keygen_helper]
-theorem forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+theorem forRange'_adviceWritesDistinct
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hdistinct : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self).AdviceWritesDistinct)
+    (hrow : ∀ (i : Fin m) column row,
+      (column, row) ∈ ((body i.val (offset + i.val * stride)).operations self).adviceWrites →
+      offset + i.val * stride ≤ row ∧ row < offset + (i.val + 1) * stride) :
+    ((forRange' offset stride m body).operations self).AdviceWritesDistinct := by
+  apply forRange'_adviceWritesDistinct_of_disjoint offset stride m body self hdistinct
+  intro i j hij
+  rw [List.disjoint_left]
+  rintro ⟨col, row⟩ hi hj
+  have hbi := hrow i col row hi
+  have hbj := hrow j col row hj
+  have hstep : (i.val + 1) * stride ≤ j.val * stride :=
+    Nat.mul_le_mul_right stride (Nat.succ_le_of_lt hij)
+  omega
+
+/-- Membership in a constant-stride loop's non-self-copy advice writes reduces to membership in
+some round. -/
+theorem mem_forRange'_nonSelfCopyAdviceWrites_iff
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (column : Column .advice) (row : ℕ) :
+    (column, row) ∈
+        ((forRange' offset stride m body).operations self).nonSelfCopyAdviceWrites self ↔
+      ∃ i : Fin m,
+        (column, row) ∈
+          ((body i.val (offset + i.val * stride)).operations self).nonSelfCopyAdviceWrites self := by
+  unfold RegionOperations.nonSelfCopyAdviceWrites
+  rw [forRange'_operations, flatMap_flatten, List.mem_flatten]
+  constructor
+  · rintro ⟨writes, hwrites, hmem⟩
+    rw [List.mem_map] at hwrites
+    obtain ⟨ops, hops, rfl⟩ := hwrites
+    rw [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    exact ⟨i, hmem⟩
+  · rintro ⟨i, hi⟩
+    refine ⟨((body i.val (offset + i.val * stride)).operations self).nonSelfCopyAdviceWrites self,
+      ?_, hi⟩
+    rw [List.mem_map]
+    exact ⟨_, List.mem_ofFn.mpr ⟨i, rfl⟩, rfl⟩
+
+/-- Self-copy-consistent advice writes compose over a constant-stride loop whenever each round is
+internally consistent and earlier rounds' advice writes are disjoint from later rounds'
+non-self-copy advice writes. -/
+theorem forRange'_adviceWritesConsistent_of_disjoint
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hcons : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self).AdviceWritesConsistent self)
+    (hdisj : ∀ i j : Fin m, i < j →
+      (((body i.val (offset + i.val * stride)).operations self).adviceWrites).Disjoint
+        (((body j.val (offset + j.val * stride)).operations self).nonSelfCopyAdviceWrites self)) :
+    ((forRange' offset stride m body).operations self).AdviceWritesConsistent self := by
+  have haux : ∀ k (hk : k ≤ m),
+      ((loopAux (fun i => offset + i * stride) body k).operations self).AdviceWritesConsistent
+        self := by
+    intro k hk
+    induction k with
+    | zero =>
+      simp [loopAux, RegionCircuit.operations_pure, RegionOperations.adviceWritesConsistent_nil]
+    | succ k ih =>
+      rw [loopAux_operations_succ]
+      apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+        (ih (Nat.le_of_succ_le hk)) (hcons ⟨k, hk⟩)
+      rw [List.disjoint_left]
+      rintro ⟨col, row⟩ hprev hcur
+      have hprevMem :
+          (col, row) ∈ ((forRange' offset stride k body).operations self).adviceWrites :=
+        hprev
+      obtain ⟨i, hi⟩ :=
+        (mem_forRange'_adviceWrites_iff offset stride k body self col row).mp hprevMem
+      exact List.disjoint_left.mp
+        (hdisj ⟨i.val, Nat.lt_of_lt_of_le i.isLt (Nat.le_of_succ_le hk)⟩ ⟨k, hk⟩ i.isLt) hi hcur
+  exact haux m le_rfl
+
+/-- Advice writes from a constant-stride loop are consistent when each round is internally
+consistent and writes only in its half-open row window `[offset + i * stride,
+offset + (i + 1) * stride)`. -/
+@[keygen_helper]
+theorem forRange'_adviceWritesConsistent
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hcons : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self).AdviceWritesConsistent self)
+    (hrow : ∀ (i : Fin m) column row,
+      (column, row) ∈ ((body i.val (offset + i.val * stride)).operations self).adviceWrites →
+      offset + i.val * stride ≤ row ∧ row < offset + (i.val + 1) * stride) :
+    ((forRange' offset stride m body).operations self).AdviceWritesConsistent self := by
+  apply forRange'_adviceWritesConsistent_of_disjoint offset stride m body self hcons
+  intro i j hij
+  rw [List.disjoint_left]
+  rintro ⟨col, row⟩ hi hj
+  have hbi := hrow i col row hi
+  have hbj := hrow j col row (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hj)
+  have hstep : (i.val + 1) * stride ≤ j.val * stride :=
+    Nat.mul_le_mul_right stride (Nat.succ_le_of_lt hij)
+  omega
+
+/-- Advice writes from a constant-stride loop lie in `[offset, offset + m * stride)`. -/
+theorem forRange'_adviceWrites_row_bounds
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hrow : ∀ (i : Fin m) column row,
+      (column, row) ∈ ((body i.val (offset + i.val * stride)).operations self).adviceWrites →
+      offset + i.val * stride ≤ row ∧ row < offset + (i.val + 1) * stride)
+    (column : Column .advice) (row : ℕ)
+    (hmem : (column, row) ∈ ((forRange' offset stride m body).operations self).adviceWrites) :
+    offset ≤ row ∧ row < offset + m * stride := by
+  unfold RegionOperations.adviceWrites at hmem
+  rw [forRange'_operations, flatMap_flatten, List.mem_flatten] at hmem
+  obtain ⟨writes, hwrites, hmem⟩ := hmem
+  rw [List.mem_map] at hwrites
+  obtain ⟨ops, hops, rfl⟩ := hwrites
+  rw [List.mem_ofFn] at hops
+  obtain ⟨i, rfl⟩ := hops
+  have hb := hrow i column row hmem
+  have hle : (i.val + 1) * stride ≤ m * stride :=
+    Nat.mul_le_mul_right stride (Nat.succ_le_of_lt i.isLt)
+  omega
+
+/-- A loop whose rounds consume nothing is lawful for every incoming cell state. -/
+@[keygen_helper]
+theorem forRange'_assignedFrom_of_forall_consumes_nil (consumption : Consumption F)
     (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex) (available : List Cell)
     (hbody : ∀ i : Fin m,
       ((body i.val (offset + i.val * stride)).operations self).Forall
-        fun operation => operation.copiedCells = []) :
-    ((forRange' offset stride m body).operations self).CopyCellsAssignedFrom
+        fun operation => [] ∈ consumption operation) :
+    ((forRange' offset stride m body).operations self).AssignedFrom consumption
       self available := by
-  apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  apply RegionOperations.assignedFrom_of_forall_consumes_nil
   exact (forRange'_forall _ _ _ _ _ _).2 hbody
 
-/-- A loop is copy-lawful when each symbolic round is copy-lawful from the caller's
-original input cells. Earlier rounds can only add cells, so the per-round proofs
-remain valid as the loop state grows. -/
-@[keygen_helper]
-theorem loopAux_copyCellsAssignedFrom
+/-- A loop is lawful when each round is lawful from the caller's cells together with
+everything the earlier rounds assigned. -/
+theorem loopAux_assignedFrom (consumption : Consumption F)
     (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex) (available : List Cell) (k : ℕ)
     (hbody : ∀ i : Fin k,
-      ((body i.val (rows i.val)).operations self).CopyCellsAssignedFrom
-        self available) :
-    ((loopAux rows body k).operations self).CopyCellsAssignedFrom self available := by
+      ((body i.val (rows i.val)).operations self).AssignedFrom consumption self
+        (((loopAux rows body i.val).operations self).assignedCellsAfter self available)) :
+    ((loopAux rows body k).operations self).AssignedFrom consumption self available := by
   induction k with
   | zero => exact .nil available
   | succ n inductionHypothesis =>
-      rw [loopAux_operations_succ,
-        RegionOperations.copyCellsAssignedFrom_append_iff]
-      have hprefix := inductionHypothesis (fun i => hbody i.castSucc)
-      exact ⟨hprefix, (hbody (Fin.last n)).mono fun cell hcell =>
-        RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ cell hcell⟩
+      rw [loopAux_operations_succ, RegionOperations.assignedFrom_append_iff]
+      exact ⟨inductionHypothesis (fun i => hbody i.castSucc), hbody (Fin.last n)⟩
 
-/-- Constant-stride specialization of `loopAux_copyCellsAssignedFrom`. -/
+/-- A loop is lawful when each symbolic round is lawful from the caller's original input
+cells. -/
+@[keygen_helper]
+theorem loopAux_assignedFrom_of_forall (consumption : Consumption F)
+    (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell) (k : ℕ)
+    (hbody : ∀ i : Fin k,
+      ((body i.val (rows i.val)).operations self).AssignedFrom consumption
+        self available) :
+    ((loopAux rows body k).operations self).AssignedFrom consumption self available :=
+  loopAux_assignedFrom consumption rows body self available k fun i =>
+    (hbody i).mono fun cell hcell =>
+      RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ cell hcell
+
+/-- Constant-stride specialization of `loopAux_assignedFrom`. -/
+theorem forRange'_assignedFrom (consumption : Consumption F)
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hbody : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self).AssignedFrom consumption self
+        (RegionOperations.assignedCellsAfter self available
+          ((loopAux (fun i => offset + i * stride) body i.val).operations self))) :
+    ((forRange' offset stride m body).operations self).AssignedFrom consumption
+      self available :=
+  loopAux_assignedFrom consumption _ body self available m hbody
+
+/-- A loop whose rounds read rows that earlier rounds wrote is lawful when its first round
+is lawful from the caller's cells, and every later round is lawful from the caller's cells
+together with everything the rounds before it assigned. -/
+theorem loopAux_assignedFrom_of_earlier_rounds (consumption : Consumption F)
+    (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell) (m : ℕ)
+    (hfirst : 0 < m →
+      ((body 0 (rows 0)).operations self).AssignedFrom consumption self available)
+    (hnext : ∀ i, i + 1 < m →
+      ((body (i + 1) (rows (i + 1))).operations self).AssignedFrom consumption self
+        (((loopAux rows body (i + 1)).operations self).assignedCellsAfter self available)) :
+    ((loopAux rows body m).operations self).AssignedFrom consumption self available := by
+  apply loopAux_assignedFrom consumption rows body self available m
+  intro i
+  obtain ⟨k, hk⟩ := i
+  cases k with
+  | zero =>
+      exact (hfirst hk).mono fun cell hcell =>
+        RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ cell hcell
+  | succ k => exact hnext k hk
+
+/-- A cell that round `k` assigns is available from round `k + 1` onward. -/
+@[keygen_norm]
+theorem mem_assignedCellsAfter_loopAux_succ_of_mem_round (rows : ℕ → ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit) (k : ℕ) (self : RegionIndex)
+    (available : List Cell) (cell : Cell)
+    (hcell : cell ∈ ((body k (rows k)).operations self).assignedCells self) :
+    cell ∈ ((loopAux rows body (k + 1)).operations self).assignedCellsAfter self available := by
+  rw [loopAux_operations_succ, RegionOperations.assignedCellsAfter_append,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  exact Or.inr hcell
+
+/-- Constant-stride form of `loopAux_assignedFrom_of_earlier_rounds`. -/
+@[keygen_helper]
+theorem forRange'_assignedFrom_of_earlier_rounds (consumption : Consumption F)
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hfirst : 0 < m →
+      ((body 0 offset).operations self).AssignedFrom consumption self available)
+    (hnext : ∀ i, i + 1 < m →
+      ((body (i + 1) (offset + i * stride + stride)).operations self).AssignedFrom
+        consumption self
+        (((loopAux (fun i => offset + i * stride) body (i + 1)).operations self)
+          |>.assignedCellsAfter self available)) :
+    ((forRange' offset stride m body).operations self).AssignedFrom consumption
+      self available := by
+  apply loopAux_assignedFrom_of_earlier_rounds consumption _ body self available m
+  · intro hm
+    simpa only [Nat.zero_mul, Nat.add_zero] using hfirst hm
+  · intro i hi
+    simpa only [Nat.add_mul, Nat.one_mul, Nat.add_assoc] using hnext i hi
+
+/-- Constant-stride specialization of `loopAux_assignedFrom_of_forall`. -/
 @[keygen_norm, keygen_helper]
-theorem forRange'_copyCellsAssignedFrom
+theorem forRange'_assignedFrom_of_forall (consumption : Consumption F)
     (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex) (available : List Cell)
     (hbody : ∀ i : Fin m,
       ((body i.val (offset + i.val * stride)).operations self)
-        |>.CopyCellsAssignedFrom self available) :
+        |>.AssignedFrom consumption self available) :
     ((forRange' offset stride m body).operations self)
-      |>.CopyCellsAssignedFrom self available :=
-  loopAux_copyCellsAssignedFrom _ _ self available m hbody
+      |>.AssignedFrom consumption self available :=
+  loopAux_assignedFrom_of_forall consumption _ _ self available m hbody
 
 /-- A region loop requests no deferred constant cells when every iteration requests
 none. The proof composes the exact summaries without unfolding any iteration body. -/
@@ -573,19 +835,186 @@ theorem forRangeVar'_fixedAssignmentsAgree
   subst j
   exact hagree i column row left right hleft hright
 
-/-- A variable-stride loop is copy-lawful when each symbolic round is copy-lawful
-from the caller's original input cells. -/
+/-- Advice writes from a variable-stride loop are pairwise distinct when each round is
+internally distinct and distinct rounds have disjoint advice-write lists. -/
+theorem forRangeVar'_adviceWritesDistinct_of_disjoint
+    (rows : ℕ → ℕ) (count : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hdistinct : ∀ i : Fin count,
+      ((body i.val (rows i.val)).operations self).AdviceWritesDistinct)
+    (hdisjoint : ∀ i j : Fin count, i.val < j.val →
+      List.Disjoint ((body i.val (rows i.val)).operations self).adviceWrites
+        ((body j.val (rows j.val)).operations self).adviceWrites) :
+    ((forRangeVar' rows count body).operations self).AdviceWritesDistinct := by
+  unfold RegionOperations.AdviceWritesDistinct RegionOperations.adviceWrites
+  rw [forRangeVar'_operations, flatMap_flatten, List.nodup_flatten]
+  refine ⟨?_, ?_⟩
+  · intro l hl
+    rw [List.mem_map] at hl
+    obtain ⟨ops, hops, rfl⟩ := hl
+    rw [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    exact hdistinct i
+  · rw [List.pairwise_map, List.pairwise_ofFn]
+    intro i j hij
+    exact hdisjoint i j hij
+
+/-- Membership in a variable-stride loop's advice writes reduces to membership in some round. -/
+theorem mem_forRangeVar'_adviceWrites_iff
+    (rows : ℕ → ℕ) (count : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (col : Column .advice) (row : ℕ) :
+    (col, row) ∈ ((forRangeVar' rows count body).operations self).adviceWrites ↔
+      ∃ i : Fin count,
+        (col, row) ∈ ((body i.val (rows i.val)).operations self).adviceWrites := by
+  unfold RegionOperations.adviceWrites
+  rw [forRangeVar'_operations, flatMap_flatten, List.mem_flatten]
+  constructor
+  · rintro ⟨writes, hwrites, hmem⟩
+    rw [List.mem_map] at hwrites
+    obtain ⟨ops, hops, rfl⟩ := hwrites
+    rw [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    exact ⟨i, hmem⟩
+  · rintro ⟨i, hmem⟩
+    refine ⟨((body i.val (rows i.val)).operations self).adviceWrites, ?_, hmem⟩
+    rw [List.mem_map]
+    exact ⟨_, List.mem_ofFn.mpr ⟨i, rfl⟩, rfl⟩
+
+/-- Advice writes from a variable-stride loop are pairwise distinct when each round is
+internally distinct and writes only in `[rows i, rows (i + 1))` with monotone `rows`. -/
+@[keygen_helper]
+theorem forRangeVar'_adviceWritesDistinct
+    (rows : ℕ → ℕ) (count : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hdistinct : ∀ i : Fin count,
+      ((body i.val (rows i.val)).operations self).AdviceWritesDistinct)
+    (hrow : ∀ (i : Fin count) column row,
+      (column, row) ∈ ((body i.val (rows i.val)).operations self).adviceWrites →
+      rows i.val ≤ row ∧ row < rows (i.val + 1))
+    (hordered : ∀ i j : Fin count, i.val < j.val →
+      rows (i.val + 1) ≤ rows j.val) :
+    ((forRangeVar' rows count body).operations self).AdviceWritesDistinct := by
+  unfold RegionOperations.AdviceWritesDistinct RegionOperations.adviceWrites
+  rw [forRangeVar'_operations, flatMap_flatten, List.nodup_flatten]
+  refine ⟨?_, ?_⟩
+  · intro l hl
+    rw [List.mem_map] at hl
+    obtain ⟨ops, hops, rfl⟩ := hl
+    rw [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    exact hdistinct i
+  · rw [List.pairwise_map, List.pairwise_ofFn]
+    intro i j hij
+    rw [List.disjoint_left]
+    rintro ⟨col, row⟩ hi hj
+    have hbi := hrow i col row hi
+    have hbj := hrow j col row hj
+    have hstep := hordered i j hij
+    omega
+
+/-- Advice writes from a variable-stride loop are consistent when each round is internally
+consistent and writes only in `[rows i, rows (i + 1))` with monotone `rows`. -/
+@[keygen_helper]
+theorem forRangeVar'_adviceWritesConsistent
+    (rows : ℕ → ℕ) (count : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hcons : ∀ i : Fin count,
+      ((body i.val (rows i.val)).operations self).AdviceWritesConsistent self)
+    (hrow : ∀ (i : Fin count) column row,
+      (column, row) ∈ ((body i.val (rows i.val)).operations self).adviceWrites →
+      rows i.val ≤ row ∧ row < rows (i.val + 1))
+    (hordered : ∀ i j : Fin count, i.val < j.val →
+      rows (i.val + 1) ≤ rows j.val) :
+    ((forRangeVar' rows count body).operations self).AdviceWritesConsistent self := by
+  have haux : ∀ k (hk : k ≤ count),
+      ((loopAux rows body k).operations self).AdviceWritesConsistent self := by
+    intro k hk
+    induction k with
+    | zero =>
+      simp [loopAux, RegionCircuit.operations_pure, RegionOperations.adviceWritesConsistent_nil]
+    | succ k ih =>
+      rw [loopAux_operations_succ]
+      apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+        (ih (Nat.le_of_succ_le hk)) (hcons ⟨k, hk⟩)
+      rw [List.disjoint_left]
+      rintro ⟨col, row⟩ hprev hcur
+      have hprevMem :
+          (col, row) ∈ ((forRangeVar' rows k body).operations self).adviceWrites := hprev
+      obtain ⟨i, hi⟩ := (mem_forRangeVar'_adviceWrites_iff rows k body self col row).mp hprevMem
+      have hbi := hrow ⟨i.val, Nat.lt_of_lt_of_le i.isLt (Nat.le_of_succ_le hk)⟩ col row hi
+      have hbj := hrow ⟨k, hk⟩ col row
+        (RegionOperations.mem_adviceWrites_of_mem_nonSelfCopy self hcur)
+      have hstep := hordered ⟨i.val, Nat.lt_of_lt_of_le i.isLt (Nat.le_of_succ_le hk)⟩
+        ⟨k, hk⟩ i.isLt
+      omega
+  exact haux count le_rfl
+
+/-- Advice writes from a variable-stride loop lie in `[rows 0, rows count)`. -/
+theorem forRangeVar'_adviceWrites_row_bounds
+    (rows : ℕ → ℕ) (count : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hrow : ∀ (i : Fin count) column row,
+      (column, row) ∈ ((body i.val (rows i.val)).operations self).adviceWrites →
+      rows i.val ≤ row ∧ row < rows (i.val + 1))
+    (hmono : ∀ a b, a ≤ b → b ≤ count → rows a ≤ rows b)
+    (column : Column .advice) (row : ℕ)
+    (hmem : (column, row) ∈ ((forRangeVar' rows count body).operations self).adviceWrites) :
+    rows 0 ≤ row ∧ row < rows count := by
+  unfold RegionOperations.adviceWrites at hmem
+  rw [forRangeVar'_operations, flatMap_flatten, List.mem_flatten] at hmem
+  obtain ⟨writes, hwrites, hmem⟩ := hmem
+  rw [List.mem_map] at hwrites
+  obtain ⟨ops, hops, rfl⟩ := hwrites
+  rw [List.mem_ofFn] at hops
+  obtain ⟨i, rfl⟩ := hops
+  have hb := hrow i column row hmem
+  have h0 : rows 0 ≤ rows i.val := hmono 0 i.val (Nat.zero_le _) (Nat.le_of_lt i.isLt)
+  have h1 : rows (i.val + 1) ≤ rows count := hmono (i.val + 1) count (Nat.succ_le_of_lt i.isLt) (Nat.le_refl _)
+  omega
+
+/-- A variable-stride loop is lawful when each round is lawful from the caller's cells
+together with everything the earlier rounds assigned. -/
+theorem forRangeVar'_assignedFrom (consumption : Consumption F)
+    (rows : ℕ → ℕ) (m : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hbody : ∀ i : Fin m,
+      ((body i.val (rows i.val)).operations self).AssignedFrom consumption self
+        (((loopAux rows body i.val).operations self).assignedCellsAfter self available)) :
+    ((forRangeVar' rows m body).operations self).AssignedFrom consumption self available :=
+  loopAux_assignedFrom consumption rows body self available m hbody
+
+/-- A variable-stride loop is lawful when each symbolic round is lawful from the caller's
+original input cells. -/
 @[keygen_norm, keygen_helper]
-theorem forRangeVar'_copyCellsAssignedFrom
+theorem forRangeVar'_assignedFrom_of_forall (consumption : Consumption F)
     (rows : ℕ → ℕ) (m : ℕ)
     (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex) (available : List Cell)
     (hbody : ∀ i : Fin m,
       ((body i.val (rows i.val)).operations self)
-        |>.CopyCellsAssignedFrom self available) :
+        |>.AssignedFrom consumption self available) :
     ((forRangeVar' rows m body).operations self)
-      |>.CopyCellsAssignedFrom self available :=
-  loopAux_copyCellsAssignedFrom rows body self available m hbody
+      |>.AssignedFrom consumption self available :=
+  loopAux_assignedFrom_of_forall consumption rows body self available m hbody
+
+/-- Variable-stride form of `loopAux_assignedFrom_of_earlier_rounds`. -/
+@[keygen_helper]
+theorem forRangeVar'_assignedFrom_of_earlier_rounds (consumption : Consumption F)
+    (rows : ℕ → ℕ) (m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hfirst : 0 < m →
+      ((body 0 (rows 0)).operations self).AssignedFrom consumption self available)
+    (hnext : ∀ i, i + 1 < m →
+      ((body (i + 1) (rows (i + 1))).operations self).AssignedFrom consumption self
+        (((loopAux rows body (i + 1)).operations self).assignedCellsAfter self available)) :
+    ((forRangeVar' rows m body).operations self).AssignedFrom consumption self available :=
+  loopAux_assignedFrom_of_earlier_rounds consumption rows body self available m hfirst hnext
 
 @[circuit_norm ↓]
 theorem forRangeVar'_constraints (rows : ℕ → ℕ) (m : ℕ)
@@ -740,23 +1169,23 @@ theorem foldRangeVarAux_operations (rows : ℕ → ℕ) (init : β)
     simp only [Fin.val_last, Fin.val_castSucc, List.flatten_cons, List.flatten_nil,
       List.append_nil]
 
-/-- Copy provenance through a serial fold. The invariant records exactly which
-cells of the running accumulator are available after the preceding rounds. -/
-theorem foldRangeVarAux_copyCellsAssignedFrom
+/-- Provenance through a serial fold. The invariant records exactly which cells of the
+running accumulator are available after the preceding rounds. -/
+theorem foldRangeVarAux_assignedFrom (consumption : Consumption F)
     (invariant : List Cell → β → Prop)
     (rows : ℕ → ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
     (self : RegionIndex) (available : List Cell)
     (hinit : invariant available init)
-    (hbodyCopy : ∀ i cells acc, invariant cells acc →
-      ((body i (rows i) acc).operations self).CopyCellsAssignedFrom self cells)
+    (hbodyAssigned : ∀ i cells acc, invariant cells acc →
+      ((body i (rows i) acc).operations self).AssignedFrom consumption self cells)
     (hbodyInvariant : ∀ i cells acc, invariant cells acc →
       invariant
         ((body i (rows i) acc).operations self |>.assignedCellsAfter self cells)
         ((body i (rows i) acc).output self)) :
     ∀ k,
       ((foldRangeVarAux rows init body k).operations self
-          |>.CopyCellsAssignedFrom self available) ∧
+          |>.AssignedFrom consumption self available) ∧
         invariant
           ((foldRangeVarAux rows init body k).operations self
             |>.assignedCellsAfter self available)
@@ -766,16 +1195,102 @@ theorem foldRangeVarAux_copyCellsAssignedFrom
   | zero =>
       exact ⟨.nil available, hinit⟩
   | succ k inductionHypothesis =>
-      rcases inductionHypothesis with ⟨hprefixCopy, hprefixInvariant⟩
-      have hroundCopy := hbodyCopy k _ _ hprefixInvariant
+      rcases inductionHypothesis with ⟨hprefixAssigned, hprefixInvariant⟩
+      have hroundAssigned := hbodyAssigned k _ _ hprefixInvariant
       have hroundInvariant := hbodyInvariant k _ _ hprefixInvariant
       constructor
       · rw [foldRangeVarAux_operations_succ,
-          RegionOperations.copyCellsAssignedFrom_append_iff]
-        exact ⟨hprefixCopy, hroundCopy⟩
+          RegionOperations.assignedFrom_append_iff]
+        exact ⟨hprefixAssigned, hroundAssigned⟩
       · simpa only [foldRangeVarAux_operations_succ, foldAcc_succ,
           RegionOperations.assignedCellsAfter, List.foldl_append] using
           hroundInvariant
+
+/-- Advice-write consistency through a serial fold when each round is internally consistent and
+earlier rounds' advice writes are disjoint from later rounds' non-self-copy advice writes. -/
+theorem foldRangeVarAux_adviceWritesConsistent
+    (rows : ℕ → ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex) (m : ℕ)
+    (hcons : ∀ i : Fin m,
+      ((body i.val (rows i.val) (foldAcc rows init body i.val self)).operations self)
+        |>.AdviceWritesConsistent self)
+    (hdisj : ∀ i j : Fin m, i < j →
+      (((body i.val (rows i.val) (foldAcc rows init body i.val self)).operations self).adviceWrites).Disjoint
+        (((body j.val (rows j.val) (foldAcc rows init body j.val self)).operations self)
+          |>.nonSelfCopyAdviceWrites self)) :
+    ((foldRangeVarAux rows init body m).operations self).AdviceWritesConsistent self := by
+  have hmemAux : ∀ k col row,
+      (col, row) ∈ ((foldRangeVarAux rows init body k).operations self).adviceWrites →
+      ∃ i : Fin k,
+        (col, row) ∈ ((body i.val (rows i.val) (foldAcc rows init body i.val self)).operations self).adviceWrites := by
+    intro k col row hmem
+    unfold RegionOperations.adviceWrites at hmem
+    rw [foldRangeVarAux_operations, flatMap_flatten, List.mem_flatten] at hmem
+    obtain ⟨writes, hwrites, hmem⟩ := hmem
+    rw [List.mem_map] at hwrites
+    obtain ⟨ops, hops, rfl⟩ := hwrites
+    rw [List.mem_ofFn] at hops
+    obtain ⟨i, rfl⟩ := hops
+    exact ⟨i, hmem⟩
+  have haux : ∀ k (hk : k ≤ m),
+      ((foldRangeVarAux rows init body k).operations self).AdviceWritesConsistent self := by
+    intro k hk
+    induction k with
+    | zero => exact RegionOperations.adviceWritesConsistent_nil self
+    | succ k ih =>
+      rw [foldRangeVarAux_operations_succ]
+      apply RegionOperations.adviceWritesConsistent_append_of_disjoint self
+        (ih (Nat.le_of_succ_le hk)) (hcons ⟨k, hk⟩)
+      rw [List.disjoint_left]
+      rintro ⟨col, row⟩ hprev hcur
+      obtain ⟨i, hi⟩ := hmemAux k col row hprev
+      exact List.disjoint_left.mp
+        (hdisj ⟨i.val, Nat.lt_of_lt_of_le i.isLt (Nat.le_of_succ_le hk)⟩ ⟨k, hk⟩ i.isLt) hi hcur
+  exact haux m le_rfl
+
+/-- Advice-write distinctness through a serial fold with monotone row windows. -/
+theorem foldRangeVarAux_adviceWritesDistinct
+    (rows : ℕ → ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex)
+    (hdistinct : ∀ i acc,
+      ((body i (rows i) acc).operations self).AdviceWritesDistinct)
+    (hrow : ∀ i acc column row,
+      (column, row) ∈ ((body i (rows i) acc).operations self).adviceWrites →
+      rows i ≤ row ∧ row < rows (i + 1))
+    (hmono : ∀ a b, a ≤ b → rows a ≤ rows b) :
+    ∀ k,
+      ((foldRangeVarAux rows init body k).operations self).AdviceWritesDistinct ∧
+        ∀ column row,
+          (column, row) ∈ ((foldRangeVarAux rows init body k).operations self).adviceWrites →
+          rows 0 ≤ row ∧ row < rows k := by
+  intro k
+  induction k with
+  | zero =>
+      refine ⟨?_, fun _ _ h => ?_⟩
+      · change RegionOperations.AdviceWritesDistinct []
+        exact RegionOperations.adviceWritesDistinct_nil
+      · change _ ∈ RegionOperations.adviceWrites [] at h
+        simp [RegionOperations.adviceWrites] at h
+  | succ k ih =>
+      rcases ih with ⟨hprevDist, hprevBound⟩
+      rw [foldRangeVarAux_operations_succ]
+      refine ⟨?_, ?_⟩
+      · rw [RegionOperations.adviceWritesDistinct_append_iff]
+        refine ⟨hprevDist, hdistinct k _, ?_⟩
+        exact RegionOperations.adviceWrites_disjoint_of_row_sep (rows k)
+          (fun c r h => (hprevBound c r h).2)
+          (fun c r h => (hrow k _ c r h).1)
+      · intro col row hmem
+        rw [RegionOperations.adviceWrites_append, List.mem_append] at hmem
+        rcases hmem with hpre | hcur
+        · have hb := hprevBound col row hpre
+          have hle := hmono k (k + 1) (Nat.le_succ k)
+          omega
+        · have hb := hrow k _ col row hcur
+          have h0 := hmono 0 k (Nat.zero_le k)
+          omega
 
 /-- An operation-local law over a serial fold reduces to the law for every round,
 with the accumulator kept in its closed `foldAcc` form. -/
@@ -879,27 +1394,58 @@ def foldRange (offset stride m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β) : RegionCircuit F β :=
   foldRangeVar (fun i => offset + i * stride) m init body
 
-/-- Constant-stride specialization of
-`foldRangeVarAux_copyCellsAssignedFrom`. -/
-theorem foldRange_copyCellsAssignedFrom
+/-- Constant-stride specialization of `foldRangeVarAux_assignedFrom`. -/
+theorem foldRange_assignedFrom (consumption : Consumption F)
     (invariant : List Cell → β → Prop)
     (offset stride m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
     (self : RegionIndex) (available : List Cell)
     (hinit : invariant available init)
-    (hbodyCopy : ∀ i cells acc, invariant cells acc →
+    (hbodyAssigned : ∀ i cells acc, invariant cells acc →
       ((body i (offset + i * stride) acc).operations self
-        |>.CopyCellsAssignedFrom self cells))
+        |>.AssignedFrom consumption self cells))
     (hbodyInvariant : ∀ i cells acc, invariant cells acc →
       invariant
         ((body i (offset + i * stride) acc).operations self
           |>.assignedCellsAfter self cells)
         ((body i (offset + i * stride) acc).output self)) :
     ((foldRange offset stride m init body).operations self
-      |>.CopyCellsAssignedFrom self available) :=
-  (foldRangeVarAux_copyCellsAssignedFrom invariant
+      |>.AssignedFrom consumption self available) :=
+  (foldRangeVarAux_assignedFrom consumption invariant
     (fun i => offset + i * stride) init body self available
-    hinit hbodyCopy hbodyInvariant m).1
+    hinit hbodyAssigned hbodyInvariant m).1
+
+/-- Constant-stride specialization of `foldRangeVarAux_adviceWritesConsistent`. -/
+theorem foldRange_adviceWritesConsistent
+    (offset stride m : ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex)
+    (hcons : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)
+          (foldAcc (fun j => offset + j * stride) init body i.val self)).operations self)
+        |>.AdviceWritesConsistent self)
+    (hdisj : ∀ i j : Fin m, i < j →
+      (((body i.val (offset + i.val * stride)
+          (foldAcc (fun k => offset + k * stride) init body i.val self)).operations self).adviceWrites).Disjoint
+        (((body j.val (offset + j.val * stride)
+          (foldAcc (fun k => offset + k * stride) init body j.val self)).operations self)
+          |>.nonSelfCopyAdviceWrites self)) :
+    ((foldRange offset stride m init body).operations self).AdviceWritesConsistent self :=
+  foldRangeVarAux_adviceWritesConsistent (fun i => offset + i * stride) init body self m hcons hdisj
+
+/-- Constant-stride specialization of `foldRangeVarAux_adviceWritesDistinct`. -/
+theorem foldRange_adviceWritesDistinct
+    (offset stride m : ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex)
+    (hdistinct : ∀ i acc,
+      ((body i (offset + i * stride) acc).operations self).AdviceWritesDistinct)
+    (hrow : ∀ i acc column row,
+      (column, row) ∈ ((body i (offset + i * stride) acc).operations self).adviceWrites →
+      offset + i * stride ≤ row ∧ row < offset + (i + 1) * stride) :
+    ((foldRange offset stride m init body).operations self).AdviceWritesDistinct :=
+  (foldRangeVarAux_adviceWritesDistinct (fun i => offset + i * stride) init body self
+    hdistinct hrow (fun _ _ hab => Nat.add_le_add_left (Nat.mul_le_mul_right stride hab) offset) m).1
 
 @[circuit_norm]
 theorem foldRange_output (offset stride m : ℕ) (init : β)

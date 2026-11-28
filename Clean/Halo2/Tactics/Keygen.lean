@@ -1,6 +1,7 @@
 module
 
 public import Clean.Halo2.Loops
+public import Clean.Halo2.Operations.Consumption
 public import Clean.Halo2.Configure.Lemmas
 public import Clean.Halo2.Operations.FixedWrites
 public import Clean.Halo2.Operations.LookupSelectors
@@ -29,6 +30,9 @@ attribute [keygen_norm, keygen_output_norm] Configure.plan_pure
 attribute [keygen_norm]
   RegionCircuit.Vector.map_getElem_mem_toList
   RegionCircuit.Vector.map_getElem!_mem_toList
+  RegionCircuit.Vector.exists_mem_toList_map_getElem!
+  RegionCircuit.Vector.exists_mem_toList_map_getElem!_of_lt
+  exists_exists_and_eq_and
 
 open Lean
 
@@ -45,6 +49,12 @@ attribute [keygen_norm]
   Configure.delta_selector Configure.delta_complexSelector
   Configure.delta_createGate
   Configure.output_bind Configure.output_pure
+  Configure.finalCounts_bind Configure.finalCounts_pure
+  Configure.finalCounts_adviceColumn Configure.finalCounts_fixedColumn
+  Configure.finalCounts_lookupTableColumn Configure.finalCounts_instanceColumn
+  Configure.finalCounts_selector Configure.finalCounts_complexSelector
+  Configure.finalCounts_enableEquality Configure.finalCounts_enableConstant
+  Configure.finalCounts_createGate Configure.finalCounts_lookup
   Configure.fixedColumns_bind Configure.fixedColumns_pure
   Configure.fixedColumns_fixedColumn
   Configure.output_adviceColumn Configure.output_fixedColumn
@@ -58,23 +68,26 @@ attribute [keygen_norm]
   ConfigureDelta.permutationRequests_queryAny
   ConfigureDelta.permutationRequests_queriedCells
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
-  KeygenRequirements.inputPermutationColumns
+  KeygenRequirements.inputPermutationColumns KeygenRequirements.readRelativeCellsAt
   RegionOperation.LookupActivationWellFormed
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
   RegionOperation.IsNotLookup
   RegionOperation.assignedCells RegionOperation.copiedCells
-  RegionOperations.assignedCells RegionOperations.copiedCells
-  RegionOperations.CopyCellsAssigned
+  RegionOperation.adviceWrites
+  RegionOperations.assignedCells_nil RegionOperations.assignedCells_cons
+  RegionOperations.assignedCells_append RegionOperations.copiedCells
+  RegionOperations.ConsumedCellsAssigned
   RegionOperations.fixedColumns RegionOperations.FixedAssignmentsAgree
   RegionOperation.HasNoFixedAssignment RegionOperations.HasNoFixedAssignments
   Operations.regionFixedColumns Operations.loadedTableColumns
   Operation.HasNoFixedWrites Operations.HasNoFixedWrites
-  RegionOperations.assignedCellsAfter
+  RegionOperations.assignedCellsAfter_nil RegionOperations.assignedCellsAfter_cons
+  RegionOperations.assignedCellsAfter_append
   Operation.copiedCells
   Operations.assignedCellsFrom Operations.assignedCells
-  Operations.copiedCells Operations.CopyCellsAssigned
+  Operations.copiedCells Operations.ConsumedCellsAssigned
   LookupArgument.lookupActivationWellFormed_enable
   selectorEnabledAtIndex_cons_self complexSelectorEnabledAtIndex_cons_self
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
@@ -82,21 +95,53 @@ attribute [keygen_norm]
   Operations.KeygenRegistered.constrainInstance_cons
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
-  List.flatMap_cons List.flatMap_append
+  List.flatMap_cons List.flatMap_append List.map_nil List.map_cons Nat.add_zero Nat.le_refl
+  Nat.add_one_ne_zero
   List.mem_append List.mem_cons List.mem_singleton List.mem_flatMap List.mem_map
   List.not_mem_nil
   List.nil_append List.append_nil List.singleton_append List.append_assoc
   and_self and_true true_and
   or_self or_true true_or or_false false_or
+  not_or not_false_eq_true
+  false_imp_iff true_imp_iff eq_self_iff_true Nat.one_ne_zero Nat.zero_ne_one
   false_implies implies_true forall_true_iff
   forall_eq forall_eq_or_imp imp_self or_imp
-  ite_self
+  ite_self if_true if_false Bool.false_eq_true
   Cell.of_column AssignedCell.of_cell
   output_assignAdvice output_assignRegion output_cellAt
+  RegionCircuit.output_bind RegionCircuit.output_pure
+  Circuit.output_bind Circuit.output_pure
   Vector.getElem_ofFn
+  Language.mem_one
+
+attribute [keygen_norm]
+  fieldReads_expr fieldReads_const fieldReads_localVar fieldReads_add fieldReads_hAdd
+  fieldReads_mul fieldReads_hMul fieldReads_inv fieldReads_hInv fieldReads_neg fieldReads_sub
+  fieldReads_ofNat fieldReads_ofU64 fieldReads_ite fieldReads_listGet
+  fieldReads_dataGet fieldReads_hintGet
+  fieldListReads_nil fieldListReads_cons
+  u64Reads_const u64Reads_ofNat u64Reads_idx u64Reads_localVar u64Reads_val
+  u64Reads_add u64Reads_hAdd u64Reads_mul u64Reads_hMul u64Reads_div u64Reads_mod
+  u64Reads_land u64Reads_lor u64Reads_lxor u64Reads_shiftL u64Reads_shiftR u64Reads_ite
+
+attribute [keygen_norm]
+  boolReads_true boolReads_false boolReads_feq boolReads_eqCondFF boolReads_eqCondFC
+  boolReads_eqCondFN boolReads_flt boolReads_neq boolReads_lt
+  boolReads_bit boolReads_not boolReads_and boolReads_hAnd
+  vectorReads_lit vectorReads_mapRange vectorReads_envRange vectorReads_bitsOf vectorReads_append
+  stepReads_letF stepReads_letU stepsReads_nil stepsReads_cons
 
 attribute [grind norm]
   Configure.output_pure Configure.delta_pure
+
+attribute [keygen_output_norm]
+  output_copyAdvice output_assignAdvice output_assignFixed output_cellAt
+
+@[keygen_spine]
+theorem operations_assignAdvice_var {F : Type} [FiniteField F]
+    (col : Column .advice) (row : ℕ) (compute : WitgenIR F 1) (self : RegionIndex) :
+    @RegionCircuit.operations F _ (Var field F) (assignAdvice col row compute) self =
+      [.assignAdvice col row compute] := rfl
 
 attribute [keygen_spine]
   RegionCircuit.operations_bind RegionCircuit.operations_pure
@@ -107,33 +152,39 @@ attribute [keygen_spine]
   operations_constrainConstant operations_assignAdviceFromInstance operations_assignAdviceFromConstant
   operations_cellAt operations_cellVec
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
-  KeygenRequirements.inputPermutationColumns
+  KeygenRequirements.inputPermutationColumns KeygenRequirements.readRelativeCellsAt
   RegionOperation.LookupActivationWellFormed
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
   RegionOperation.IsNotLookup
   RegionOperation.assignedCells RegionOperation.copiedCells
-  RegionOperations.assignedCells RegionOperations.copiedCells
-  RegionOperations.CopyCellsAssigned
+  RegionOperation.adviceWrites
+  RegionOperations.assignedCells_nil RegionOperations.assignedCells_cons
+  RegionOperations.assignedCells_append RegionOperations.copiedCells
+  RegionOperations.ConsumedCellsAssigned
   RegionOperations.fixedColumns RegionOperations.FixedAssignmentsAgree
   RegionOperation.HasNoFixedAssignment RegionOperations.HasNoFixedAssignments
   Operations.regionFixedColumns Operations.loadedTableColumns
   Operation.HasNoFixedWrites Operations.HasNoFixedWrites
-  RegionOperations.assignedCellsAfter
+  RegionOperations.assignedCellsAfter_nil RegionOperations.assignedCellsAfter_cons
+  RegionOperations.assignedCellsAfter_append
   Operation.copiedCells
   Operations.assignedCellsFrom Operations.assignedCells
-  Operations.copiedCells Operations.CopyCellsAssigned
+  Operations.copiedCells Operations.ConsumedCellsAssigned
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
-  List.flatMap_cons List.flatMap_append
+  List.flatMap_cons List.flatMap_append List.map_nil List.map_cons Nat.add_zero Nat.le_refl
+  Nat.add_one_ne_zero
   List.mem_append List.mem_cons List.mem_singleton List.mem_flatMap List.mem_map
-  List.nil_append List.append_nil List.singleton_append List.append_assoc
+  List.nil_append List.append_nil List.cons_append List.singleton_append List.append_assoc
   and_self and_true true_and
   or_self or_true true_or or_false false_or
+  not_or not_false_eq_true
+  false_imp_iff true_imp_iff eq_self_iff_true Nat.one_ne_zero Nat.zero_ne_one
 
 attribute [keygen_norm]
   RegionCircuit.loopAux_forall RegionCircuit.forRange'_forall
@@ -275,6 +326,18 @@ meta section
 
 open Lean Elab Tactic Meta
 
+/-- Declared ahead of its elaborator, so that the helper-certificate step can run the whole
+tactic on a certificate's side conditions. -/
+syntax "keygen_registration" : tactic
+
+/-- The discharger of the keygen simp calls: a rule's premiss is a hypothesis in context,
+or else something the sets prove on their own. -/
+macro "keygen_discharge" : tactic =>
+  `(tactic| first
+    | assumption
+    | (simp only [keygen_spine, keygen_norm] <;> fail "keygen_discharge: premiss not proved")
+    | skip)
+
 namespace KeygenRegistration
 
 /-- Find a transparent configure-program head below an output/delta projection. -/
@@ -296,6 +359,28 @@ def circuitHead? (target : Expr) : Option Name := do
   let arguments := projection.getAppArgs
   guard (arguments.size ≥ 2)
   arguments[arguments.size - 2]!.headBeta.getAppFn.constName?
+
+/-- Find an unfoldable synthesis-body head inside a local membership hypothesis (for example, a
+named loop body in `(col, row) ∈ ((roundBody ...).operations self).adviceWrites`). -/
+def localCircuitHead? (unfolded : Std.HashSet Name) : TacticM (Option Name) := do
+  let env ← getEnv
+  let bundleProjections := keygenBundleProjectionAttr.getDecls env
+  let lctx ← getLCtx
+  for fvarId in lctx.getFVarIds.reverse do
+    let decl := lctx.get! fvarId
+    if decl.isImplementationDetail then
+      continue
+    let type ← instantiateMVars decl.type
+    if (type.find? (·.isConstOf ``Membership.mem)).isNone then
+      continue
+    if let some head := circuitHead? type then
+      if !unfolded.contains head && head != ``Nat.rec &&
+          head != `Halo2.FormalCircuit.call && head != `Halo2.FormalRegionCircuit.call &&
+          !bundleProjections.contains head && !env.isProjectionFn head then
+        match env.find? head with
+        | some (.defnInfo _) => return some head
+        | _ => pure ()
+  return none
 
 /-- Reduce registered bundle projections after their concrete bundle head has been
 unfolded. Keeping this out of the general normalization set prevents opaque child
@@ -454,7 +539,7 @@ partial def closeCallSideCondition
   try
     evalTactic (← `(tactic|
       first | assumption | exact () | rfl |
-        simp_all only [keygen_norm, synthesis_summary_norm]))
+        simp_all only [keygen_spine, keygen_norm, synthesis_summary_norm]))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -476,7 +561,7 @@ partial def closeCallSideCondition
   let state ← saveState
   try
     evalTactic (← `(tactic|
-      simp_all only [keygen_norm, synthesis_summary_norm]))
+      simp_all only [keygen_spine, keygen_norm, synthesis_summary_norm]))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -509,35 +594,79 @@ partial def closeCallSideCondition
     return
   closeCallSideCondition (unfolded.insert head)
 
+/-- Try one helper certificate: apply it and close its side conditions with the call-routing
+closer, then, when `fallback` is set, with the whole tactic. Returns `(done, applied, closed)`
+where `applied` indicates the certificate matched and was applied, and `closed` counts how many
+side conditions closed via the fast call-routing closer. -/
+def tryHelperCertificate (candidate : Name) (targetHead : Name) (fallback : Bool) :
+    TacticM (Bool × Bool × Nat) := do
+  let state ← saveState
+  try
+    let origTarget ← instantiateMVars (← getMainTarget)
+    let certificateLemma ← mkConstWithFreshMVarLevels candidate
+    let some candidateHead :=
+        circuitHead? (← liftMetaM <| inferType certificateLemma).getForallBody
+      | state.restore
+        return (false, false, 0)
+    if candidateHead != targetHead then
+      state.restore
+      return (false, false, 0)
+    let sideConditions ← (← getMainGoal).apply certificateLemma
+    -- Guard against self-looping certificates that regenerate the identical target.
+    for sideCondition in sideConditions do
+      if !(← liftMetaM sideCondition.isAssigned) then
+        let sideTarget ← instantiateMVars (← sideCondition.getType)
+        if sideTarget == origTarget then
+          state.restore
+          return (false, false, 0)
+    let mut remaining := []
+    let mut closed := 0
+    for sideCondition in sideConditions.reverse do
+      if ← liftMetaM sideCondition.isAssigned then
+        continue
+      setGoals [sideCondition]
+      closeCallSideCondition
+      if (← getGoals).isEmpty then
+        closed := closed + 1
+      else if fallback then
+        let sideState ← saveState
+        try
+          evalTactic (← `(tactic| keygen_registration))
+        catch _ =>
+          sideState.restore
+      remaining := remaining ++ (← getGoals)
+    setGoals remaining
+    if (← getGoals).isEmpty then
+      return (true, true, closed)
+    state.restore
+    return (false, true, closed)
+  catch _ =>
+    state.restore
+    return (false, false, 0)
+
 /-- Apply a registered certificate for a raw circuit helper. -/
 def applyHelperCertificate : TacticM Bool := withMainContext do
   let target ← instantiateMVars (← getMainTarget)
   let some targetHead := circuitHead? target
     | return false
+  let mut progressed : Array Name := #[]
+  let mut matched : Array Name := #[]
   for candidate in keygenHelperAttr.getDecls (← getEnv) do
-    let state ← saveState
-    try
-      let certificateLemma ← mkConstWithFreshMVarLevels candidate
-      let some candidateHead := circuitHead? (← liftMetaM <| inferType certificateLemma)
-        | state.restore
-          continue
-      if candidateHead != targetHead then
-        state.restore
-        continue
-      let sideConditions ← (← getMainGoal).apply certificateLemma
-      let mut remaining := []
-      for sideCondition in sideConditions.reverse do
-        if ← liftMetaM sideCondition.isAssigned then
-          continue
-        setGoals [sideCondition]
-        closeCallSideCondition
-        remaining := remaining ++ (← getGoals)
-      setGoals remaining
-      if (← getGoals).isEmpty then
-        return true
-      state.restore
-    catch _ =>
-      state.restore
+    let (done, applied, closed) ← tryHelperCertificate candidate targetHead false
+    if done then
+      return true
+    if closed > 0 then
+      progressed := progressed.push candidate
+    else if applied then
+      matched := matched.push candidate
+  for candidate in progressed do
+    let (done, _, _) ← tryHelperCertificate candidate targetHead true
+    if done then
+      return true
+  for candidate in matched do
+    let (done, _, _) ← tryHelperCertificate candidate targetHead true
+    if done then
+      return true
   return false
 
 /-- Collect the formal-circuit-valued direct arguments of an application. -/
@@ -761,7 +890,7 @@ partial def freshProductMVars (type : Expr) (fuel : Nat := 32) : MetaM Expr := d
 /--
 Retry a call-routing proposition with only its keygen metadata made transparent.
 -/
-def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
+def simpCallRoutingCore (expression : Expr) : SimpM Simp.Result := do
   let env ← getEnv
   let requirementProjections := keygenRequirementProjectionAttr.getDecls env
   let configureProjections := keygenConfigureProjectionAttr.getDecls env
@@ -850,6 +979,9 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
           expression.getAppFn.isConstOf ``KeygenRequirements.constantColumns ||
           expression.getAppFn.isConstOf ``KeygenRequirements.permutationColumns ||
           expression.getAppFn.isConstOf ``KeygenRequirements.inputCells ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.readCells ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.readRelativeCells ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.readRelativeCellsAt ||
           expression.getAppFn.isConstOf ``KeygenRequirements.inputPermutationColumns
     | return exposed
   let arguments := requirementProjection.getAppArgs
@@ -868,6 +1000,12 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
     Simp.withSimpTheorems (#[projections] ++ ambient) do
       Simp.simp reducedExpression
   (← exposed.mkEqTrans definitionallyReduced).mkEqTrans reduced
+
+/-- `simpCallRoutingCore` with contextual simplification for routing premises with opaque parts. -/
+def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
+  let context ← (← readThe Simp.Context).setConfig
+    { (← Simp.getConfig) with contextual := true }
+  withTheReader Simp.Context (fun _ => context) (simpCallRoutingCore expression)
 
 /-- Expose only framework projections around a configure program, preserving its head. -/
 partial def exposeConfigureProgram (program : Expr) (fuel : Nat := 8) :
@@ -1227,9 +1365,23 @@ def proveListRoutingPremise (goal : MVarId) : SimpM Bool := do
     let concreteGoal ← normalizedGoal.replaceTargetEq normalizedTarget targetEquality
     let closed ← concreteGoal.withContext do
       proveConcreteForall concreteGoal
-    unless closed do
-      throwError "concrete list-routing premise was not solved"
-    return closed
+    if closed then
+      return true
+    concreteGoal.withContext do
+      let [elementLevel] := target.getAppFn.constLevels!
+        | throwError "routing target is not a List.Forall"
+      let characterization := mkAppN
+        (mkConst ``List.forall_iff_forall_mem [elementLevel])
+        #[arguments[0]!, arguments[1]!, simplifiedValues.expr]
+      let backward ← mkAppM ``Iff.mpr #[characterization]
+      let backwardType ← whnf (← inferType backward)
+      unless backwardType.isForall do
+        throwError "invalid List.Forall characterization"
+      let simplified ← simpCallRouting backwardType.bindingDomain!
+      let some proof ← proofOfSimpTrue? backwardType.bindingDomain! simplified
+        | throwError "list-routing premiss with an opaque part was not solved"
+      concreteGoal.assign (mkApp backward proof)
+      return true
   catch _ =>
     set metaState
     return false
@@ -1360,11 +1512,23 @@ simproc callRegistration
 simproc regionCallRegistration
     (List.Forall _ _) := callRegistrationSimproc
 
-simproc callCopyCellsAssignedFrom
-    (Operations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
+simproc callAssignedFrom
+    (Operations.AssignedFrom _ _ _ _) := callRegistrationSimproc
 
-simproc regionCallCopyCellsAssignedFrom
-    (RegionOperations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
+simproc regionCallAssignedFrom
+    (RegionOperations.AssignedFrom _ _ _ _) := callRegistrationSimproc
+
+simproc callAdviceWritesDistinct
+    (Operations.AdviceWritesDistinct _) := callRegistrationSimproc
+
+simproc regionCallAdviceWritesDistinct
+    (RegionOperations.AdviceWritesDistinct _) := callRegistrationSimproc
+
+simproc callAdviceWritesConsistent
+    (Operations.AdviceWritesConsistentFrom _ _) := callRegistrationSimproc
+
+simproc regionCallAdviceWritesConsistent
+    (RegionOperations.AdviceWritesConsistent _ _) := callRegistrationSimproc
 
 simproc callLookupSelectorAssignmentsAgree
     (Operations.LookupSelectorAssignmentsAgree _) := callRegistrationSimproc
@@ -1374,8 +1538,11 @@ simproc regionCallLookupSelectorAssignmentsAgree
 
 attribute [keygen_norm]
   callRegistration regionCallRegistration
-  callCopyCellsAssignedFrom regionCallCopyCellsAssignedFrom
+  callAssignedFrom regionCallAssignedFrom
+  callAdviceWritesDistinct regionCallAdviceWritesDistinct
+  callAdviceWritesConsistent regionCallAdviceWritesConsistent
   callLookupSelectorAssignmentsAgree regionCallLookupSelectorAssignmentsAgree
+  imp_true_iff
 
 /-- Target and hypothesis types used to detect normalization progress. -/
 def goalContextTypes : TacticM (Array Expr) := withMainContext do
@@ -1396,7 +1563,8 @@ partial def normalize : TacticM Unit := do
     normalize
     return
   let before ← goalContextTypes
-  evalTactic (← `(tactic| simp (config := { failIfUnchanged := false }) only [
+  evalTactic (← `(tactic| simp (config := { failIfUnchanged := false })
+    (disch := keygen_discharge) only [
     keygen_spine, keygen_norm,
     Operations.KeygenRegistered, Operation.KeygenRegistered,
     RegionOperation.KeygenRegistered,
@@ -1427,6 +1595,114 @@ partial def normalize : TacticM Unit := do
   evalTactic (← `(tactic|
     simp_all (config := { failIfUnchanged := false }) only [keygen_norm]))
 
+/-- Fail if the main goal's target still mentions a metavariable. -/
+elab "keygen_guard_closed" : tactic => do
+  let target ← instantiateMVars (← getMainTarget)
+  if target.hasExprMVar then
+    throwError "read support left a metavariable in the read set:{indentExpr target}"
+
+/-- Open a read-support obligation `∃ reads, WitnessFunctionSupport reads compute ∧ property reads`. -/
+macro "open_witness_support" : tactic =>
+  `(tactic| (apply Halo2.exists_witnessFunctionSupport_of
+             case support => solve_witness_support
+             keygen_guard_closed))
+
+/-- Backtracking search over `@[witness_support]` rules for a `WitnessFunctionSupport` goal,
+invoking `onSolved` on each complete derivation so the caller can check availability of the
+resulting read set before committing (making read-support resolution independent of rule
+declaration order). -/
+partial def searchWitnessSupport (decls : Array Name) (depth : Nat)
+    (supportGoals : List MVarId) (onSolved : TacticM Bool) : TacticM Bool := do
+  match supportGoals with
+  | [] => onSolved
+  | g :: gs =>
+    if depth == 0 then
+      return false
+    let state ← saveState
+    setGoals [g]
+    let mut closedByLocal := false
+    try
+      evalTactic (← `(tactic| assumption))
+      if (← getGoals).isEmpty then
+        closedByLocal := true
+    catch _ =>
+      pure ()
+    if closedByLocal then
+      if ← searchWitnessSupport decls (depth - 1) gs onSolved then
+        return true
+    state.restore
+    for decl in decls do
+      let ruleState ← saveState
+      try
+        let lemmaTerm ← mkConstWithFreshMVarLevels decl
+        let newGoals ← withTransparency .reducible <| g.apply lemmaTerm
+        if ← searchWitnessSupport decls (depth - 1) (newGoals ++ gs) onSolved then
+          return true
+        ruleState.restore
+      catch _ =>
+        ruleState.restore
+    return false
+
+mutual
+
+/-- Open a read-support obligation `∃ reads, WitnessFunctionSupport reads compute ∧ property reads`.
+First tries the indexed `open_witness_support` fast path; if that leaves an unclosed availability
+obligation (for instance, when another `@[witness_support]` rule supplies a smaller or available
+read set), backtracks across all `@[witness_support]` derivations regardless of declaration order
+before falling back to the fast path's residual goal for manual proof. -/
+partial def openWitnessSupport (unfolded : Std.HashSet Name) : TacticM Bool := do
+  let initState ← saveState
+  let mut fastResidual : Option Tactic.SavedState := none
+  if ← tryTactic (evalTactic (← `(tactic| open_witness_support))) then
+    if (← getGoals).isEmpty then
+      return true
+    close unfolded
+    if (← getGoals).isEmpty then
+      return true
+    fastResidual := some (← saveState)
+  initState.restore
+  let applied ← tryTactic (evalTactic (← `(tactic| apply Halo2.exists_witnessFunctionSupport_of)))
+  if applied then
+    if let supportGoal :: propGoal :: restGoals ← getGoals then
+      let decls := ← Lean.labelled `witness_support
+      let solved ← searchWitnessSupport decls 16 [supportGoal] do
+        for rest in restGoals do
+          unless ← rest.isAssigned do
+            return false
+        setGoals [propGoal]
+        let target ← instantiateMVars (← getMainTarget)
+        if target.hasExprMVar then
+          return false
+        close unfolded
+        return (← getGoals).isEmpty
+      if solved then
+        return true
+  if let some residual := fastResidual then
+    residual.restore
+    return true
+  initState.restore
+  return false
+
+/-- Try applying a same-region composition lemma to `left ++ right`, committing only if all
+generated subgoals close. Checks the disjointness subgoal first so non-matching appends fail
+immediately. -/
+partial def tryCloseAppendWith (unfolded : Std.HashSet Name) (tactic : TSyntax `tactic) :
+    TacticM Bool := do
+  let state ← saveState
+  try
+    evalTactic tactic
+    let branches ← getGoals
+    for branch in branches.reverse do
+      setGoals [branch]
+      close unfolded
+      if !(← getGoals).isEmpty then
+        state.restore
+        return false
+    return true
+  catch _ =>
+    state.restore
+    return false
+
 /-- Recursively normalize operation spines and conjunctions. -/
 partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
   withMainContext do
@@ -1452,11 +1728,17 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
     return
   if ← applyHelperCertificate then
     return
+  if ← openWitnessSupport unfolded then
+    return
 
   withMainContext do
     let target ← instantiateMVars (← getMainTarget)
     let target ←
-      if target.isAppOf ``List.Forall then
+      if target.isAppOf ``List.Forall ||
+          target.isAppOf ``RegionOperations.AdviceWritesDistinct ||
+          target.isAppOf ``Operations.AdviceWritesDistinct ||
+          target.isAppOf ``RegionOperations.AdviceWritesConsistent ||
+          target.isAppOf ``Operations.AdviceWritesConsistentFrom then
         pure target
       else
         whnf target
@@ -1477,16 +1759,43 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
       return
 
     if target.isAppOf ``List.Forall then
-      if target.getAppArgs.back!.isAppOf ``List.append then
+      let ops := target.getAppArgs.back!
+      if ops.isAppOf ``List.append || ops.isAppOf ``HAppend.hAppend then
         evalTactic (← `(tactic| apply List.forall_append.mpr))
         close unfolded
         return
+
+    if target.isAppOf ``RegionOperations.AdviceWritesConsistent then
+      let ops := target.getAppArgs.back!
+      if ops.isAppOf ``List.append || ops.isAppOf ``HAppend.hAppend then
+        if ← tryCloseAppendWith unfolded
+            (← `(tactic| apply Halo2.RegionOperations.adviceWritesConsistent_append_of_disjoint)) then
+          return
+        if ← tryCloseAppendWith unfolded
+            (← `(tactic|
+              apply Halo2.RegionOperations.adviceWritesConsistent_append_of_adviceWrites_disjoint)) then
+          return
+
+    if target.isAppOf ``RegionOperations.AdviceWritesDistinct then
+      let ops := target.getAppArgs.back!
+      if ops.isAppOf ``List.append || ops.isAppOf ``HAppend.hAppend then
+        if ← tryCloseAppendWith unfolded
+            (← `(tactic| apply Halo2.RegionOperations.adviceWritesDistinct_append_of_disjoint)) then
+          return
 
     if let some head := circuitHead? target then
       if unfolded.contains head || head == ``Nat.rec then
         return
       try
         evalTactic (← `(tactic| unfold $(mkIdent head)))
+      catch _ =>
+        return
+      close (unfolded.insert head)
+      return
+
+    if let some head ← localCircuitHead? unfolded then
+      try
+        evalTactic (← `(tactic| unfold $(mkIdent head) at *))
       catch _ =>
         return
       close (unfolded.insert head)
@@ -1509,6 +1818,15 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
       evalTactic (← `(tactic| grind))
     catch _ =>
       state.restore
+    if (← getGoals).isEmpty then
+      return
+    let state ← saveState
+    try
+      evalTactic (← `(tactic| omega))
+    catch _ =>
+      state.restore
+
+end
 
 /--
 Normalize all configure output/delta projections before opening the synthesis bind
@@ -1521,6 +1839,12 @@ partial def prepareConfigure (unfolded : Std.HashSet Name := {}) : TacticM Unit 
       simp_all! +zetaDelta only [
         Configure.delta_bind, Configure.delta_pure,
         Configure.output_bind, Configure.output_pure,
+        Configure.finalCounts_bind, Configure.finalCounts_pure,
+        Configure.finalCounts_adviceColumn, Configure.finalCounts_fixedColumn,
+        Configure.finalCounts_lookupTableColumn, Configure.finalCounts_instanceColumn,
+        Configure.finalCounts_selector, Configure.finalCounts_complexSelector,
+        Configure.finalCounts_enableEquality, Configure.finalCounts_enableConstant,
+        Configure.finalCounts_createGate, Configure.finalCounts_lookup,
         Configure.output_adviceColumn, Configure.output_fixedColumn,
         Configure.output_instanceColumn, Configure.output_selector,
         Configure.output_complexSelector, Configure.output_enableEquality,
@@ -1568,7 +1892,8 @@ It first applies the shared structural simp sets, then selectively unfolds named
 configure/synthesis heads that still block a registration goal. Formal-circuit calls
 stay opaque for explicit discharge through the compositional registration lemmas.
 -/
-elab "keygen_registration" : tactic => do
+elab_rules : tactic
+  | `(tactic| keygen_registration) => do
   if (← getGoals).isEmpty then
     return
   trace[Halo2.keygen] "keygen_registration: introductions"

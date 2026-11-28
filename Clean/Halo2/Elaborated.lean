@@ -164,14 +164,32 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
         (program.delta counts).permutationRequests ++
         keygenRequirements.inputPermutationColumns configInput hconfig input) := by
     keygen_registration
-  /-- Every copy endpoint is either a declared caller input or assigned by synthesis. -/
-  copyCellsAssigned :
+  /-- Every cell an operation consumes, copied or read, is a declared caller input, a
+  declared read cell, a declared relative read, or assigned earlier by synthesis. The
+  relative reads are placed at the initial region and offset `0`, where the region of a
+  lifted region circuit starts; a layouter circuit of its own declares none. -/
+  consumedCellsAssigned :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
       (hconfig : keygenRequirements.configLawful configInput)
       (input : Var Input F) (i : RegionIndex),
     let program := configure configInput
-    ((synthesize (program.output counts) input).operations i).CopyCellsAssigned i
-      (keygenRequirements.inputCells configInput hconfig input) := by
+    ((synthesize (program.output counts) input).operations i).ConsumedCellsAssigned i
+      (keygenRequirements.inputCells configInput hconfig input ++
+        keygenRequirements.readCells configInput hconfig input ++
+        keygenRequirements.readRelativeCellsAt configInput hconfig i 0 input) := by
+    keygen_registration
+  /-- Optional column-distinctness preconditions on caller-supplied advice columns
+  needed to guarantee `adviceWritesConsistent`. Defaults to `True`. -/
+  adviceColumnRequirements : Config → Prop := fun _ => True
+  /-- Every region in synthesis writes advice cells consistently (distinct writes, equal-valued
+  repeated writes, or idempotent self-copies). -/
+  adviceWritesConsistent :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (_hconfig : keygenRequirements.configLawful configInput)
+      (_hadvice : adviceColumnRequirements ((configure configInput).output counts))
+      (input : Var Input F) (i : RegionIndex),
+    ((synthesize ((configure configInput).output counts) input).operations i)
+      |>.AdviceWritesConsistentFrom i := by
     keygen_registration
   /-- Fixed writes have unambiguous compiler semantics. -/
   fixedWritesLawful :
@@ -454,15 +472,32 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
             (program.delta counts).permutationRequests ++
             keygenRequirements.inputPermutationColumns configInput hconfig input)) := by
     keygen_registration
-  /-- Region-level copy endpoints are either declared inputs or locally assigned. -/
-  copyCellsAssigned :
+  /-- Every cell a region operation consumes, copied or read, is a declared caller input, a
+  declared read cell, a declared relative read placed at this call's offset in its region, or
+  assigned earlier in the region. -/
+  consumedCellsAssigned :
     ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
       (hconfig : keygenRequirements.configLawful configInput)
       (offset : ℕ) (input : Var Input F) (region : RegionIndex),
     let program := configure configInput
     ((synthesize
-      (program.output counts) offset input).operations region).CopyCellsAssigned region
-        (keygenRequirements.inputCells configInput hconfig input) := by
+      (program.output counts) offset input).operations region).ConsumedCellsAssigned region
+        (keygenRequirements.inputCells configInput hconfig input ++
+          keygenRequirements.readCells configInput hconfig input ++
+          keygenRequirements.readRelativeCellsAt configInput hconfig region offset input) := by
+    keygen_registration
+  /-- Optional column-distinctness preconditions on caller-supplied advice columns
+  needed to guarantee `adviceWritesConsistent`. Defaults to `True`. -/
+  adviceColumnRequirements : Config → Prop := fun _ => True
+  /-- Every region-local advice assignment is consistent (distinct writes, equal-valued repeated
+  writes, or idempotent self-copies). -/
+  adviceWritesConsistent :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (_hconfig : keygenRequirements.configLawful configInput)
+      (_hadvice : adviceColumnRequirements ((configure configInput).output counts))
+      (offset : ℕ) (input : Var Input F) (region : RegionIndex),
+    ((synthesize ((configure configInput).output counts) offset input).operations region)
+      |>.AdviceWritesConsistent region := by
     keygen_registration
   /-- Every region lookup activation enables its master and only declared selectors. -/
   lookupActivationsWellFormed :
@@ -659,6 +694,8 @@ end ElaboratedRegionCircuit
 attribute [keygen_bundle_projection, keygen_requirement_projection,
     keygen_metadata_projection]
   ElaboratedCircuit.keygenRequirements
+  ElaboratedCircuit.adviceColumnRequirements
   ElaboratedRegionCircuit.keygenRequirements
+  ElaboratedRegionCircuit.adviceColumnRequirements
 
 end Halo2

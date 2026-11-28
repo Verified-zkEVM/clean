@@ -8,6 +8,10 @@ public import Clean.Halo2.WitnessIR
 public import Clean.Halo2.Configure
 public import Clean.Halo2.Configure.Extensions
 public import Clean.Halo2.Operations
+public import Clean.Halo2.Operations.Provenance
+public import Clean.Halo2.Operations.Consumption
+public import Clean.Halo2.Operations.AdviceWrites
+public import Clean.Halo2.WitnessSupport
 public import Clean.Halo2.Basic
 public import Clean.Halo2.Lemmas
 public import Clean.Halo2.Loops
@@ -16,6 +20,7 @@ public import Clean.Halo2.Keygen
 public import Clean.Halo2.TopLevel
 public import Clean.Halo2.TopLevelUnextended
 public import Clean.Halo2.WitnessExecution
+public import Clean.Halo2.WitnessExecution.Bridge
 public import Clean.Halo2.WitnessExecution.TopLevel
 public import Clean.Halo2.ConfigurationHolds
 public import Clean.Halo2.Compiler.ConstraintsCompiled

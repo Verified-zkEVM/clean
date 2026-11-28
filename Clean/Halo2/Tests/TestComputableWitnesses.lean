@@ -209,10 +209,36 @@ private theorem clobber_fast_rejected :
 private theorem clobber_not_writesConsistent :
     ¬ Operations.WritesConsistent testPlace Determined.empty clobberOps 0 := by
   intro hcons
-  have hpair := List.pairwise_cons.mp hcons.adviceUnique
-  have hfixed := (hpair.1 ⟨(colA, (testPlace 0 + 0 : ℕ)), .ofFExpr (.const 1)⟩
-    List.mem_cons_self rfl).1
-  cases hfixed
+  have hpair := List.pairwise_cons.mp hcons.pairwiseConsistent
+  rcases hpair.1 ⟨(colA, (testPlace 0 + 0 : ℕ)), .ofFExpr (.const 1)⟩
+      List.mem_cons_self rfl with hval | hself
+  · let zeroEnv : ProverEnvironment TestField :=
+      { get := fun _ _ => 0, usableRows := 8, hint := ProverHint.empty TestField }
+    have hzero := hval zeroEnv
+    simp [Halo2.eval_ofFExpr_zero, Witgen.FExprOver.eval] at hzero
+  · let zeroEnv : ProverEnvironment TestField :=
+      { get := fun _ _ => 0, usableRows := 8, hint := ProverHint.empty TestField }
+    have hzero := hself zeroEnv
+    simp [Halo2.eval_ofFExpr_zero, Witgen.FExprOver.eval, ProverEnvironment.read, zeroEnv] at hzero
+
+/-! ## 4b. Positive test: idempotent self-copy satisfies `WritesConsistent` -/
+
+private def selfCopyOps : Operations TestField :=
+  [ .region "self_copy" [
+      .assignAdvice colA 0 (.ofFExpr (.const 7)),
+      .assignAdvice colA 0 (.ofFExpr (.expr (AssignedCell.of 0 0 colA)))
+    ] ]
+
+private theorem selfCopy_writesConsistent :
+    Operations.WritesConsistent testPlace Determined.empty selfCopyOps 0 := by
+  refine ⟨fun _ _ h => False.elim h, ?_⟩
+  simp only [selfCopyOps, Operations.assignments, RegionOperations.assignments, List.append_nil,
+    List.pairwise_cons, List.mem_singleton, forall_eq, List.not_mem_nil, false_implies,
+    implies_true, List.Pairwise.nil, and_true, true_implies]
+  right
+  intro env
+  simp [Halo2.eval_ofFExpr_zero, Witgen.FExprOver.eval, Witgen.WitgenEnv.readVar,
+    AssignedCell.eval, AssignedCell.of, Cell.of, Cell.row, Column.toAny, ProverEnvironment.read]
 
 /-! ## 5. Negative test 4: `.native` escape hatch -/
 
